@@ -12,6 +12,54 @@ const chain = {
   bgAttachment(bga){ this.catcher.backgroundAttachment = bga; return this; },
   bgPosition(bgp){ this.catcher.backgroundPosition = bgp; return this; },
 
+  // Border
+  border(b){ this.catcher.border = b; return this; },
+  borderStyle(bs){ this.catcher.borderStyle = bs; return this; },
+  borderWidth(bw){ this.catcher.borderWidth = bw; return this; },
+  borderColor(bc){ this.catcher.borderColor = bc; return this; },
+  borderRadius(br){ this.catcher.borderRadius = br; return this; },
+  borderSideStyle(side, value){
+    if (side === 'top') {
+      this.catcher.borderTopStyle = value;
+    } else if (side === 'right') {
+      this.catcher.borderRightStyle = value;
+    } else if (side === 'bottom') {
+      this.catcher.borderBottomStyle = value;
+    } else if (side === 'left') {
+      this.catcher.borderLeftStyle = value;
+    }
+    return this;
+  },
+
+   // Margin
+  margin(m){ this.catcher.margin = m; return this; },
+  marginTop(mt){ this.catcher.marginTop = mt; return this; },
+  marginRight(mr){ this.catcher.marginRight = mr; return this; },
+  marginBottom(mb){ this.catcher.marginBottom = mb; return this; },
+  marginLeft(ml){ this.catcher.marginLeft = ml; return this; },
+
+  // Padding
+  padding(p){ this.catcher.padding = p; return this; },
+  paddingTop(pt){ this.catcher.paddingTop = pt; return this; },
+  paddingRight(pr){ this.catcher.paddingRight = pr; return this; },
+  paddingBottom(pb){ this.catcher.paddingBottom = pb; return this; },
+  paddingLeft(pl){ this.catcher.paddingLeft = pl; return this; },
+
+  // Height, Width and Max-width
+  width(w){ this.catcher.width = w; return this; },
+  minWidth(mnw){ this.catcher.minWidth = mnw; return this; },
+  maxWidth(mxw){ this.catcher.maxWidth = mxw; return this; },
+  height(h){ this.catcher.height = h; return this; },
+  minHeight(mnh){ this.catcher.minHeight = mnh; return this; },
+  maxHeight(mxh){ this.catcher.maxHeight = mxh; return this; },
+
+  // Outline
+  outline(o){ this.catcher.outline = o; return this; },
+  outlineColor(oc){ this.catcher.outlineColor = oc; return this; },
+  outlineStyle(os){ this.catcher.outlineStyle = os; return this; },
+  outlineWidth(ow){ this.catcher.outlineWidth = ow; return this; },
+  outlineOffset(oo){ this.catcher.outlineOffset = oo; return this; },
+
   // Text 
   color(c){ this.catcher.color = c; return this; },
   direction(d){ this.catcher.direction = d; return this; },
@@ -37,31 +85,19 @@ const chain = {
   wordSpacing(ws){ this.catcher.wordSpacing = ws; return this; },
   whiteSpace(sws){ this.catcher.whiteSpace = sws; return this; },
 
-  // Border
-  border(b){ this.catcher.border = b; return this; },
-  borderStyle(bs){ this.catcher.borderStyle = bs; return this; },
-  borderWidth(bw){ this.catcher.borderWidth = bw; return this; },
-  borderColor(bc){ this.catcher.borderColor = bc; return this; },
-  borderRadius(br){ this.catcher.borderRadius = br; return this; },
-  borderSideStyle(side, value){
-    if (side === 'top') {
-      this.catcher.borderTopStyle = value;
-    } else if (side === 'right') {
-      this.catcher.borderRightStyle = value;
-    } else if (side === 'bottom') {
-      this.catcher.borderBottomStyle = value;
-    } else if (side === 'left') {
-      this.catcher.borderLeftStyle = value;
-    }
-    return this;
-  },
-
   // Font 
-  fontFamily(f){ this.catcher.fontFamily = f; return this; },
-  fontStyle(s){ this.catcher.fontStyle = s; return this; },
-  fontWeight(w){ this.catcher.fontWeight = w; return this; },
-  fontVariant(v){ this.catcher.fontVariant = v; return this; },
-  fontSize(si){ this.catcher.fontSize = si; return this; },
+  font(f){ this.catcher.font = f; return this; },
+  fontFamily(ff){ this.catcher.fontFamily = ff; return this; },
+  fontStyle(fs){ this.catcher.fontStyle = fs; return this; },
+  fontWeight(fw){ this.catcher.fontWeight = fw; return this; },
+  fontVariant(fv){ this.catcher.fontVariant = fv; return this; },
+  fontSize(fsz){ this.catcher.fontSize = fsz; return this; },
+
+  // List Style
+  listStyle(ls){ this.catcher.listStyle = ls; return this; },
+  listStyleType(lst){ this.catcher.listStyleType = lst; return this; },
+  listStyleImage(lsi){ this.catcher.listStyleImage = lsi; return this; },
+  listStylePosition(lsp){ this.catcher.listStylePosition = lsp; return this; },
 
   // Display 
   display(d){ this.catcher.display = d; return this; },
@@ -76,27 +112,11 @@ const chain = {
   order(o){ this.catcher.order = o; return this; },
   visibility(v){ this.catcher.visibility = v; return this; },
 
-  // Height, Width and Max-width
-  width(w){ this.catcher.width = w; return this; },
-  minWidth(mnw){ this.catcher.minWidth = mnw; return this; },
-  maxWidth(mxw){ this.catcher.maxWidth = mxw; return this; },
-  height(h){ this.catcher.height = h; return this; },
-  minHeight(mnh){ this.catcher.minHeight = mnh; return this; },
-  maxHeight(mxh){ this.catcher.maxHeight = mxh; return this; },
-
-  // Padding
-  padding(p){ this.catcher.padding = p; return this; },
-  paddingTop(pt){ this.catcher.paddingTop = pt; return this; },
-  paddingRight(pr){ this.catcher.paddingRight = pr; return this; },
-  paddingBottom(pb){ this.catcher.paddingBottom = pb; return this; },
-  paddingLeft(pl){ this.catcher.paddingLeft = pl; return this; },
-
-  // Margin
-  margin(m){ this.catcher.margin = m; return this; },
-  marginTop(mt){ this.catcher.marginTop = mt; return this; },
-  marginRight(mr){ this.catcher.marginRight = mr; return this; },
-  marginBottom(mb){ this.catcher.marginBottom = mb; return this; },
-  marginLeft(ml){ this.catcher.marginLeft = ml; return this; },
+  // Position
+  position(p){ this.catcher.position = p; return this; },
+  top(t){ this.catcher.top = t; return this; },
+  left(l){ this.catcher.left = l; return this; },
+  bottom(b){ this.catcher.bottom = b; return this; },
 
   // Overflow
   overflow(o){ this.catcher.overflow = o; return this; },
@@ -104,28 +124,18 @@ const chain = {
   overflowY(oy){ this.catcher.overflowY = oy; return this; },
   overflowWrap(ow){ this.catcher.overflowWrap = ow; return this; },
 
-  // List Style
-  listStyle(ls){ this.catcher.listStyle = ls; return this; },
-  listStyleType(lst){ this.catcher.listStyleType = lst; return this; },
-  listStyleImage(lsi){ this.catcher.listStyleImage = lsi; return this; },
-  listStylePosition(lsp){ this.catcher.listStylePosition = lsp; return this; },
-  
-  // Outline
-  outline(o){ this.catcher.outline = o; return this; },
-  outlineColor(oc){ this.catcher.outlineColor = oc; return this; },
-  outlineStyle(os){ this.catcher.outlineStyle = os; return this; },
-  outlineWidth(ow){ this.catcher.outlineWidth = ow; return this; },
-  outlineOffset(oo){ this.catcher.outlineOffset = oo; return this; },
+  textFillColor(tfc){ this.catcher.textFillColor = tfc; return this; },
+  backgroundClip(bc){ this.catcher.backgroundClip = bc; return this; },
+  gridTemplateColumns(gtc){ this.catcher.gridTemplateColumns = gtc; return this; },
+  right(r){ this.catcher.right = r; return this; },
+  transform(tf){ this.catcher.transform = tf; return this; },
+  boxShadow(bs){ this.catcher.boxShadow = bs; return this; },
+  backdropFilter(bf){ this.catcher.backdropFilter = bf; return this; },
+  gap(g){ this.catcher.gap = g; return this; },
 
   // Float
   float(f){ this.catcher.float = f; return this; },
   clear(c){ this.catcher.clear = c; return this; },
-
-  // Position
-  position(p){ this.catcher.position = p; return this; },
-  top(t){ this.catcher.top = t; return this; },
-  left(l){ this.catcher.left = l; return this; },
-  bottom(b){ this.catcher.bottom = b; return this; },
   
   // Z-index
   zIndex(zi){ this.catcher.zIndex = zi; return this; },
@@ -197,9 +207,6 @@ const compile = (obj) => {
       const element = obj[key];
       let selectors = element.selectors || []; // Provide default empty array if selectors is undefined
       let elementCSS = '';
-      console.log('Problematic element:', element);
-        console.log('Type of element:', typeof element);
-        console.log('Is element null?', element === null);
       for (let prop in element) {
 
         if (element.hasOwnProperty(prop) && prop !== 'selectors') {
@@ -218,9 +225,6 @@ const compile = (obj) => {
 };
 
 const get = (filename) => {
-  console.log('get() called with:', filename);
-  console.log('Current working directory:', process.cwd());
-
   const fileExt = path.extname(filename).toLowerCase();
   if (fileExt !== '.jcss') {
     throw new Error(`Import error: ${filename} must have .jcss extension`);
@@ -228,11 +232,9 @@ const get = (filename) => {
   
   // Try to resolve the path
   const resolvedPath = path.resolve(process.cwd(), filename);
-  console.log('Resolved path:', resolvedPath);
   
   // Check if file exists
   const exists = fs.existsSync(resolvedPath);
-  console.log('File exists?', exists);
   
   if (!exists) {
     throw new Error(`File not found: ${filename} (resolved to: ${resolvedPath})`);
