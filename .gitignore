@@ -3,4 +3,5 @@ node_modules/
 .DS_Store
 .env
 *.tgz
-npm-debug.log*.npmrc
+npm-debug.log*
+.npmrc
