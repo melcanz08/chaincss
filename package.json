@@ -3,6 +3,10 @@
   "version": "1.5.21",
   "description": "A simple package transpiler for js to css",
   "main": "chaincss.js",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/melcanz08/chaincss.git"
