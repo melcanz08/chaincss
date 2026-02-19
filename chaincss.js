@@ -8,15 +8,16 @@ const chokidar = require('chokidar');
 const CleanCSS = require('clean-css');
 const transpilerModule = require('./transpiler.js');
 
-// FUNCTION TO PROCESS CHUNKS OF SCRIPTS FROM THE INPUT FILE USING THE VM MODULE
 const processScript = (scriptBlock) => {
+  //const output = 'cssOutput = undefined;';
   const context = vm.createContext({ 
-    ...transpilerModule 
+    ...transpilerModule // Only expose what's needed
   });
-  const jsCode = scriptBlock.trim(); 
+
+  const jsCode = scriptBlock.trim(); //`(function() { ${scriptBlock.trim()} })();`;  Wrap script in IIFE
   const chainScript = new vm.Script(jsCode);
-  chainScript.runInContext(context);
-  return context.chain.cssOutput; 
+  chainScript.runInContext(context); // Execute in isolated context
+  return context.chain.cssOutput; // Return the processed output
 };
 
 // CSS Minification Function
@@ -31,12 +32,12 @@ const minifyCss = (css) => {
 
 // FUNCTION TO CONVERT JS CODES TO CSS CODE
 const processor = (inputFile, outputFile) => {
-  const allowedExtensions = ['.jcss'];
+  /*const allowedExtensions = ['.jcss'];
   const fileExt = path.extname(inputFile).toLowerCase();
   
   if (!allowedExtensions.includes(fileExt)) {
     throw new Error(`Invalid file extension: ${fileExt}. Only .jcss files are allowed.`);
-  }
+  }*/
   const input = path.resolve(inputFile);
   const content = fs.readFileSync(input, 'utf8');
   const blocks = content.split(/<@([\s\S]*?)@>/gm);
@@ -61,7 +62,7 @@ const processor = (inputFile, outputFile) => {
   const outputDir = path.resolve(outputFile);
   const trimmedCSS = outputCSS.trim();
   const minCSS = minifyCss(trimmedCSS);
-  fs.writeFileSync(outputDir, minCSS, 'utf8'); 
+  fs.writeFileSync(outputDir, minCSS, 'utf8'); // Write processed CSS
 };
 
 // Watch function
