@@ -9,7 +9,7 @@
   },
   "homepage": "https://github.com/melcanz08/chaincss",
   "bin": {
-    "chaincss": "./chaincss.js"
+    "chaincss": "chaincss.js"
   },
   "dependencies": {
     "chokidar": "^3.5.3",
