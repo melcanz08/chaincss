@@ -3,6 +3,11 @@
   "version": "1.5.10",
   "description": "A simple package transpiler for js to css",
   "main": "chaincss.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/melcanz08/chaincss.git"
+  },
+  "homepage": "https://github.com/melcanz08/chaincss",
   "bin": {
     "chaincss": "./chaincss.js"
   },
