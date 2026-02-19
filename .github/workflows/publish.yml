@@ -25,8 +25,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Debug npm version
-        run: npm --version
+      - name: Debug information
+        run: |
+          echo "Node version: $(node --version)"
+          echo "npm version: $(npm --version)"
+          echo "Package name: $(node -p "require('./package.json').name")"
+          echo "Package version: $(node -p "require('./package.json').version")"
 
-      - name: Publish to npm
+      - name: Attempt publish
+        run: npm publish --access public --dry-run
+
+      - name: Actual publish
         run: npm publish --access public
