@@ -53,17 +53,17 @@ Project Structure
 
 Create this folder structure in your project:
 
-your-project/
-├── chaincss/                 # ChainCSS source files
-│   ├── main.jcss             # Main entry file
-│   ├── chain.jcss            # Chaining definitions
-│   └── processor.js          # Processing script
-├── public/                   # Output files
-│   ├── index.html
-│   └── style.css             # Generated CSS
-├── node_modules/
-├── package.json
-└── package-lock.json
+    your-project/
+    ├── chaincss/                 # ChainCSS source files
+    │   ├── main.jcss             # Main entry file
+    │   ├── chain.jcss            # Chaining definitions
+    │   └── processor.js          # Processing script
+    ├── public/                   # Output files
+    │   ├── index.html
+    │   └── style.css             # Generated CSS
+    ├── node_modules/
+    ├── package.json
+    └── package-lock.json
 
 
 The Initialization processor Setup

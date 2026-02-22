@@ -11,7 +11,7 @@
     "type": "git",
     "url": "git+https://github.com/melcanz08/chaincss.git"
   },
-  "homepage": "https://github.com/melcanz08/chaincss",
+  "homepage": "https://melcanz08.github.io/chaincss-website",
   "bin": {
     "chaincss": "chaincss.js"
   },
