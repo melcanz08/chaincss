@@ -19,6 +19,26 @@
     "chokidar": "^3.5.3",
     "clean-css": "^5.3.3"
   },
+  "peerDependencies": {
+    "autoprefixer": "^10.0.0",
+    "browserslist": "^4.28.1",
+    "caniuse-db": "^1.0.30001770",
+    "postcss": "^8.5.6"
+  },
+  "peerDependenciesMeta": {
+    "autoprefixer": {
+      "optional": true
+    },
+    "postcss": {
+      "optional": true
+    },
+    "browserslist": {
+      "optional": true
+    },
+    "caniuse-db": {
+      "optional": true
+    }
+  },
   "keywords": [
     "css",
     "js",

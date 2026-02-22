@@ -8,18 +8,19 @@ A simple JavaScript-to-CSS transpiler that converts JS objects into optimized CS
 ## 🚀 Installation
 
 ```bash
-npm install @melcanz85/chaincss
-
+    npm install @melcanz85/chaincss
+```
 📦 Usage (Node.js)
+
 Quick Setup
 
-    Install development dependencies:
+### Install development dependencies:
 
-bash
+```bash
+    npm install --save-dev nodemon concurrently
+```
 
-npm install --save-dev nodemon concurrently
-
-    Update your package.json scripts:
+### Update your package.json scripts:
 
 json
 
@@ -27,6 +28,27 @@ json
   "start": "concurrently \"nodemon server.js\" \"nodemon --watch chaincss/*.jcss --watch processor.js --exec 'node processor.js'\""
 }
 
+
+## 🔧 CSS Prefixing
+
+ChainCSS offers two prefixing modes:
+
+### 1. Lightweight Mode (Default, ~50KB)
+Built-in prefixer that handles the most common CSS properties:
+- Flexbox & Grid
+- Transforms & Animations
+- Filters & Effects
+- Text effects
+- Box properties
+
+No additional installation needed!
+
+### 2. Full Mode (Uses Autoprefixer)
+For complete prefixing coverage of all CSS properties:
+
+```bash
+npm install autoprefixer postcss browserslist caniuse-db
+```
 Project Structure
 
 Create this folder structure in your project:
@@ -48,94 +70,118 @@ The Initialization processor Setup
 
 In chaincss/processor.js:
 
-const chain = require("@melcanz85/chaincss");
+    const chain = require("@melcanz85/chaincss");
 
-try {
-  // Process main file and output CSS
-  chain.processor('./chaincss/main.jcss', './public/style.css');
-} catch (err) {
-  console.error('Error processing chainCSS file:', err.stack);
-  process.exit(1);
-}
+    try {
+      // Process main file and output CSS
+      chain.processor('./chaincss/main.jcss', './public/style.css');
+    } catch (err) {
+      console.error('Error processing chainCSS file:', err.stack);
+      process.exit(1);
+    }
 
 💻 Code Examples
 
- //*** This is where the chaining happens all codes here are in javascript syntax, the methods are the css properties but in javascript form it follows the camelCase standard. Example the css property font-family is fontFamily in chaincss and your css selector is the value of the block() method which is always at the end of the chain.
+    //--Chaining File (chaincss/chain.jcss):
 
- //*** The property method are the same as the css property but background is an exception because it's a long word so it is shorten to bg only. Example background-color is bgColor() in chaincss etc.
+### This is where the chaining happens all codes must be in javascript syntax. 
+    The chain methods are the same as the css properties but in camelCase mode 
+    and the exception of the background property which is shorten to 'bg' only for
+    example background-color is bgColor() in chaincss. The value of the block() 
+    method is the css selector which is always at the end of the chain or block.
 
- 
-//--Chaining File (chaincss/chain.jcss):
+    // Variables for consistent styling
+    const bodyBg = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+    const headerBg = 'rgba(255, 255, 255, 0.95)';
+    const bodyFontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, 
+                            Ubuntu, sans-serif";
+    const headerBoxShadow = '0 2px 20px rgba(0,0,0,0.1)';
+    const logoFontSize = '1.8rem';
 
-// Variables for consistent styling
-const bodyBgColor = '#f0f0f0';
-const headerBgColor = '#333';
-const bodyFontFamily = 'Arial, sans-serif';
-const headerAlignItems = 'center';
-const logoHeight = '50px';
+    const reset = chain
+      .margin('0')
+        .padding('0')
+        .boxSizing('border-box')
+        .block('*');
 
-// Reset browser defaults
-const resetDefaultBrowStyle = chain
-  .margin('0')
-  .padding('0')
-  .block('body', 'h1', 'h2', 'h3', 'p', 'ul');
+    const body = chain
+        .fontFamily(bodyFontFamily)
+        .lineHeight('1.6')
+        .color('#1e293b')
+        .bg(bodyBg)
+        .block('body');
 
-// Body styles
-const bodyStyle = chain
-  .fontFamily(bodyFontFamily)
-  .lineHeight('1.6')
-  .bgColor(bodyBgColor)
-  .block('body');
+        /* Header/Navigation */
+    const navbar = chain
+        .bg(headerBg)
+        .backdropFilter('blur(10px)')
+        .padding('1rem 5%')
+        .position('fixed')
+        .width('100%')
+        .top('0')
+        .zIndex('1000')
+        .boxShadow(headerBoxShadow)
+        .block('.navbar');
 
-// Header styles
-const header = chain
-  .display('flex')
-  .alignItems(headerAlignItems)
-  .justifyContent('space-between')
-  .bgColor(headerBgColor)
-  .color('#fff')
-  .padding('10px 20px')
-  .block('header');
+    const nav_container = chain
+        .maxWidth('1200px')
+        .margin('0 auto')
+        .display('flex')
+        .justifyContent('space-between')
+        .alignItems('center')
+        .block('.nav-container');
 
-// Logo
-const logoImgHeight = chain
-  .height(logoHeight)
-  .block('.logo img');
+    const logo = chain
+        .fontSize(logoFontSize)
+        .fontWeight('700')
+        .bg('linear-gradient(135deg, #667eea, #764ba2)')
+        .backgroundClip('text')
+        .textFillColor('transparent')
+        .letterSpacing('-0.5px')
+        .block('.logo');
 
-module.exports = {
-  resetDefaultBrowStyle,
-  bodyStyle,
-  header,
-  logoImgHeight
-};
+    module.exports = {
+      reset,
+      navbar,
+      nav_container,
+      logo
+    };
 
 
 //--Main File (chaincss/main.jcss):
 
-<@
-  // Import chaining definitions
-  const style = get('./chain.jcss');
+    <@
+      // Import chaining definitions
+      const style = get('./chain.jcss');
 
-  // Override specific styles
-  style.header.bgColor = 'red';
-  
-  // Compile to CSS
-  compile(style);
-@>
+      // Override specific styles
+      style.logo.fontSize = '2rem';
+      
+      // Compile to CSS
+      compile(style);
+    @>
 
-@media (max-width: 768px) {
-<@
-  run(
-    chain.flexDirection('column').alignItems('flex-start').block('header'),
-    chain.order(1).block('.logo'),
-    chain.order(2).block('.search-bar'),
-    chain.order(3).block('h1'),
-    chain.order(5).block('nav'),
-    chain.order(4).display('flex').width('100%').justifyContent('flex-end').block('.burgerWrapper')
-  );
-@>
-}
+    @keyframes fadeInUp {
+    <@
+      run(
+        chain.opacity('0').transform('translateY(20px)').block('from'),
+        chain.opacity('1').transform('translateY(0)').block('to'),
+      );
+    @>
+    }
 
+    /* Responsive */
+    @media (max-width: 768px) {
+    <@
+      run(
+        chain.fontSize('2.5rem').block('.hero h1'),
+        chain.flexDirection('column').gap('1rem').block('.stats'),
+        chain.flexDirection('column').alignItems('center').block('.cta-buttons'),
+        chain.gridTemplateColumns('1fr').block('.example-container'),
+        chain.display('none').block('.nav-links')
+      );
+    @>
+    }
 
 📝 Notes
     
@@ -143,13 +189,16 @@ module.exports = {
 
     But chainCSS syntax must be wrapped in <@ @> delimiters.
 
-    The get() function imports chaining definitions from other files
+    The get() function imports chaining definitions from your chain.jcss file
 
-    YOU can modify your style in between get() and compile() in the main file it will overwrite the styles in the chainn file.
+    You can modify your style in between get() and compile() in the 
+    main file it will overwrite the styles in the chain file.
 
 🎨 Editor Support
 
-Since .jcss files are just JavaScript files with ChainCSS syntax, you can easily enable proper syntax highlighting in your editor:
+Since .jcss files are just JavaScript files with ChainCSS syntax, you can 
+easily enable proper syntax highlighting in your editor:
+
 VS Code
 
 Add this to your project's .vscode/settings.json:
@@ -171,13 +220,13 @@ WebStorm / IntelliJ IDEA
 Vim / Neovim
 
 Add to your .vimrc or init.vim:
-vim
 
-au BufRead,BufNewFile *.jcss setfiletype javascript
+    au BufRead,BufNewFile *.jcss setfiletype javascript
 
 Sublime Text
 
-Create or edit ~/Library/Application Support/Sublime Text/Packages/User/JCSS.sublime-settings:
+    Create or edit ~/Library/Application Support/Sublime Text/Packages/User/JCSS.sublime-settings:
+
 json
 
 {
@@ -190,12 +239,13 @@ Atom
 Add to your config.cson:
 coffeescript
 
-"*":
-  core:
-    customFileTypes:
-      "source.js": [
-        "jcss"
-      ]
+    "*":
+      core:
+        customFileTypes:
+          "source.js": [
+            "jcss"
+          ]
+
 
 Other Editors
 
@@ -208,19 +258,17 @@ Status               Feature             Description
 
 ✅ Basic             JS → CSS            Convert plain JS objects to CSS
 
-🚧 Keyframe          animations          @keyframes support
+✅ Vendor            prefixing           Auto-add -webkit-, -moz-, etc.
 
-🚧 Vendor            prefixing           Auto-add -webkit-, -moz-, etc.
+✅ Keyframe          animations          @keyframes support
+                     
+✅ Source maps       Debug               generated CSS
 
-🚧 Source maps       Debug               generated CSS
-
-🚧 Watch             mode                Auto-recompile on file changes
-
-✅ = Working, 🚧 = Coming soon
-
+✅ Watch             mode                Auto-recompile on file changes
 
 👨‍💻 Contributing
-Contributions are welcome! Feel free to open issues or submit pull requests.
+
+    Contributions are welcome! Feel free to open issues or submit pull requests.
 
 📄 License
 

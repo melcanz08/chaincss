@@ -124,6 +124,7 @@ const chain = {
   overflowY(oy){ this.catcher.overflowY = oy; return this; },
   overflowWrap(ow){ this.catcher.overflowWrap = ow; return this; },
 
+  animation(a){ this.catcher.animation = a; return this; },
   textFillColor(tfc){ this.catcher.textFillColor = tfc; return this; },
   backgroundClip(bc){ this.catcher.backgroundClip = bc; return this; },
   gridTemplateColumns(gtc){ this.catcher.gridTemplateColumns = gtc; return this; },
