@@ -272,4 +272,4 @@ Status               Feature             Description
 
 📄 License
 
-MIT © Rommel Caneos
+MIT © Rommel E. Caneos
