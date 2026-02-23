@@ -34,6 +34,7 @@ json
 ChainCSS offers two prefixing modes:
 
 ### 1. Lightweight Mode (Default, ~50KB)
+
 Built-in prefixer that handles the most common CSS properties:
 - Flexbox & Grid
 - Transforms & Animations
@@ -44,6 +45,7 @@ Built-in prefixer that handles the most common CSS properties:
 No additional installation needed!
 
 ### 2. Full Mode (Uses Autoprefixer)
+
 For complete prefixing coverage of all CSS properties:
 
 ```bash
