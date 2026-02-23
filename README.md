@@ -1,6 +1,6 @@
 # @melcanz85/chaincss
 
-[![npm version](https://badge.fury.io/js/@melcanz85%2Fchaincss.svg)](https://badge.fury.io/js/@melcanz85%2Fchaincss)
+[![npm version](https://badge.fury.io/js/@melcanz85%2Fchaincss.svg?v=2)](https://badge.fury.io/js/@melcanz85%2Fchaincss)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A simple JavaScript-to-CSS transpiler that converts JS objects into optimized CSS.
