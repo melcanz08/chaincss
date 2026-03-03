@@ -460,7 +460,6 @@ Status               Feature             Description
 |    Feature     |     chaincss      |  Runtime CSS-in-JS  | Tailwind      | Vanilla CSS |
 |----------------|-------------------|---------------------|---------------|-------------|
 | **When CSS is generated**   | ⚙️ **Build time** | 🕒 Runtime (browser)| ⚙️ Build time | 📁 Already written |
- 
 | **Browser work**| None - just      | Executes JS to      | None - just   | None         |
                     serves CSS          generate CSS            serves CSS
 | **Dynamic values**| ✅ Via JS at   | ✅ Via props at     | ⚠️ Limited    | ❌ Manual    |
