@@ -1,6 +1,6 @@
 # @melcanz85/chaincss
 
-[![npm version](https://badge.fury.io/js/@melcanz85%2Fchaincss.svg?v=2)](https://badge.fury.io/js/@melcanz85%2Fchaincss)
+[![npm version](https://img.shields.io/npm/v/@melcanz85/chaincss.svg)](https://www.npmjs.com/package/@melcanz85/chaincss)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ⚡ **Compile-time CSS-in-JS** - Runs during build, not in the browser!
@@ -227,7 +227,7 @@ ChainCSS works great with React and Vite! Here's how to set it up:
 3. **Styles are merged and compiled** into a single `global.css` file
 4. **React components import the generated CSS** and use the class names
 
-### Example: Button Component
+### Example: Navbar & Hero Components
 
 **src/components/Nav/navbar.jcss**
 
@@ -459,15 +459,12 @@ Status               Feature             Description
 
 |    Feature     |     chaincss      |  Runtime CSS-in-JS  | Tailwind      | Vanilla CSS |
 |----------------|-------------------|---------------------|---------------|-------------|
-| **When CSS is  | ⚙️ **Build time** | 🕒 Runtime (browser)| ⚙️ Build time | 📁 Already written |
-    generated**  
-
+| **When CSS is generated**   | ⚙️ **Build time** | 🕒 Runtime (browser)| ⚙️ Build time | 📁 Already written |
+ 
 | **Browser work**| None - just      | Executes JS to      | None - just   | None         |
                     serves CSS          generate CSS            serves CSS
-
 | **Dynamic values**| ✅ Via JS at   | ✅ Via props at     | ⚠️ Limited    | ❌ Manual    |
                          build time         runtime
-
 | **Bundle size** | Just the CSS     | CSS + JS runtime    | Just the CSS  | Just the CSS |
 
 👨‍💻 Contributing
