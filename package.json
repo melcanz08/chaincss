@@ -1,6 +1,6 @@
 {
   "name": "@melcanz85/chaincss",
-  "version": "1.7.2",
+  "version": "1.7.3",
   "description": "A simple package transpiler for js to css",
   "main": "chaincss.js",
   "publishConfig": {
