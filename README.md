@@ -3,13 +3,16 @@
 [![npm version](https://badge.fury.io/js/@melcanz85%2Fchaincss.svg?v=2)](https://badge.fury.io/js/@melcanz85%2Fchaincss)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A simple JavaScript-to-CSS transpiler that converts JS objects into optimized CSS.
+⚡ **Compile-time CSS-in-JS** - Runs during build, not in the browser!
+
+A simple JavaScript-to-CSS transpiler that converts JS objects into optimized CSS **without runtime overhead**.
 
 ## 🚀 Installation
 
 ```bash
     npm install @melcanz85/chaincss
 ```
+
 📦 Usage (Node.js)
 
 Quick Setup
@@ -22,11 +25,9 @@ Quick Setup
 
 ### Update your package.json scripts:
 
-json
-
-"scripts": {
-  "start": "concurrently \"nodemon server.js\" \"nodemon --watch chaincss/*.jcss --watch processor.js --exec 'node processor.js'\""
-}
+    "scripts": {
+      "start": "concurrently \"nodemon server.js\" \"nodemon --watch chaincss/*.jcss --watch processor.js --exec 'node processor.js'\""
+    }
 
 
 ## 🔧 CSS Prefixing
@@ -49,7 +50,7 @@ No additional installation needed!
 For complete prefixing coverage of all CSS properties:
 
 ```bash
-npm install autoprefixer postcss browserslist caniuse-db
+    npm install autoprefixer postcss browserslist caniuse-db
 ```
 Project Structure
 
@@ -185,11 +186,187 @@ In chaincss/processor.js:
     @>
     }
 
+
+## ⚛️ Using ChainCSS with React
+
+ChainCSS works great with React and Vite! Here's how to set it up:
+
+### Quick Start with React + Vite
+
+1. **Create a new React project**
+```bash
+    npm create vite@latest my-app -- --template react
+    cd my-app
+```
+
+### Project Structure (Component-First Approach)
+
+    my-react-app/
+    ├── src/
+    │   ├── components/
+    │   │   ├── Navbar/
+    │   │   │   ├── Navbar.jsx
+    │   │   │   └── navbar.jcss             # Chain definitions with fluent API
+    │   │   ├── Button/
+    │   │   │   ├── Button.jsx
+    │   │   │   └── button.jcss             # Chain definitions with fluent API
+    │   │   └── ...
+    │   ├── style/
+    │   │   └── global.css                  # Generated CSS
+    │   ├── App.jsx
+    │   └── main.jsx
+    ├── chaincss/
+    │   ├── main.jcss                        # Entry point - imports and compiles
+    │   └── processor.js                     # Processing script
+    └── package.json
+
+### How It Works
+
+1. **Each component has its own `.jcss` file** with style definitions as JavaScript objects
+2. **`main.jcss` imports all component styles** using `get()` function
+3. **Styles are merged and compiled** into a single `global.css` file
+4. **React components import the generated CSS** and use the class names
+
+### Example: Button Component
+
+**src/components/Nav/navbar.jcss**
+
+    const navbar = chain
+    .bg('rgba(255, 255, 255, 0.95)')
+    .backdropFilter('blur(10px)')
+    .padding('1rem 5%')
+    .position('fixed')
+    .width('100%')
+    .top('0')
+    .zIndex('1000')
+    .boxShadow('0 2px 20px rgba(0,0,0,0.1)')
+    .block('.navbar');
+
+    module.exports = {navbar}
+
+**src/components/Hero/hero.jcss**
+
+    const hero = chain
+    .padding('120px 5% 80px')
+    .bg('linear-gradient(135deg, #667eea 0%, #764ba2 100%)')
+    .color('white')
+    .textAlign('center')
+    .block('.hero');
+
+    module.exports = {hero}
+
+**chaincss/main.jcss**
+
+    // You can mix a default style using run() method or even vanilla css (without delimeters)
+    <@
+    run(
+        chain.margin('0').padding('0').boxSizing('border-box').block('*'),
+        chain
+        .fontFamily("-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif")
+        .lineHeight('1.6')
+        .color('#1e293b')
+        .bg('linear-gradient(135deg, #667eea 0%, #764ba2 100%)')
+        .block('body')
+    );
+    @>
+
+    .button {
+      background-color: #667eea;
+      color: white;
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+    }
+
+    <@
+    // Import all component styles
+    const nav = get('./src/components/Navbar/navbar.jcss');
+    const hero = get('./src/components/Hero/hero.jcss');
+
+    // Merge for one compilation
+    const allStyles = Object.assign({},nav,hero);
+
+    // Overwrite padding in navbar chain!
+    nav.navbar.padding = '1rem 5%';
+
+    compile(allStyles);
+    @>
+
+    // you can add keyframes and media queries in this setup
+    @keyframes fadeInUp {
+    <@
+    run(
+        chain.opacity('0').transform('translateY(20px)').block('from'),
+        chain.opacity('1').transform('translateY(0)').block('to'),
+    );
+    @>
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+    <@
+    run(
+        chain.fontSize('2.5rem').block('.hero h1'),
+        chain.flexDirection('column').gap('1rem').block('.stats'),
+        chain.flexDirection('column').alignItems('center').block('.cta-buttons'),
+        chain.gridTemplateColumns('1fr').block('.example-container'),
+        chain.display('none').block('.nav-links')
+    );
+    @>
+    }
+
+Benefits of This Approach
+
+    ✅ Component Co-location: Styles live next to their components
+
+    ✅ Single Source of Truth: Each component manages its own styles
+
+    ✅ Easy to Maintain: Add/remove components without touching a central style file
+
+    ✅ Scalable: Perfect for large React applications
+
+    ✅ No Redundancy: Styles are automatically merged and optimized
+
+**This structure is much cleaner and follows React best practices! Each component owns its styles, and `main.jcss` simply orchestrates the compilation.**
+
+🎯 Best Practices with React
+
+    1. Component-Specific Styles
+
+        * Keep styles close to components: Button/button.jcss
+
+        * Use descriptive class names that match your components
+
+    2. Global Styles
+
+        * Use main.jcss for global resets and animations
+
+        * Import generated CSS once in your root component
+
+    3. Dynamic Styles
+
+    // In your .jcss file
+    const theme = {
+      primary: '#667eea',
+      secondary: '#764ba2'
+    };
+
+    const button = chain
+      .backgroundColor(theme.primary)
+      .block('.btn');
+      
+    const buttonHover = chain
+      .backgroundColor(theme.secondary)
+      .block('.btn:hover');
+
 📝 Notes
     
-    You can directly put css syntax code on your main file.
+    You can directly put css syntax code on your main.jcss file.
 
     But chainCSS syntax must be wrapped in <@ @> delimiters.
+
+    run() and compile() method should be separate block <@ run() @> <@ compile @>
 
     The get() function imports chaining definitions from your chain.jcss file
 
@@ -205,11 +382,11 @@ VS Code
 
 Add this to your project's .vscode/settings.json:
 
-{
-    "files.associations": {
-        "*.jcss": "javascript"
+    {
+        "files.associations": {
+            "*.jcss": "javascript"
+        }
     }
-}
 
 WebStorm / IntelliJ IDEA
 
@@ -268,10 +445,35 @@ Status               Feature             Description
 
 ✅ Watch             mode                Auto-recompile on file changes
 
+
+## 🚀 Key Differentiators
+
+- **⚙️ Compile-time, not runtime** - chaincss processes your styles during build, generating pure CSS files. Zero JavaScript execution in the browser means faster page loads!
+
+- **🏎️ Performance by design** - Unlike runtime CSS-in-JS libraries, chaincss adds no bundle weight and causes no layout shifts
+
+- **🔧 Build-time processing** - Your `.jcss` files are transformed before deployment, not in the user's browser
+
+
+## 🔄 chaincss vs Other Approaches
+
+|    Feature     |     chaincss      |  Runtime CSS-in-JS  | Tailwind      | Vanilla CSS |
+|----------------|-------------------|---------------------|---------------|-------------|
+| **When CSS is  | ⚙️ **Build time** | 🕒 Runtime (browser)| ⚙️ Build time | 📁 Already written |
+    generated**  
+
+| **Browser work**| None - just      | Executes JS to      | None - just   | None         |
+                    serves CSS          generate CSS            serves CSS
+
+| **Dynamic values**| ✅ Via JS at   | ✅ Via props at     | ⚠️ Limited    | ❌ Manual    |
+                         build time         runtime
+
+| **Bundle size** | Just the CSS     | CSS + JS runtime    | Just the CSS  | Just the CSS |
+
 👨‍💻 Contributing
 
     Contributions are welcome! Feel free to open issues or submit pull requests.
 
 📄 License
 
-MIT © Rommel E. Caneos
+MIT © Rommel Caneos

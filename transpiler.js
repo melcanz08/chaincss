@@ -209,7 +209,6 @@ const compile = (obj) => {
       let selectors = element.selectors || []; // Provide default empty array if selectors is undefined
       let elementCSS = '';
       for (let prop in element) {
-
         if (element.hasOwnProperty(prop) && prop !== 'selectors') {
           // Convert camelCase to kebab-case
           const kebabKey = prop.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase();
@@ -218,7 +217,6 @@ const compile = (obj) => {
       }
       selectors = selectors.join();
       cssString += `${selectors} {\n${elementCSS}}\n`;
-      
     }
   }
 
@@ -230,7 +228,6 @@ const get = (filename) => {
   if (fileExt !== '.jcss') {
     throw new Error(`Import error: ${filename} must have .jcss extension`);
   }
-  
   // Try to resolve the path
   const resolvedPath = path.resolve(process.cwd(), filename);
   
@@ -238,7 +235,7 @@ const get = (filename) => {
   const exists = fs.existsSync(resolvedPath);
   
   if (!exists) {
-    throw new Error(`File not found: ${filename} (resolved to: ${resolvedPath})`);
+    throw new Error('File not found: '+filename+'(resolved to: '+resolvedPath+')');
   }
   
   return require(resolvedPath);

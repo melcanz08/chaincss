@@ -105,7 +105,7 @@ class ChainCSSPrefixer {
     }
   }
 
-  // 🚀 Full mode with Autoprefixer
+  // Full mode with Autoprefixer
    async processWithAutoprefixer(cssString, options, mapOptions) {
     const from = options.from || 'input.css';
     const to = options.to || 'output.css';
@@ -124,7 +124,7 @@ class ChainCSSPrefixer {
     };
   }
 
-  // 🔧 Lightweight mode with built-in prefixer
+  // Lightweight mode with built-in prefixer
   async processWithBuiltIn(cssString, options, mapOptions) {
     if (!this.hasBuiltInDeps) {
       return { css: cssString, map: null };

@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-// INCLUDE SEVERAL NODEJS MODULES
 const vm = require('vm');
 const path = require('path');
 const fs = require('fs');
@@ -18,21 +17,16 @@ let prefixerConfig = {
 const prefixer = new ChainCSSPrefixer(prefixerConfig);
 
 const processScript = (scriptBlock) => {
-  const context = vm.createContext({ 
-    ...transpilerModule
-  });
-
+  const context = vm.createContext({ ...transpilerModule});
   const jsCode = scriptBlock.trim();
   const chainScript = new vm.Script(jsCode);
   chainScript.runInContext(context);
   return context.chain.cssOutput;
 };
 
-// FUNCTION TO CONVERT JS CODES TO CSS CODE (FIRST STEP)
 const processJavascriptBlocks = (content) => {
   const blocks = content.split(/<@([\s\S]*?)@>/gm);
   let outputCSS = '';
-
   for (let i = 0; i < blocks.length; i++) {
     if (i % 2 === 0) {
       outputCSS += blocks[i]; // Write the existing CSS as is
@@ -49,15 +43,13 @@ const processJavascriptBlocks = (content) => {
       }
     }
   }
-  
   return outputCSS.trim();
 };
 
-// NEW: Validate CSS (check for unclosed blocks)
+// Validate CSS (check for unclosed blocks)
 const validateCSS = (css) => {
   const openBraces = (css.match(/{/g) || []).length;
   const closeBraces = (css.match(/}/g) || []).length;
-  
   if (openBraces !== closeBraces) {
     console.error(`CSS syntax error: Unclosed blocks (${openBraces} opening vs ${closeBraces} closing braces)`);
     return false;
@@ -66,17 +58,14 @@ const validateCSS = (css) => {
 };
 
 // Modified minification function with source map support
-
 const processAndMinifyCss = async (css, inputFile, outputFile) => {
-  // First validate the CSS
   if (!validateCSS(css)) {
     throw new Error('Invalid CSS syntax - check for missing braces');
   }
-  
+
   // Step 1: Apply prefixer (if enabled)
   let processedCss = css;
   let sourceMap = null;
-  
   if (prefixerConfig.enabled) {
     try {
       const result = await prefixer.process(css, {
@@ -84,10 +73,8 @@ const processAndMinifyCss = async (css, inputFile, outputFile) => {
         to: outputFile,
         map: prefixerConfig.sourceMap !== false
       });
-      
       processedCss = result.css;
       sourceMap = result.map;
-      
     } catch (err) {
       console.error('⚠Prefixer error:', err.message);
       processedCss = css;
@@ -100,19 +87,15 @@ const processAndMinifyCss = async (css, inputFile, outputFile) => {
     console.error('CSS Minification Errors:', output.errors);
     return { css: null, map: null };
   }
-  
   let finalCss = output.styles;
-  
   if (sourceMap && !prefixerConfig.sourceMapInline) {
     const mapFileName = path.basename(`${outputFile}.map`);
     finalCss += `\n/*# sourceMappingURL=${mapFileName} */`;
   }
-  
   return { css: finalCss, map: sourceMap };
 };
 
 // Main processor function - FIXED ORDER
-
 const processor = async (inputFile, outputFile) => {
   try {
     const input = path.resolve(inputFile);
@@ -126,19 +109,18 @@ const processor = async (inputFile, outputFile) => {
     if (!validateCSS(processedCSS)) {
       throw new Error('Invalid CSS syntax');
     }
-    
+
     // STEP 3: Apply prefixer and minify with source maps
-   
-    const result = await processAndMinifyCss(processedCSS, input, output);
+    const stylePath = output + '/global.css';
+    const result = await processAndMinifyCss(processedCSS, input, stylePath);
     if (result.css) {
-      fs.writeFileSync(output, result.css, 'utf8');
-      
+      fs.writeFileSync(stylePath, result.css, 'utf8');
+
       //Write source map if generated
       if (result.map) {
-        const mapFile = `${output}.map`;
+        const mapFile = `${stylePath}.map`;
         fs.writeFileSync(mapFile, result.map, 'utf8');
       }
-      
       if (prefixerConfig.enabled) {
         console.log(`   Prefixer: ${prefixerConfig.mode} mode (${prefixerConfig.browsers.join(', ')})`);
       }
@@ -155,9 +137,7 @@ const processor = async (inputFile, outputFile) => {
 
 // Watch function
 function watch(inputFile, outputFile) {
-  console.log(`Watching for changes in ${inputFile}...`);
   chokidar.watch(inputFile).on('change', async () => {
-    console.log(`File changed: ${inputFile}`);
     try {
       await processor(inputFile, outputFile);
     } catch (err) {
@@ -167,7 +147,6 @@ function watch(inputFile, outputFile) {
 }
 
 // Parse CLI arguments
-
 function parseArgs(args) {
   const result = {
     inputFile: null,
@@ -213,7 +192,6 @@ function parseArgs(args) {
 if (require.main === module) {
   const args = process.argv.slice(2);
   const cliOptions = parseArgs(args);
-  
   if (!cliOptions.inputFile || !cliOptions.outputFile) {
     console.log(`
 ChainCSS - JavaScript-powered CSS preprocessor
