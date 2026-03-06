@@ -3,17 +3,17 @@
 [![npm version](https://img.shields.io/npm/v/@melcanz85/chaincss.svg)](https://www.npmjs.com/package/@melcanz85/chaincss)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-⚡ **Compile-time CSS-in-JS** - Runs during build, not in the browser!
+**Compile-time CSS-in-JS** - Runs during build, not in the browser!
 
 A simple JavaScript-to-CSS transpiler that converts JS objects into optimized CSS **without runtime overhead**.
 
-## 🚀 Installation
+## Installation
 
 ```bash
     npm install @melcanz85/chaincss
 ```
 
-📦 Usage (Node.js)
+**Usage (Node.js)**
 
 Quick Setup
 
@@ -26,50 +26,68 @@ Quick Setup
 ### Update your package.json scripts:
 
     "scripts": {
-      "start": "concurrently \"nodemon server.js\" \"nodemon --watch chaincss/*.jcss --watch processor.js --exec 'node processor.js'\""
+      "start": "concurrently \"nodemon server.js\" \"nodemon --watch chaincss/*.jcss --watch processor.cjs --exec 'node processor.cjs'\""
     }
 
 
-## 🔧 CSS Prefixing
+## CSS Prefixing
 
-ChainCSS offers two prefixing modes:
+ChainCSS offers two prefixing approaches:
 
-### 1. Lightweight Mode (Default, ~50KB)
+### 1. Built-in Prefixer (Auto Mode, Default)
 
-Built-in prefixer that handles the most common CSS properties:
+Our lightweight built-in prefixer handles the most common CSS properties:
 - Flexbox & Grid
 - Transforms & Animations
 - Filters & Effects
 - Text effects
 - Box properties
 
-No additional installation needed!
-
-### 2. Full Mode (Uses Autoprefixer)
+**No additional installation needed!** Just run:
+```bash
+    npx chaincss input.jcss output.css --watch
+```
+### 2. Full Autoprefixer Mode (Complete Coverage)
 
 For complete prefixing coverage of all CSS properties:
 
 ```bash
     npm install autoprefixer postcss browserslist caniuse-db
-```
-Project Structure
+    
+    # then run this command 
+    npx chaincss input.jcss output.css --watch --prefixer-mode full
 
-Create this folder structure in your project:
+```
+
+### 3. Make Full Mode Permanent
+
+Edit your package.json script:
+
+    "scripts": {
+        "css:watch": "chaincss src/styles.jcss dist/styles.css --watch --prefixer-mode full",
+        "start": "concurrently \"npm run dev\" \"npm run css:watch\""
+    }
+
+
+**Project Structure (vanillajs, vanilla nodejs)**
+
+Create this folder structure in your vanillaJS project:
 
     your-project/
     ├── chaincss/                 # ChainCSS source files
     │   ├── main.jcss             # Main entry file
     │   ├── chain.jcss            # Chaining definitions
-    │   └── processor.js          # Processing script
+    │   └── processor.js         # Processing script
     ├── public/                   # Output files
     │   ├── index.html
     │   └── style.css             # Generated CSS
     ├── node_modules/
     ├── package.json
-    └── package-lock.json
+    ├── package.lock.json
+    └── server.js
 
 
-The Initialization processor Setup
+**The Initialization processor Setup**
 
 In chaincss/processor.js:
 
@@ -83,107 +101,60 @@ In chaincss/processor.js:
       process.exit(1);
     }
 
-💻 Code Examples
+## Code Examples
 
     //--Chaining File (chaincss/chain.jcss):
 
-### This is where the chaining happens all codes must be in javascript syntax. 
-    The chain methods are the same as the css properties but in camelCase mode 
-    and the exception of the background property which is shorten to 'bg' only for
-    example background-color is bgColor() in chaincss. The value of the block() 
-    method is the css selector which is always at the end of the chain or block.
+**This is where the chaining happens all codes must be in javascript syntax. 
+    The chain methods are the same as the css properties but in camelCase mode. 
+    The value of the block() method is the css selector which is always at the 
+    end of the chain or block.**
 
-    // Variables for consistent styling
-    const bodyBg = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
-    const headerBg = 'rgba(255, 255, 255, 0.95)';
-    const bodyFontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, 
-                            Ubuntu, sans-serif";
-    const headerBoxShadow = '0 2px 20px rgba(0,0,0,0.1)';
-    const logoFontSize = '1.8rem';
-
-    const reset = chain
-      .margin('0')
-        .padding('0')
-        .boxSizing('border-box')
-        .block('*');
-
-    const body = chain
-        .fontFamily(bodyFontFamily)
-        .lineHeight('1.6')
-        .color('#1e293b')
-        .bg(bodyBg)
-        .block('body');
-
-        /* Header/Navigation */
-    const navbar = chain
-        .bg(headerBg)
-        .backdropFilter('blur(10px)')
-        .padding('1rem 5%')
-        .position('fixed')
-        .width('100%')
-        .top('0')
-        .zIndex('1000')
-        .boxShadow(headerBoxShadow)
+       /* Header/Navigation */
+    const navbar = $().backdropFilter('blur(10px)').padding('1rem 5%')
+        .position('fixed').width('100%').top('0').zIndex('1000').boxShadow(headerBoxShadow)
         .block('.navbar');
 
-    const nav_container = chain
-        .maxWidth('1200px')
-        .margin('0 auto')
-        .display('flex')
-        .justifyContent('space-between')
-        .alignItems('center')
-        .block('.nav-container');
-
-    const logo = chain
-        .fontSize(logoFontSize)
-        .fontWeight('700')
-        .bg('linear-gradient(135deg, #667eea, #764ba2)')
-        .backgroundClip('text')
-        .textFillColor('transparent')
-        .letterSpacing('-0.5px')
-        .block('.logo');
+    const nav_container = $().maxWidth('1200px').margin('0 auto').display('flex')
+        .justifyContent('space-between').alignItems('center').block('.nav-container');
 
     module.exports = {
-      reset,
       navbar,
-      nav_container,
-      logo
+      nav_container
     };
 
 
-//--Main File (chaincss/main.jcss):
+**Main File (chaincss/main.jcss):**
 
     <@
       // Import chaining definitions
       const style = get('./chain.jcss');
 
       // Override specific styles
-      style.logo.fontSize = '2rem';
+      style.navbar.padding = '2rem 5%';
       
       // Compile to CSS
       compile(style);
     @>
 
     @keyframes fadeInUp {
-    <@
-      run(
-        chain.opacity('0').transform('translateY(20px)').block('from'),
-        chain.opacity('1').transform('translateY(0)').block('to'),
-      );
-    @>
+        <@
+            const from = $().opacity('0').transform('translateY(20px)').block('from');
+            const to = $().chain.opacity('1').transform('translateY(0)').block('to');
+            run(from,to);
+        @>
     }
 
     /* Responsive */
     @media (max-width: 768px) {
-    <@
-      run(
-        chain.fontSize('2.5rem').block('.hero h1'),
-        chain.flexDirection('column').gap('1rem').block('.stats'),
-        chain.flexDirection('column').alignItems('center').block('.cta-buttons'),
-        chain.gridTemplateColumns('1fr').block('.example-container'),
-        chain.display('none').block('.nav-links')
-      );
-    @>
+        <@
+            const hero_h1 = $().fontSize('2.5rem').block('.hero h1');
+            const stats = $().flexDirection('column').gap('1rem').block('.stats');
+            const cta_buttons = $().flexDirection('column').alignItems('center').block('.cta-buttons');
+            const ex_container = $().gridTemplateColumns('1fr').block('.example-container');
+            const nav_links = $().display('none').block('.nav-links');
+            run(hero_h1,stats,cta_buttons,ex_container,nav_links);
+        @>
     }
 
 
@@ -231,7 +202,7 @@ ChainCSS works great with React and Vite! Here's how to set it up:
 
 **src/components/Nav/navbar.jcss**
 
-    const navbar = chain
+    const navbar = $()
     .bg('rgba(255, 255, 255, 0.95)')
     .backdropFilter('blur(10px)')
     .padding('1rem 5%')
@@ -259,15 +230,11 @@ ChainCSS works great with React and Vite! Here's how to set it up:
 
     // You can mix a default style using run() method or even vanilla css (without delimeters)
     <@
-    run(
-        chain.margin('0').padding('0').boxSizing('border-box').block('*'),
-        chain
-        .fontFamily("-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif")
-        .lineHeight('1.6')
-        .color('#1e293b')
-        .bg('linear-gradient(135deg, #667eea 0%, #764ba2 100%)')
-        .block('body')
-    );
+    const reset =  $().margin('0').padding('0').boxSizing('border-box').block('*');
+    const body =  $().fontFamily("-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 
+                Oxygen, Ubuntu, sans-serif").lineHeight('1.6').color('#1e293b')
+                .background('linear-gradient(135deg, #667eea 0%, #764ba2 100%)').block('body');
+    run(reset, body);
     @>
 
     .button {
@@ -281,42 +248,44 @@ ChainCSS works great with React and Vite! Here's how to set it up:
 
     <@
     // Import all component styles
-    const nav = get('./src/components/Navbar/navbar.jcss');
-    const hero = get('./src/components/Hero/hero.jcss');
+    const nav = get('./src/components/nav/nav.jcss');
+    const hero = get('./src/components/sect_hero/hero.jcss');
+    const feature = get('./src/components/sect_feature/feature.jcss');
+    const example = get('./src/components/sect_example/example.jcss');
+    const gstart = get('./src/components/sect_gStart/gStart.jcss');
+    const footer = get('./src/components/footer/footer.jcss');
 
-    // Merge for one compilation
-    const allStyles = Object.assign({},nav,hero);
+    const merged = Object.assign({},nav,hero,feature,example,gstart,footer);
 
-    // Overwrite padding in navbar chain!
-    nav.navbar.padding = '1rem 5%';
-
-    compile(allStyles);
+        // Overwrite your chaining file
+        nav.logo.textDecoration = 'none';
+        //example.css_output.overflowWrap = 'break-word';
+        
+    compile(merged);
     @>
 
     // you can add keyframes and media queries in this setup
     @keyframes fadeInUp {
     <@
-    run(
-        chain.opacity('0').transform('translateY(20px)').block('from'),
-        chain.opacity('1').transform('translateY(0)').block('to'),
-    );
+        const from =  $().opacity('0').transform('translateY(20px)').block('from');
+        const to =  $().opacity('1').transform('translateY(0)').block('to');
+        run(from,to);
     @>
-    }
+}
 
     /* Responsive */
     @media (max-width: 768px) {
     <@
-    run(
-        chain.fontSize('2.5rem').block('.hero h1'),
-        chain.flexDirection('column').gap('1rem').block('.stats'),
-        chain.flexDirection('column').alignItems('center').block('.cta-buttons'),
-        chain.gridTemplateColumns('1fr').block('.example-container'),
-        chain.display('none').block('.nav-links')
-    );
+        const hero =  $().fontSize('2.5rem').block('.hero h1');
+        const stats =  $().flexDirection('column').gap('1rem').block('.stats');
+        const ctaButtons =  $().flexDirection('column').alignItems('center').block('.cta-buttons');
+        const exampleContainer =  $().gridTemplateColumns('1fr').block('.example-container');
+        const navLinks =  $().display('none').block('.nav-links');
+        run(hero,stats,ctaButtons,exampleContainer,navLinks);
     @>
-    }
+}
 
-Benefits of This Approach
+**Benefits of This Approach**
 
     ✅ Component Co-location: Styles live next to their components
 
@@ -328,9 +297,10 @@ Benefits of This Approach
 
     ✅ No Redundancy: Styles are automatically merged and optimized
 
-**This structure is much cleaner and follows React best practices! Each component owns its styles, and `main.jcss` simply orchestrates the compilation.**
+This structure is much cleaner and follows React best practices! Each component owns its styles, and 
+    `main.jcss` simply orchestrates the compilation.
 
-🎯 Best Practices with React
+## 🎯 Best Practices with React
 
     1. Component-Specific Styles
 
@@ -360,7 +330,7 @@ Benefits of This Approach
       .backgroundColor(theme.secondary)
       .block('.btn:hover');
 
-📝 Notes
+## 📝 Notes
     
     You can directly put css syntax code on your main.jcss file.
 
@@ -373,12 +343,12 @@ Benefits of This Approach
     You can modify your style in between get() and compile() in the 
     main file it will overwrite the styles in the chain file.
 
-🎨 Editor Support
+## 🎨 Editor Support
 
 Since .jcss files are just JavaScript files with ChainCSS syntax, you can 
 easily enable proper syntax highlighting in your editor:
 
-VS Code
+**VS Code**
 
 Add this to your project's .vscode/settings.json:
 
@@ -388,7 +358,7 @@ Add this to your project's .vscode/settings.json:
         }
     }
 
-WebStorm / IntelliJ IDEA
+**WebStorm / IntelliJ IDEA**
 
     Go to Settings/Preferences → Editor → File Types
 
@@ -396,13 +366,13 @@ WebStorm / IntelliJ IDEA
 
     Click + and add *.jcss to the registered patterns
 
-Vim / Neovim
+**Vim / Neovim**
 
 Add to your .vimrc or init.vim:
 
     au BufRead,BufNewFile *.jcss setfiletype javascript
 
-Sublime Text
+**Sublime Text**
 
     Create or edit ~/Library/Application Support/Sublime Text/Packages/User/JCSS.sublime-settings:
 
@@ -413,7 +383,7 @@ json
     "syntax": "Packages/JavaScript/JavaScript.sublime-syntax"
 }
 
-Atom
+**Atom**
 
 Add to your config.cson:
 coffeescript
@@ -428,10 +398,11 @@ coffeescript
 
 Other Editors
 
-Most modern editors allow you to associate file extensions with language modes. Simply configure your editor to treat .jcss files as JavaScript.
+Most modern editors allow you to associate file extensions with language modes. 
+Simply configure your editor to treat .jcss files as JavaScript.
 
 
-✨ Features
+## Features
 
 Status               Feature             Description
 
@@ -440,34 +411,36 @@ Status               Feature             Description
 ✅ Vendor            prefixing           Auto-add -webkit-, -moz-, etc.
 
 ✅ Keyframe          animations          @keyframes support
+
+✅ Media queries     responsive          @media support
                      
 ✅ Source maps       Debug               generated CSS
 
 ✅ Watch             mode                Auto-recompile on file changes
 
 
-## 🚀 Key Differentiators
+### Key Differentiators
 
-- **⚙️ Compile-time, not runtime** - chaincss processes your styles during build, generating pure CSS files. Zero JavaScript execution in the browser means faster page loads!
+- ** Compile-time, not runtime** - chaincss processes your styles during build, generating pure CSS files. Zero JavaScript execution in the browser means faster page loads!
 
-- **🏎️ Performance by design** - Unlike runtime CSS-in-JS libraries, chaincss adds no bundle weight and causes no layout shifts
+- ** Performance by design** - Unlike runtime CSS-in-JS libraries, chaincss adds no bundle weight and causes no layout shifts
 
-- **🔧 Build-time processing** - Your `.jcss` files are transformed before deployment, not in the user's browser
+- ** Build-time processing** - Your `.jcss` files are transformed before deployment, not in the user's browser
 
 
-## 🔄 chaincss vs Other Approaches
+### chaincss vs Other Approaches
 
 |    Feature     |     chaincss      |  Runtime CSS-in-JS  | Tailwind      | Vanilla CSS |
 |----------------|-------------------|---------------------|---------------|-------------|
-| **When CSS is generated** | ⚙️ **Build time** | 🕒 Runtime (browser) | ⚙️ Build time | 📁 Already written |
+| **When CSS is generated** |  **Build time** |  Runtime (browser) |  Build time |  Already written |
 | **Browser work**| None - just serves CSS | Executes JS to generate CSS | None - just serves CSS | None |
-| **Dynamic values**| ✅ Via JS at build time | ✅ Via props at runtime | ⚠️ Limited  | ❌ Manual |
+| **Dynamic values**|  Via JS at build time |  Via props at runtime | ⚠ Limited  |  Manual |
 | **Bundle size** | Just the CSS | CSS + JS runtime | Just the CSS | Just the CSS |
 
-👨‍💻 Contributing
+### 👨‍💻 Contributing
 
     Contributions are welcome! Feel free to open issues or submit pull requests.
 
-📄 License
+### License
 
 MIT © Rommel Caneos

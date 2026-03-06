@@ -17,7 +17,10 @@ let prefixerConfig = {
 const prefixer = new ChainCSSPrefixer(prefixerConfig);
 
 const processScript = (scriptBlock) => {
-  const context = vm.createContext({ ...transpilerModule});
+  const context = vm.createContext({ 
+    ...transpilerModule,
+    $: transpilerModule.$
+  });
   const jsCode = scriptBlock.trim();
   const chainScript = new vm.Script(jsCode);
   chainScript.runInContext(context);
@@ -173,7 +176,6 @@ function parseArgs(args) {
     } else if (arg === '--browsers' && args[i + 1]) {
       result.browsers = args[i + 1].split(',');
       i++;
-    // NEW: Add these two
     } else if (arg === '--no-source-map') {
       result.sourceMap = false;
     } else if (arg === '--source-map-inline') {
