@@ -113,7 +113,7 @@ In chaincss/processor.js:
 
        /* Header/Navigation */
     const navbar = $().backdropFilter('blur(10px)').padding('1rem 5%')
-        .position('fixed').width('100%').top('0').zIndex('1000').boxShadow(headerBoxShadow)
+        .position('fixed').width('100%').top('0').zIndex('1000').boxShadow('0 2px 20px rgba(0,0,0,0.1)')
         .block('.navbar');
 
     const nav_container = $().maxWidth('1200px').margin('0 auto').display('flex')
