@@ -89,7 +89,7 @@ class ChainCSSPrefixer {
       // Set up source map options
       const mapOptions = {
         inline: this.config.sourceMapInline,
-        annotation: false, // We'll add the comment ourselves
+        annotation: false, 
         sourcesContent: true
       };
 
@@ -100,7 +100,7 @@ class ChainCSSPrefixer {
       return await this.processWithBuiltIn(cssString, options, mapOptions);
       
     } catch (err) {
-      console.error('⚠️ Prefixer error:', err.message);
+      console.error('Prefixer error:', err.message);
       return { css: cssString, map: null };
     }
   }

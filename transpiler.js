@@ -1,5 +1,7 @@
 const path = require('path');
 const fs = require('fs');
+const tokenModule = require('./tokens');
+const tokens = tokenModule.tokens;
 
 const chain = {
   cssOutput: undefined,
@@ -72,7 +74,22 @@ const chain = {
 // Initialize properties synchronously when module loads
 chain.initializeProperties();
 
-function $(){
+const resolveToken = (value, useTokens) => {
+  if (!useTokens || typeof value !== 'string' || !value.startsWith('$')) {
+    return value;
+  }
+  
+  const tokenPath = value.slice(1);
+  const tokenValue = tokens.get(tokenPath);
+  
+  if (!tokenValue) {
+    return value;
+  }
+  
+  return tokenValue;
+};
+
+function $(useTokens = true){
   const catcher = {};
   
   // Use cached properties if available
@@ -102,19 +119,16 @@ function $(){
           return result;
         };
       }
-      
       // Convert camelCase to kebab-case for CSS property
-      const cssProperty = prop.replace(/([A-Z])/g, '-$1').toLowerCase();
-      
+      const cssProperty = prop.replace(/([A-Z])/g, '-$1').toLowerCase();     
       // Validate property exists (optional) - use cached properties
       if (validProperties && validProperties.length > 0 && !validProperties.includes(cssProperty)) {
-        console.warn(`⚠️ Warning: '${cssProperty}' may not be a valid CSS property`);
+        console.warn(`Warning: '${cssProperty}' may not be a valid CSS property`);
       }
-      
       // Return a function that sets the value
       return function(value) {
-        catcher[prop] = value;
-        return proxy; // Return proxy for chaining
+        catcher[prop] = resolveToken(value, useTokens);  // ← USE IT HERE
+        return proxy;
       };
     }
   };
@@ -178,38 +192,13 @@ const compile = (obj) => {
   }
 
   chain.cssOutput = cssString.trim();
-  return cssString.trim();
 };
-
-const get = (filename) => {
-  const fileExt = path.extname(filename).toLowerCase();
-  if (fileExt !== '.jcss') {
-    throw new Error(`Import error: ${filename} must have .jcss extension`);
-  }
-  
-  // Try to resolve the path
-  const resolvedPath = path.resolve(process.cwd(), filename);
-  
-  // Check if file exists
-  if (!fs.existsSync(resolvedPath)) {
-    throw new Error(`File not found: ${filename} (resolved to: ${resolvedPath})`);
-  }
-  
-  return require(resolvedPath);
-};
-
-// Make chaincss available globally
-if (typeof global !== 'undefined') {
-  global.chain = chain;
-  global.run = run;
-  global.compile = compile;
-  global.$ = $;
-}
 
 module.exports = {
   chain,
   $,
   run,
   compile,
-  get
+  createTokens: tokenModule.createTokens,
+  responsive: tokenModule.responsive
 };
