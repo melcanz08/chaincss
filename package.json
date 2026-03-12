@@ -2,7 +2,30 @@
   "name": "@melcanz85/chaincss",
   "version": "1.8.0",
   "description": "A simple package transpiler for js to css",
-  "main": "chaincss.js",
+  "main": "index.js",
+  "module": "index.react.js",
+  "exports": {
+    ".": {
+      "require": "./index.js",
+      "import": "./index.react.js"
+    },
+    "./react": {
+      "import": "./index.react.js"
+    }
+  },
+  "types": "types.d.ts",             
+  "files": [
+    "index.js",
+    "index.react.js",
+    "chaincss.js",
+    "transpiler.js",
+    "tokens.js",
+    "react-hooks.js",
+    "atomic-optimizer.js",
+    "cache-manager.js",
+    "prefixer.js",
+    "types.d.ts"
+  ],
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"

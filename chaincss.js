@@ -1,33 +1,190 @@
 #!/usr/bin/env node
 
-const vm = require('vm');
+const {NodeVM} = require('vm2');
 const path = require('path');
 const fs = require('fs');
 const chokidar = require('chokidar');
 const CleanCSS = require('clean-css');
-const transpilerModule = require('./transpiler.js');
 const ChainCSSPrefixer = require('./prefixer.js');
+const fileCache = new Map();
 
 let prefixerConfig = {
   enabled: true,
   browsers: ['> 0.5%', 'last 2 versions', 'not dead'],
   mode: 'auto' // 'auto', 'lightweight', or 'full'
 };
-
 const prefixer = new ChainCSSPrefixer(prefixerConfig);
 
-const processScript = (scriptBlock) => {
-  const context = vm.createContext({ 
-    ...transpilerModule,
-    $: transpilerModule.$
-  });
-  const jsCode = scriptBlock.trim();
-  const chainScript = new vm.Script(jsCode);
-  chainScript.runInContext(context);
-  return context.chain.cssOutput;
+// IMPORT THE CORE FROM TRANSPILER - use aliasing
+const { $, run, compile: originalCompile, chain } = require('./transpiler');
+
+// Import atomic optimizer
+const { AtomicOptimizer } = require('./atomic-optimizer');
+const { CacheManager } = require('./cache-manager');
+
+// Atomic optimizer instance
+let atomicOptimizer = null;
+
+// Configuration
+let config = {
+  atomic: {
+    enabled: false,  // Default off for backward compatibility
+    threshold: 3,
+    naming: 'hash',
+    cache: true,
+    minify: true
+  }
 };
 
-const processJavascriptBlocks = (content) => {
+try {
+  // Try .cjs first (for ES Module projects)
+  let configPath = path.join(process.cwd(), 'chaincss.config.cjs');
+  
+  if (fs.existsSync(configPath)) {
+    const userConfig = require(configPath);
+    config = { ...config, ...userConfig };
+  } else {
+    // Fall back to .js
+    configPath = path.join(process.cwd(), 'chaincss.config.js');
+    
+    if (fs.existsSync(configPath)) {
+      const userConfig = require(configPath);
+      config = { ...config, ...userConfig };
+    } else {
+      console.log('No config file found');
+    }
+  }
+  
+} catch (err) {
+  console.log('Error loading config:', err.message);
+}
+
+// Initialize atomic optimizer if enabled
+if (config.atomic.enabled) {
+  atomicOptimizer = new AtomicOptimizer(config.atomic);
+} else {
+  console.log('Atomic optimizer disabled (config.atomic.enabled =', config.atomic.enabled, ')');
+}
+
+
+// Create the wrapped compile function
+const compile = (obj) => {
+  // First, do standard compilation to get styles
+  originalCompile(obj);
+  
+  // If atomic is enabled, optimize
+  if (atomicOptimizer && config.atomic.enabled) {
+    const optimized = atomicOptimizer.optimize(obj);
+    chain.cssOutput = optimized;
+    return optimized;
+  }
+  return chain.cssOutput;
+};
+
+// Create a combined module for VM sandbox
+const transpilerModule = {
+  $,
+  run,
+  compile,
+  chain
+};
+
+
+// Recursive file processing function
+const processJCSSFile = (filePath) => {
+  // Check cache first
+  if (fileCache.has(filePath)) {
+    return fileCache.get(filePath);
+  }
+  
+  // Check if file exists
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`File not found: ${filePath}`);
+  }
+  
+  const content = fs.readFileSync(filePath, 'utf8');
+  
+  // Create a new VM instance for this file
+  const vm = new NodeVM({
+    console: 'inherit',
+    timeout: 5000,
+    sandbox: {
+      ...transpilerModule,
+      get: (relativePath) => {
+        const baseDir = path.dirname(filePath);
+        const targetPath = path.resolve(baseDir, relativePath);
+        return processJCSSFile(targetPath);
+      },
+      __filename: filePath,
+      __dirname: path.dirname(filePath),
+      module: { exports: {} },
+      exports: {}       
+    },
+    require: {
+      external: true,
+      builtin: ['path', 'fs'],
+      root: './'
+    }
+  });
+  
+  // Wrap the content - DON'T redeclare module!
+  const wrappedContent = `
+    // Clear any existing exports
+    module.exports = {};
+    
+    // Run the actual file content
+    ${content}
+    
+    // Return the exports
+    module.exports;
+  `;
+  
+  try {
+    const exports = vm.run(wrappedContent, filePath);
+    fileCache.set(filePath, exports);
+    return exports;
+  } catch (err) {
+    console.error(`Error processing ${filePath}:`, err.message);
+    throw err;
+  }
+};
+
+const processScript = (scriptBlock,filename) => {
+
+  const vm = new NodeVM({
+    console: 'inherit',
+    timeout: 5000,
+    sandbox: {
+        ...transpilerModule,
+        get: (relativePath) => {
+          const baseDir = path.dirname(filename);
+          const targetPath = path.resolve(baseDir, relativePath);
+          return processJCSSFile(targetPath);
+        },
+        __filename: filename,
+        __dirname: path.dirname(filename),
+        module: { exports: {} },
+        require: (path) => require(path)
+    },
+    require: {
+        external: true, // Allow some external modules
+        builtin: ['path', 'fs'], // Allow specific Node built-ins
+        root: './' // Restrict to project root
+    }
+  });
+
+  const jsCode = scriptBlock.trim();
+
+  try {
+      const result = vm.run(jsCode, filename);
+      return transpilerModule.chain.cssOutput;
+  } catch (err) {
+      console.error(`Error processing script in ${filename}:`, err.message);
+      throw err;
+  }
+};
+
+const processJavascriptBlocks = (content, inputpath) => {
   const blocks = content.split(/<@([\s\S]*?)@>/gm);
   let outputCSS = '';
   for (let i = 0; i < blocks.length; i++) {
@@ -36,7 +193,8 @@ const processJavascriptBlocks = (content) => {
     } else {
       const scriptBlock = blocks[i];
       try {
-        const outputProcessScript = processScript(scriptBlock);
+        const outputProcessScript = processScript(scriptBlock,inputpath);
+
         if (typeof outputProcessScript !== 'object' && typeof outputProcessScript !== 'undefined') {
           outputCSS += outputProcessScript;
         }
@@ -106,8 +264,7 @@ const processor = async (inputFile, outputFile) => {
     const content = fs.readFileSync(input, 'utf8');
     
     // STEP 1: Process JavaScript blocks first
-    const processedCSS = processJavascriptBlocks(content);
-    
+    const processedCSS = processJavascriptBlocks(content, input);
     // STEP 2: Validate the CSS
     if (!validateCSS(processedCSS)) {
       throw new Error('Invalid CSS syntax');
@@ -158,8 +315,7 @@ function parseArgs(args) {
     noPrefix: false,
     browsers: null,
     prefixerMode: 'auto',
-    // NEW: Add these
-    sourceMap: true, // Enable source maps by default
+    sourceMap: true, 
     sourceMapInline: false
   };
   
@@ -255,4 +411,13 @@ Examples:
   })();
 }
 
-module.exports = { processor, watch };
+module.exports = { 
+  processor, 
+  watch,
+  $,
+  run,
+  compile,
+  chain,
+  atomicOptimizer,
+  config 
+};

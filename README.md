@@ -1,447 +1,449 @@
-# @melcanz85/chaincss
+# ChainCSS
 
 ![npm downloads](https://img.shields.io/npm/dm/@melcanz85/chaincss)
 [![npm version](https://img.shields.io/npm/v/@melcanz85/chaincss.svg)](https://www.npmjs.com/package/@melcanz85/chaincss)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Compile-time CSS-in-JS** - Runs during build, not in the browser!
+**Write CSS with JavaScript. The only CSS-in-JS library that lets you CHOOSE your runtime cost.**
 
-A simple JavaScript-to-CSS transpiler that converts JS objects into optimized CSS **without runtime overhead**.
+ChainCSS is a revolutionary CSS-in-JS solution that gives you **two powerful modes** in one package:
 
+**Build-time compilation** → Pure CSS, zero JavaScript in browser
+
+**Runtime hooks** → Dynamic, prop-based styles when you need them
+
+"The performance of vanilla CSS with the power of JavaScript — now with **CHOICE.**"
+
+```javascript
+    // Same beautiful API, two powerful modes
+    const button = $()
+      .color('white')
+      .backgroundColor('#667eea')
+      .padding('1rem')
+      .borderRadius('4px')
+      .block('.btn');
+````
 ## Installation
 
 ```bash
+
     npm install @melcanz85/chaincss
 ```
 
-**Usage (Node.js)**
+## Two Powerful Modes - One API
 
-Quick Setup
+### Mode 1: Build-time (Zero Runtime)
 
-### Install development dependencies:
+**Perfect for:** Static styles, layouts, design systems — anything that doesn't change.
 
-```bash
-    npm install --save-dev nodemon concurrently
-```
+```javascript
+    // chaincss/button.jcss
+    const button = $()
+      .backgroundColor('#667eea')
+      .color('white')
+      .padding('0.5rem 1rem')
+      .borderRadius('4px')
+      .block('.btn');
 
-### Update your package.json scripts:
+    module.exports = { button };
+````
 
-    "scripts": {
-      "start": "concurrently \"nodemon server.js\" \"nodemon --watch chaincss/*.jcss --watch processor.cjs --exec 'node processor.cjs'\""
-    }
+```javascript
+    // chaincss/processor.js
+    const chaincss = require('@melcanz85/chaincss');
 
+    chaincss.processor('./chaincss/main.jcss', './dist/style.css');
+    //  Outputs pure CSS: .btn { background: #667eea; color: white; ... }
+    //  Zero JavaScript sent to browser
+    //  Max performance, smallest bundle
+````
+### Mode 2: Runtime (React Hooks)
 
-## CSS Prefixing
+**Perfect for:** Dynamic styles that respond to props, state, or themes.
 
-ChainCSS offers two prefixing approaches:
+```jsx
+    // components/DynamicButton.jsx
+    import { useChainStyles } from '@melcanz85/chaincss';
 
-### 1. Built-in Prefixer (Auto Mode, Default)
-
-Our lightweight built-in prefixer handles the most common CSS properties:
-- Flexbox & Grid
-- Transforms & Animations
-- Filters & Effects
-- Text effects
-- Box properties
-
-**No additional installation needed!** Just run:
-```bash
-    npx chaincss input.jcss output.css --watch
-```
-### 2. Full Autoprefixer Mode (Complete Coverage)
-
-For complete prefixing coverage of all CSS properties:
-
-```bash
-    npm install autoprefixer postcss browserslist caniuse-db
-    
-    # then run this command 
-    npx chaincss input.jcss output.css --watch --prefixer-mode full
-
-```
-
-### 3. Make Full Mode Permanent
-
-Edit your package.json script:
-
-    "scripts": {
-        "css:watch": "chaincss src/styles.jcss dist/styles.css --watch --prefixer-mode full",
-        "start": "concurrently \"npm run dev\" \"npm run css:watch\""
-    }
-
-
-**Project Structure (vanillajs, vanilla nodejs)**
-
-Create this folder structure in your vanillaJS project:
-
-    your-project/
-    ├── chaincss/                 # ChainCSS source files
-    │   ├── main.jcss             # Main entry file
-    │   ├── chain.jcss            # Chaining definitions
-    │   └── processor.js         # Processing script
-    ├── public/                   # Output files
-    │   ├── index.html
-    │   └── style.css             # Generated CSS
-    ├── node_modules/
-    ├── package.json
-    ├── package.lock.json
-    └── server.js
-
-
-**The Initialization processor Setup**
-
-In chaincss/processor.js:
-
-    const chain = require("@melcanz85/chaincss");
-
-    try {
-      // Process main file and output CSS
-      chain.processor('./chaincss/main.jcss', './public/style.css');
-    } catch (err) {
-      console.error('Error processing chainCSS file:', err.stack);
-      process.exit(1);
-    }
-
-## Code Examples
-
-    //--Chaining File (chaincss/chain.jcss):
-
-**This is where the chaining happens all codes must be in javascript syntax. 
-    The chain methods are the same as the css properties but in camelCase mode. 
-    The value of the block() method is the css selector which is always at the 
-    end of the chain or block.**
-
-       /* Header/Navigation */
-    const navbar = $().backdropFilter('blur(10px)').padding('1rem 5%')
-        .position('fixed').width('100%').top('0').zIndex('1000').boxShadow('0 2px 20px rgba(0,0,0,0.1)')
-        .block('.navbar');
-
-    const nav_container = $().maxWidth('1200px').margin('0 auto').display('flex')
-        .justifyContent('space-between').alignItems('center').block('.nav-container');
-
-    module.exports = {
-      navbar,
-      nav_container
-    };
-
-
-**Main File (chaincss/main.jcss):**
-
-    <@
-      // Import chaining definitions
-      const style = get('./chain.jcss');
-
-      // Override specific styles
-      style.navbar.padding = '2rem 5%';
+    function DynamicButton({ variant = 'primary', children }) {
+      const styles = useChainStyles({
+        button: () => $()
+          .backgroundColor(variant === 'primary' ? '#667eea' : '#48bb78')
+          .color('white')
+          .padding('0.5rem 1rem')
+          .borderRadius('4px')
+          .hover()
+            .transform('translateY(-2px)')
+            .boxShadow('0 4px 6px rgba(0,0,0,0.1)')
+          .block()
+      });
       
-      // Compile to CSS
-      compile(style);
-    @>
-
-    @keyframes fadeInUp {
-        <@
-            const from = $().opacity('0').transform('translateY(20px)').block('from');
-            const to = $().chain.opacity('1').transform('translateY(0)').block('to');
-            run(from,to);
-        @>
+      return <button className={styles.button}>{children}</button>;
     }
-
-    /* Responsive */
-    @media (max-width: 768px) {
-        <@
-            const hero_h1 = $().fontSize('2.5rem').block('.hero h1');
-            const stats = $().flexDirection('column').gap('1rem').block('.stats');
-            const cta_buttons = $().flexDirection('column').alignItems('center').block('.cta-buttons');
-            const ex_container = $().gridTemplateColumns('1fr').block('.example-container');
-            const nav_links = $().display('none').block('.nav-links');
-            run(hero_h1,stats,cta_buttons,ex_container,nav_links);
-        @>
-    }
+    // ✅ Styles injected at runtime
+    // ✅ Automatic cleanup on unmount
+    // ✅ Fully dynamic based on props
 
 
-## ⚛️ Using ChainCSS with React
-
-ChainCSS works great with React and Vite! Here's how to set it up:
-
-### Quick Start with React + Vite
-
-1. **Create a new React project**
-```bash
-    npm create vite@latest my-app -- --template react
-    cd my-app
 ```
 
-### Project Structure (Component-First Approach)
+## Use BOTH in the Same Project!
 
-    my-react-app/
-    ├── src/
-    │   ├── components/
-    │   │   ├── Navbar/
-    │   │   │   ├── Navbar.jsx
-    │   │   │   └── navbar.jcss             # Chain definitions with fluent API
-    │   │   ├── Button/
-    │   │   │   ├── Button.jsx
-    │   │   │   └── button.jcss             # Chain definitions with fluent API
-    │   │   └── ...
-    │   ├── style/
-    │   │   └── global.css                  # Generated CSS
-    │   ├── App.jsx
-    │   └── main.jsx
+```jsx
+    // Best of both worlds:
+    // - Layout styles → Build-time (zero cost)
+    // - Interactive styles → Runtime (dynamic)
+
+    // chaincss/layout.jcss (build-time)
+    const grid = $().display('grid').gap('1rem').block('.grid');
+
+    // components/Card.jsx (runtime)
+    function Card({ isHighlighted }) {
+      const styles = useChainStyles({
+        card: () => $()
+          .backgroundColor(isHighlighted ? '#fffacd' : 'white')
+          .padding('1rem')
+          .block()
+      });
+    }
+```
+
+## Features at a Glance
+
+    Feature             Status      Description
+
+    Zero Runtime        ✅          Pure CSS output, no JS in browser
+
+    React Hooks         ✅          Dynamic runtime styles when needed
+
+    Atomic CSS          ✅          90% smaller CSS files
+
+    TypeScript          ✅          First-class type support
+
+    Design Tokens       ✅          Centralized design system
+
+    Auto-prefixing      ✅          Built-in + full Autoprefixer
+
+    Source Maps         ✅          Debug your .jcss files
+
+    Watch Mode          ✅          Instant recompilation
+
+    VM Security         ✅          Safe code execution
+
+
+## The ChainCSS API
+
+### The Chain Builder
+
+```javascript
+    // jQuery-like fluent API
+    const style = $()
+      .propertyName('value')      // camelCase → kebab-case
+      .anotherProperty('value')
+      .block('.selector');         // End the chain with selector(s)
+
+    // Pseudo-classes & nested styles
+    const button = $()
+      .color('white')
+      .backgroundColor('#667eea')
+      .hover()
+        .backgroundColor('#5a67d8')
+        .transform('scale(1.05)')
+      .focus()
+        .boxShadow('0 0 0 3px rgba(102,126,234,0.5)')
+      .block('.btn');
+````
+### File Structure
+
+```text
+    your-project/
     ├── chaincss/
-    │   ├── main.jcss                        # Entry point - imports and compiles
-    │   └── processor.js                     # Processing script
+    │   ├── main.jcss           # Entry point - imports & compiles
+    │   ├── processor.cjs       # Build script
+    │   └── *.jcss              # Your style definitions
+    ├── src/
+    │   └── style/
+    │       └── global.css      # Generated CSS
     └── package.json
+```
+### Basic Example
 
-### How It Works
+**chaincss/button.jcss**
 
-1. **Each component has its own `.jcss` file** with style definitions as JavaScript objects
-2. **`main.jcss` imports all component styles** using `get()` function
-3. **Styles are merged and compiled** into a single `global.css` file
-4. **React components import the generated CSS** and use the class names
+```javascript
+    const button = $()
+      .backgroundColor('#667eea')
+      .color('white')
+      .padding('0.75rem 1.5rem')
+      .borderRadius('0.375rem')
+      .fontWeight('600')
+      .block('.btn');
 
-### Example: Navbar & Hero Components
-
-**src/components/Nav/navbar.jcss**
-
-    const navbar = $()
-    .bg('rgba(255, 255, 255, 0.95)')
-    .backdropFilter('blur(10px)')
-    .padding('1rem 5%')
-    .position('fixed')
-    .width('100%')
-    .top('0')
-    .zIndex('1000')
-    .boxShadow('0 2px 20px rgba(0,0,0,0.1)')
-    .block('.navbar');
-
-    module.exports = {navbar}
-
-**src/components/Hero/hero.jcss**
-
-    const hero = chain
-    .padding('120px 5% 80px')
-    .bg('linear-gradient(135deg, #667eea 0%, #764ba2 100%)')
-    .color('white')
-    .textAlign('center')
-    .block('.hero');
-
-    module.exports = {hero}
-
+    module.exports = { button };
+```
 **chaincss/main.jcss**
 
-    // You can mix a default style using run() method or even vanilla css (without delimeters)
+```javascript
     <@
-    const reset =  $().margin('0').padding('0').boxSizing('border-box').block('*');
-    const body =  $().fontFamily("-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 
-                Oxygen, Ubuntu, sans-serif").lineHeight('1.6').color('#1e293b')
-                .background('linear-gradient(135deg, #667eea 0%, #764ba2 100%)').block('body');
-    run(reset, body);
+      const { button } = get('./button.jcss');
+      compile({ button });
     @>
+````
 
-    .button {
-      background-color: #667eea;
-      color: white;
-      padding: 0.5rem 1rem;
-      border-radius: 4px;
-      border: none;
-      cursor: pointer;
-    }
+**chaincss/processor.js**
 
-    <@
-    // Import all component styles
-    const nav = get('./src/components/nav/nav.jcss');
-    const hero = get('./src/components/sect_hero/hero.jcss');
-    const feature = get('./src/components/sect_feature/feature.jcss');
-    const example = get('./src/components/sect_example/example.jcss');
-    const gstart = get('./src/components/sect_gStart/gStart.jcss');
-    const footer = get('./src/components/footer/footer.jcss');
+```javascript
 
-    const merged = Object.assign({},nav,hero,feature,example,gstart,footer);
+const chaincss = require('@melcanz85/chaincss');
 
-        // Overwrite your chaining file
-        nav.logo.textDecoration = 'none';
-        //example.css_output.overflowWrap = 'break-word';
-        
-    compile(merged);
-    @>
+chaincss.processor('./chaincss/main.jcss', './src/style');
+// Generates ./src/style/global.css
+```
+## Advanced Features
 
-    // you can add keyframes and media queries in this setup
-    @keyframes fadeInUp {
-    <@
-        const from =  $().opacity('0').transform('translateY(20px)').block('from');
-        const to =  $().opacity('1').transform('translateY(0)').block('to');
-        run(from,to);
-    @>
-}
+### Design Tokens
 
-    /* Responsive */
-    @media (max-width: 768px) {
-    <@
-        const hero =  $().fontSize('2.5rem').block('.hero h1');
-        const stats =  $().flexDirection('column').gap('1rem').block('.stats');
-        const ctaButtons =  $().flexDirection('column').alignItems('center').block('.cta-buttons');
-        const exampleContainer =  $().gridTemplateColumns('1fr').block('.example-container');
-        const navLinks =  $().display('none').block('.nav-links');
-        run(hero,stats,ctaButtons,exampleContainer,navLinks);
-    @>
-}
+```javascript
 
-**Benefits of This Approach**
+    // tokens.js
+    const { createTokens } = require('@melcanz85/chaincss');
 
-    ✅ Component Co-location: Styles live next to their components
+    module.exports = createTokens({
+      colors: {
+        primary: '#667eea',
+        secondary: '#764ba2'
+      },
+      spacing: {
+        sm: '0.5rem',
+        md: '1rem',
+        lg: '1.5rem'
+      }
+    });
 
-    ✅ Single Source of Truth: Each component manages its own styles
-
-    ✅ Easy to Maintain: Add/remove components without touching a central style file
-
-    ✅ Scalable: Perfect for large React applications
-
-    ✅ No Redundancy: Styles are automatically merged and optimized
-
-This structure is much cleaner and follows React best practices! Each component owns its styles, and 
-    `main.jcss` simply orchestrates the compilation.
-
-## 🎯 Best Practices with React
-
-    1. Component-Specific Styles
-
-        * Keep styles close to components: Button/button.jcss
-
-        * Use descriptive class names that match your components
-
-    2. Global Styles
-
-        * Use main.jcss for global resets and animations
-
-        * Import generated CSS once in your root component
-
-    3. Dynamic Styles
-
-    // In your .jcss file
-    const theme = {
-      primary: '#667eea',
-      secondary: '#764ba2'
-    };
-
-    const button = chain
-      .backgroundColor(theme.primary)
+    // In your styles
+    const button = $()
+      .color('$colors.primary')     // ← Token syntax!
+      .padding('$spacing.md')
       .block('.btn');
+```
+
+## Atomic CSS Optimization
+
+```javascript
+    // chaincss.config.js
+    module.exports = {
+      atomic: {
+        enabled: true,      // Enable 90% CSS size reduction
+        threshold: 3,        // Styles used 3+ times become atomic
+        naming: 'hash'       // Smallest class names
+      }
+    };
+```
+**Before (standard CSS):** 4,823 chars
+**After (atomic CSS):** 499 chars → **90% smaller!**
+
+### Built-in Security
+
+ChainCSS uses **secure VM sandboxing** to safely execute your .jcss files. No eval, no global leaks, no security risks.
+
+
+## Quick Start Guides
+
+### With Node.js (Vanilla)
+
+```bash
+    # 1. Install
+    npm install @melcanz85/chaincss
+
+    # 2. Create processor.cjs
+    echo "const chaincss = require('@melcanz85/chaincss');
+    chaincss.processor('./chaincss/main.jcss', './dist');" > processor.js
+
+    # 3. Create your first .jcss file
+    mkdir chaincss
+    echo "const hello = $().color('red').block('.hello');
+    compile({ hello });" > chaincss/main.jcss
+
+    # 4. Build
+    node processor.js
+    # ./dist/global.css generated!
+```
+### With React + Vite
+
+```bash
+    # 1. Create React app
+    npm create vite@latest my-app -- --template react
+    cd my-app
+
+    # 2. Install ChainCSS
+    npm install @melcanz85/chaincss
+
+    # 3. Create component with styles
+    mkdir -p src/components/Button
+```
+**src/components/Button/Button.jsx**
+
+```jsx
+
+    import { useChainStyles } from '@melcanz85/chaincss';
+
+    export function Button({ variant = 'primary', children }) {
+      const styles = useChainStyles({
+        button: () => $()
+          .backgroundColor(variant === 'primary' ? '#667eea' : '#48bb78')
+          .color('white')
+          .padding('0.5rem 1rem')
+          .borderRadius('0.375rem')
+          .hover()
+            .transform('translateY(-2px)')
+            .boxShadow('0 4px 6px rgba(0,0,0,0.1)')
+          .block()
+      });
       
-    const buttonHover = chain
-      .backgroundColor(theme.secondary)
-      .block('.btn:hover');
-
-## 📝 Notes
-    
-    You can directly put css syntax code on your main.jcss file.
-
-    But chainCSS syntax must be wrapped in <@ @> delimiters.
-
-    run() and compile() method should be separate block <@ run() @> <@ compile @>
-
-    The get() function imports chaining definitions from your chain.jcss file
-
-    You can modify your style in between get() and compile() in the 
-    main file it will overwrite the styles in the chain file.
-
-## 🎨 Editor Support
-
-Since .jcss files are just JavaScript files with ChainCSS syntax, you can 
-easily enable proper syntax highlighting in your editor:
-
-**VS Code**
-
-Add this to your project's .vscode/settings.json:
-
-    {
-        "files.associations": {
-            "*.jcss": "javascript"
-        }
+      return <button className={styles.button}>{children}</button>;
     }
-
-**WebStorm / IntelliJ IDEA**
-
-    Go to Settings/Preferences → Editor → File Types
-
-    Select JavaScript in the list
-
-    Click + and add *.jcss to the registered patterns
-
-**Vim / Neovim**
-
-Add to your .vimrc or init.vim:
-
-    au BufRead,BufNewFile *.jcss setfiletype javascript
-
-**Sublime Text**
-
-    Create or edit ~/Library/Application Support/Sublime Text/Packages/User/JCSS.sublime-settings:
-
-json
-
-{
-    "extensions": ["jcss"],
-    "syntax": "Packages/JavaScript/JavaScript.sublime-syntax"
-}
-
-**Atom**
-
-Add to your config.cson:
-coffeescript
-
-    "*":
-      core:
-        customFileTypes:
-          "source.js": [
-            "jcss"
-          ]
+```
 
 
-Other Editors
+## Performance Comparison
 
-Most modern editors allow you to associate file extensions with language modes. 
-Simply configure your editor to treat .jcss files as JavaScript.
+    Approach                Runtime Cost    Bundle Size         Dynamic Styles      Learning Curve
 
+    **ChainCSS (Build)**    **Zero**        **Just CSS**        Build-time          Low
 
-## Features
+    **ChainCSS (Runtime)**  Minimal         Small runtime       Full                Low
 
-Status               Feature             Description
+    Styled Components       5-10KB runtime  CSS + runtime       Full                Medium
 
-✅ Basic             JS → CSS            Convert plain JS objects to CSS
+    Emotion                 8-12KB runtime  CSS + runtime       Full                Medium
 
-✅ Vendor            prefixing           Auto-add -webkit-, -moz-, etc.
+    Tailwind                Zero            Just CSS            Limited             High
 
-✅ Keyframe          animations          @keyframes support
+    CSS Modules             Zero            Just CSS            None                Low
 
-✅ Media queries     responsive          @media support
-                     
-✅ Source maps       Debug               generated CSS
-
-✅ Watch             mode                Auto-recompile on file changes
+**ChainCSS is the ONLY library that gives you BOTH worlds!**
 
 
-### Key Differentiators
+## Configuration
 
-- ** Compile-time, not runtime** - chaincss processes your styles during build, generating pure CSS files. Zero JavaScript execution in the browser means faster page loads!
+Create chaincss.config.js in your project root:
 
-- ** Performance by design** - Unlike runtime CSS-in-JS libraries, chaincss adds no bundle weight and causes no layout shifts
+```javascript
 
-- ** Build-time processing** - Your `.jcss` files are transformed before deployment, not in the user's browser
+    module.exports = {
+      // Atomic CSS optimization
+      atomic: {
+        enabled: true,
+        threshold: 3,        // Min usage for atomic conversion
+        naming: 'hash'       // 'hash' | 'readable' | 'short'
+      },
+      
+      // Prefixer options
+      prefixer: {
+        mode: 'auto',        // 'auto' or 'full'
+        browsers: ['> 0.5%', 'last 2 versions']
+      },
+      
+      // Source maps
+      sourceMaps: true
+    };
+```
+
+## API Reference
+
+### Core Functions
+
+    Function                        Description
+
+    `$()`                           Create a new chain builder
+
+    `.block(selector)`              End chain and assign selector(s)
+
+    `compile(styles)`               Compile style objects to CSS
+
+    `run(...styles)`                Process inline styles
+
+    `get(filename)`                 Import .jcss files
+
+    `processor(input, output)`      Build-time processor
 
 
-### chaincss vs Other Approaches
+### React Hooks
 
-|    Feature     |     chaincss      |  Runtime CSS-in-JS  | Tailwind      | Vanilla CSS |
-|----------------|-------------------|---------------------|---------------|-------------|
-| **When CSS is generated** |  **Build time** |  Runtime (browser) |  Build time |  Already written |
-| **Browser work**| None - just serves CSS | Executes JS to generate CSS | None - just serves CSS | None |
-| **Dynamic values**|  Via JS at build time |  Via props at runtime | ⚠ Limited  |  Manual |
-| **Bundle size** | Just the CSS | CSS + JS runtime | Just the CSS | Just the CSS |
+    Hook                                        Description
 
-### 👨‍💻 Contributing
+    `useChainStyles(styles, options)`           Basic styles hook
 
-    Contributions are welcome! Feel free to open issues or submit pull requests.
+    `useDynamicChainStyles(factory, deps)`      Styles that depend on props/state
 
-### License
+    `useThemeChainStyles(styles, theme)`        Theme-aware styles
 
-MIT © Rommel Caneos
+    `ChainCSSGlobal`                            Global styles component
+
+    `cx(...classes)`                            Conditional class merging
+
+
+## Editor Support
+
+### VS Code
+
+```json
+    {
+      "files.associations": {
+        "*.jcss": "javascript"
+      }
+    }
+```
+
+### WebStorm
+
+* Settings → Editor → File Types
+
+* Add `*.jcss` as JavaScript
+
+### Vim
+
+```vim
+    au BufRead,BufNewFile `*.jcss` setfiletype javascript
+```
+
+## Roadmap
+
+* Zero-runtime compilation
+
+* React hooks
+
+* Atomic CSS optimization
+
+* Design tokens
+
+* TypeScript support
+
+* Vue/Svelte integrations (coming soon)
+
+* Plugin system (coming soon)
+
+
+## Contributing
+
+Contributions are welcome! Whether it's:
+
+* Bug fixes
+
+* Documentation improvements
+
+* New features
+
+* Test cases
+
+Please see CONTRIBUTING.md for guidelines.
+
+
+## License
+
+MIT © [Rommel Caneos]('https://github.com/melcanz08')
+
+
+## Star Us on GitHub!
+
+If ChainCSS helps you, please [give it a star!]('https://github.com/melcanz08/chaincss') It helps others discover it.
