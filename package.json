@@ -1,6 +1,6 @@
 {
   "name": "@melcanz85/chaincss",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "A simple package transpiler for js to css",
   "main": "index.js",
   "module": "index.react.js",
@@ -13,7 +13,7 @@
       "import": "./index.react.js"
     }
   },
-  "types": "types.d.ts",             
+  "types": "types.d.ts",
   "files": [
     "index.js",
     "index.react.js",
