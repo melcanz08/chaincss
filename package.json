@@ -40,7 +40,8 @@
   },
   "dependencies": {
     "chokidar": "^3.5.3",
-    "clean-css": "^5.3.3"
+    "clean-css": "^5.3.3",
+    "vm2": "^3.9.19"
   },
   "peerDependencies": {
     "autoprefixer": "^10.0.0",

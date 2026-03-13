@@ -37,7 +37,7 @@ ChainCSS is a revolutionary CSS-in-JS solution that gives you **two powerful mod
 **Perfect for:** Static styles, layouts, design systems — anything that doesn't change.
 
 ```javascript
-    // chaincss/button.jcss
+    // src/button.jcss
     const button = $()
       .backgroundColor('#667eea')
       .color('white')
@@ -48,14 +48,9 @@ ChainCSS is a revolutionary CSS-in-JS solution that gives you **two powerful mod
     module.exports = { button };
 ````
 
-```javascript
-    // chaincss/processor.js
-    const chaincss = require('@melcanz85/chaincss');
-
-    chaincss.processor('./chaincss/main.jcss', './dist/style.css');
-    //  Outputs pure CSS: .btn { background: #667eea; color: white; ... }
-    //  Zero JavaScript sent to browser
-    //  Max performance, smallest bundle
+```bash
+  npx chaincss ./src/main.jcss ./style --watch & node server.js
+  # ./style/global.css generated!
 ````
 ### Mode 2: Runtime (React Hooks)
 
@@ -157,13 +152,13 @@ ChainCSS is a revolutionary CSS-in-JS solution that gives you **two powerful mod
 
 ```text
     your-project/
-    ├── chaincss/
-    │   ├── main.jcss           # Entry point - imports & compiles
-    │   ├── processor.cjs       # Build script
-    │   └── *.jcss              # Your style definitions
+    ├── node_module
     ├── src/
-    │   └── style/
-    │       └── global.css      # Generated CSS
+    │   ├── main.jcss           # Entry point - imports & compiles
+    │   └── chain.jcss          # Your style definitions           
+    │   
+    ├── style/
+    │   └── global.css          # Generated CSS
     └── package.json
 ```
 ### Basic Example
@@ -190,15 +185,6 @@ ChainCSS is a revolutionary CSS-in-JS solution that gives you **two powerful mod
     @>
 ````
 
-**chaincss/processor.js**
-
-```javascript
-
-const chaincss = require('@melcanz85/chaincss');
-
-chaincss.processor('./chaincss/main.jcss', './src/style');
-// Generates ./src/style/global.css
-```
 ## Advanced Features
 
 ### Design Tokens
@@ -252,22 +238,19 @@ ChainCSS uses **secure VM sandboxing** to safely execute your .jcss files. No ev
 ### With Node.js (Vanilla)
 
 ```bash
-    # 1. Install
-    npm install @melcanz85/chaincss
+# 1. Install
+npm install @melcanz85/chaincss
 
-    # 2. Create processor.cjs
-    echo "const chaincss = require('@melcanz85/chaincss');
-    chaincss.processor('./chaincss/main.jcss', './dist');" > processor.js
+# 2. Create your first .jcss file
+mkdir chaincss
+echo "const hello = $().color('red').block('.hello');
+compile({ hello });" > chaincss/main.jcss
 
-    # 3. Create your first .jcss file
-    mkdir chaincss
-    echo "const hello = $().color('red').block('.hello');
-    compile({ hello });" > chaincss/main.jcss
-
-    # 4. Build
-    node processor.js
-    # ./dist/global.css generated!
+# 3. Build
+  npx chaincss ./src/main.jcss ./style --watch & node server.js
+# ./style/global.css generated!
 ```
+
 ### With React + Vite
 
 ```bash
@@ -281,6 +264,7 @@ ChainCSS uses **secure VM sandboxing** to safely execute your .jcss files. No ev
     # 3. Create component with styles
     mkdir -p src/components/Button
 ```
+
 **src/components/Button/Button.jsx**
 
 ```jsx
