@@ -12,22 +12,25 @@ ChainCSS is a revolutionary CSS-in-JS solution that gives you **two powerful mod
 
 **Runtime hooks** → Dynamic, prop-based styles when you need them
 
-"The performance of vanilla CSS with the power of JavaScript — now with **CHOICE.**"
 
-```javascript
-    // Same beautiful API, two powerful modes
-    const button = $()
-      .color('white')
-      .backgroundColor('#667eea')
-      .padding('1rem')
-      .borderRadius('4px')
-      .block('.btn');
-````
 ## Installation
 
 ```bash
 
     npm install @melcanz85/chaincss
+```
+
+### File Structure
+
+```text
+    your-project/
+    ├── node_module
+    ├── src/
+    │   ├── main.jcss           # Entry point - imports & compiles
+    │   └── *.jcss              # Your style definitions             
+    ├── style/                  # Generated CSS will be stored stored here
+    ├── index.html              # Your web page
+    └── package.json
 ```
 
 ## Two Powerful Modes - One API
@@ -47,11 +50,31 @@ ChainCSS is a revolutionary CSS-in-JS solution that gives you **two powerful mod
 
     module.exports = { button };
 ````
+**in your main.jcss**
+
+```javascript
+  <@
+    const button = get('./button.js');
+
+    compile(button);
+  @>
+```
+..then run this in terminal/command prompt
+
+```bash
+  npx chaincss ./src/main.jcss ./style --watch 
+  # ./style/global.css generated!
+````
+OR with vanilla nodejs project
 
 ```bash
   npx chaincss ./src/main.jcss ./style --watch & node server.js
   # ./style/global.css generated!
 ````
+* Note: running `npx chaincss ./src/main.jcss ./style --watch ` for the first time will
+        generate chaincss.config.js with default values. You can edit this to 
+        customize your build!.
+
 ### Mode 2: Runtime (React Hooks)
 
 **Perfect for:** Dynamic styles that respond to props, state, or themes.
@@ -148,19 +171,7 @@ ChainCSS is a revolutionary CSS-in-JS solution that gives you **two powerful mod
         .boxShadow('0 0 0 3px rgba(102,126,234,0.5)')
       .block('.btn');
 ````
-### File Structure
 
-```text
-    your-project/
-    ├── node_module
-    ├── src/
-    │   ├── main.jcss           # Entry point - imports & compiles
-    │   └── chain.jcss          # Your style definitions           
-    │   
-    ├── style/
-    │   └── global.css          # Generated CSS
-    └── package.json
-```
 ### Basic Example
 
 **chaincss/button.jcss**

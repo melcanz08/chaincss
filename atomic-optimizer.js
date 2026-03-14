@@ -40,7 +40,7 @@ class AtomicOptimizer {
           this.stats = cache.stats || this.stats;
           
           const cacheTime = new Date(cache.timestamp).toLocaleString();
-          console.log(`Loaded ${this.atomicClasses.size} atomic classes from cache (${cacheTime})`);
+          console.log(`--Loaded ${this.atomicClasses.size} atomic classes from cache (${cacheTime})\n`);
           
           // Verify config matches
           if (cache.config) {
@@ -237,8 +237,6 @@ class AtomicOptimizer {
   }
 
   optimize(styles) {
-    console.log('ChainCSS Atomic Optimizer running...');
-    
     // Track usage first
     this.trackStyles(styles);
     
@@ -256,10 +254,6 @@ class AtomicOptimizer {
     
     // Calculate savings
     const savings = ((this.stats.totalStyles - this.atomicClasses.size) / this.stats.totalStyles * 100).toFixed(1);
-    
-    //console.log(`Optimization complete:`);
-    //console.log(`Atomic classes created: ${this.atomicClasses.size}`);
-    //console.log(`CSS size reduction: ~${savings}%`);
     
     // Save cache if enabled
     if (this.options.cache) {

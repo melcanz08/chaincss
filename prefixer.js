@@ -58,7 +58,7 @@ class ChainCSSPrefixer {
     // User explicitly wants full mode but Autoprefixer not installed
     if (this.config.mode === 'full' && !this.hasAutoprefixer) {
       console.warn('⚠️ Full mode requested but autoprefixer not installed. Falling back to lightweight mode.');
-      console.warn('   To use full mode: npm install autoprefixer postcss');
+      console.warn('   To use full mode: npm install autoprefixer postcss caniuse-db browserslist\n');
       return 'lightweight';
     }
     
@@ -107,6 +107,7 @@ class ChainCSSPrefixer {
 
   // Full mode with Autoprefixer
    async processWithAutoprefixer(cssString, options, mapOptions) {
+
     const from = options.from || 'input.css';
     const to = options.to || 'output.css';
     
@@ -131,10 +132,8 @@ class ChainCSSPrefixer {
     }
 
     this.targetBrowsers = browserslist(this.config.browsers);
-    
     const from = options.from || 'input.css';
     const to = options.to || 'output.css';
-    
     const result = await postcss([
       this.createBuiltInPlugin()
     ]).process(cssString, { 
