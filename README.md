@@ -47,13 +47,13 @@ ChainCSS is a revolutionary CSS-in-JS solution that gives you **two powerful mod
       .borderRadius('4px')
       .block('.btn');
 
-    module.exports = { button };
+    module.exports =  button;
 ````
 **in your main.jcss**
 
 ```javascript
   <@
-    const button = get('./button.js');
+    const button = get('./button.jcss');
 
     compile(button);
   @>
@@ -71,8 +71,9 @@ OR with vanilla nodejs project
   # ./style/global.css generated!
 ````
 * Note: running `npx chaincss ./src/main.jcss ./style --watch ` for the first time will
-        generate chaincss.config.js with default values. You can edit this to 
+        generate ./chaincss.config.js with default values. You can edit this to 
         customize your build!.
+
 
 ### Mode 2: Runtime (React Hooks)
 
@@ -97,9 +98,9 @@ OR with vanilla nodejs project
       
       return <button className={styles.button}>{children}</button>;
     }
-    // ✅ Styles injected at runtime
-    // ✅ Automatic cleanup on unmount
-    // ✅ Fully dynamic based on props
+    //  Styles injected at runtime
+    //  Automatic cleanup on unmount
+    //  Fully dynamic based on props
 
 
 ```
@@ -145,8 +146,6 @@ OR with vanilla nodejs project
 
     Watch Mode          ✅          Instant recompilation
 
-    VM Security         ✅          Safe code execution
-
 
 ## The ChainCSS API
 
@@ -155,7 +154,7 @@ OR with vanilla nodejs project
 ```javascript
     // jQuery-like fluent API
     const style = $()
-      .propertyName('value')      // camelCase → kebab-case
+      .propertyName('value')      
       .anotherProperty('value')
       .block('.selector');         // End the chain with selector(s)
 
@@ -184,13 +183,13 @@ OR with vanilla nodejs project
       .fontWeight('600')
       .block('.btn');
 
-    module.exports = { button };
+    module.exports = button;
 ```
 **chaincss/main.jcss**
 
 ```javascript
     <@
-      const { button } = get('./button.jcss');
+      const button  = get('./button.jcss');
       compile({ button });
     @>
 ````
@@ -237,6 +236,7 @@ OR with vanilla nodejs project
 ```
 **Before (standard CSS):** 4,823 chars
 **After (atomic CSS):** 499 chars → **90% smaller!**
+
 
 ## Quick Start Guides
 
@@ -298,9 +298,9 @@ compile({ hello });" > chaincss/main.jcss
 
     Approach                Runtime Cost    Bundle Size         Dynamic Styles      Learning Curve
 
-    **ChainCSS (Build)**    **Zero**        **Just CSS**        Build-time          Low
+    ChainCSS (Build)        Zero            Just CSS            Build-time          Low
 
-    **ChainCSS (Runtime)**  Minimal         Small runtime       Full                Low
+    ChainCSS (Runtime)      Minimal         Small runtime       Full                Low
 
     Styled Components       5-10KB runtime  CSS + runtime       Full                Medium
 
@@ -310,7 +310,7 @@ compile({ hello });" > chaincss/main.jcss
 
     CSS Modules             Zero            Just CSS            None                Low
 
-**ChainCSS is the ONLY library that gives you BOTH worlds!**
+**ChainCSS is the ONLY library that gives you DUAL options**
 
 ## API Reference
 
@@ -369,23 +369,6 @@ compile({ hello });" > chaincss/main.jcss
 ```vim
     au BufRead,BufNewFile `*.jcss` setfiletype javascript
 ```
-
-## Roadmap
-
-* Zero-runtime compilation
-
-* React hooks
-
-* Atomic CSS optimization
-
-* Design tokens
-
-* TypeScript support
-
-* Vue/Svelte integrations (coming soon)
-
-* Plugin system (coming soon)
-
 
 ## Contributing
 

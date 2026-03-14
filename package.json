@@ -21,6 +21,7 @@
     "transpiler.js",
     "tokens.js",
     "react-hooks.js",
+    "strVal.js",
     "atomic-optimizer.js",
     "cache-manager.js",
     "prefixer.js",
