@@ -1,6 +1,6 @@
 {
   "name": "@melcanz85/chaincss",
-  "version": "1.9.4",
+  "version": "1.9.5",
   "description": "A simple package transpiler for js to css",
   "main": "index.js",
   "module": "index.react.js",
