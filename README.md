@@ -12,7 +12,6 @@ ChainCSS is a revolutionary CSS-in-JS solution that gives you **two powerful mod
 
 **Runtime hooks** → Dynamic, prop-based styles when you need them
 
-
 ## Installation
 
 ```bash
@@ -28,7 +27,7 @@ ChainCSS is a revolutionary CSS-in-JS solution that gives you **two powerful mod
     ├── src/
     │   ├── main.jcss           # Entry point - imports & compiles
     │   └── *.jcss              # Your style definitions             
-    ├── style/                  # Generated CSS will be stored stored here
+    ├── style/                  # Generated CSS will be stored here
     ├── index.html              # Your web page
     └── package.json
 ```
@@ -239,11 +238,6 @@ OR with vanilla nodejs project
 **Before (standard CSS):** 4,823 chars
 **After (atomic CSS):** 499 chars → **90% smaller!**
 
-### Built-in Security
-
-ChainCSS uses **secure VM sandboxing** to safely execute your .jcss files. No eval, no global leaks, no security risks.
-
-
 ## Quick Start Guides
 
 ### With Node.js (Vanilla)
@@ -318,64 +312,38 @@ compile({ hello });" > chaincss/main.jcss
 
 **ChainCSS is the ONLY library that gives you BOTH worlds!**
 
-
-## Configuration
-
-Create chaincss.config.js in your project root:
-
-```javascript
-
-    module.exports = {
-      // Atomic CSS optimization
-      atomic: {
-        enabled: true,
-        threshold: 3,        // Min usage for atomic conversion
-        naming: 'hash'       // 'hash' | 'readable' | 'short'
-      },
-      
-      // Prefixer options
-      prefixer: {
-        mode: 'auto',        // 'auto' or 'full'
-        browsers: ['> 0.5%', 'last 2 versions']
-      },
-      
-      // Source maps
-      sourceMaps: true
-    };
-```
-
 ## API Reference
 
 ### Core Functions
 
     Function                        Description
 
-    `$()`                           Create a new chain builder
+    $()                           Create a new chain builder
 
-    `.block(selector)`              End chain and assign selector(s)
+    .block(selector)              End chain and assign selector(s)
 
-    `compile(styles)`               Compile style objects to CSS
+    compile(styles)               Compile style objects to CSS
 
-    `run(...styles)`                Process inline styles
+    run(...styles)                Process inline styles
 
-    `get(filename)`                 Import .jcss files
+    get(filename)                 Import .jcss files
 
-    `processor(input, output)`      Build-time processor
+    processor(input, output)      Build-time processor
 
 
 ### React Hooks
 
     Hook                                        Description
 
-    `useChainStyles(styles, options)`           Basic styles hook
+    useChainStyles(styles, options)           Basic styles hook
 
-    `useDynamicChainStyles(factory, deps)`      Styles that depend on props/state
+    useDynamicChainStyles(factory, deps)      Styles that depend on props/state
 
-    `useThemeChainStyles(styles, theme)`        Theme-aware styles
+    useThemeChainStyles(styles, theme)        Theme-aware styles
 
-    `ChainCSSGlobal`                            Global styles component
+    ChainCSSGlobal                            Global styles component
 
-    `cx(...classes)`                            Conditional class merging
+    cx(...classes)                            Conditional class merging
 
 
 ## Editor Support

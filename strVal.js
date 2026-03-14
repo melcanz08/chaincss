@@ -1,23 +1,23 @@
 const strVal = {
 	userConf: `// ChainCSS Configuration
-				module.exports = {
-				  atomic: {
-				    enabled: false,
-				    threshold: 3,
-				    naming: 'hash',
-				    cache: true,
-				    cachePath: './.chaincss-cache',
-				    minify: true
-				  },
-				  prefixer: {
-				    mode: 'full',
-				    browsers: ['> 0.5%', 'last 2 versions', 'not dead'],
-				    enabled: true,
-				    sourceMap: false,
-				    sourceMapInline: false
-				  }
-				};
-				`,
+module.exports = {
+  atomic: {
+    enabled: false,
+    threshold: 3,
+    naming: 'hash',
+    cache: true,
+    cachePath: './.chaincss-cache',
+    minify: true
+  },
+  prefixer: {
+    mode: 'full',
+    browsers: ['> 0.5%', 'last 2 versions', 'not dead'],
+    enabled: true,
+    sourceMap: false,
+    sourceMapInline: false
+  }
+};
+`,
 	cli_opt_guide: `
 ChainCSS - JavaScript-powered CSS preprocessor
 
