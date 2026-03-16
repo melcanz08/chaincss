@@ -54,6 +54,7 @@ ChainCSS is a revolutionary CSS-in-JS solution that gives you **two powerful mod
 **in your main.jcss**
 
 ```javascript
+  // src/main.jcss
   <@
     const button = get('./button.jcss');
 
@@ -82,27 +83,44 @@ OR with vanilla nodejs project
 **Perfect for:** Dynamic styles that respond to props, state, or themes.
 
 ```jsx
-    // components/DynamicButton.jsx
-    import { useChainStyles } from '@melcanz85/chaincss';
+    import { useChainStyles, $ } from '@melcanz85/chaincss/react';
+    import { useState } from 'react';
 
-    function DynamicButton({ variant = 'primary', children }) {
-      const styles = useChainStyles({
-        button: () => $()
-          .backgroundColor(variant === 'primary' ? '#667eea' : '#48bb78')
-          .color('white')
-          .padding('0.5rem 1rem')
-          .borderRadius('4px')
-          .hover()
-            .transform('translateY(-2px)')
-            .boxShadow('0 4px 6px rgba(0,0,0,0.1)')
-          .block()
-      });
+    const SectionDemo = () => {
+      const [variant, setVariant] = useState('primary');
+      const [isHovered, setIsHovered] = useState(false);
       
-      return <button className={styles.button}>{children}</button>;
-    }
-    //  Styles injected at runtime
-    //  Automatic cleanup on unmount
-    //  Fully dynamic based on props
+      // Runtime styles that change based on state/props!
+      const styles = useChainStyles(() => ({
+        buttonGroup: $()
+          .display('flex')
+          .gap('1rem')
+          .justifyContent('center')
+          .marginTop('2rem')
+          .flexWrap('wrap')
+          .block(),
+        
+        variantButton: $()
+          .padding('0.5rem 1rem')
+          .backgroundColor('#e2e8f0')
+          .border('none')
+          .borderRadius('0.375rem')
+          .cursor('pointer')
+          .fontWeight('500')
+          .transition('all 0.2s')
+          .hover()
+            .backgroundColor('#cbd5e0')
+          .block()
+        }),[variant]
+      );
+
+      return (
+        <section> 
+        </section>
+      );
+    };
+
+    export default SectionDemo;
 
 
 ```
@@ -295,7 +313,9 @@ compile({ hello });" > chaincss/main.jcss
     }
 ```
 
-See ChainCSS in action! Visit our interactive demo site - [https://melcanz08.github.io/chaincss_react_website/]](https://melcanz08.github.io/chaincss_react_website/)
+
+See ChainCSS in action! Visit our interactive demo site - [https://melcanz08.github.io/chaincss_react_website/](https://melcanz08.github.io/chaincss_react_website/)
+
 
 ## Performance Comparison
 
