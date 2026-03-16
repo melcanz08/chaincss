@@ -7,6 +7,9 @@ declare module '@melcanz85/chaincss' {
     [cssProperty: string]: any;
   }
 
+  export const createTokens: any;
+  export const responsive: any;
+
   // Base interface for CSS properties (dynamic)
   export interface CSSPropertyBuilder {
     [key: string]: (value: string | number) => ChainBuilder;

@@ -1,5 +1,5 @@
 const strVal = {
-	userConf: `// ChainCSS Configuration
+	userConf: `// Project Configuration
 module.exports = {
   atomic: {
     enabled: false,

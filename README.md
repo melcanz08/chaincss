@@ -4,6 +4,8 @@
 [![npm version](https://img.shields.io/npm/v/@melcanz85/chaincss.svg)](https://www.npmjs.com/package/@melcanz85/chaincss)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+[![Live Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://melcanz08.github.io/chaincss_react_website/)
+
 **Write CSS with JavaScript. The only CSS-in-JS library that lets you CHOOSE your runtime cost.**
 
 ChainCSS is a revolutionary CSS-in-JS solution that gives you **two powerful modes** in one package:
@@ -293,6 +295,7 @@ compile({ hello });" > chaincss/main.jcss
     }
 ```
 
+See ChainCSS in action! Visit our interactive demo site - [https://melcanz08.github.io/chaincss_react_website/]](https://melcanz08.github.io/chaincss_react_website/)
 
 ## Performance Comparison
 

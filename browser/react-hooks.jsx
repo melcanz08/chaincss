@@ -1,5 +1,5 @@
 import { useMemo, useEffect, useRef, useState } from 'react';
-import { $, compile } from './transpiler';
+import { $, compile, chain } from './rtt';
 
 // Cache for generated styles to avoid duplication
 const styleCache = new Map();
@@ -37,7 +37,7 @@ const updateStyles = (css) => {
 };
 
 // Main hook for using ChainCSS styles in React
-export function useChainStyles(styles, options = {}) {
+export function useChainStyles(styles, deps = [], options = {}) {
   const {
     cache = true,
     namespace = 'chain',
@@ -52,10 +52,15 @@ export function useChainStyles(styles, options = {}) {
   
   // Process styles and generate CSS
   const processed = useMemo(() => {
-    if (!styles || Object.keys(styles).length === 0) return { classNames: {}, css: '' };
+    // ✅ FIRST: Resolve styles if it's a function
+    const resolvedStyles = typeof styles === 'function' ? styles() : styles;
     
-    // Check cache first
-    const cacheKey = JSON.stringify(styles);
+    if (!resolvedStyles || Object.keys(resolvedStyles).length === 0) {
+      return { classNames: {}, css: '' };
+    }
+    
+    // ✅ NOW use resolvedStyles for cache key
+    const cacheKey = JSON.stringify(resolvedStyles);
     if (cache && styleCache.has(cacheKey)) {
       return styleCache.get(cacheKey);
     }
@@ -64,7 +69,8 @@ export function useChainStyles(styles, options = {}) {
     const newClassNames = {};
     const compiledStyles = {};
     
-    Object.entries(styles).forEach(([key, styleDef]) => {
+    // ✅ Use resolvedStyles here
+    Object.entries(resolvedStyles).forEach(([key, styleDef]) => {
       // Generate a unique class name
       const className = `${namespace}-${key}-${id.current}`;
       
@@ -94,7 +100,7 @@ export function useChainStyles(styles, options = {}) {
     }
     
     return result;
-  }, [styles, namespace]);
+  }, [styles, namespace, id.current, ...deps]);
   
   // Update the style sheet when styles change
   useEffect(() => {

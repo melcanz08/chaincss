@@ -9,7 +9,7 @@ const fileCache = new Map();
 const strVal = require('./strVal.js');
 const { AtomicOptimizer } = require('./atomic-optimizer');
 const { CacheManager } = require('./cache-manager');
-const { $, run, compile: originalCompile, chain } = require('./transpiler');
+const { $, run, compile: originalCompile, chain } = require('./btt');
 
 // Atomic optimizer instance (will be initialized after config)
 let atomicOptimizer = null;

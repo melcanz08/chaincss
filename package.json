@@ -1,31 +1,42 @@
 {
   "name": "@melcanz85/chaincss",
-  "version": "1.9.5",
+  "version": "1.10.0",
   "description": "A simple package transpiler for js to css",
-  "main": "index.js",
-  "module": "index.react.js",
   "exports": {
     ".": {
-      "require": "./index.js",
-      "import": "./index.react.js"
+      "types": "./types.d.ts",
+      "node": {
+        "require": "./node/index.js"
+      },
+      "browser": {
+        "import": "./browser/index.js"
+      },
+      "default": "./browser/index.js"
+    },
+    "./node": {
+      "types": "./types.d.ts",
+      "require": "./node/index.js"
+    },
+    "./browser": {
+      "types": "./types.d.ts",
+      "import": "./browser/index.js"
     },
     "./react": {
-      "import": "./index.react.js"
+      "types": "./types.d.ts",
+      "browser": {
+        "import": "./browser/index.js"
+      },
+      "default": "./browser/index.js"
     }
   },
   "types": "types.d.ts",
   "files": [
-    "index.js",
-    "index.react.js",
-    "chaincss.js",
-    "transpiler.js",
-    "tokens.js",
-    "react-hooks.js",
-    "strVal.js",
-    "atomic-optimizer.js",
-    "cache-manager.js",
-    "prefixer.js",
-    "types.d.ts"
+    "node/",
+    "browser/",
+    "shared/",
+    "types.d.ts",
+    "README.md",
+    "LICENSE"
   ],
   "publishConfig": {
     "access": "public",
@@ -37,7 +48,7 @@
   },
   "homepage": "https://melcanz08.github.io/chaincss-website",
   "bin": {
-    "chaincss": "chaincss.js"
+    "chaincss": "./node/chaincss.js"
   },
   "dependencies": {
     "chokidar": "^3.5.3",
@@ -68,7 +79,9 @@
     "css",
     "js",
     "transpiler",
-    "compiler"
+    "compiler",
+    "css-in-js",
+    "react"
   ],
   "author": "Rommel Caneos",
   "license": "MIT"

@@ -1,27 +1,49 @@
 const path = require('path');
 const fs = require('fs');
-const tokenModule = require('./tokens');
-const tokens = tokenModule.tokens;
+const https = require('https'); // Built-in, no install needed!
+const { tokens, createTokens, responsive } = require('../shared/tokens.cjs');
 
 const chain = {
   cssOutput: undefined,
   catcher: {},
   cachedValidProperties: [],
 
-  // Initialize properties synchronously
   initializeProperties() {
     try {
       const jsonPath = path.join(__dirname, 'css-properties.json');
       if (fs.existsSync(jsonPath)) {
         const data = fs.readFileSync(jsonPath, 'utf8');
         this.cachedValidProperties = JSON.parse(data);
-        
       } else {
         console.log('⚠️ CSS properties not cached, will load on first use');
       }
     } catch (error) {
       console.error('Error loading CSS properties:', error.message);
     }
+  },
+
+  // Helper function to fetch with https
+  fetchWithHttps(url) {
+    return new Promise((resolve, reject) => {
+      https.get(url, (response) => {
+        let data = '';
+        
+        response.on('data', (chunk) => {
+          data += chunk;
+        });
+        
+        response.on('end', () => {
+          try {
+            const jsonData = JSON.parse(data);
+            resolve(jsonData);
+          } catch (error) {
+            reject(error);
+          }
+        });
+      }).on('error', (error) => {
+        reject(error);
+      });
+    });
   },
 
   async getCSSProperties() {
@@ -36,12 +58,12 @@ const chain = {
         this.cachedValidProperties = objProp;
         return objProp;
       } catch {
+        // Use https instead of fetch
         const url = 'https://raw.githubusercontent.com/mdn/data/main/css/properties.json';
-        const response = await fetch(url);
-        const data = await response.json();
+        const data = await this.fetchWithHttps(url);
         const allProperties = Object.keys(data);
         
-         // Strip vendor prefixes and remove duplicates
+        // Strip vendor prefixes and remove duplicates
         const baseProperties = new Set();
         
         allProperties.forEach(prop => {
@@ -65,7 +87,6 @@ const chain = {
     }
   },
 
-  // Synchronous version for internal use
   getCachedProperties() {
     return this.cachedValidProperties;
   }
@@ -98,7 +119,7 @@ function $(useTokens = true){
   const handler = {
     get: (target, prop) => {
       if (prop === 'block') {
-        return function(...args) {chain
+        return function(...args) {
           // If no args, just return current catcher
           if (args.length === 0) {
             const result = { ...catcher };
@@ -127,7 +148,7 @@ function $(useTokens = true){
       }
       // Return a function that sets the value
       return function(value) {
-        catcher[prop] = resolveToken(value, useTokens);  // ← USE IT HERE
+        catcher[prop] = resolveToken(value, useTokens);
         return proxy;
       };
     }
@@ -144,7 +165,7 @@ function $(useTokens = true){
   }
   
   return proxy;
-};
+}
 
 const run = (...args) => {
   let cssOutput = '';
@@ -199,6 +220,6 @@ module.exports = {
   $,
   run,
   compile,
-  createTokens: tokenModule.createTokens,
-  responsive: tokenModule.responsive
+  createTokens,
+  responsive
 };
