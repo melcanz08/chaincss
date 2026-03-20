@@ -1,48 +1,68 @@
 import { tokens, createTokens, responsive } from '../shared/tokens.mjs';
+
 let cssProperties = [];
-try {
-  const module = await import('../node/css-properties.json', { 
-    assert: { type: 'json' },
-    ignore: true 
-  });
-  cssProperties = module.default;
-} catch (e) {
-  console.log('CSS properties file not found, will fetch from CDN');
-}
+
+// Instead of using dynamic import with unsupported options
+// Use a try-catch with proper dynamic import syntax
+const loadCSSProperties = async () => {
+  try {
+    // Remove the unsupported 'ignore' option
+    const module = await import('../node/css-properties.json', { 
+      assert: { type: 'json' }
+    });
+    return module.default;
+  } catch (e) {
+    // If the file doesn't exist in the package, fallback to CDN
+    console.log('CSS properties file not found in package, will fetch from CDN');
+    return null;
+  }
+};
+
+// Initialize asynchronously
 const chain = {
   cssOutput: undefined,
   catcher: {},
   cachedValidProperties: [],
-  async initializeProperties() { 
-    if (cssProperties && cssProperties.length > 0) {
-      this.cachedValidProperties = cssProperties;
+  async initializeProperties() {
+    if (this.cachedValidProperties.length > 0) {
       return;
-    }else{
-      try {
-        let CDNfallBackProp = [];
-        const response = await fetch('https://raw.githubusercontent.com/mdn/data/main/css/properties.json');
-        const data = await response.json();
-        const allProperties = Object.keys(data);
-        
-        // Strip vendor prefixes and remove duplicates
-        const baseProperties = new Set();
-        allProperties.forEach(prop => {
-          const baseProp = prop.replace(/^-(webkit|moz|ms|o)-/, '');
-          baseProperties.add(baseProp);
-        });
-        CDNfallBackProp = Array.from(baseProperties).sort();
-        this.cachedValidProperties = CDNfallBackProp;
-      } catch (error) {
-        console.error('Error loading from CDN:', error);
-        return [];
-      }
+    }
+    
+    // Try to load from local file first
+    const localProperties = await loadCSSProperties();
+    if (localProperties && localProperties.length > 0) {
+      this.cachedValidProperties = localProperties;
+      return;
+    }
+    
+    // Fallback to CDN
+    try {
+      console.log('Loading CSS properties from CDN...');
+      const response = await fetch('https://raw.githubusercontent.com/mdn/data/main/css/properties.json');
+      const data = await response.json();
+      const allProperties = Object.keys(data);
+      
+      // Strip vendor prefixes and remove duplicates
+      const baseProperties = new Set();
+      allProperties.forEach(prop => {
+        const baseProp = prop.replace(/^-(webkit|moz|ms|o)-/, '');
+        baseProperties.add(baseProp);
+      });
+      this.cachedValidProperties = Array.from(baseProperties).sort();
+    } catch (error) {
+      console.error('Error loading from CDN:', error);
+      this.cachedValidProperties = [];
     }
   },
   getCachedProperties() {
     return this.cachedValidProperties;
   }
 };
+
+// Start initialization but don't await (non-blocking)
 chain.initializeProperties();
+
+// Rest of your code remains the same...
 const resolveToken = (value, useTokens) => {
   if (!useTokens || typeof value !== 'string' || !value.startsWith('$')) {
     return value;
@@ -54,6 +74,7 @@ const resolveToken = (value, useTokens) => {
   }
   return tokenValue;
 };
+
 function $(useTokens = true){
   const catcher = {};
   const validProperties = chain.cachedValidProperties;
@@ -87,6 +108,7 @@ function $(useTokens = true){
   const proxy = new Proxy({}, handler);
   return proxy;
 }
+
 const run = (...args) => {
   let cssOutput = '';
   args.forEach((value) => {
@@ -105,6 +127,7 @@ const run = (...args) => {
   chain.cssOutput = cssOutput.trim();
   return cssOutput.trim();
 };
+
 const compile = (obj) => {
   let cssString = '';
   for (const key in obj) {
