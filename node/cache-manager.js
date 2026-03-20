@@ -1,6 +1,5 @@
 const fs = require('fs');
 const path = require('path');
-
 class CacheManager {
   constructor(cachePath = './.chaincss-cache') {
     this.cachePath = path.resolve(process.cwd(), cachePath);
@@ -8,8 +7,6 @@ class CacheManager {
     this.cache = {};
     this.load();
   }
-
-  // Load cache from disk
   load() {
     try {
       if (fs.existsSync(this.cachePath)) {
@@ -33,18 +30,12 @@ class CacheManager {
       this.cache = {};
     }
   }
-
-  // Get value from cache
   get(key) {
     return this.cache[key];
   }
-
-  // Set value in cache
   set(key, value) {
     this.cache[key] = value;
   }
-
-  // Save cache to disk
   save() {
     try {
       const data = JSON.stringify(this.cache, null, 2);
@@ -54,8 +45,6 @@ class CacheManager {
       console.warn('Could not save cache:', error.message);
     }
   }
-
-  // Clear cache
   clear() {
     this.cache = {};
     if (fs.existsSync(this.cachePath)) {
@@ -64,5 +53,4 @@ class CacheManager {
     console.log('Cache cleared');
   }
 }
-
 module.exports = { CacheManager };

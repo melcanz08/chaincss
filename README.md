@@ -6,9 +6,7 @@
 
 [![Live Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://melcanz08.github.io/chaincss_react_website/)
 
-**Write CSS with JavaScript. The only CSS-in-JS library that lets you CHOOSE your runtime cost.**
-
-ChainCSS is a revolutionary CSS-in-JS solution that gives you **two powerful modes** in one package:
+**Write CSS with JavaScript. Lets you CHOOSE your runtime cost. DUAL MODE**
 
 **Build-time compilation** → Pure CSS, zero JavaScript in browser
 
@@ -16,10 +14,55 @@ ChainCSS is a revolutionary CSS-in-JS solution that gives you **two powerful mod
 
 ## Installation
 
+* Install [nodejs.](https://nodejs.org/en/download)
+
 ```bash
 
     npm install @melcanz85/chaincss
 ```
+
+* In your html add a link tag with an href value of style/global.css this serves as the 
+stylesheet for your entire webpage. You dont need to touch this css file.
+
+```html
+  <!-- index.html -->
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <title>chaincss</title>
+    <link rel="stylesheet" type="text/css" href="style/global.css">
+  </head>
+  <body>
+    <p>Hello World</p>
+  </body>
+  </html>
+```
+
+## Syntax
+
+```javascript
+// main.jcss
+<@
+  const text = $().color('blue').textAlign('center').block('p');
+
+  //text.fontSize = '2rem';
+  
+  run(text);
+@>
+```
+
+* To apply this styles run this in your terminal / command prompt.
+
+```bash
+  npx chaincss ./src/main.jcss ./style --watch 
+````
+
+* Open your index.html in the browser. 
+
+* To make changes uncomment styles between text variable declaration and run() method.
+
+* Thats how you add or modify the style block you treat them as a regular javascript object.
+
 
 ### File Structure
 
@@ -67,62 +110,68 @@ ChainCSS is a revolutionary CSS-in-JS solution that gives you **two powerful mod
   npx chaincss ./src/main.jcss ./style --watch 
   # ./style/global.css generated!
 ````
-OR with vanilla nodejs project
-
-```bash
-  npx chaincss ./src/main.jcss ./style --watch & node server.js
-  # ./style/global.css generated!
-````
 * Note: running `npx chaincss ./src/main.jcss ./style --watch ` for the first time will
         generate ./chaincss.config.js with default values. You can edit this to 
         customize your build!.
-
 
 ### Mode 2: Runtime (React Hooks)
 
 **Perfect for:** Dynamic styles that respond to props, state, or themes.
 
 ```jsx
-    import { useChainStyles, $ } from '@melcanz85/chaincss/react';
-    import { useState } from 'react';
+    // src/components/Counter.jsx
+  import { useState } from 'react';
+  import { useChainStyles, $ } from '@melcanz85/chaincss/react';
 
-    const SectionDemo = () => {
-      const [variant, setVariant] = useState('primary');
-      const [isHovered, setIsHovered] = useState(false);
-      
-      // Runtime styles that change based on state/props!
-      const styles = useChainStyles(() => ({
-        buttonGroup: $()
-          .display('flex')
-          .gap('1rem')
-          .justifyContent('center')
-          .marginTop('2rem')
-          .flexWrap('wrap')
-          .block(),
-        
-        variantButton: $()
-          .padding('0.5rem 1rem')
-          .backgroundColor('#e2e8f0')
-          .border('none')
-          .borderRadius('0.375rem')
-          .cursor('pointer')
-          .fontWeight('500')
-          .transition('all 0.2s')
-          .hover()
-            .backgroundColor('#cbd5e0')
-          .block()
-        }),[variant]
-      );
+  export default function Counter() {
+    const [count, setCount] = useState(0);
 
-      return (
-        <section> 
-        </section>
-      );
-    };
+    const styles = useChainStyles(() => {
+      const container = $()
+        .display('flex')
+        .flexDirection('column')
+        .alignItems('center')
+        .justifyContent('center')
+        .gap('3rem')
+        .padding('4rem 2.5rem')
+        .backgroundColor('rgba(255, 255, 255, 0.92)')
+        .borderRadius('2rem')
+        .boxShadow('0 25px 50px -12px rgba(0, 0, 0, 0.25)')
+        .backdropFilter('blur(12px)')
+        .maxWidth('420px')
+        .width('90%')
+        .block();
 
-    export default SectionDemo;
+      const numberBase = $()
+        .fontSize('6rem')
+        .fontWeight('800')
+        .letterSpacing('-0.05em')
+        .transition('color 0.5s ease, transform 0.3s ease')
+        .transform(count === 0 ? 'scale(1)' : 'scale(1.1)')
+        .animation(count > 0 ? 'pulse 1.8s infinite ease-in-out' : 'none')
+        .block();
 
+    const numberColor = $()
+        .color(
+          count === 0 ? '#4a5568' : `hsl(${ (count * 40) % 360 }, 80%, 60%)`
+        )
+        .block();
 
+    return { container, numberBase, numberColor };
+    }, [count]);
+
+    return (
+      <div className={styles.container}>
+        <div className={`${styles.numberBase} ${styles.numberColor}`}>
+          {count}
+        </div>
+
+        <button className="increment-btn" onClick={() => setCount(prev => prev + 1)}>
+          Tap to Count Up
+        </button>
+      </div>
+    );
+  }
 ```
 
 ## Use BOTH in the Same Project!
@@ -137,8 +186,8 @@ OR with vanilla nodejs project
 
     // components/Card.jsx (runtime)
     function Card({ isHighlighted }) {
-      const styles = useChainStyles({
-        card: () => $()
+      const styles = useChainStyles(() => {
+        const card = $()
           .backgroundColor(isHighlighted ? '#fffacd' : 'white')
           .padding('1rem')
           .block()
@@ -248,9 +297,9 @@ OR with vanilla nodejs project
     // chaincss.config.js
     module.exports = {
       atomic: {
-        enabled: true,      // Enable 90% CSS size reduction
-        threshold: 3,        // Styles used 3+ times become atomic
-        naming: 'hash'       // Smallest class names
+        enabled: true, 
+        threshold: 3,    
+        naming: 'hash'
       }
     };
 ```
@@ -297,8 +346,8 @@ compile({ hello });" > chaincss/main.jcss
     import { useChainStyles } from '@melcanz85/chaincss';
 
     export function Button({ variant = 'primary', children }) {
-      const styles = useChainStyles({
-        button: () => $()
+      const styles = useChainStyles(() => {
+        const button = $()
           .backgroundColor(variant === 'primary' ? '#667eea' : '#48bb78')
           .color('white')
           .padding('0.5rem 1rem')
@@ -307,8 +356,8 @@ compile({ hello });" > chaincss/main.jcss
             .transform('translateY(-2px)')
             .boxShadow('0 4px 6px rgba(0,0,0,0.1)')
           .block()
+          return { button };
       });
-      
       return <button className={styles.button}>{children}</button>;
     }
 ```
@@ -333,7 +382,7 @@ See ChainCSS in action! Visit our interactive demo site - [https://melcanz08.git
 
     CSS Modules             Zero            Just CSS            None                Low
 
-**ChainCSS is the ONLY library that gives you DUAL options**
+**ChainCSS a "DUAL MODE optioned" css-in-js library**
 
 ## API Reference
 
@@ -410,9 +459,9 @@ Please see CONTRIBUTING.md for guidelines.
 
 ## License
 
-MIT © [Rommel Caneos]('https://github.com/melcanz08')
+MIT © [Rommel Caneos](https://github.com/melcanz08)
 
 
 ## Star Us on GitHub!
 
-If ChainCSS helps you, please [give it a star!]('https://github.com/melcanz08/chaincss') It helps others discover it.
+If ChainCSS helps you, please [give it a star!](https://github.com/melcanz08/chaincss) It helps others discover it.
