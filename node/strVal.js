@@ -2,7 +2,7 @@ const strVal = {
 	userConf: `// Project Configuration
 module.exports = {
   atomic: {
-    enabled: false,
+    enabled: true,
     threshold: 3,
     naming: 'hash',
     cache: true,
@@ -13,7 +13,7 @@ module.exports = {
     mode: 'auto',
     browsers: ['> 0.5%', 'last 2 versions', 'not dead'],
     enabled: true,
-    sourceMap: false,
+    sourceMap: true,
     sourceMapInline: false
   }
 };
