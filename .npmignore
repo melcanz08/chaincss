@@ -1,0 +1,15 @@
+# Development files (keep out of npm)
+benchmarks/
+test/
+examples/
+vscode-extension/
+
+# Source maps (optional)
+*.map
+
+# Cache
+.chaincss-cache/
+
+# IDE files
+.vscode/
+.idea/

@@ -121,7 +121,6 @@ function $(useTokens = true) {
         }
         
         return (value) => {
-          console.log(`📦 ${prop} = ${value}, isBuildingHover = ${isBuildingHover}`);
           if (isBuildingHover) {
             hoverStyles[prop] = resolveToken(value, useTokens);
           } else {

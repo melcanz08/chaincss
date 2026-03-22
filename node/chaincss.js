@@ -344,13 +344,13 @@ const processAndMinifyCss = async (css, inputFile, outputFile) => {
 const processor = async (inputFile, outputFile) => {
   try {
     const input = path.resolve(inputFile);
-    const output = path.resolve(outputFile);
-    
-    const outputDir = path.dirname(output);
+    const outputDir = path.resolve(outputFile);
+    //console.log('const output = path.resolve(outputFile) : ',output);
+    //const outputDir = path.dirname(output);
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
     }
-    
+    console.log('const outputDir = path.dirname(output) : ',outputDir);
     const content = fs.readFileSync(input, 'utf8');
     const processedCSS = processJavascriptBlocks(content, input);
     if (!validateCSS(processedCSS)) {
