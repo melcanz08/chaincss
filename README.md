@@ -79,7 +79,7 @@
 
   module.exports = {
     atomic: {
-      enabled: true, // enable this for 
+      enabled: true, 
       threshold: 3,
       naming: 'hash',
       cache: true,
