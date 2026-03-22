@@ -27,23 +27,31 @@
   "exports": {
     ".": {
       "types": "./types.d.ts",
-      "node": {
-        "require": "./node/btt.js",
-        "import": "./node/btt.js"
-      },
       "browser": {
-        "import": "./browser/rtt.js",
-        "require": "./browser/rtt.js"
+        "import": "./browser/index.js",
+        "require": "./browser/index.js"
       },
-      "default": "./browser/rtt.js"
+      "default": "./browser/index.js"
     },
     "./react": {
       "types": "./types.d.ts",
       "browser": {
-        "import": "./browser/react-hooks.js",
-        "require": "./browser/react-hooks.js"
+        "import": "./browser/react-hooks.jsx",
+        "require": "./browser/react-hooks.jsx"
       },
-      "default": "./browser/react-hooks.js"
+      "default": "./browser/react-hooks.jsx"
+    },
+    "./browser/*": {
+      "browser": {
+        "import": "./browser/*",
+        "require": "./browser/*"
+      }
+    },
+    "./node/*": {
+      "node": {
+        "import": "./node/*",
+        "require": "./node/*"
+      }
     },
     "./vite-plugin": {
       "types": "./types.d.ts",
