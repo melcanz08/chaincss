@@ -1,6 +1,6 @@
 {
   "name": "@melcanz85/chaincss",
-  "version": "1.12.0",
+  "version": "1.12.1",
   "description": "Chainable CSS-in-JS with build-time compilation, atomic CSS, and zero-runtime options",
   "keywords": [
     "css",
