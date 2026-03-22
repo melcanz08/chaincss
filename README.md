@@ -79,11 +79,8 @@
 
   module.exports = {
     atomic: {
-<<<<<<< HEAD
       enabled: true, 
-=======
       enabled: true,
->>>>>>> 9e4a03a (Update README badges or content)
       threshold: 3,
       naming: 'hash',
       cache: true,
