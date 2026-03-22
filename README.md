@@ -4,25 +4,54 @@
 [![npm version](https://img.shields.io/npm/v/@melcanz85/chaincss.svg)](https://www.npmjs.com/package/@melcanz85/chaincss)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-[![Live Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://melcanz08.github.io/chaincss_react_website/)
+[![Live Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://chaincss.dev)
 
 **Write CSS with JavaScript. Lets you CHOOSE your runtime cost. DUAL MODE**
 
-**Build-time compilation** → Pure CSS, zero JavaScript in browser
+* **Build-time compilation** → Pure CSS, zero JavaScript in browser
 
-**Runtime hooks** → Dynamic, prop-based styles when you need them
+* **Runtime hooks** → Dynamic, prop-based styles when you need them
 
-## Installation
+### Requirements
 
-* Install [nodejs.](https://nodejs.org/en/download)
+* Node.js 18.x or higher [download.](https://nodejs.org/en/download)
+
+* For React: React 16.8+ (hooks support required)
+
+## Installation & Setup
+
+### For Static/Build-time Usage
 
 ```bash
 
     npm install @melcanz85/chaincss
 ```
 
-* In your html add a link tag with an href value of style/global.css this serves as the 
-stylesheet for your entire webpage. You dont need to touch this css file.
+### For React with Runtime Hooks
+
+```bash
+  npm install @melcanz85/chaincss
+  # React hooks are included in the main package
+```
+
+## Quick Start
+
+  **Syntax**
+
+1. Create your first .jcss file
+
+```javascript
+// main.jcss
+<@
+  const text = $().color('blue').textAlign('center').block('p');
+
+  //text.fontSize = '2rem';
+  
+  run(text);
+@>
+```
+
+2. Add the stylesheet link to your HTML
 
 ```html
   <!-- index.html -->
@@ -38,31 +67,52 @@ stylesheet for your entire webpage. You dont need to touch this css file.
   </html>
 ```
 
-## Syntax
+3. Run the compiler
+
+```bash
+  npx chaincss ./src/main.jcss ./style --watch 
+```
+
+* *Note: The first run creates ./chaincss.config.js with default values. Edit this file to customize your build.*
+
+```javascript
+
+  module.exports = {
+    atomic: {
+      enabled: true, // enable this for 
+      threshold: 3,
+      naming: 'hash',
+      cache: true,
+      cachePath: './.chaincss-cache',
+      minify: true
+    },
+    prefixer: {
+      mode: 'auto',
+      browsers: ['> 0.5%', 'last 2 versions', 'not dead'],
+      enabled: true,
+      sourceMap: true,
+      sourceMapInline: false
+    }
+  };
+
+````
+
+4. Open index.html in your browser — your styles should be applied!
+
+* To modify or add styles just add a property to the newly created style object before the run() function. They become javascript regular objects.
 
 ```javascript
 // main.jcss
 <@
   const text = $().color('blue').textAlign('center').block('p');
 
-  //text.fontSize = '2rem';
+  text.fontSize = '2rem';
+  text.padding = '10px';
+  text.backgroundColor = 'rgb(106, 90, 205)';
   
   run(text);
 @>
 ```
-
-* To apply this styles run this in your terminal / command prompt.
-
-```bash
-  npx chaincss ./src/main.jcss ./style --watch 
-````
-
-* Open your index.html in the browser. 
-
-* To make changes uncomment styles between text variable declaration and run() method.
-
-* Thats how you add or modify the style block you treat them as a regular javascript object.
-
 
 ### File Structure
 
@@ -104,15 +154,6 @@ stylesheet for your entire webpage. You dont need to touch this css file.
     compile(button);
   @>
 ```
-..then run this in terminal/command prompt
-
-```bash
-  npx chaincss ./src/main.jcss ./style --watch 
-  # ./style/global.css generated!
-````
-* Note: running `npx chaincss ./src/main.jcss ./style --watch ` for the first time will
-        generate ./chaincss.config.js with default values. You can edit this to 
-        customize your build!.
 
 ### Mode 2: Runtime (React Hooks)
 
@@ -176,14 +217,16 @@ stylesheet for your entire webpage. You dont need to touch this css file.
 
 ## Use BOTH in the Same Project!
 
-```jsx
+```javascript
     // Best of both worlds:
     // - Layout styles → Build-time (zero cost)
     // - Interactive styles → Runtime (dynamic)
 
     // chaincss/layout.jcss (build-time)
     const grid = $().display('grid').gap('1rem').block('.grid');
+```
 
+```jsx
     // components/Card.jsx (runtime)
     function Card({ isHighlighted }) {
       const styles = useChainStyles(() => {
@@ -239,30 +282,6 @@ stylesheet for your entire webpage. You dont need to touch this css file.
       .block('.btn');
 ````
 
-### Basic Example
-
-**chaincss/button.jcss**
-
-```javascript
-    const button = $()
-      .backgroundColor('#667eea')
-      .color('white')
-      .padding('0.75rem 1.5rem')
-      .borderRadius('0.375rem')
-      .fontWeight('600')
-      .block('.btn');
-
-    module.exports = button;
-```
-**chaincss/main.jcss**
-
-```javascript
-    <@
-      const button  = get('./button.jcss');
-      compile({ button });
-    @>
-````
-
 ## Advanced Features
 
 ### Design Tokens
@@ -283,8 +302,11 @@ stylesheet for your entire webpage. You dont need to touch this css file.
         lg: '1.5rem'
       }
     });
+```
 
-    // In your styles
+**In your styles**
+
+```javascript
     const button = $()
       .color('$colors.primary')     // ← Token syntax!
       .padding('$spacing.md')
@@ -307,65 +329,6 @@ stylesheet for your entire webpage. You dont need to touch this css file.
 **After (atomic CSS):** 499 chars → **90% smaller!**
 
 
-## Quick Start Guides
-
-### With Node.js (Vanilla)
-
-```bash
-# 1. Install
-npm install @melcanz85/chaincss
-
-# 2. Create your first .jcss file
-mkdir chaincss
-echo "const hello = $().color('red').block('.hello');
-compile({ hello });" > chaincss/main.jcss
-
-# 3. Build
-  npx chaincss ./src/main.jcss ./style --watch & node server.js
-# ./style/global.css generated!
-```
-
-### With React + Vite
-
-```bash
-    # 1. Create React app
-    npm create vite@latest my-app -- --template react
-    cd my-app
-
-    # 2. Install ChainCSS
-    npm install @melcanz85/chaincss
-
-    # 3. Create component with styles
-    mkdir -p src/components/Button
-```
-
-**src/components/Button/Button.jsx**
-
-```jsx
-
-    import { useChainStyles } from '@melcanz85/chaincss';
-
-    export function Button({ variant = 'primary', children }) {
-      const styles = useChainStyles(() => {
-        const button = $()
-          .backgroundColor(variant === 'primary' ? '#667eea' : '#48bb78')
-          .color('white')
-          .padding('0.5rem 1rem')
-          .borderRadius('0.375rem')
-          .hover()
-            .transform('translateY(-2px)')
-            .boxShadow('0 4px 6px rgba(0,0,0,0.1)')
-          .block()
-          return { button };
-      });
-      return <button className={styles.button}>{children}</button>;
-    }
-```
-
-
-See ChainCSS in action! Visit our interactive demo site - [https://melcanz08.github.io/chaincss_react_website/](https://melcanz08.github.io/chaincss_react_website/)
-
-
 ## Performance Comparison
 
     Approach                Runtime Cost    Bundle Size         Dynamic Styles      Learning Curve
@@ -382,40 +345,42 @@ See ChainCSS in action! Visit our interactive demo site - [https://melcanz08.git
 
     CSS Modules             Zero            Just CSS            None                Low
 
-**ChainCSS a "DUAL MODE optioned" css-in-js library**
+**ChainCSS a "DUAL MODE" css-in-js library**
+
 
 ## API Reference
 
+
 ### Core Functions
 
-    Function                        Description
+Function                        Description
 
-    $()                           Create a new chain builder
+`$()`                           Create a new chain builder
 
-    .block(selector)              End chain and assign selector(s)
+`.block(selector)`              End chain and assign selector(s)
 
-    compile(styles)               Compile style objects to CSS
+`compile(styles)`               Compile style objects to CSS
 
-    run(...styles)                Process inline styles
+`run(...styles)`                Process inline styles
 
-    get(filename)                 Import .jcss files
+`get(filename)`                 Import `.jcss` files
 
-    processor(input, output)      Build-time processor
+`processor(input, output)`      Build-time processor
 
 
 ### React Hooks
 
-    Hook                                        Description
+Hook                                        Description
 
-    useChainStyles(styles, options)           Basic styles hook
+`useChainStyles(styles, options)`           Basic styles hook
 
-    useDynamicChainStyles(factory, deps)      Styles that depend on props/state
+`useDynamicChainStyles(factory, deps)`      Styles that depend on props/state
 
-    useThemeChainStyles(styles, theme)        Theme-aware styles
+`useThemeChainStyles(styles, theme)`        Theme-aware styles
 
-    ChainCSSGlobal                            Global styles component
+`ChainCSSGlobal`                            Global styles component
 
-    cx(...classes)                            Conditional class merging
+`cx(...classes)`                            Conditional class merging
 
 
 ## Editor Support
@@ -441,6 +406,43 @@ See ChainCSS in action! Visit our interactive demo site - [https://melcanz08.git
 ```vim
     au BufRead,BufNewFile `*.jcss` setfiletype javascript
 ```
+
+### Troubleshooting
+
+**Q: My styles aren't appearing in the browser**
+
+* Ensure your HTML includes `<link rel="stylesheet" href="style/global.css">`
+
+* Run `npx chaincss` at least once to generate the initial CSS file
+
+* Check that your `.jcss` files are in the correct directory
+
+* Verify the path in your `npx chaincss` command matches your file structure
+
+**Q: React hooks aren't working**
+
+* Verify you're using React 16.8 or newer
+
+* Import from `@melcanz85/chaincss` (not a subpath)
+
+**Q: The `get()` function returns undefined**
+
+* Ensure the imported file exports something (`use module.exports = ...`)
+
+* Check that the file path is correct relative to your `main.jcss`
+
+**Q: Changes aren't reflected after saving**
+
+* Make sure the `--watch` flag is active
+
+* If not using watch mode, re-run the build command
+
+* Clear your browser cache or do a hard refresh
+
+
+## See ChainCSS in Action
+
+Visit our interactive demo site: [https://www.chaincss.dev/](https://www.chaincss.dev)
 
 ## Contributing
 
