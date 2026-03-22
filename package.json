@@ -1,38 +1,79 @@
 {
   "name": "@melcanz85/chaincss",
-  "version": "1.11.5",
-  "description": "A simple package transpiler for js to css",
+  "version": "1.11.3",
+  "description": "Chainable CSS-in-JS with build-time compilation, atomic CSS, and zero-runtime options",
+  "keywords": [
+    "css",
+    "css-in-js",
+    "chaincss",
+    "atomic-css",
+    "zero-runtime",
+    "design-tokens",
+    "react",
+    "nextjs",
+    "vite",
+    "webpack"
+  ],
+  "author": "Rommel Caneos",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/melcanz08/chaincss.git"
+  },
+  "homepage": "https://chaincss.dev",
+  "bugs": {
+    "url": "https://github.com/melcanz08/chaincss/issues"
+  },
   "exports": {
     ".": {
       "types": "./types.d.ts",
       "node": {
-        "require": "./node/index.js"
+        "require": "./node/btt.js",
+        "import": "./node/btt.js"
       },
       "browser": {
-        "import": "./browser/index.js"
+        "import": "./browser/rtt.js",
+        "require": "./browser/rtt.js"
       },
-      "default": "./browser/index.js"
-    },
-    "./node": {
-      "types": "./types.d.ts",
-      "require": "./node/index.js"
-    },
-    "./browser": {
-      "types": "./types.d.ts",
-      "import": "./browser/index.js"
+      "default": "./browser/rtt.js"
     },
     "./react": {
       "types": "./types.d.ts",
       "browser": {
-        "import": "./browser/index.js"
+        "import": "./browser/react-hooks.js",
+        "require": "./browser/react-hooks.js"
       },
-      "default": "./browser/index.js"
+      "default": "./browser/react-hooks.js"
+    },
+    "./vite-plugin": {
+      "types": "./types.d.ts",
+      "import": "./node/plugins/vite-plugin.js",
+      "require": "./node/plugins/vite-plugin.js",
+      "default": "./node/plugins/vite-plugin.js"
+    },
+    "./webpack-plugin": {
+      "types": "./types.d.ts",
+      "import": "./node/plugins/webpack-plugin.js",
+      "require": "./node/plugins/webpack-plugin.js",
+      "default": "./node/plugins/webpack-plugin.js"
+    },
+    "./next-plugin": {
+      "types": "./types.d.ts",
+      "import": "./node/plugins/next-plugin.js",
+      "require": "./node/plugins/next-plugin.js",
+      "default": "./node/plugins/next-plugin.js"
+    },
+    "./loader": {
+      "types": "./types.d.ts",
+      "import": "./node/loaders/chaincss-loader.js",
+      "require": "./node/loaders/chaincss-loader.js",
+      "default": "./node/loaders/chaincss-loader.js"
     }
   },
   "types": "types.d.ts",
   "files": [
-    "node/",
     "browser/",
+    "node/",
     "shared/",
     "types.d.ts",
     "README.md",
@@ -40,28 +81,27 @@
   ],
   "publishConfig": {
     "access": "public",
-    "registry": "https://registry.npmjs.org/"
+    "registry": "https://registry.npmjs.org/",
+    "provenance": true
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/melcanz08/chaincss.git"
-  },
-  "homepage": "https://melcanz08.github.io/chaincss-website",
   "bin": {
     "chaincss": "./node/chaincss.js"
   },
   "dependencies": {
     "chokidar": "^3.5.3",
-    "clean-css": "^5.3.3",
-    "vm2": "^3.9.19"
+    "clean-css": "^5.3.3"
   },
   "peerDependencies": {
+    "react": ">=16.8.0",
     "autoprefixer": "^10.0.0",
+    "postcss": "^8.5.6",
     "browserslist": "^4.28.1",
-    "caniuse-db": "^1.0.30001770",
-    "postcss": "^8.5.6"
+    "caniuse-db": "^1.0.30001770"
   },
   "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
     "autoprefixer": {
       "optional": true
     },
@@ -75,14 +115,8 @@
       "optional": true
     }
   },
-  "keywords": [
-    "css",
-    "js",
-    "transpiler",
-    "compiler",
-    "css-in-js",
-    "react"
-  ],
-  "author": "Rommel Caneos",
-  "license": "MIT"
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "sideEffects": false
 }

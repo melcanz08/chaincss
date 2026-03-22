@@ -1,5 +1,5 @@
 const strVal = {
-	userConf: `// Project Configuration
+  userConf: `// Project Configuration
 module.exports = {
   atomic: {
     enabled: true,
@@ -18,7 +18,7 @@ module.exports = {
   }
 };
 `,
-	cli_opt_guide: `
+  cli_opt_guide: `
 ChainCSS - JavaScript-powered CSS preprocessor
 
 Usage: 

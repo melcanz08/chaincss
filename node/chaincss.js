@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-const {NodeVM} = require('vm2');
 const path = require('path');
 const fs = require('fs');
+const Module = require('module');
 const chokidar = require('chokidar');
 const CleanCSS = require('clean-css');
 const { $, run, compile: originalCompile, chain } = require('./btt');
@@ -9,8 +9,11 @@ const ChainCSSPrefixer = require('./prefixer.js');
 const strVal = require('./strVal.js');
 const { AtomicOptimizer } = require('./atomic-optimizer');
 const { CacheManager } = require('./cache-manager');
+
 const fileCache = new Map();
+const compiledCache = new Map();
 let atomicOptimizer = null;
+
 let config = {
   atomic: {
     enabled: false,
@@ -28,7 +31,9 @@ let config = {
     sourceMapInline: false
   }
 }; 
+
 let prefixer = new ChainCSSPrefixer(config.prefixer);
+
 function deft_to_userConf(target, source) {
   const result = { ...target };
   for (const key in source) {
@@ -38,9 +43,9 @@ function deft_to_userConf(target, source) {
       result[key] = source[key];
     }
   }
-  
   return result;
 }
+
 const ensureConfigExists = () => {
   const configPath = path.join(process.cwd(), 'chaincss.config.cjs');
   const configExists = fs.existsSync(configPath);
@@ -50,6 +55,7 @@ const ensureConfigExists = () => {
     console.log('-- Successfully created config file: ./chaincss.config.cjs\n');
   }
 };
+
 const loadUserConfig = () => {
   const configPath = path.join(process.cwd(), 'chaincss.config.cjs');
   if (fs.existsSync(configPath)) {
@@ -69,6 +75,7 @@ const loadUserConfig = () => {
     }
   }
 };
+
 const initAtomicOptimizer = () => {
   if (config.atomic.enabled) {
     atomicOptimizer = new AtomicOptimizer(config.atomic);
@@ -76,9 +83,11 @@ const initAtomicOptimizer = () => {
     console.log('-- Atomic optimizer disabled\n');
   }
 };
+
 const initPrefixer = () => {
   prefixer = new ChainCSSPrefixer(config.prefixer);
 };
+
 function parseArgs(args) {
   const result = {
     inputFile: null,
@@ -88,7 +97,8 @@ function parseArgs(args) {
     browsers: null,
     prefixerMode: null,
     sourceMap: null,
-    sourceMapInline: false
+    sourceMapInline: false,
+    atomic: false
   };
   
   for (let i = 0; i < args.length; i++) {
@@ -108,6 +118,8 @@ function parseArgs(args) {
       result.sourceMap = false;
     } else if (arg === '--source-map-inline') {
       result.sourceMapInline = true;
+    } else if (arg === '--atomic') {
+      result.atomic = true;
     } else if (!result.inputFile) {
       result.inputFile = arg;
     } else if (!result.outputFile) {
@@ -116,6 +128,7 @@ function parseArgs(args) {
   }
   return result;
 }
+
 const applyCliOptions = (cliOptions) => {
   if (cliOptions.sourceMap !== null) {
     config.prefixer.sourceMap = cliOptions.sourceMap;
@@ -132,7 +145,11 @@ const applyCliOptions = (cliOptions) => {
   if (cliOptions.browsers) {
     config.prefixer.browsers = cliOptions.browsers;
   }
+  if (cliOptions.atomic) {
+    config.atomic.enabled = true;
+  }
 };
+
 function watch(inputFile, outputFile) {
   chokidar.watch(inputFile).on('change', async () => {
     try {
@@ -142,96 +159,117 @@ function watch(inputFile, outputFile) {
     }
   });
 }
+
 const compile = (obj) => {
   originalCompile(obj);
   let css = chain.cssOutput || '';
   if (atomicOptimizer && config.atomic.enabled) {
-    css = atomicOptimizer.optimize(obj);
+    const result = atomicOptimizer.optimize(obj);
+    css = result.css;
     chain.cssOutput = css;
+    chain.classMap = result.map;
+    chain.atomicStats = result.stats;
   }
   return css;
 };
+
 const transpilerModule = {
   $,
   run,
   compile: originalCompile,
   chain
 };
+
+// Native module-based JCSS file processor (replaces vm2)
 const processJCSSFile = (filePath) => {
-  if (fileCache.has(filePath)) {
-    return fileCache.get(filePath);
+  const abs = path.resolve(filePath);
+  
+  if (fileCache.has(abs)) return fileCache.get(abs);
+  
+  if (!fs.existsSync(abs)) {
+    throw new Error(`File not found: ${abs}`);
   }
-  if (!fs.existsSync(filePath)) {
-    throw new Error(`File not found: ${filePath}`);
+  
+  const content = fs.readFileSync(abs, 'utf8');
+  const dirname = path.dirname(abs);
+  
+  const m = new Module(abs, module.parent);
+  m.filename = abs;
+  m.paths = Module._nodeModulePaths(dirname);
+  
+  const get = (relativePath) => processJCSSFile(path.resolve(dirname, relativePath));
+  
+  let compiledFn = compiledCache.get(abs);
+  if (!compiledFn) {
+    compiledFn = new Function(
+      'exports',
+      'require',
+      'module',
+      '__filename',
+      '__dirname',
+      '$',
+      'run',
+      'compile',
+      'chain',
+      'get',
+      content
+    );
+    compiledCache.set(abs, compiledFn);
   }
-  const content = fs.readFileSync(filePath, 'utf8');
-  const vm = new NodeVM({
-    console: 'inherit',
-    timeout: 5000,
-    sandbox: {
-      ...transpilerModule,
-      get: (relativePath) => {
-        const baseDir = path.dirname(filePath);
-        const targetPath = path.resolve(baseDir, relativePath);
-        return processJCSSFile(targetPath);
-      },
-      __filename: filePath,
-      __dirname: path.dirname(filePath),
-      module: { exports: {} },
-      exports: {}       
-    },
-    require: {
-      external: true,
-      builtin: ['path', 'fs'],
-      root: './'
-    }
-  });
-  const wrappedContent = `
-    module.exports = {};
-    ${content}
-    module.exports;
-  `;
+  
   try {
-    const exports = vm.run(wrappedContent, filePath);
-    fileCache.set(filePath, exports);
-    return exports;
+    compiledFn(
+      m.exports,
+      require,
+      m,
+      abs,
+      dirname,
+      $,
+      run,
+      originalCompile,
+      chain,
+      get
+    );
   } catch (err) {
-    console.error(`Error processing ${filePath}:`, err.message);
+    console.error(`Error processing ${abs}:`, err.message);
     throw err;
   }
+  
+  fileCache.set(abs, m.exports);
+  return m.exports;
 };
+
 const processScript = (scriptBlock, filename) => {
-  const vm = new NodeVM({
-    console: 'inherit',
-    timeout: 5000,
-    sandbox: {
-      ...transpilerModule,
-      get: (relativePath) => {
-        const baseDir = path.dirname(filename);
-        const targetPath = path.resolve(baseDir, relativePath);
-        return processJCSSFile(targetPath);
-      },
-      __filename: filename,
-      __dirname: path.dirname(filename),
-      module: { exports: {} },
-      require: (path) => require(path)
-    },
-    require: {
-      external: true,
-      builtin: ['path', 'fs'],
-      root: './'
-    }
-  });
-  const jsCode = scriptBlock.trim();
+  const dirname = path.dirname(filename);
+  const get = (relativePath) => processJCSSFile(path.resolve(dirname, relativePath));
+  
+  chain.cssOutput = '';
+  
+  let compiledFn = compiledCache.get(`script:${filename}`);
+  if (!compiledFn) {
+    compiledFn = new Function(
+      '$',
+      'run',
+      'compile',
+      'chain',
+      'get',
+      '__filename',
+      '__dirname',
+      scriptBlock
+    );
+    compiledCache.set(`script:${filename}`, compiledFn);
+  }
+  
   try {
-    const result = vm.run(jsCode, filename);
-    const css = vm.sandbox.chain?.cssOutput || '';
-    return css;
+    compiledFn($, run, originalCompile, chain, get, filename, dirname);
   } catch (err) {
     console.error(`Error processing script in ${filename}:`, err.message);
     throw err;
   }
+  
+  return chain.cssOutput || '';
 };
+
 const processJavascriptBlocks = (content, inputpath) => {
   const blocks = content.split(/<@([\s\S]*?)@>/gm);
   let outputCSS = '';
@@ -254,6 +292,7 @@ const processJavascriptBlocks = (content, inputpath) => {
   }
   return outputCSS.trim();
 };
+
 const validateCSS = (css) => {
   const openBraces = (css.match(/{/g) || []).length;
   const closeBraces = (css.match(/}/g) || []).length;
@@ -263,6 +302,7 @@ const validateCSS = (css) => {
   }
   return true;
 };
+
 const processAndMinifyCss = async (css, inputFile, outputFile) => {
   if (!validateCSS(css)) {
     throw new Error('Invalid CSS syntax - check for missing braces');
@@ -300,22 +340,104 @@ const processAndMinifyCss = async (css, inputFile, outputFile) => {
   }
   return { css: finalCss, map: finalSourceMap };
 };
+
 const processor = async (inputFile, outputFile) => {
   try {
     const input = path.resolve(inputFile);
     const output = path.resolve(outputFile);
+    
+    const outputDir = path.dirname(output);
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+    
     const content = fs.readFileSync(input, 'utf8');
     const processedCSS = processJavascriptBlocks(content, input);
     if (!validateCSS(processedCSS)) {
       throw new Error('Invalid CSS syntax');
     }
-    const stylePath = path.join(output, 'global.css');
+    const stylePath = path.join(outputDir, 'global.css');
     const result = await processAndMinifyCss(processedCSS, input, stylePath);
     if (result.css) {
       fs.writeFileSync(stylePath, result.css, 'utf8');
+      console.log(`✅ CSS compiled successfully: ${stylePath}`);
       if (result.map) {
         const mapFile = `${stylePath}.map`;
         fs.writeFileSync(mapFile, result.map, 'utf8');
+        console.log(`✅ Source map: ${mapFile}`);
+      }
+      
+      // ========== ATOMIC CLASS MAP GENERATION ==========
+      if (atomicOptimizer && config.atomic.enabled && chain.classMap && Object.keys(chain.classMap).length > 0) {
+        // Write map.json (selector → atomic class string)
+        const mapJsonPath = path.join(outputDir, 'global.map.json');
+        const mapData = {
+          version: '1.0.0',
+          generated: new Date().toISOString(),
+          input: inputFile,
+          output: stylePath,
+          atomicEnabled: true,
+          threshold: config.atomic.threshold,
+          classMap: chain.classMap,
+          stats: chain.atomicStats
+        };
+        fs.writeFileSync(mapJsonPath, JSON.stringify(mapData, null, 2), 'utf8');
+        console.log(`✅ Class map: ${mapJsonPath}`);
+        
+        // Write JS module for easy import
+        const jsPath = path.join(outputDir, 'global.classes.js');
+        const jsContent = `/**
+ * ChainCSS Atomic Class Map
+ * Generated: ${new Date().toISOString()}
+ * Threshold: ${config.atomic.threshold}
+ */
+
+export const classMap = ${JSON.stringify(chain.classMap, null, 2)};
+
+export const getClass = (selector) => classMap[selector] || '';
+
+export default classMap;
+`;
+        fs.writeFileSync(jsPath, jsContent, 'utf8');
+        console.log(`✅ JS module: ${jsPath}`);
+        
+        // Write TypeScript definitions
+        const dtsPath = path.join(outputDir, 'global.classes.d.ts');
+        const dtsContent = `/**
+ * ChainCSS Atomic Class Map Type Definitions
+ * Generated: ${new Date().toISOString()}
+ */
+
+export const classMap: Record<string, string>;
+export const getClass: (selector: string) => string;
+declare const _default: Record<string, string>;
+export default _default;
+`;
+        fs.writeFileSync(dtsPath, dtsContent, 'utf8');
+        console.log(`✅ TypeScript definitions: ${dtsPath}`);
+        
+        // Update manifest
+        const manifestPath = path.join(outputDir, 'chaincss-manifest.json');
+        let manifest = {};
+        if (fs.existsSync(manifestPath)) {
+          try {
+            manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+          } catch (e) {}
+        }
+        
+        manifest[path.basename(stylePath)] = {
+          css: path.basename(stylePath),
+          map: path.basename(mapJsonPath),
+          js: path.basename(jsPath),
+          dts: path.basename(dtsPath),
+          generated: new Date().toISOString(),
+          input: inputFile,
+          threshold: config.atomic.threshold,
+          stats: chain.atomicStats
+        };
+        
+        fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf8');
+        console.log(`✅ Manifest: ${manifestPath}`);
       }
     }
   } catch (err) {
@@ -323,6 +445,7 @@ const processor = async (inputFile, outputFile) => {
     throw err;
   }
 };
+
 if (require.main === module) {
   ensureConfigExists();
   loadUserConfig();
@@ -348,6 +471,7 @@ if (require.main === module) {
     }
   })();
 }
+
 module.exports = { 
   processor, 
   watch,
