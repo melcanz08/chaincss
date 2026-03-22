@@ -31,15 +31,19 @@
         "import": "./browser/index.js",
         "require": "./browser/index.js"
       },
+      "node": {
+        "import": "./node/btt.js",
+        "require": "./node/btt.js"
+      },
       "default": "./browser/index.js"
     },
     "./react": {
       "types": "./types.d.ts",
       "browser": {
-        "import": "./browser/react-hooks.jsx",
-        "require": "./browser/react-hooks.jsx"
+        "import": "./browser/react-hooks.js",
+        "require": "./browser/react-hooks.js"
       },
-      "default": "./browser/react-hooks.jsx"
+      "default": "./browser/react-hooks.js"
     },
     "./browser/*": {
       "browser": {
