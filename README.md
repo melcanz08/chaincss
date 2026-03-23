@@ -140,8 +140,8 @@
 
 ## Documentation
 
-For complete guide documentation, examples, and API reference, visit:
-[https://chaincss.dev](https://www.chaincss.dev/docs)
+For complete guide, documentation, examples, and API reference, 
+just go to the docs section of [https://chaincss.dev](https://www.chaincss.dev)
 
 ## License
 
