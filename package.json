@@ -1,6 +1,6 @@
 {
   "name": "chaincss",
-  "version": "1.12.8",
+  "version": "1.12.9",
   "description": "Chainable CSS-in-JS with build-time compilation, atomic CSS, and zero-runtime options",
   "keywords": [
     "css",
