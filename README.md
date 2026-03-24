@@ -1,7 +1,7 @@
 # ChainCSS
 
 ![npm downloads](https://img.shields.io/npm/dm/chaincss)
-[![npm version](https://img.shields.io/npm/v//chaincss.svg)](https://www.npmjs.com/package/chaincss)
+[![npm version](https://img.shields.io/npm/v/chaincss.svg)](https://www.npmjs.com/package/chaincss)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 [![Live Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://chaincss.dev)
