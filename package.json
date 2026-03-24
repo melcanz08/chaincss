@@ -12,7 +12,23 @@
     "react",
     "nextjs",
     "vite",
-    "webpack"
+    "webpack",
+    "styled-components",
+    "emotion",
+    "tailwind",
+    "vanilla-extract",
+    "panda-css",
+    "styling",
+    "component-library",
+    "theming",
+    "responsive",
+    "buildtime-css",
+    "buildtime",
+    "stylesheet",
+    "javascript",
+    "typescript",
+    "runtime-css",
+    "runtime"
   ],
   "author": "Rommel Caneos",
   "license": "MIT",
@@ -94,7 +110,7 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/",
-    "provenance": true
+    "provenance": false
   },
   "bin": {
     "chaincss": "./node/chaincss.js"

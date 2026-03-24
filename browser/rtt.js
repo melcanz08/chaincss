@@ -1,16 +1,42 @@
 import { tokens, createTokens, responsive } from '../shared/tokens.mjs';
 
-let cssProperties = [];
+let cachedProperties = null;
 
 const loadCSSProperties = async () => {
+  // Return cached if already loaded
+  if (cachedProperties !== null) {
+    return cachedProperties;
+  }
+  // Try CDN first (only once)
   try {
-    const module = await import('../node/css-properties.json', { 
-      assert: { type: 'json' }
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+    
+    const response = await fetch('https://raw.githubusercontent.com/mdn/data/main/css/properties.json', {
+      signal: controller.signal
     });
-    return module.default;
-  } catch (e) {
-    console.log('CSS properties file not found in package, will fetch from CDN');
-    return null;
+    clearTimeout(timeoutId);
+    
+    if (response.ok) {
+      const data = await response.json();
+      const allProperties = Object.keys(data);
+      const baseProperties = new Set();
+      
+      allProperties.forEach(prop => {
+        const baseProp = prop.replace(/^-(webkit|moz|ms|o)-/, '');
+        baseProperties.add(baseProp);
+      });
+      
+      cachedProperties = Array.from(baseProperties).sort();
+      console.log(`✅ Loaded ${cachedProperties.length} CSS properties from CDN`);
+      return cachedProperties;
+    }
+  } catch (error) {
+    console.log('CDN failed, using fallback CSS property list');
+    // Use hardcoded fallback (always works)
+    const { COMMON_CSS_PROPERTIES } = await import('./commonProps.js');
+    cachedProperties = COMMON_CSS_PROPERTIES;
+    return cachedProperties;
   }
 };
 
@@ -23,35 +49,18 @@ const chain = {
       return;
     }
     
-    const localProperties = await loadCSSProperties();
-    if (localProperties && localProperties.length > 0) {
-      this.cachedValidProperties = localProperties;
-      return;
-    }
-    
-    try {
-      console.log('Loading CSS properties from CDN...');
-      const response = await fetch('https://raw.githubusercontent.com/mdn/data/main/css/properties.json');
-      const data = await response.json();
-      const allProperties = Object.keys(data);
-      
-      const baseProperties = new Set();
-      allProperties.forEach(prop => {
-        const baseProp = prop.replace(/^-(webkit|moz|ms|o)-/, '');
-        baseProperties.add(baseProp);
-      });
-      this.cachedValidProperties = Array.from(baseProperties).sort();
-    } catch (error) {
-      console.error('Error loading from CDN:', error);
-      this.cachedValidProperties = [];
-    }
+    const properties = await loadCSSProperties();
+    this.cachedValidProperties = properties;
   },
   getCachedProperties() {
     return this.cachedValidProperties;
   }
 };
 
-chain.initializeProperties();
+// Start initialization (non-blocking)
+chain.initializeProperties().catch(err => {
+  console.error('Failed to load CSS properties:', err.message);
+});
 
 const resolveToken = (value, useTokens) => {
   if (!useTokens || typeof value !== 'string' || !value.startsWith('$')) {
@@ -66,75 +75,229 @@ const resolveToken = (value, useTokens) => {
 };
 
 function $(useTokens = true) {
-  const regularStyles = {};
-  const hoverStyles = {};
-  let isBuildingHover = false;
-  
+  const catcher = {};
   const validProperties = chain.cachedValidProperties;
   
-  // Create the main proxy
-  const createProxy = () => {
-    const handler = {
-      get: (target, prop) => {
-        // Handle .block()
-        if (prop === 'block') {
-          return (...args) => {
-            const result = { ...regularStyles };
-            
-            // Add hover styles if any exist
-            if (Object.keys(hoverStyles).length > 0) {
-              result.hover = { ...hoverStyles };
-            }
-            
-            if (args.length > 0) {
-              result.selectors = args;
-            }
-            
-            // Clear for next use
-            Object.keys(regularStyles).forEach(key => delete regularStyles[key]);
-            Object.keys(hoverStyles).forEach(key => delete hoverStyles[key]);
-            isBuildingHover = false;
-            
+  const handler = {
+    get: (target, prop) => {
+      if (prop === 'block') {
+        return function(...args) {
+          if (args.length === 0) {
+            const result = { ...catcher };
+            Object.keys(catcher).forEach(key => delete catcher[key]);
             return result;
-          };
-        }
-        
-        // Handle .hover()
-        if (prop === 'hover') {
-          return () => {
-            isBuildingHover = true;
-            return proxy; // Return the same proxy, just with hover mode on
-          };
-        }
-
-        if(prop==='end'){
-          return () => {
-            isBuildingHover = false;
-            return proxy; // Return the same proxy, but end of hover mode
-          };
-        }
-        
-        // Handle regular CSS properties
-        const cssProperty = prop.replace(/([A-Z])/g, '-$1').toLowerCase();
-        if (validProperties && validProperties.length > 0 && !validProperties.includes(cssProperty)) {
-          console.warn(`Warning: '${cssProperty}' may not be a valid CSS property`);
-        }
-        
-        return (value) => {
-          if (isBuildingHover) {
-            hoverStyles[prop] = resolveToken(value, useTokens);
-          } else {
-            regularStyles[prop] = resolveToken(value, useTokens);
           }
+          const result = {
+            selectors: args,
+            ...catcher
+          };
+          Object.keys(catcher).forEach(key => delete catcher[key]);
+          return result;
+        };
+      }
+
+      if (prop === 'hover') {
+        return () => {
+          const hoverCatcher = {};
+          const hoverHandler = {
+            get: (hoverTarget, hoverProp) => {
+              if (hoverProp === 'end') {
+                return () => {
+                  catcher.hover = { ...hoverCatcher };
+                  Object.keys(hoverCatcher).forEach(key => delete hoverCatcher[key]);
+                  return proxy;
+                };
+              }
+              const cssProperty = hoverProp.replace(/([A-Z])/g, '-$1').toLowerCase();
+              if (validProperties && validProperties.length > 0 && !validProperties.includes(cssProperty)) {
+                console.warn(`Warning: '${cssProperty}' may not be a valid CSS property`);
+              }
+              return (value) => {
+                hoverCatcher[hoverProp] = resolveToken(value, useTokens);
+                return hoverProxy;
+              };
+            }
+          };
+          const hoverProxy = new Proxy({}, hoverHandler);
+          return hoverProxy;
+        };
+      }
+
+      if (prop === 'end') {
+        return () => {
           return proxy;
         };
       }
-    };
-    
-    return new Proxy({}, handler);
+
+      if (prop === 'select') {
+        return function(selector) {
+          const props = {};
+          const selectorProxy = new Proxy({}, {
+            get: (target, methodProp) => {
+              if (methodProp === 'block') {
+                return function() {
+                  return {
+                    selectors: [selector],
+                    ...props
+                  };
+                };
+              }
+              return function(value) {
+                props[methodProp] = resolveToken(value, useTokens);
+                return selectorProxy;
+              };
+            }
+          });
+          return selectorProxy;
+        };
+      }
+
+      // At-Rules
+      if (prop === 'media') {
+        return function(query, callback) {
+          const subChain = $(useTokens);
+          const result = callback(subChain);
+          if (!catcher.atRules) catcher.atRules = [];
+          catcher.atRules.push({
+            type: 'media',
+            query: query,
+            styles: result
+          });
+          return proxy;
+        };
+      }
+
+      if (prop === 'keyframes') {
+        return function(name, callback) {
+          const keyframeContext = { _keyframeSteps: {} };
+          const keyframeProxy = new Proxy(keyframeContext, {
+            get: (target, stepProp) => {
+              if (stepProp === 'from' || stepProp === 'to') {
+                return function(stepCallback) {
+                  const subChain = $(useTokens);
+                  const properties = stepCallback(subChain).block();
+                  target._keyframeSteps[stepProp] = properties;
+                  return keyframeProxy;
+                };
+              }
+              if (stepProp === 'percent') {
+                return function(value, stepCallback) {
+                  const subChain = $(useTokens);
+                  const properties = stepCallback(subChain).block();
+                  target._keyframeSteps[`${value}%`] = properties;
+                  return keyframeProxy;
+                };
+              }
+              return undefined;
+            }
+          });
+          callback(keyframeProxy);
+          if (!catcher.atRules) catcher.atRules = [];
+          catcher.atRules.push({
+            type: 'keyframes',
+            name: name,
+            steps: keyframeContext._keyframeSteps
+          });
+          return proxy;
+        };
+      }
+
+      if (prop === 'fontFace') {
+        return function(callback) {
+          const subChain = $(useTokens);
+          const fontProps = callback(subChain).block();
+          if (!catcher.atRules) catcher.atRules = [];
+          catcher.atRules.push({
+            type: 'font-face',
+            properties: fontProps
+          });
+          return proxy;
+        };
+      }
+
+      if (prop === 'supports') {
+        return function(condition, callback) {
+          const subChain = $(useTokens);
+          const styles = callback(subChain);
+          if (!catcher.atRules) catcher.atRules = [];
+          catcher.atRules.push({
+            type: 'supports',
+            condition: condition,
+            styles: styles
+          });
+          return proxy;
+        };
+      }
+
+      if (prop === 'container') {
+        return function(condition, callback) {
+          const subChain = $(useTokens);
+          const styles = callback(subChain);
+          if (!catcher.atRules) catcher.atRules = [];
+          catcher.atRules.push({
+            type: 'container',
+            condition: condition,
+            styles: styles
+          });
+          return proxy;
+        };
+      }
+
+      if (prop === 'layer') {
+        return function(name, callback) {
+          const subChain = $(useTokens);
+          const styles = callback(subChain);
+          if (!catcher.atRules) catcher.atRules = [];
+          catcher.atRules.push({
+            type: 'layer',
+            name: name,
+            styles: styles
+          });
+          return proxy;
+        };
+      }
+
+      if (prop === 'counterStyle') {
+        return function(name, callback) {
+          const subChain = $(useTokens);
+          const properties = callback(subChain).block();
+          if (!catcher.atRules) catcher.atRules = [];
+          catcher.atRules.push({
+            type: 'counter-style',
+            name: name,
+            properties: properties
+          });
+          return proxy;
+        };
+      }
+
+      if (prop === 'property') {
+        return function(name, callback) {
+          const subChain = $(useTokens);
+          const descriptors = callback(subChain).block();
+          if (!catcher.atRules) catcher.atRules = [];
+          catcher.atRules.push({
+            type: 'property',
+            name: name,
+            descriptors: descriptors
+          });
+          return proxy;
+        };
+      }
+
+      const cssProperty = prop.replace(/([A-Z])/g, '-$1').toLowerCase();
+      if (validProperties && validProperties.length > 0 && !validProperties.includes(cssProperty)) {
+        console.warn(`Warning: '${cssProperty}' may not be a valid CSS property`);
+      }
+      
+      return function(value) {
+        catcher[prop] = resolveToken(value, useTokens);
+        return proxy;
+      };
+    }
   };
   
-  const proxy = createProxy();
+  const proxy = new Proxy({}, handler);
   return proxy;
 }
 
@@ -166,34 +329,29 @@ const compile = (obj) => {
       
       // Generate normal styles
       let normalCSS = '';
-      let hoverCSS = '';
-      
       for (let prop in element) {
         if (element.hasOwnProperty(prop) && prop !== 'selectors' && prop !== 'hover') {
           const kebabKey = prop.replace(/([A-Z])/g, '-$1').toLowerCase();
           normalCSS += `  ${kebabKey}: ${element[prop]};\n`;
         }
       }
-      
-      // Generate hover styles if present
-      if (element.hover && typeof element.hover === 'object') {
-        for (let prop in element.hover) {
-          if (element.hover.hasOwnProperty(prop)) {
-            const kebabKey = prop.replace(/([A-Z])/g, '-$1').toLowerCase();
-            hoverCSS += `  ${kebabKey}: ${element.hover[prop]};\n`;
-          }
-        }
-      }
-      
-      // Add normal styles
       if (normalCSS) {
         cssString += `${selectors.join(', ')} {\n${normalCSS}}\n`;
       }
       
-      // Add hover styles as separate rule
-      if (hoverCSS) {
-        const hoverSelectors = selectors.map(s => `${s}:hover`);
-        cssString += `${hoverSelectors.join(', ')} {\n${hoverCSS}}\n`;
+      // Generate hover styles
+      if (element.hover && typeof element.hover === 'object') {
+        let hoverCSS = '';
+        for (let prop in element.hover) {
+          if (element.hover.hasOwnProperty(prop) && prop !== 'selectors') {
+            const kebabKey = prop.replace(/([A-Z])/g, '-$1').toLowerCase();
+            hoverCSS += `  ${kebabKey}: ${element.hover[prop]};\n`;
+          }
+        }
+        if (hoverCSS) {
+          const hoverSelectors = selectors.map(s => `${s}:hover`);
+          cssString += `${hoverSelectors.join(', ')} {\n${hoverCSS}}\n`;
+        }
       }
     }
   }

@@ -345,12 +345,9 @@ const processor = async (inputFile, outputFile) => {
   try {
     const input = path.resolve(inputFile);
     const outputDir = path.resolve(outputFile);
-    //console.log('const output = path.resolve(outputFile) : ',output);
-    //const outputDir = path.dirname(output);
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
     }
-    console.log('const outputDir = path.dirname(output) : ',outputDir);
     const content = fs.readFileSync(input, 'utf8');
     const processedCSS = processJavascriptBlocks(content, input);
     if (!validateCSS(processedCSS)) {
@@ -360,11 +357,9 @@ const processor = async (inputFile, outputFile) => {
     const result = await processAndMinifyCss(processedCSS, input, stylePath);
     if (result.css) {
       fs.writeFileSync(stylePath, result.css, 'utf8');
-      console.log(`✅ CSS compiled successfully: ${stylePath}`);
       if (result.map) {
         const mapFile = `${stylePath}.map`;
         fs.writeFileSync(mapFile, result.map, 'utf8');
-        console.log(`✅ Source map: ${mapFile}`);
       }
       
       // ========== ATOMIC CLASS MAP GENERATION ==========
