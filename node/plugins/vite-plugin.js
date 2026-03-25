@@ -1,4 +1,3 @@
-// node/plugins/vite-plugin.js
 import path from 'node:path';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
@@ -25,10 +24,8 @@ const compiledCache = new Map();
 const compileScript = (scriptBlock, filename, get) => {
   const dirname = path.dirname(filename);
   
-  // Reset CSS output
   chain.cssOutput = '';
   
-  // Create a function from the script - no temp files!
   const fn = new Function(
     '$',
     'run',
@@ -40,7 +37,6 @@ const compileScript = (scriptBlock, filename, get) => {
     scriptBlock
   );
   
-  // Execute with helpers
   fn($, run, originalCompile, chain, get, filename, dirname);
   
   return chain.cssOutput || '';
@@ -52,10 +48,8 @@ const processJavascriptBlocks = (content, filename, get) => {
   
   for (let i = 0; i < blocks.length; i++) {
     if (i % 2 === 0) {
-      // Static content
       output += blocks[i];
     } else {
-      // JavaScript block
       const css = compileScript(blocks[i], filename, get);
       if (css && typeof css === 'string') {
         output += css;
@@ -69,10 +63,8 @@ const processJavascriptBlocks = (content, filename, get) => {
 const processJCSSFile = (filePath) => {
   const abs = path.resolve(filePath);
   
-  // Return cached result if available
   if (fileCache.has(abs)) return fileCache.get(abs);
   
-  // Check if file exists
   if (!fs.existsSync(abs)) {
     throw new Error(`ChainCSS: File not found: ${abs}`);
   }
@@ -80,26 +72,21 @@ const processJCSSFile = (filePath) => {
   const content = fs.readFileSync(abs, 'utf8');
   const dirname = path.dirname(abs);
   
-  // Create get function for this file
   const get = (relativePath) => {
     const targetPath = path.resolve(dirname, relativePath);
     return processJCSSFile(targetPath);
   };
   
-  // Process the file
   const result = processJavascriptBlocks(content, abs, get);
   
-  // Cache the result
   fileCache.set(abs, result);
   return result;
 };
 
-// Minify and prefix CSS
 const processCSS = async (css, filepath, options = {}) => {
   const { minify = true, prefix = true } = options;
   let processed = css;
   
-  // Add prefixing
   if (prefix && prefixer) {
     try {
       const result = await prefixer.process(css, { from: filepath });
@@ -109,7 +96,6 @@ const processCSS = async (css, filepath, options = {}) => {
     }
   }
   
-  // Minify
   if (minify) {
     const minified = new CleanCSS({ level: 2 }).minify(processed);
     if (minified.errors.length) {
@@ -121,45 +107,103 @@ const processCSS = async (css, filepath, options = {}) => {
   return processed;
 };
 
+// Helper to track used selectors for tree shaking
+const trackUsedSelectors = (bundle) => {
+  const usedSelectors = new Set();
+  if (!bundle) return usedSelectors;
+  
+  const classRegex = /class(?:Name)?=["']([^"']+)["']/g;
+  let match;
+  while ((match = classRegex.exec(bundle)) !== null) {
+    match[1].split(' ').forEach(cls => {
+      if (cls && cls !== '') {
+        usedSelectors.add(`.${cls}`);
+      }
+    });
+  }
+  return usedSelectors;
+};
+
+// Helper to filter unused CSS
+function filterUsedCSS(css, usedSelectors) {
+  const lines = css.split('\n');
+  const filteredLines = [];
+  let inRule = false;
+  
+  for (const line of lines) {
+    const selectorMatch = line.match(/^([^{]+){/);
+    if (selectorMatch) {
+      const selectors = selectorMatch[1].split(',').map(s => s.trim());
+      const isUsed = selectors.some(selector => {
+        const baseSelector = selector.split(':')[0];
+        return usedSelectors.has(baseSelector);
+      });
+      
+      if (isUsed) {
+        filteredLines.push(line);
+        inRule = true;
+      } else {
+        inRule = false;
+      }
+    } else if (inRule) {
+      filteredLines.push(line);
+      if (line.includes('}')) {
+        inRule = false;
+      }
+    } else if (!line.includes('}')) {
+      filteredLines.push(line);
+    }
+  }
+  
+  return filteredLines.join('\n');
+}
+
 export default function chaincssVite(opts = {}) {
   const {
     extension = '.jcss',
     minify = process.env.NODE_ENV === 'production',
     prefix = true,
-    hmr = true
+    hmr = true,
+    debug = process.env.NODE_ENV === 'development',
+    treeShake = process.env.NODE_ENV === 'production'
   } = opts;
+  
+  let generatedCSS = '';
+  let generatedClassMap = {};
   
   return {
     name: 'vite-plugin-chaincss',
     enforce: 'pre',
     
-    // Transform .jcss files
     async transform(code, id) {
       if (!id.endsWith(extension)) return null;
       
       try {
-        // Create get function for root file
         const dirname = path.dirname(id);
         const get = (relativePath) => {
           const targetPath = path.resolve(dirname, relativePath);
           return processJCSSFile(targetPath);
         };
         
-        // Process the file
         let css = processJavascriptBlocks(code, id, get);
         
-        // Process CSS (prefix + minify)
+        generatedCSS = css;
+        if (chain.classMap) {
+          generatedClassMap = chain.classMap;
+        }
+        
         css = await processCSS(css, id, { minify, prefix });
         
-        // In development, inject CSS for HMR
-        if (process.env.NODE_ENV !== 'production') {
+        // Development with Debug Mode
+        if (process.env.NODE_ENV !== 'production' && debug) {
+          const classMapStr = JSON.stringify(generatedClassMap);
           return {
             code: `
-              // ChainCSS HMR
+              // ChainCSS with Debug Mode
               const id = ${JSON.stringify(id)};
               const css = ${JSON.stringify(css)};
+              const classMap = ${classMapStr};
               
-              // Add style to head
               let style = document.querySelector(\`style[data-chaincss="\${id}"]\`);
               if (!style) {
                 style = document.createElement('style');
@@ -168,14 +212,29 @@ export default function chaincssVite(opts = {}) {
               }
               style.textContent = css;
               
-              // HMR handling
+              // Debug Mode: Add inspector attributes
+              if (typeof window !== 'undefined' && window.__CHAINCSS_DEBUG__ !== false) {
+                // Mark elements with their chaincss classes
+                const observer = new MutationObserver(() => {
+                  document.querySelectorAll('[class*="chain-"]').forEach(el => {
+                    const classes = Array.from(el.classList).filter(c => c.includes('chain-')).join(' ');
+                    if (classes && !el.hasAttribute('data-chaincss-class')) {
+                      el.setAttribute('data-chaincss-class', classes);
+                    }
+                  });
+                });
+                observer.observe(document.body, { childList: true, subtree: true });
+                
+                console.log('🔍 ChainCSS Debug Mode Active');
+                console.log('📊 Class Map:', classMap);
+              }
+              
               if (import.meta.hot) {
                 import.meta.hot.accept((newModule) => {
                   if (newModule?.default) {
                     style.textContent = newModule.default;
                   }
                 });
-                
                 import.meta.hot.dispose(() => {
                   style.remove();
                 });
@@ -187,7 +246,39 @@ export default function chaincssVite(opts = {}) {
           };
         }
         
-        // Production: just export CSS
+        // Development without Debug
+        if (process.env.NODE_ENV !== 'production') {
+          return {
+            code: `
+              const id = ${JSON.stringify(id)};
+              const css = ${JSON.stringify(css)};
+              
+              let style = document.querySelector(\`style[data-chaincss="\${id}"]\`);
+              if (!style) {
+                style = document.createElement('style');
+                style.setAttribute('data-chaincss', id);
+                document.head.appendChild(style);
+              }
+              style.textContent = css;
+              
+              if (import.meta.hot) {
+                import.meta.hot.accept((newModule) => {
+                  if (newModule?.default) {
+                    style.textContent = newModule.default;
+                  }
+                });
+                import.meta.hot.dispose(() => {
+                  style.remove();
+                });
+              }
+              
+              export default css;
+            `,
+            map: null
+          };
+        }
+        
+        // Production with Tree Shaking tracking
         return {
           code: `export default ${JSON.stringify(css)};`,
           map: null
@@ -199,12 +290,89 @@ export default function chaincssVite(opts = {}) {
       }
     },
     
-    // Handle HMR updates
+    // Add debug styles to HTML
+    transformIndexHtml(html) {
+      if (debug && process.env.NODE_ENV !== 'production') {
+        return {
+          html,
+          tags: [
+            {
+              tag: 'script',
+              injectTo: 'head',
+              children: `
+                window.__CHAINCSS_DEBUG__ = true;
+                console.log('🔍 ChainCSS Debug Mode: Hover over elements to see their atomic classes');
+              `
+            },
+            {
+              tag: 'style',
+              injectTo: 'head',
+              children: `
+                [data-chaincss-class]:hover::after {
+                  content: attr(data-chaincss-class);
+                  position: absolute;
+                  background: #667eea;
+                  color: white;
+                  padding: 2px 8px;
+                  font-size: 11px;
+                  border-radius: 4px;
+                  font-family: monospace;
+                  z-index: 9999;
+                  pointer-events: none;
+                  white-space: nowrap;
+                  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                }
+              `
+            }
+          ]
+        };
+      }
+      return html;
+    },
+    
+    // Tree Shaking: Remove unused CSS
+    generateBundle(options, bundle) {
+      if (!treeShake) return;
+      
+      const jsBundle = Object.values(bundle).find(
+        file => file.type === 'chunk' && file.isEntry
+      );
+      
+      if (!jsBundle) return;
+      
+      const usedSelectors = trackUsedSelectors(jsBundle.code);
+      
+      const totalSelectors = Object.keys(generatedClassMap).length;
+      const usedCount = usedSelectors.size;
+      const deadCount = totalSelectors - usedCount;
+      const savings = totalSelectors > 0 ? (deadCount / totalSelectors * 100).toFixed(1) : 0;
+      
+      if (deadCount > 0) {
+        console.log(`\n ChainCSS Tree Shaking Results:`);
+        console.log(`Total styles: ${totalSelectors}`);
+        console.log(`Used styles: ${usedCount}`);
+        console.log(`Dead code eliminated: ${deadCount} (${savings}% savings)`);
+      }
+      
+      const cssFile = Object.values(bundle).find(
+        file => file.type === 'asset' && file.fileName.endsWith('.css')
+      );
+      
+      if (cssFile && typeof cssFile.source === 'string') {
+        const originalCSS = cssFile.source;
+        const filteredCSS = filterUsedCSS(originalCSS, usedSelectors);
+        
+        if (filteredCSS.length < originalCSS.length) {
+          cssFile.source = filteredCSS;
+          const cssSavings = ((originalCSS.length - filteredCSS.length) / originalCSS.length * 100).toFixed(1);
+          console.log(`   🎨 CSS size reduced by ${cssSavings}%`);
+        }
+      }
+    },
+    
     handleHotUpdate({ file, server }) {
       if (file.endsWith(extension)) {
-        // Invalidate cache for changed file
         fileCache.delete(file);
-        // Trigger reload
         server.ws.send({
           type: 'full-reload',
           path: '*'

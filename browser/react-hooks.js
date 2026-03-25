@@ -1,4 +1,5 @@
-import React, { useMemo, useEffect, useRef, useState } from 'react';
+import React from 'react';
+const { useMemo, useEffect, useRef, useState } = React;
 import { $, compile, chain } from './rtt';
 
 const styleCache = new Map();
@@ -135,4 +136,27 @@ export function withChainStyles(styles, options = {}) {
 
 export function cx(...classes) {
   return classes.filter(Boolean).join(' ');
+}
+
+let debugEnabled = false;
+
+export function enableChainCSSDebug() {
+  if (typeof window !== 'undefined') {
+    debugEnabled = true;
+    window.__CHAINCSS_DEBUG__ = true;
+    console.log('🔍 ChainCSS Debug Mode Enabled');
+    console.log('💡 Tip: Hover over elements to see their atomic classes');
+  }
+}
+
+export function disableChainCSSDebug() {
+  if (typeof window !== 'undefined') {
+    debugEnabled = false;
+    window.__CHAINCSS_DEBUG__ = false;
+    console.log('🔍 ChainCSS Debug Mode Disabled');
+  }
+}
+
+export function isDebugEnabled() {
+  return debugEnabled || (typeof window !== 'undefined' && window.__CHAINCSS_DEBUG__);
 }

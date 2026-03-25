@@ -353,6 +353,82 @@ function $(useTokens = true) {
         };
       }
 
+      // theme method
+      if (prop === 'theme') {
+        return function(themeTokens, callback) {
+          // Store original tokens to restore later
+          const originalTokens = tokens;
+          
+          // Create a temporary token store for this theme
+          const themeTokenStore = {
+            get: (path) => {
+              // Try to get from theme tokens first, fallback to original
+              const themeValue = themeTokens.get ? themeTokens.get(path) : null;
+              if (themeValue !== null && themeValue !== undefined) {
+                return themeValue;
+              }
+              return originalTokens.get(path);
+            },
+            // Make it look like the original tokens object
+            ...themeTokens
+          };
+          
+          // Create a proxy to intercept token resolution
+          const tokenProxy = new Proxy(themeTokenStore, {
+            get: (target, prop) => {
+              if (prop === 'get') {
+                return target.get.bind(target);
+              }
+              return target[prop];
+            }
+          });
+          
+          // Temporarily override the global tokens
+          const originalTokensRef = globalThis.__CHAINCSS_TOKENS__ || tokens;
+          const tempTokens = themeTokenStore;
+          
+          // Create a new $ function that uses the theme tokens
+          const themed$ = (useTokens = true) => {
+            // Store original resolver
+            const originalResolver = resolveToken;
+            
+            // Create temporary token resolver
+            const themeResolver = (value, useTokensFlag) => {
+              if (!useTokensFlag || typeof value !== 'string' || !value.startsWith('$')) {
+                return value;
+              }
+              const tokenPath = value.slice(1);
+              const tokenValue = tempTokens.get(tokenPath);
+              return tokenValue || value;
+            };
+            
+            // Temporarily replace resolveToken
+            globalThis.__CHAINCSS_TEMP_RESOLVER__ = themeResolver;
+            
+            const result = $(useTokens);
+            
+            // Restore original resolver
+            delete globalThis.__CHAINCSS_TEMP_RESOLVER__;
+            
+            return result;
+          };
+          
+          // Execute callback with themed chain
+          const result = callback(themed$);
+          
+          // Store theme data for CSS generation
+          if (!catcher.themes) catcher.themes = [];
+          catcher.themes.push({
+            name: `theme-${Date.now()}`,
+            styles: result,
+            tokens: themeTokens,
+            fallback: originalTokens
+          });
+          
+          return proxy;
+        };
+      }
+
       // Regular CSS properties
       const cssProperty = prop.replace(/([A-Z])/g, '-$1').toLowerCase();
       if (validProperties && validProperties.length > 0 && !validProperties.includes(cssProperty)) {
@@ -657,6 +733,29 @@ const compile = (obj) => {
     if (!obj.hasOwnProperty(key)) continue;
     const element = obj[key];
 
+    // Handle themes
+    if (element.themes && Array.isArray(element.themes)) {
+      element.themes.forEach(theme => {
+        // Generate CSS for each theme variant
+        if (theme.styles && theme.styles.selectors) {
+          let themeCSS = '';
+          let themeSelectors = theme.styles.selectors || [];
+          
+          for (let prop in theme.styles) {
+            if (prop !== 'selectors' && theme.styles.hasOwnProperty(prop)) {
+              const kebabKey = prop.replace(/([A-Z])/g, '-$1').toLowerCase();
+              themeCSS += `  ${kebabKey}: ${theme.styles[prop]};\n`;
+            }
+          }
+          
+          if (themeCSS) {
+            cssString += `${themeSelectors.join(', ')} {\n${themeCSS}}\n`;
+          }
+        }
+      });
+      continue;
+    }
+
     if (element.atRules && Array.isArray(element.atRules)) {
       element.atRules.forEach(rule => { 
         cssString += processAtRule(rule, null); 
@@ -676,17 +775,9 @@ const compile = (obj) => {
           element[prop].forEach(rule => { 
             atRulesCSS += processAtRule(rule, element.selectors); 
           });
-        } else if (prop === 'nestedRules' && Array.isArray(element[prop])) {
-          element[prop].forEach(rule => {
-            let nestedBody = '';
-            for (let nestedProp in rule.styles) {
-              const kebabKey = nestedProp.replace(/([A-Z])/g, '-$1').toLowerCase();
-              nestedBody += `    ${kebabKey}: ${rule.styles[nestedProp]};\n`;
-            }
-            if (nestedBody) {
-              atRulesCSS += `${element.selectors.join(', ')} ${rule.selector} {\n${nestedBody}  }\n`;
-            }
-          });
+        } else if (prop === 'themes' && Array.isArray(element[prop])) {
+          // Process themes (already handled above)
+          continue;
         } else if (prop === 'hover' && typeof element[prop] === 'object') {
           let hoverBody = '';
           for (let hoverKey in element[prop]) {

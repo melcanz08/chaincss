@@ -124,6 +124,8 @@ function parseArgs(args) {
       result.inputFile = arg;
     } else if (!result.outputFile) {
       result.outputFile = arg;
+    }else if (arg === '--validate-themes') {
+      result.validateThemes = true;
     }
   }
   return result;
@@ -148,6 +150,14 @@ const applyCliOptions = (cliOptions) => {
   if (cliOptions.atomic) {
     config.atomic.enabled = true;
   }
+  /*if (cliOptions.validateThemes) {
+    const configPath = path.join(process.cwd(), 'chaincss.config.cjs');
+    if (fs.existsSync(configPath)) {
+        await import('./theme-validator.js').then(module => {
+        module.validateThemeFiles(configPath);
+      });
+    }
+  }*/
 };
 
 function watch(inputFile, outputFile) {

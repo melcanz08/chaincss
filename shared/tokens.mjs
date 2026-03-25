@@ -1,5 +1,15 @@
+// shared/tokens.mjs
+
 class DesignTokens {
-  constructor(tokens = {}) {
+  constructor(tokens = {}, contract = null) {
+    // Store contract for validation
+    this.contract = contract;
+    
+    // Validate against contract if provided
+    if (contract) {
+      this.validateContract(tokens, contract);
+    }
+    
     this.tokens = this.deepFreeze({
       colors: {},
       spacing: {},
@@ -12,6 +22,48 @@ class DesignTokens {
     });
     
     this.flattened = this.flattenTokens(this.tokens);
+  }
+
+  // Validate token structure against contract
+  validateContract(tokens, contract, path = '') {
+    const errors = [];
+    
+    const validate = (contractPart, tokenPart, currentPath) => {
+      if (typeof contractPart === 'object' && contractPart !== null) {
+        const requiredKeys = Object.keys(contractPart);
+        const tokenKeys = Object.keys(tokenPart || {});
+        
+        requiredKeys.forEach(key => {
+          const newPath = currentPath ? `${currentPath}.${key}` : key;
+          
+          if (!tokenPart || !tokenPart.hasOwnProperty(key)) {
+            errors.push(`❌ Missing required token: "${newPath}"`);
+          } else {
+            validate(contractPart[key], tokenPart[key], newPath);
+          }
+        });
+        
+        // Warn about extra keys
+        tokenKeys.forEach(key => {
+          if (!contractPart.hasOwnProperty(key)) {
+            const newPath = currentPath ? `${currentPath}.${key}` : key;
+            console.warn(`⚠️ Extra token not in contract: "${newPath}"`);
+          }
+        });
+      } else {
+        if (typeof tokenPart !== 'string') {
+          errors.push(`❌ Token "${currentPath}" must be a string, got ${typeof tokenPart}`);
+        }
+      }
+    };
+    
+    validate(contract, tokens, path);
+    
+    if (errors.length > 0) {
+      throw new Error(`Theme Contract Validation Failed:\n${errors.join('\n')}`);
+    }
+    
+    return true;
   }
 
   // Deep freeze to prevent accidental modifications
@@ -57,7 +109,7 @@ class DesignTokens {
     return css;
   }
 
-  // Create a theme variant
+  // Create a theme variant with contract validation
   createTheme(name, overrides) {
     const themeTokens = { ...this.flattened };
     
@@ -67,7 +119,13 @@ class DesignTokens {
       }
     });
     
-    return new DesignTokens(this.expandTokens(themeTokens));
+    // Validate theme against original contract if exists
+    if (this.contract) {
+      const expandedTokens = this.expandTokens(themeTokens);
+      this.validateContract(expandedTokens, this.contract);
+    }
+    
+    return new DesignTokens(this.expandTokens(themeTokens), this.contract);
   }
 
   // Expand flattened tokens back to nested structure
@@ -234,8 +292,13 @@ const defaultTokens = {
 const tokens = new DesignTokens(defaultTokens);
 
 // Token utility functions
-const createTokens = (customTokens) => {
-  return new DesignTokens(customTokens);
+const createTokens = (customTokens, contract = null) => {
+  return new DesignTokens(customTokens, contract);
+};
+
+// Define a theme contract
+const defineThemeContract = (contract) => {
+  return contract;
 };
 
 // Generate responsive values
@@ -251,6 +314,7 @@ const responsive = (values) => {
 export {
   tokens,
   createTokens,
+  defineThemeContract,
   responsive,
   DesignTokens
 };

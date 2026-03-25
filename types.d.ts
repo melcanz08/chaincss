@@ -1,6 +1,6 @@
 /// <reference types="react" />
 
-declare module '@melcanz85/chaincss' {
+declare module 'chaincss' {
   // ============================================================================
   // Core Types
   // ============================================================================
@@ -33,6 +33,12 @@ declare module '@melcanz85/chaincss' {
     
     // Selector shortcut
     $(selector: string): ChainBuilder;
+
+    // Theme method
+    theme<T extends Record<string, any>>(
+      tokens: T,
+      callback: (chain: ChainBuilder) => void
+    ): ChainBuilder;
   }
   
   export interface KeyframeBuilder {
@@ -123,6 +129,10 @@ declare module '@melcanz85/chaincss' {
   ): (Component: React.ComponentType<P>) => React.FC<P & { chainStyles?: Record<string, string> }>;
   
   export function cx(...classes: (string | undefined | null | false)[]): string;
+
+  export function enableChainCSSDebug(): void;
+  export function disableChainCSSDebug(): void;
+  export function isDebugEnabled(): boolean;
   
   // ============================================================================
   // Configuration
@@ -179,6 +189,8 @@ declare module '@melcanz85/chaincss' {
     minify?: boolean;
     prefix?: boolean;
     hmr?: boolean;
+    debug?: boolean;  
+    treeShake?: boolean; 
   }
   
   export function vitePlugin(options?: VitePluginOptions): any;
@@ -188,9 +200,9 @@ declare module '@melcanz85/chaincss' {
 // Vite Plugin Subpath Export
 // ============================================================================
 
-declare module '@melcanz85/chaincss/vite-plugin' {
+declare module 'chaincss/vite-plugin' {
   import { Plugin } from 'vite';
-  import { VitePluginOptions } from '@melcanz85/chaincss';
+  import { VitePluginOptions } from 'chaincss';
   
   export default function chaincssVite(options?: VitePluginOptions): Plugin;
 }
@@ -199,16 +211,16 @@ declare module '@melcanz85/chaincss/vite-plugin' {
 // React Subpath Export
 // ============================================================================
 
-declare module '@melcanz85/chaincss/react' {
-  export * from '@melcanz85/chaincss';
+declare module 'chaincss/react' {
+  export * from 'chaincss';
   
   // Re-export React-specific hooks
-  export const useChainStyles: typeof import('@melcanz85/chaincss').useChainStyles;
-  export const useDynamicChainStyles: typeof import('@melcanz85/chaincss').useDynamicChainStyles;
-  export const useThemeChainStyles: typeof import('@melcanz85/chaincss').useThemeChainStyles;
-  export const ChainCSSGlobal: typeof import('@melcanz85/chaincss').ChainCSSGlobal;
-  export const withChainStyles: typeof import('@melcanz85/chaincss').withChainStyles;
-  export const cx: typeof import('@melcanz85/chaincss').cx;
+  export const useChainStyles: typeof import('chaincss').useChainStyles;
+  export const useDynamicChainStyles: typeof import('chaincss').useDynamicChainStyles;
+  export const useThemeChainStyles: typeof import('chaincss').useThemeChainStyles;
+  export const ChainCSSGlobal: typeof import('chaincss').ChainCSSGlobal;
+  export const withChainStyles: typeof import('chaincss').withChainStyles;
+  export const cx: typeof import('chaincss').cx;
 }
 
 // ============================================================================
@@ -237,3 +249,29 @@ export type Recipe<TVariants extends Record<string, Record<string, any>>> = {
 export function recipe<TVariants extends Record<string, Record<string, any>>>(
   options: RecipeOptions<TVariants>
 ): Recipe<TVariants>;
+
+//================
+// THEME CONTRACT
+//================
+export interface ThemeContract {
+  [key: string]: string | Record<string, any>;
+}
+
+export function defineThemeContract<T extends ThemeContract>(
+  contract: T
+): T & { __isContract: true; __validate: (theme: any) => void };
+
+export function createTheme<T extends Record<string, any>>(
+  contract: T,
+  values: T
+): DesignTokens;
+
+export function createTokens(
+  customTokens: Partial<Tokens>,
+  contract?: ThemeContract
+): DesignTokens;
+
+export function validateTheme(
+  contract: ThemeContract,
+  theme: any
+): boolean;
