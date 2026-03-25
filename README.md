@@ -2,10 +2,12 @@
 
 [![npm version](https://img.shields.io/npm/v/chaincss)](https://www.npmjs.com/package/chaincss)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
 [![Live Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://chaincss.dev)
 
 > Chainable CSS-in-JS with build-time compilation, atomic CSS, and zero-runtime options
+
+> **Note:** The previous package `@melcanz85/chaincss` is no longer supported.  
+> **Please install `chaincss` instead:** `npm install chaincss`
 
 ##  Features
 
