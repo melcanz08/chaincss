@@ -387,7 +387,7 @@ const processor = async (inputFile, outputFile) => {
           stats: chain.atomicStats
         };
         fs.writeFileSync(mapJsonPath, JSON.stringify(mapData, null, 2), 'utf8');
-        console.log(`✅ Class map: ${mapJsonPath}`);
+        console.log(` Class map: ${mapJsonPath}`);
         
         // Write JS module for easy import
         const jsPath = path.join(outputDir, 'global.classes.js');
@@ -404,7 +404,7 @@ export const getClass = (selector) => classMap[selector] || '';
 export default classMap;
 `;
         fs.writeFileSync(jsPath, jsContent, 'utf8');
-        console.log(`✅ JS module: ${jsPath}`);
+        console.log(` JS module: ${jsPath}`);
         
         // Write TypeScript definitions
         const dtsPath = path.join(outputDir, 'global.classes.d.ts');
@@ -419,7 +419,7 @@ declare const _default: Record<string, string>;
 export default _default;
 `;
         fs.writeFileSync(dtsPath, dtsContent, 'utf8');
-        console.log(`✅ TypeScript definitions: ${dtsPath}`);
+        console.log(` TypeScript definitions: ${dtsPath}`);
         
         // Update manifest
         const manifestPath = path.join(outputDir, 'chaincss-manifest.json');
@@ -442,7 +442,7 @@ export default _default;
         };
         
         fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf8');
-        console.log(`✅ Manifest: ${manifestPath}`);
+        console.log(` Manifest: ${manifestPath}`);
       }
     }
   } catch (err) {
