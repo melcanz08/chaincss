@@ -1,18 +1,91 @@
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
-const { tokens, createTokens, responsive } = require('../shared/tokens.cjs');
-const { AtomicOptimizer } = require('./atomic-optimizer');
+const {tokens, DesignTokens } = require('../shared/tokens.cjs');
+const { COMMON_CSS_PROPERTIES } = require('../browser/commonProps.js');
 
-const atomicOptimizer = new AtomicOptimizer({ 
-  enabled: false,
-  alwaysAtomic: [],
-  neverAtomic: ['content', 'animation']
-});
+// Remove the hardcoded atomicOptimizer instance
+let atomicOptimizer = null;
+
+// Function to set the atomic optimizer from outside
+function setAtomicOptimizer(optimizer) {
+  atomicOptimizer = optimizer;
+}
 
 function configureAtomic(opts) { 
-  Object.assign(atomicOptimizer.options, opts); 
+  if (atomicOptimizer) {
+    Object.assign(atomicOptimizer.options, opts);
+  }
 }
+
+// Helper function for Node.js HTTP requests (for older Node versions)
+const fetchWithHttps = (url) => {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      req.destroy();
+      reject(new Error('Request timeout'));
+    }, 3000);
+    
+    const req = https.get(url, (response) => {
+      clearTimeout(timeout);
+      let data = '';
+      response.on('data', (chunk) => data += chunk);
+      response.on('end', () => {
+        try {
+          resolve(JSON.parse(data));
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
+    
+    req.on('error', (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+  });
+};
+
+const loadCSSProperties = async () => {
+  // Return cached if already loaded
+  if (chain.cachedValidProperties !== null) {
+    return chain.cachedValidProperties;
+  }
+  
+  // Try CDN first (only once) - same as runtime
+  try {
+    const url = 'https://raw.githubusercontent.com/mdn/data/main/css/properties.json';
+    let data;
+    
+    // Use fetch if available (Node 18+), otherwise use https
+    if (globalThis.fetch) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      const response = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      data = await response.json();
+    } else {
+      // Fallback for older Node versions
+      data = await fetchWithHttps(url);
+    }
+    
+    const allProperties = Object.keys(data);
+    const baseProperties = new Set();
+    
+    allProperties.forEach(prop => {
+      const baseProp = prop.replace(/^-(webkit|moz|ms|o)-/, '');
+      baseProperties.add(baseProp);
+    });
+    
+    chain.cachedValidProperties = Array.from(baseProperties).sort();
+    return chain.cachedValidProperties;
+    
+  } catch (error) {
+    // Use imported fallback (clean and separate)
+    chain.cachedValidProperties = COMMON_CSS_PROPERTIES;
+    return chain.cachedValidProperties;
+  }
+};
 
 const chain = {
   cssOutput: undefined,
@@ -21,63 +94,13 @@ const chain = {
   classMap: {},
   atomicStats: null,
 
-  initializeProperties() {
-    try {
-      const jsonPath = path.join(__dirname, 'css-properties.json');
-      if (fs.existsSync(jsonPath)) {
-        const data = fs.readFileSync(jsonPath, 'utf8');
-        this.cachedValidProperties = JSON.parse(data);
-      } else {
-        console.log('⚠️ CSS properties not cached, will load on first use');
-      }
-    } catch (error) {
-      console.error('Error loading CSS properties:', error.message);
+  async initializeProperties() {
+    if (this.cachedValidProperties.length > 0) {
+      return;
     }
-  },
-
-  fetchWithHttps(url) {
-    return new Promise((resolve, reject) => {
-      https.get(url, (response) => {
-        let data = '';
-        response.on('data', (chunk) => data += chunk);
-        response.on('end', () => {
-          try {
-            resolve(JSON.parse(data));
-          } catch (error) {
-            reject(error);
-          }
-        });
-      }).on('error', reject);
-    });
-  },
-
-  async getCSSProperties() {
-    try {
-      const jsonPath = path.join(__dirname, 'css-properties.json');
-      try {
-        await fs.promises.access(jsonPath);
-        const existingData = await fs.promises.readFile(jsonPath, 'utf8');
-        const objProp = JSON.parse(existingData);
-        this.cachedValidProperties = objProp;
-        return objProp;
-      } catch {
-        const url = 'https://raw.githubusercontent.com/mdn/data/main/css/properties.json';
-        const data = await this.fetchWithHttps(url);
-        const allProperties = Object.keys(data);
-        const baseProperties = new Set();
-        allProperties.forEach(prop => {
-          const baseProp = prop.replace(/^-(webkit|moz|ms|o)-/, '');
-          baseProperties.add(baseProp);
-        });
-        const cleanProperties = Array.from(baseProperties).sort();
-        await fs.promises.writeFile(jsonPath, JSON.stringify(cleanProperties, null, 2));
-        this.cachedValidProperties = cleanProperties;
-        return cleanProperties;
-      }
-    } catch (error) {
-      console.error('Error loading CSS properties:', error.message);
-      return [];
-    }
+   
+    const properties = await loadCSSProperties();
+    this.cachedValidProperties = properties;
   },
 
   getCachedProperties() {
@@ -87,18 +110,47 @@ const chain = {
 
 chain.initializeProperties();
 
-const resolveToken = (value, useTokens) => {
-  if (!useTokens || typeof value !== 'string' || !value.startsWith('$')) {
-    return value;
-  }
-  const tokenPath = value.slice(1);
-  const tokenValue = tokens.get(tokenPath);
-  return tokenValue || value;
-};
+//token pointer
+const originalToken = tokens;
+
+let currentTokenContext = null;
+
+// createTokens pointer
+function createTokens(tokenValues) {
+  const tokenObj = new DesignTokens(tokenValues);
+  currentTokenContext = tokenObj;
+  return tokenObj;
+}
 
 function $(useTokens = true) {
   const catcher = {};
-  const validProperties = chain.cachedValidProperties;
+  let validProperties = chain.cachedValidProperties;
+  const tokenContext = currentTokenContext || null;
+
+  const resolveToken = (value) => {
+    if (!useTokens || typeof value !== 'string') return value;
+    
+    // Check if string contains any token patterns
+    if (value.includes('$')) {
+      // Replace all $token.path patterns with their resolved values
+      return value.replace(/\$([a-zA-Z0-9.-]+)/g, (match, path) => {
+        if (tokenContext) {
+          const resolved = tokenContext.get(path);
+          if (resolved !== undefined) {
+            return resolved;
+          }
+        }
+        // Also try global tokens as fallback
+        const globalResolved = tokens.get(path);
+        if (globalResolved !== undefined) {
+          return globalResolved;
+        }
+        return match; // Return original if not found
+      });
+    }
+    
+    return value;
+  };
   
   const handler = {
     get: (target, prop) => {
@@ -356,24 +408,19 @@ function $(useTokens = true) {
       // theme method
       if (prop === 'theme') {
         return function(themeTokens, callback) {
-          // Store original tokens to restore later
           const originalTokens = tokens;
           
-          // Create a temporary token store for this theme
           const themeTokenStore = {
             get: (path) => {
-              // Try to get from theme tokens first, fallback to original
               const themeValue = themeTokens.get ? themeTokens.get(path) : null;
               if (themeValue !== null && themeValue !== undefined) {
                 return themeValue;
               }
               return originalTokens.get(path);
             },
-            // Make it look like the original tokens object
             ...themeTokens
           };
           
-          // Create a proxy to intercept token resolution
           const tokenProxy = new Proxy(themeTokenStore, {
             get: (target, prop) => {
               if (prop === 'get') {
@@ -383,16 +430,12 @@ function $(useTokens = true) {
             }
           });
           
-          // Temporarily override the global tokens
           const originalTokensRef = globalThis.__CHAINCSS_TOKENS__ || tokens;
           const tempTokens = themeTokenStore;
           
-          // Create a new $ function that uses the theme tokens
           const themed$ = (useTokens = true) => {
-            // Store original resolver
             const originalResolver = resolveToken;
             
-            // Create temporary token resolver
             const themeResolver = (value, useTokensFlag) => {
               if (!useTokensFlag || typeof value !== 'string' || !value.startsWith('$')) {
                 return value;
@@ -402,21 +445,17 @@ function $(useTokens = true) {
               return tokenValue || value;
             };
             
-            // Temporarily replace resolveToken
             globalThis.__CHAINCSS_TEMP_RESOLVER__ = themeResolver;
             
             const result = $(useTokens);
             
-            // Restore original resolver
             delete globalThis.__CHAINCSS_TEMP_RESOLVER__;
             
             return result;
           };
           
-          // Execute callback with themed chain
           const result = callback(themed$);
           
-          // Store theme data for CSS generation
           if (!catcher.themes) catcher.themes = [];
           catcher.themes.push({
             name: `theme-${Date.now()}`,
@@ -443,13 +482,6 @@ function $(useTokens = true) {
   };
   
   const proxy = new Proxy({}, handler);
-  
-  if (chain.cachedValidProperties.length === 0) {
-    chain.getCSSProperties().catch(err => {
-      console.error('Failed to load CSS properties:', err.message);
-    });
-  }
-  
   return proxy;
 }
 
@@ -649,6 +681,7 @@ function processStandaloneAtRule(rule) {
   return output;
 }
 
+// btt.js - Updated run() function
 const run = (...args) => {
   let cssOutput = '';
   const styleObjs = [];
@@ -714,12 +747,25 @@ const run = (...args) => {
   cssOutput = cssOutput.replace(/\n{3,}/g, '\n\n').trim();
   chain.cssOutput = cssOutput;
 
-  if (atomicOptimizer.options.enabled) {
+  // Use the injected atomic optimizer
+  if (atomicOptimizer && atomicOptimizer.options.enabled) {
     const result = atomicOptimizer.optimize(styleObjs);
-    chain.cssOutput = result.css;
+    
+    // IMPORTANT: In component-first mode, we need to combine
+    // atomic utilities with the component CSS
+    if (atomicOptimizer.options.outputStrategy === 'component-first') {
+      // Component CSS already contains all styles, but we want to add
+      // atomic utilities as optional extras. The atomic optimizer's result.css
+      // already includes atomicCSS + componentCSS (with all styles)
+      chain.cssOutput = result.css;
+    } else {
+      // utility-first mode
+      chain.cssOutput = result.css;
+    }
+    
     chain.classMap = result.map;
     chain.atomicStats = result.stats;
-    return result.css;
+    return chain.cssOutput;
   }
   
   return cssOutput;
@@ -736,7 +782,6 @@ const compile = (obj) => {
     // Handle themes
     if (element.themes && Array.isArray(element.themes)) {
       element.themes.forEach(theme => {
-        // Generate CSS for each theme variant
         if (theme.styles && theme.styles.selectors) {
           let themeCSS = '';
           let themeSelectors = theme.styles.selectors || [];
@@ -776,7 +821,6 @@ const compile = (obj) => {
             atRulesCSS += processAtRule(rule, element.selectors); 
           });
         } else if (prop === 'themes' && Array.isArray(element[prop])) {
-          // Process themes (already handled above)
           continue;
         } else if (prop === 'hover' && typeof element[prop] === 'object') {
           let hoverBody = '';
@@ -802,11 +846,13 @@ const compile = (obj) => {
 
   chain.cssOutput = cssString.trim();
 
-  if (atomicOptimizer.options.enabled) {
+  // Use the injected atomic optimizer instead of a local instance
+  if (atomicOptimizer && atomicOptimizer.options.enabled) {
     const result = atomicOptimizer.optimize(collected);
     chain.cssOutput = result.css;
     chain.classMap = result.map;
     chain.atomicStats = result.stats;
+    chain.componentMap = result.componentMap; 
     return result.css;
   }
   
@@ -931,7 +977,7 @@ function recipe(options) {
       if (cv.style) styles.push(cv.style);
     }
     
-    if (atomicOptimizer.options.enabled) {
+    if (atomicOptimizer && atomicOptimizer.options.enabled) {
       const styleObj = {};
       styles.forEach((style, i) => {
         const selectors = style.selectors || [`variant-${i}`];
@@ -953,10 +999,11 @@ module.exports = {
   chain,
   $,
   run,
+  tokens : originalToken,
   compile,
   createTokens,
-  responsive,
   configureAtomic,
-  atomicOptimizer,
+  setAtomicOptimizer,  // Export this for dependency injection
+  atomicOptimizer,     // Will be null until set
   recipe
 };

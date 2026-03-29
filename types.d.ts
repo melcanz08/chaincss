@@ -250,9 +250,10 @@ export function recipe<TVariants extends Record<string, Record<string, any>>>(
   options: RecipeOptions<TVariants>
 ): Recipe<TVariants>;
 
-//================
+// ============================================================================
 // THEME CONTRACT
-//================
+// ============================================================================
+
 export interface ThemeContract {
   [key: string]: string | Record<string, any>;
 }
@@ -275,3 +276,50 @@ export function validateTheme(
   contract: ThemeContract,
   theme: any
 ): boolean;
+
+// ============================================================================
+// Vue JS composables
+// ============================================================================
+
+declare module 'chaincss/vue' {
+  import { Ref, ComputedRef, Component } from 'vue';
+
+  export interface UseAtomicClassesOptions {
+    atomic?: boolean;
+    global?: boolean;
+  }
+
+  export interface UseAtomicClassesReturn {
+    classes: Ref<Record<string, any>>;
+    cx: (name: string) => any;
+    cn: (...names: string[]) => string;
+  }
+
+  export function useAtomicClasses(
+    styles: Record<string, any> | Ref<Record<string, any>> | ComputedRef<Record<string, any>>,
+    options?: UseAtomicClassesOptions
+  ): UseAtomicClassesReturn;
+
+  export const ChainCSSGlobal: Component<{
+    styles: Record<string, any>;
+    atomic?: boolean;
+  }>;
+
+  export function createStyledComponent(
+    styles: Record<string, any> | ((props: any) => Record<string, any>),
+    options?: {
+      name?: string;
+      atomic?: boolean;
+      props?: Record<string, any>;
+    }
+  ): Component;
+
+  export function createTheme<T extends Record<string, any>>(
+    themes: T
+  ): {
+    currentTheme: Ref<keyof T>;
+    themeStyles: ComputedRef<T[keyof T]>;
+    setTheme: (themeName: keyof T) => void;
+    toggleTheme: () => void;
+  };
+}

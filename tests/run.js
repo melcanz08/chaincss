@@ -122,4 +122,3 @@ try {
 }
 
 console.log('\n All tests passed!\n');
-EOF

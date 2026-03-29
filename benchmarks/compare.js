@@ -14,4 +14,3 @@ console.log('Check results at: https://chaincss.dev/benchmarks\n');
 const { version } = require('../../package.json');
 console.log(`ChainCSS v${version} is ready for benchmarking!\n`);
 console.log('For detailed benchmarks, please visit our documentation site.');
-EOF

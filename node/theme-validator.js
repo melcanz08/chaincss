@@ -8,7 +8,7 @@ export function validateThemeFiles(configPath) {
   
   const { contract, themes } = config;
   
-  console.log('\n🎨 Validating Theme Contract...\n');
+  console.log('\nValidating Theme Contract...\n');
   
   const errors = [];
   
@@ -16,9 +16,9 @@ export function validateThemeFiles(configPath) {
     const themeName = theme.name || `theme-${index}`;
     try {
       validateTheme(contract, theme.values);
-      console.log(`✅ ${themeName}: Valid`);
+      console.log(`${themeName}: Valid`);
     } catch (err) {
-      errors.push(`❌ ${themeName}: ${err.message}`);
+      errors.push(`${themeName}: ${err.message}`);
     }
   });
   
@@ -28,5 +28,5 @@ export function validateThemeFiles(configPath) {
     process.exit(1);
   }
   
-  console.log('\n✅ All themes valid!\n');
+  console.log('\nAll themes valid!\n');
 }

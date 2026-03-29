@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Live Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://chaincss.dev)
 
-> Chainable CSS-in-JS with build-time compilation, atomic CSS, and zero-runtime options
+> ChainCSS is the JavaScript-native styling engine for the modern web
 
 > **Note:** The previous package `@melcanz85/chaincss` is no longer supported.  
 > **Please install `chaincss` instead:** `npm install chaincss`
@@ -21,7 +21,7 @@
 | **Hover States** | `.hover().backgroundColor('blue').end()` |
 | **Hover Exit** | `.end()` method to exit hover mode |
 | **Nested Selectors** | `.select('.parent .child')` |
-| **Token Resolution** | `$colors.primary` → actual color value |
+| **Token Resolution** | `:colors.primary` → actual color value |
 | **CSS Property Validation** | Warns on invalid CSS properties |
 
 ### At-Rules (CSS Rules)
@@ -44,7 +44,6 @@
 | **Design Tokens** | `createTokens()` with colors, spacing, typography |
 | **Token Getter** | `tokens.get('colors.primary')` |
 | **Token Resolution in Styles** | `$colors.primary` syntax |
-| **Responsive Values** | `responsive({ base: '16px', sm: '14px', lg: '18px' })` |
 | **Theme Switching** | Dynamic token updates at runtime |
 | **CSS Variables Output** | `tokens.toCSSVariables()` |
 
@@ -129,20 +128,13 @@
 | **Atomic CSS Optimization** | Eliminates duplicate styles |
 | **Cache Strategy** | File + compiled function cache |
 
-### Security & Compatibility
 
-| Feature | Description |
-|---------|-------------|
-| **No eval()** | Uses `new Function()` with parameters |
-| **No vm2** | Native Node.js module system |
-| **Node.js 14+** | Minimum version requirement |
-| **ESM/CJS Support** | Dual module format |
-| **Browser Support** | Modern browsers via autoprefixer |
+For complete guide, documentation, examples, and API reference see:
 
-## Documentation
+## [Documentation](https://www.chaincss.dev/docs)
 
-For complete guide, documentation, examples, and API reference, 
-just go to the docs section of [https://chaincss.dev](https://www.chaincss.dev)
+ 
+
 
 ## License
 

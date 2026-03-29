@@ -1,18 +1,34 @@
 const strVal = {
-  userConf: `// Project Configuration
+  userConf: `// ChainCSS Configuration
+// Generated: ${new Date().toISOString()}
+
 module.exports = {
   atomic: {
-    enabled: true,
-    threshold: 3,
-    naming: 'hash',
-    cache: true,
+    enabled: true,          // Enable atomic CSS optimization
+    threshold: 3,            // Minimum usage count for atomic conversion
+    naming: 'hash',          // 'hash' (c_3b82f6) or 'readable' (bg-blue-500)
+    cache: true,             // Cache atomic classes between builds
     cachePath: './.chaincss-cache',
-    minify: true
+    minify: true,            // Minify CSS output
+    mode: 'hybrid',          // 'atomic' | 'standard' | 'hybrid'
+    alwaysAtomic: [],        // Force these properties to be atomic
+    neverAtomic: [           // Never make these properties atomic
+      'content', 'animation', 'transition', 'keyframes',
+      'counterIncrement', 'counterReset'
+    ],
+    outputStrategy: 'component-first',
+    frameworkOutput: {
+      react: false,          // Generate React hooks
+      vue: false,            // Generate Vue composables
+      vanilla: true          // Generate vanilla JS class map
+    },
+    preserveSelectors: false, // Keep original selector names in comments
+    verbose: true            // Show detailed atomic optimization stats
   },
   prefixer: {
-    mode: 'auto',
-    browsers: ['> 0.5%', 'last 2 versions', 'not dead'],
     enabled: true,
+    mode: 'auto',            // 'auto' | 'always' | 'never'
+    browsers: ['> 0.5%', 'last 2 versions', 'not dead'],
     sourceMap: true,
     sourceMapInline: false
   }
@@ -34,27 +50,14 @@ Options:
   
   # Atomic CSS Optimization
   --atomic              Enable atomic CSS optimization
-  --threshold <number>  Minimum usage count for atomic classes (default: 3)
-  --atomic-naming <type> Atomic class naming (hash|readable) (default: hash)
+  --atomic-mode <mode>  Atomic mode: atomic, standard, hybrid (default: hybrid)
+  --atomic-naming <scheme> Naming scheme: hash, readable (default: hash)
+  --atomic-verbose      Show detailed atomic optimization stats
+  --preserve-selectors  Keep original selector names in comments
   --no-atomic-cache     Disable atomic CSS cache
   
-  # Performance & Debug
-  --verbose             Enable verbose logging
-  --debug               Enable debug mode with detailed output
-  --tree-shake          Remove unused CSS classes (dead code elimination)
-  
   # Output Control
-  --minify              Minify CSS output (default: true in production)
   --no-minify           Disable CSS minification
-  --out-dir <dir>       Output directory (default: same as outputFile dir)
-  --manifest            Generate build manifest file
-  
-  # Configuration
-  --config <path>       Path to config file (default: chaincss.config.cjs)
-  --no-config           Ignore config file, use CLI options only
-  
-  # Theme Validation
-  --validate-themes     Validate theme contracts during build
   
   # Help
   --help, -h            Show this help message
@@ -62,44 +65,27 @@ Options:
 
 Examples:
   # Basic compilation
-  chaincss style.jcss style.css
+  chaincss style.jcss dist/
   
   # Watch mode for development
-  chaincss style.jcss style.css --watch
+  chaincss style.jcss dist/ --watch
   
   # Atomic CSS optimization
-  chaincss style.jcss style.css --atomic
+  chaincss style.jcss dist/ --atomic
   
-  # With custom threshold for atomic classes
-  chaincss style.jcss style.css --atomic --threshold 5
+  # With custom naming scheme
+  chaincss style.jcss dist/ --atomic --atomic-naming readable
   
-  # Full production build with all optimizations
-  chaincss style.jcss style.css --atomic --minify --tree-shake --source-map
+  # Verbose output for debugging
+  chaincss style.jcss dist/ --atomic --atomic-verbose
   
   # Custom browser support
-  chaincss style.jcss style.css --browsers "> 1%, last 2 versions, not dead"
-  
-  # Full autoprefixer mode
-  chaincss style.jcss style.css --prefixer-mode full
-  
-  # Validate themes during build
-  chaincss style.jcss style.css --validate-themes
-  
-  # Debug mode with verbose output
-  chaincss style.jcss style.css --debug --verbose
-  
-  # Disable prefixing (for modern browsers only)
-  chaincss style.jcss style.css --no-prefix
-  
-  # With custom config file
-  chaincss style.jcss style.css --config ./my-chaincss.config.cjs
+  chaincss style.jcss dist/ --browsers "> 1%, last 2 versions, not dead"
 
 Notes:
   - Atomic CSS optimization reduces CSS size by reusing common style patterns
-  - Tree shaking removes unused CSS classes from final bundle
-  - Theme validation ensures all themes have required tokens
   - Use --watch during development for instant updates
-  - Use --atomic --minify --tree-shake for production builds
+  - Use --atomic for production builds to optimize CSS bundle size
     `
 }
 

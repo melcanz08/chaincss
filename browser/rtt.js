@@ -1,4 +1,4 @@
-import { tokens, createTokens, responsive } from '../shared/tokens.mjs';
+import { tokens as importedTokens, DesignTokens } from '../shared/tokens.mjs';
 
 let cachedProperties = null;
 
@@ -28,7 +28,7 @@ const loadCSSProperties = async () => {
       });
       
       cachedProperties = Array.from(baseProperties).sort();
-      console.log(`✅ Loaded ${cachedProperties.length} CSS properties from CDN`);
+      //console.log(`Loaded ${cachedProperties.length} CSS properties from CDN`);
       return cachedProperties;
     }
   } catch (error) {
@@ -303,19 +303,43 @@ function $(useTokens = true) {
 
 const run = (...args) => {
   let cssOutput = '';
+  
   args.forEach((value) => {
     if (value && value.selectors) {
-      let rule = `${value.selectors.join(', ')} {\n`;
+      let normalStyles = '';
+      let hoverStyles = '';
+      
+      // Separate normal properties from hover
       for (let key in value) {
-        if (key !== 'selectors' && value.hasOwnProperty(key)) {
+        if (key === 'selectors') continue;
+        
+        if (key === 'hover' && typeof value[key] === 'object') {
+          // Build hover styles separately
+          hoverStyles = `${value.selectors.join(', ')}:hover {\n`;
+          for (let hoverKey in value[key]) {
+            const kebabKey = hoverKey.replace(/([A-Z])/g, '-$1').toLowerCase();
+            hoverStyles += `  ${kebabKey}: ${value[key][hoverKey]};\n`;
+          }
+          hoverStyles += `}\n`;
+        } else {
+          // Build normal styles
           const kebabKey = key.replace(/([A-Z])/g, '-$1').toLowerCase();
-          rule += `  ${kebabKey}: ${value[key]};\n`;
+          normalStyles += `  ${kebabKey}: ${value[key]};\n`;
         }
       }
-      rule += `}\n\n`;
-      cssOutput += rule;
+      
+      // Output normal styles
+      if (normalStyles) {
+        cssOutput += `${value.selectors.join(', ')} {\n${normalStyles}}\n`;
+      }
+      
+      // Output hover styles
+      if (hoverStyles) {
+        cssOutput += hoverStyles;
+      }
     }
   });
+  
   chain.cssOutput = cssOutput.trim();
   return cssOutput.trim();
 };
@@ -359,12 +383,18 @@ const compile = (obj) => {
   return cssString.trim();
 };
 
+function createTokens(tokenValues) {
+  const tokenObj = new DesignTokens(tokenValues);
+  return tokenObj;
+}
+
+const tokens = importedTokens;
+
 export {
   chain,
   $,
   run,
   compile,
   tokens,
-  createTokens,
-  responsive
+  createTokens
 };

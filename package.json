@@ -61,11 +61,20 @@
       },
       "default": "./browser/react-hooks.js"
     },
-    "./browser/*": {
+    "./vue": {
+      "types": "./types.d.ts",
+      "browser": {
+        "import": "./browser/vue-composables.js",
+        "require": "./browser/vue-composables.js"
+      },
+      "default": "./browser/vue-composables.js"
+    },
+    "./browser": {
       "browser": {
         "import": "./browser/*",
         "require": "./browser/*"
-      }
+      },
+      "default": "./browser/index.js"
     },
     "./node/*": {
       "node": {
@@ -120,6 +129,7 @@
     "clean-css": "^5.3.3"
   },
   "peerDependencies": {
+    "vue": "^3.0.0",
     "react": ">=16.8.0",
     "autoprefixer": "^10.0.0",
     "postcss": "^8.5.6",

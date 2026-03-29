@@ -39,8 +39,8 @@ class ChainCSSPrefixer {
   }
   determineMode() {
     if (this.config.mode === 'full' && !this.hasAutoprefixer) {
-      console.warn('⚠️ Full mode requested but autoprefixer not installed. Falling back to lightweight mode.');
-      console.warn('   To use full mode install this devDenpendecies: "npm install -D autoprefixer postcss caniuse-db browserslist"\n');
+      console.warn('Full mode requested but autoprefixer not installed. Falling back to lightweight mode.');
+      console.warn('   To use full mode: npm install autoprefixer postcss caniuse-db browserslist\n');
       return 'lightweight';
     }
     if (this.config.mode === 'lightweight') {
