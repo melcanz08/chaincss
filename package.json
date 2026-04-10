@@ -12,7 +12,7 @@
     "CHANGELOG.md"
   ],
   "bin": {
-    "chaincss": "./dist/cli/index.js"
+    "chaincss": "dist/cli/cli.cjs"
   },
   "exports": {
     ".": {
