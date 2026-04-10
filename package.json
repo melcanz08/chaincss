@@ -1,13 +1,12 @@
 {
   "name": "chaincss",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "description": "The JavaScript-native styling engine for the modern web",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
-    "dist",
-    "dist/cli/cli.cjs",
+    "dist/**/*",
     "README.md",
     "LICENSE",
     "CHANGELOG.md"
@@ -38,19 +37,17 @@
       "types": "./dist/plugins/webpack.d.ts"
     }
   },
-  "scripts": {
+    "scripts": {
     "build": "npm run build:clean && npm run build:types && npm run build:core && npm run build:cli && npm run build:plugins && npm run build:runtime && npm run build:compiler",
     "build:clean": "rm -rf dist",
     "build:types": "tsc --emitDeclarationOnly --outDir dist",
     "build:core": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js --external:chokidar --external:glob --external:commander --external:chalk --external:autoprefixer --external:postcss --external:clean-css",
-    "build:cli": "esbuild src/cli/index.ts --bundle --platform=node --format=esm --outfile=dist/cli/index.js --external:chokidar --external:glob --external:commander --external:chalk --external:autoprefixer --external:postcss --external:clean-css && chmod +x dist/cli/index.js",
+    "build:cli": "esbuild src/cli/index.ts --bundle --platform=node --format=esm --outfile=dist/cli/index.js --external:chokidar --external:glob --external:commander --external:chalk --external:autoprefixer --external:postcss --external:clean-css && chmod +x dist/cli/index.js && echo '#!/usr/bin/env node\nconst { spawn } = require(\"child_process\");\nconst path = require(\"path\");\nconst cliPath = path.join(__dirname, \"index.js\");\nconst args = process.argv.slice(2);\nconst child = spawn(\"node\", [cliPath, ...args], { stdio: \"inherit\", shell: false });\nchild.on(\"close\", (code) => process.exit(code));' > dist/cli/cli.cjs && chmod +x dist/cli/cli.cjs",
     "build:plugins": "esbuild src/plugins/vite.ts --bundle --platform=node --format=esm --outfile=dist/plugins/vite.js --external:vite && esbuild src/plugins/webpack.ts --bundle --platform=node --format=esm --outfile=dist/plugins/webpack.js --external:webpack",
     "build:runtime": "esbuild src/runtime/index.ts --bundle --platform=browser --format=esm --outfile=dist/runtime/index.js --external:react --external:vue && esbuild src/runtime/react.tsx --bundle --platform=browser --format=esm --outfile=dist/runtime/react.js --external:react --external:vue && esbuild src/runtime/vue.ts --bundle --platform=browser --format=esm --outfile=dist/runtime/vue.js --external:vue --external:react",
     "build:compiler": "esbuild src/compiler/index.ts --bundle --platform=node --format=esm --outfile=dist/compiler/index.js --external:chokidar --external:glob --external:commander --external:chalk --external:autoprefixer --external:postcss --external:clean-css",
     "dev": "npm run build:clean && npm run build:types && npm run build:core -- --watch",
     "prepublishOnly": "npm run build",
-    "test": "vitest",
-    "lint": "eslint src --ext .ts,.tsx",
     "version": "git add -A",
     "postversion": "git push && git push --tags"
   },
@@ -58,15 +55,12 @@
     "chalk": "^5.3.0",
     "chokidar": "^3.5.3",
     "clean-css": "^5.3.2",
-    "commander": "^11.1.0",
-    "postcss": "^8.4.31"
+    "commander": "^11.1.0"
   },
   "devDependencies": {
     "@types/clean-css": "^4.2.10",
     "@types/node": "^20.8.10",
     "@types/react": "^18.2.0",
-    "autoprefixer": "^10.4.16",
-    "browserslist": "^4.22.1",
     "esbuild": "^0.19.12",
     "glob": "^10.3.10",
     "react": "^18.2.0",
@@ -76,43 +70,31 @@
   },
   "peerDependencies": {
     "react": "^18.0.0",
-    "vue": "^3.0.0"
+    "vue": "^3.0.0",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.31",
+    "browserslist": "^4.22.1",
+    "caniuse-db": "^1.0.30001785"
   },
   "peerDependenciesMeta": {
-    "react": {
-      "optional": true
-    },
-    "vue": {
-      "optional": true
-    }
+    "react": { "optional": true },
+    "vue": { "optional": true },
+    "autoprefixer": { "optional": true },
+    "postcss": { "optional": true },
+    "browserslist": { "optional": true },
+    "caniuse-db": { "optional": true }
   },
   "keywords": [
-    "css",
     "css-in-js",
-    "chaincss",
-    "atomic-css",
     "zero-runtime",
+    "atomic-css",
+    "css-compiler",
     "design-tokens",
     "react",
-    "nextjs",
+    "vue",
     "vite",
     "webpack",
-    "styled-components",
-    "emotion",
-    "tailwind",
-    "vanilla-extract",
-    "panda-css",
-    "styling",
-    "component-library",
-    "theming",
-    "responsive",
-    "buildtime-css",
-    "buildtime",
-    "stylesheet",
-    "javascript",
-    "typescript",
-    "runtime-css",
-    "runtime"
+    "nextjs"
   ],
   "author": "Rommel Caneos",
   "license": "MIT",
