@@ -1,6 +1,6 @@
 {
   "name": "chaincss",
-  "version": "2.0.4",
+  "version": "2.0.5",
   "description": "The JavaScript-native styling engine for the modern web",
   "type": "module",
   "main": "./dist/index.js",
@@ -37,7 +37,7 @@
       "types": "./dist/plugins/webpack.d.ts"
     }
   },
-    "scripts": {
+  "scripts": {
     "build": "npm run build:clean && npm run build:types && npm run build:core && npm run build:cli && npm run build:plugins && npm run build:runtime && npm run build:compiler",
     "build:clean": "rm -rf dist",
     "build:types": "tsc --emitDeclarationOnly --outDir dist",
@@ -77,12 +77,24 @@
     "caniuse-db": "^1.0.30001785"
   },
   "peerDependenciesMeta": {
-    "react": { "optional": true },
-    "vue": { "optional": true },
-    "autoprefixer": { "optional": true },
-    "postcss": { "optional": true },
-    "browserslist": { "optional": true },
-    "caniuse-db": { "optional": true }
+    "react": {
+      "optional": true
+    },
+    "vue": {
+      "optional": true
+    },
+    "autoprefixer": {
+      "optional": true
+    },
+    "postcss": {
+      "optional": true
+    },
+    "browserslist": {
+      "optional": true
+    },
+    "caniuse-db": {
+      "optional": true
+    }
   },
   "keywords": [
     "css-in-js",
