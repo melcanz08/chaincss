@@ -50,7 +50,6 @@
     "prepublishOnly": "npm run build",
     "test": "vitest",
     "lint": "eslint src --ext .ts,.tsx",
-    //"preversion": "npm run test && npm run build",
     "version": "git add -A",
     "postversion": "git push && git push --tags"
   },
