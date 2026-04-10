@@ -1,0 +1,5960 @@
+var __create = Object.create;
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
+  get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
+}) : x)(function(x) {
+  if (typeof require !== "undefined")
+    return require.apply(this, arguments);
+  throw Error('Dynamic require of "' + x + '" is not supported');
+});
+var __esm = (fn, res) => function __init() {
+  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+};
+var __commonJS = (cb, mod) => function __require2() {
+  return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+};
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
+
+// src/core/constants.ts
+var VERSION, NEVER_ATOMIC_PROPERTIES, ALWAYS_ATOMIC_PROPERTIES, DEFAULT_BROWSERS, DEFAULT_CSS_FILENAME, DEFAULT_CLASS_MAP_FILENAME, DEFAULT_TYPES_FILENAME, DEFAULT_CACHE_PATH, DEFAULT_CONFIG2;
+var init_constants = __esm({
+  "src/core/constants.ts"() {
+    "use strict";
+    VERSION = "2.0.0";
+    NEVER_ATOMIC_PROPERTIES = [
+      "content",
+      "animation",
+      "animation-name",
+      "animation-duration",
+      "animation-timing-function",
+      "animation-delay",
+      "animation-iteration-count",
+      "animation-direction",
+      "animation-fill-mode",
+      "animation-play-state",
+      "transition",
+      "transition-property",
+      "transition-duration",
+      "transition-timing-function",
+      "transition-delay",
+      "keyframes",
+      "counter-increment",
+      "counter-reset",
+      "counter-set",
+      "list-style",
+      "list-style-type",
+      "list-style-position",
+      "list-style-image"
+    ];
+    ALWAYS_ATOMIC_PROPERTIES = [
+      "display",
+      "position",
+      "margin",
+      "margin-top",
+      "margin-right",
+      "margin-bottom",
+      "margin-left",
+      "padding",
+      "padding-top",
+      "padding-right",
+      "padding-bottom",
+      "padding-left",
+      "color",
+      "background-color",
+      "background",
+      "border",
+      "border-radius",
+      "width",
+      "height",
+      "max-width",
+      "max-height",
+      "min-width",
+      "min-height",
+      "font-size",
+      "font-weight",
+      "text-align",
+      "cursor",
+      "opacity",
+      "z-index",
+      "overflow",
+      "flex",
+      "grid",
+      "gap"
+    ];
+    DEFAULT_BROWSERS = [
+      "> 0.5%",
+      "last 2 versions",
+      "not dead",
+      "Firefox ESR",
+      "not ie < 11"
+    ];
+    DEFAULT_CSS_FILENAME = "styles.css";
+    DEFAULT_CLASS_MAP_FILENAME = "class-map.json";
+    DEFAULT_TYPES_FILENAME = "classes.d.ts";
+    DEFAULT_CACHE_PATH = "./.chaincss-cache";
+    DEFAULT_CONFIG2 = {
+      tokens: {
+        enabled: false,
+        prefix: "chain"
+      },
+      atomic: {
+        enabled: true,
+        threshold: 3,
+        naming: process.env.NODE_ENV === "production" ? "hash" : "readable",
+        cache: true,
+        cachePath: DEFAULT_CACHE_PATH,
+        minify: true,
+        mode: "hybrid",
+        outputStrategy: "component-first",
+        alwaysAtomic: ALWAYS_ATOMIC_PROPERTIES,
+        neverAtomic: NEVER_ATOMIC_PROPERTIES,
+        verbose: false
+      },
+      prefixer: {
+        enabled: true,
+        mode: "auto",
+        browsers: DEFAULT_BROWSERS,
+        sourceMap: true,
+        sourceMapInline: false
+      },
+      output: {
+        cssFile: DEFAULT_CSS_FILENAME,
+        classMapFile: DEFAULT_CLASS_MAP_FILENAME,
+        typesFile: DEFAULT_TYPES_FILENAME,
+        minify: true,
+        generateGlobalCSS: true
+      },
+      // New: Debug & Timeline (all false by default)
+      debug: false,
+      // ← Off by default
+      sourceComments: true,
+      // ← On by default (helps debugging)
+      timeline: false,
+      // ← Off by default
+      framework: "auto",
+      // ← Auto-detect framework
+      namespace: "chain",
+      verbose: false
+    };
+  }
+});
+
+// src/core/utils.ts
+import crypto from "crypto";
+function hashString(str, length = 6) {
+  return crypto.createHash("sha1").update(str).digest("hex").slice(0, length);
+}
+function generateClassName(styleId, naming = "hash") {
+  if (naming === "hash") {
+    return `c_${hashString(styleId)}`;
+  }
+  return `chain-${styleId.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`;
+}
+function ensureDir(dir) {
+  const fs5 = __require("fs");
+  const path7 = __require("path");
+  if (!fs5.existsSync(dir)) {
+    fs5.mkdirSync(dir, { recursive: true });
+  }
+}
+function writeFile(filePath, content) {
+  const fs5 = __require("fs");
+  const path7 = __require("path");
+  const dir = path7.dirname(filePath);
+  ensureDir(dir);
+  fs5.writeFileSync(filePath, content, "utf8");
+}
+function formatCSS(css, minify = false) {
+  if (!minify) {
+    return css.replace(/{/g, " {\n  ").replace(/;/g, ";\n  ").replace(/}/g, "\n}\n").replace(/\n\s*\n/g, "\n").trim();
+  }
+  return css.replace(/\/\*.*?\*\//g, "").replace(/\s+/g, " ").replace(/\s*{\s*/g, "{").replace(/\s*}\s*/g, "}").replace(/\s*;\s*/g, ";").replace(/\s*:\s*/g, ":").trim();
+}
+function getBaseName(filePath) {
+  const path7 = __require("path");
+  return path7.basename(filePath, path7.extname(filePath));
+}
+var init_utils = __esm({
+  "src/core/utils.ts"() {
+    "use strict";
+  }
+});
+
+// src/compiler/tokens.ts
+var DesignTokens, defaultTokens, tokens;
+var init_tokens = __esm({
+  "src/compiler/tokens.ts"() {
+    "use strict";
+    DesignTokens = class _DesignTokens {
+      tokens;
+      flattened;
+      constructor(tokens3 = {}) {
+        this.tokens = this.deepFreeze({
+          colors: {},
+          spacing: {},
+          typography: {
+            fontFamily: {},
+            fontSize: {},
+            fontWeight: {},
+            lineHeight: {}
+          },
+          breakpoints: {},
+          zIndex: {},
+          shadows: {},
+          borderRadius: {},
+          ...tokens3
+        });
+        this.flattened = this.flattenTokens(this.tokens);
+      }
+      // Deep freeze to prevent accidental modifications
+      deepFreeze(obj) {
+        Object.keys(obj).forEach((key) => {
+          const value = obj[key];
+          if (typeof value === "object" && value !== null) {
+            this.deepFreeze(value);
+          }
+        });
+        return Object.freeze(obj);
+      }
+      // Flatten nested tokens for easy access
+      flattenTokens(obj, prefix = "") {
+        return Object.keys(obj).reduce((acc, key) => {
+          const prefixed = prefix ? `${prefix}.${key}` : key;
+          const value = obj[key];
+          if (typeof value === "object" && value !== null) {
+            Object.assign(acc, this.flattenTokens(value, prefixed));
+          } else {
+            acc[prefixed] = value;
+          }
+          return acc;
+        }, {});
+      }
+      // Get token value by path (e.g., 'colors.primary')
+      get(path7, defaultValue = "") {
+        return this.flattened[path7] || defaultValue;
+      }
+      // Generate CSS variables from tokens
+      toCSSVariables(prefix = "chain") {
+        let css = ":root {\n";
+        Object.entries(this.flattened).forEach(([key, value]) => {
+          const varName = `--${prefix}-${key.replace(/\./g, "-")}`;
+          css += `  ${varName}: ${value};
+`;
+        });
+        css += "}\n";
+        return css;
+      }
+      // Create a theme variant
+      createTheme(name, overrides) {
+        const themeTokens = { ...this.flattened };
+        Object.entries(overrides).forEach(([key, value]) => {
+          if (themeTokens[key]) {
+            themeTokens[key] = value;
+          }
+        });
+        return new _DesignTokens(this.expandTokens(themeTokens));
+      }
+      // Expand flattened tokens back to nested structure
+      expandTokens(flattened) {
+        const result = {};
+        Object.entries(flattened).forEach(([key, value]) => {
+          const parts = key.split(".");
+          let current = result;
+          for (let i = 0; i < parts.length - 1; i++) {
+            if (!current[parts[i]]) {
+              current[parts[i]] = {};
+            }
+            current = current[parts[i]];
+          }
+          current[parts[parts.length - 1]] = value;
+        });
+        return result;
+      }
+    };
+    defaultTokens = {
+      colors: {
+        primary: "#667eea",
+        secondary: "#764ba2",
+        success: "#48bb78",
+        danger: "#f56565",
+        warning: "#ed8936",
+        info: "#4299e1",
+        light: "#f7fafc",
+        dark: "#1a202c",
+        white: "#ffffff",
+        black: "#000000",
+        gray: {
+          100: "#f7fafc",
+          200: "#edf2f7",
+          300: "#e2e8f0",
+          400: "#cbd5e0",
+          500: "#a0aec0",
+          600: "#718096",
+          700: "#4a5568",
+          800: "#2d3748",
+          900: "#1a202c"
+        }
+      },
+      spacing: {
+        0: "0",
+        1: "0.25rem",
+        2: "0.5rem",
+        3: "0.75rem",
+        4: "1rem",
+        5: "1.25rem",
+        6: "1.5rem",
+        8: "2rem",
+        10: "2.5rem",
+        12: "3rem",
+        16: "4rem",
+        20: "5rem",
+        24: "6rem",
+        32: "8rem",
+        40: "10rem",
+        48: "12rem",
+        56: "14rem",
+        64: "16rem",
+        xs: "0.5rem",
+        sm: "1rem",
+        md: "1.5rem",
+        lg: "2rem",
+        xl: "3rem",
+        "2xl": "4rem",
+        "3xl": "6rem"
+      },
+      typography: {
+        fontFamily: {
+          sans: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+          serif: 'Georgia, Cambria, "Times New Roman", Times, serif',
+          mono: 'SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace'
+        },
+        fontSize: {
+          xs: "0.75rem",
+          sm: "0.875rem",
+          base: "1rem",
+          lg: "1.125rem",
+          xl: "1.25rem",
+          "2xl": "1.5rem",
+          "3xl": "1.875rem",
+          "4xl": "2.25rem",
+          "5xl": "3rem"
+        },
+        fontWeight: {
+          hairline: "100",
+          thin: "200",
+          light: "300",
+          normal: "400",
+          medium: "500",
+          semibold: "600",
+          bold: "700",
+          extrabold: "800",
+          black: "900"
+        },
+        lineHeight: {
+          none: "1",
+          tight: "1.25",
+          snug: "1.375",
+          normal: "1.5",
+          relaxed: "1.625",
+          loose: "2"
+        }
+      },
+      breakpoints: {
+        sm: "640px",
+        md: "768px",
+        lg: "1024px",
+        xl: "1280px",
+        "2xl": "1536px"
+      },
+      zIndex: {
+        0: "0",
+        10: "10",
+        20: "20",
+        30: "30",
+        40: "40",
+        50: "50",
+        auto: "auto",
+        dropdown: "1000",
+        sticky: "1020",
+        fixed: "1030",
+        modal: "1040",
+        popover: "1050",
+        tooltip: "1060"
+      },
+      shadows: {
+        sm: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
+        base: "0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)",
+        md: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+        lg: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+        xl: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+        "2xl": "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+        inner: "inset 0 2px 4px 0 rgba(0, 0, 0, 0.06)",
+        none: "none"
+      },
+      borderRadius: {
+        none: "0",
+        sm: "0.125rem",
+        base: "0.25rem",
+        md: "0.375rem",
+        lg: "0.5rem",
+        xl: "0.75rem",
+        "2xl": "1rem",
+        "3xl": "1.5rem",
+        full: "9999px"
+      }
+    };
+    tokens = new DesignTokens(defaultTokens);
+  }
+});
+
+// src/compiler/commonProps.ts
+var COMMON_CSS_PROPERTIES;
+var init_commonProps = __esm({
+  "src/compiler/commonProps.ts"() {
+    "use strict";
+    COMMON_CSS_PROPERTIES = [
+      "align-content",
+      "align-items",
+      "align-self",
+      "animation",
+      "background",
+      "background-clip",
+      "background-color",
+      "background-image",
+      "background-position",
+      "background-repeat",
+      "background-size",
+      "border",
+      "border-bottom",
+      "border-color",
+      "border-left",
+      "border-radius",
+      "border-right",
+      "border-style",
+      "border-top",
+      "border-width",
+      "bottom",
+      "box-shadow",
+      "box-sizing",
+      "color",
+      "content",
+      "cursor",
+      "display",
+      "flex",
+      "flex-direction",
+      "flex-grow",
+      "flex-shrink",
+      "flex-wrap",
+      "float",
+      "font",
+      "font-family",
+      "font-size",
+      "font-weight",
+      "gap",
+      "grid",
+      "grid-template-columns",
+      "grid-template-rows",
+      "height",
+      "justify-content",
+      "left",
+      "letter-spacing",
+      "line-height",
+      "margin",
+      "margin-bottom",
+      "margin-left",
+      "margin-right",
+      "margin-top",
+      "max-height",
+      "max-width",
+      "min-height",
+      "min-width",
+      "opacity",
+      "outline",
+      "overflow",
+      "padding",
+      "padding-bottom",
+      "padding-left",
+      "padding-right",
+      "padding-top",
+      "position",
+      "right",
+      "text-align",
+      "text-decoration",
+      "text-transform",
+      "top",
+      "transform",
+      "transition",
+      "transition-delay",
+      "transition-duration",
+      "transition-property",
+      "transition-timing-function",
+      "width",
+      "z-index"
+    ];
+  }
+});
+
+// src/compiler/btt.ts
+import path2 from "path";
+import https from "https";
+import { fileURLToPath } from "url";
+function takeSnapshot(selector, styles, source) {
+  if (!timelineEnabled)
+    return "";
+  const hash = JSON.stringify(styles);
+  const existing = styleHistory.find((s) => s.selector === selector && s.hash === hash);
+  if (existing)
+    return existing.id;
+  const id = `snapshot_${currentSnapshotId++}`;
+  const snapshot = {
+    id,
+    timestamp: Date.now(),
+    selector,
+    styles: { ...styles },
+    source,
+    hash
+  };
+  styleHistory.push(snapshot);
+  const previousSnapshot = styleHistory.slice(-2)[0];
+  if (previousSnapshot && previousSnapshot.selector === selector) {
+    for (const [key, value] of Object.entries(styles)) {
+      const oldValue = previousSnapshot.styles[key];
+      if (!(key in previousSnapshot.styles)) {
+        styleChanges.push({
+          id: `change_${Date.now()}_${Math.random()}`,
+          timestamp: Date.now(),
+          selector,
+          property: key,
+          oldValue: void 0,
+          newValue: value,
+          type: "add"
+        });
+      } else if (JSON.stringify(oldValue) !== JSON.stringify(value)) {
+        styleChanges.push({
+          id: `change_${Date.now()}_${Math.random()}`,
+          timestamp: Date.now(),
+          selector,
+          property: key,
+          oldValue,
+          newValue: value,
+          type: "modify"
+        });
+      }
+    }
+    for (const [key] of Object.entries(previousSnapshot.styles)) {
+      if (!(key in styles)) {
+        styleChanges.push({
+          id: `change_${Date.now()}_${Math.random()}`,
+          timestamp: Date.now(),
+          selector,
+          property: key,
+          oldValue: previousSnapshot.styles[key],
+          newValue: void 0,
+          type: "remove"
+        });
+      }
+    }
+  }
+  return id;
+}
+function getSourceLocation() {
+  if (!enableSourceComments)
+    return null;
+  const stack = new Error().stack;
+  if (!stack)
+    return null;
+  const stackLines = stack.split("\n");
+  for (let i = 0; i < stackLines.length; i++) {
+    const line = stackLines[i];
+    const match = line.match(/([^/]+\.chain\.js):(\d+):\d+/);
+    if (match) {
+      const fileName = match[1];
+      const lineNumber = match[2];
+      return `${fileName}:${lineNumber}`;
+    }
+  }
+  return null;
+}
+function setSourceComments(enabled) {
+  enableSourceComments = enabled;
+}
+function addSourceComment(css, sourceLocation) {
+  if (!enableSourceComments || !sourceLocation)
+    return css;
+  return `/* Generated from: ${sourceLocation} */
+${css}`;
+}
+function createAnimation(animationName, config = {}) {
+  const duration = config.duration || "0.3s";
+  const delay = config.delay || "0s";
+  const timing = config.timing || "ease";
+  const iteration = config.iteration || 1;
+  const direction = config.direction || "normal";
+  const fillMode = config.fillMode || "both";
+  return {
+    animation: `${animationName} ${duration} ${timing} ${delay} ${iteration} ${direction}`,
+    animationFillMode: fillMode
+  };
+}
+function calc(expression) {
+  return `calc(${expression})`;
+}
+function add(a, b) {
+  return `calc(${a} + ${b})`;
+}
+function subtract(a, b) {
+  return `calc(${a} - ${b})`;
+}
+function multiply(a, b) {
+  return `calc(${a} * ${b})`;
+}
+function divide(a, b) {
+  return `calc(${a} / ${b})`;
+}
+function percent(value) {
+  return `${value}%`;
+}
+function vw(value) {
+  return `${value}vw`;
+}
+function vh(value) {
+  return `${value}vh`;
+}
+function rem(value) {
+  return `${value}rem`;
+}
+function em(value) {
+  return `${value}em`;
+}
+function px(value) {
+  return `${value}px`;
+}
+function min(...values) {
+  return `min(${values.join(", ")})`;
+}
+function max(...values) {
+  return `max(${values.join(", ")})`;
+}
+function clamp(min2, preferred, max2) {
+  return `clamp(${min2}, ${preferred}, ${max2})`;
+}
+function setBreakpoints(breakpoints) {
+  currentBreakpoints = { ...DEFAULT_BREAKPOINTS, ...breakpoints };
+}
+function setAtomicOptimizer(optimizer) {
+  atomicOptimizer = optimizer;
+}
+function createTokens(tokenValues) {
+  const tokenObj = new DesignTokens(tokenValues);
+  currentTokenContext = tokenObj;
+  return tokenObj;
+}
+function resolveToken(value, useTokens, tokenContext) {
+  if (!useTokens || typeof value !== "string")
+    return value;
+  if (value.includes("$")) {
+    return value.replace(/\$([a-zA-Z0-9.-]+)/g, (match, path7) => {
+      if (tokenContext) {
+        const resolved = tokenContext.get(path7);
+        if (resolved !== void 0) {
+          return resolved;
+        }
+      }
+      const globalResolved = tokens2.get(path7);
+      if (globalResolved !== void 0) {
+        return globalResolved;
+      }
+      return match;
+    });
+  }
+  return value;
+}
+function chaincssv2(useTokens = true) {
+  const catcher = {};
+  let validProperties = chain.cachedValidProperties;
+  const tokenContext = currentTokenContext || null;
+  const createResponsiveMethod = (breakpointName, query) => {
+    return function(callback) {
+      const subChain = chaincssv2(useTokens);
+      let result = callback(subChain);
+      if (result && typeof result.$el === "function") {
+        result = result.$el();
+      }
+      const { selectors, ...pureStyles } = result || {};
+      if (!catcher.atRules)
+        catcher.atRules = [];
+      catcher.atRules.push({
+        type: "media",
+        query,
+        styles: pureStyles
+      });
+      return proxy;
+    };
+  };
+  const handler = {
+    get: (target, prop) => {
+      if (prop === "debug") {
+        return () => {
+          debugMode = true;
+          currentDebugSelector = "";
+          return proxy;
+        };
+      }
+      if (prop === "debugWith") {
+        return (selector) => {
+          debugMode = true;
+          currentDebugSelector = selector;
+          return proxy;
+        };
+      }
+      if (prop === "$el") {
+        return function(...args) {
+          if (args.length === 0) {
+            const result2 = { ...catcher };
+            Object.keys(catcher).forEach((key) => delete catcher[key]);
+            return result2;
+          }
+          const selector = args[0];
+          const result = {
+            selectors: args,
+            ...catcher
+          };
+          if (debugMode) {
+            const debugSelector = currentDebugSelector || selector;
+            console.group(`\u{1F50D} ChainCSS Debug: ${debugSelector}`);
+            console.log("\u{1F4E6} Selector:", selector);
+            console.log("\u{1F3A8} Styles:", catcher);
+            const stack = new Error().stack;
+            if (stack) {
+              const stackLines = stack.split("\n");
+              for (let i = 3; i < Math.min(stackLines.length, 8); i++) {
+                if (stackLines[i] && !stackLines[i].includes("btt.ts")) {
+                  console.log("\u{1F4CD} Source:", stackLines[i].trim());
+                  break;
+                }
+              }
+            }
+            console.groupEnd();
+            debugMode = false;
+            currentDebugSelector = "";
+          }
+          Object.keys(catcher).forEach((key) => delete catcher[key]);
+          return result;
+        };
+      }
+      if (animationPresets[prop]) {
+        return (config) => {
+          if (!catcher.atRules)
+            catcher.atRules = [];
+          const hasKeyframes = catcher.atRules.some(
+            (rule) => rule.type === "keyframes" && rule.name === prop
+          );
+          if (!hasKeyframes) {
+            catcher.atRules.push({
+              type: "keyframes",
+              name: prop,
+              steps: animationPresets[prop]
+            });
+          }
+          const animationStyles = createAnimation(prop, config);
+          Object.assign(catcher, animationStyles);
+          return proxy;
+        };
+      }
+      if (prop === "duration") {
+        return (value) => {
+          if (catcher.animation) {
+            catcher.animation = catcher.animation.replace(/(\d+(?:\.\d+)?(?:ms|s))/, value);
+          } else {
+            catcher.animationDuration = value;
+          }
+          return proxy;
+        };
+      }
+      if (prop === "delay") {
+        return (value) => {
+          if (catcher.animation) {
+            const parts = catcher.animation.split(" ");
+            parts.splice(3, 0, value);
+            catcher.animation = parts.join(" ");
+          } else {
+            catcher.animationDelay = value;
+          }
+          return proxy;
+        };
+      }
+      if (prop === "timing") {
+        return (value) => {
+          if (catcher.animation) {
+            catcher.animation = catcher.animation.replace(/(ease|linear|ease-in|ease-out|ease-in-out|cubic-bezier\([^)]+\))/, value);
+          } else {
+            catcher.animationTimingFunction = value;
+          }
+          return proxy;
+        };
+      }
+      if (prop === "iteration") {
+        return (value) => {
+          if (catcher.animation) {
+            catcher.animation = catcher.animation.replace(/\d+|infinite/, String(value));
+          } else {
+            catcher.animationIterationCount = value;
+          }
+          return proxy;
+        };
+      }
+      if (prop === "infinite") {
+        return () => {
+          if (catcher.animation) {
+            catcher.animation = catcher.animation.replace(/\d+/, "infinite");
+          } else {
+            catcher.animationIterationCount = "infinite";
+          }
+          return proxy;
+        };
+      }
+      if (prop === "animate") {
+        return (name, keyframes, config) => {
+          if (!catcher.atRules)
+            catcher.atRules = [];
+          catcher.atRules.push({
+            type: "keyframes",
+            name,
+            steps: keyframes
+          });
+          const animationStyles = createAnimation(name, config);
+          Object.assign(catcher, animationStyles);
+          return proxy;
+        };
+      }
+      if (prop === "calc")
+        return helpers.calc;
+      if (prop === "add")
+        return helpers.add;
+      if (prop === "subtract" || prop === "sub")
+        return helpers.subtract;
+      if (prop === "multiply" || prop === "mul")
+        return helpers.multiply;
+      if (prop === "divide" || prop === "div")
+        return helpers.divide;
+      if (prop === "percent")
+        return helpers.percent;
+      if (prop === "vw")
+        return helpers.vw;
+      if (prop === "vh")
+        return helpers.vh;
+      if (prop === "rem")
+        return helpers.rem;
+      if (prop === "em")
+        return helpers.em;
+      if (prop === "px")
+        return helpers.px;
+      if (prop === "min")
+        return helpers.min;
+      if (prop === "max")
+        return helpers.max;
+      if (prop === "clamp")
+        return helpers.clamp;
+      if (currentBreakpoints && currentBreakpoints[prop]) {
+        return createResponsiveMethod(prop, currentBreakpoints[prop]);
+      }
+      if (prop === "hover") {
+        return () => {
+          if (debugMode) {
+            console.log(`  \u{1F5B1}\uFE0F Hover styles added`);
+          }
+          const hoverCatcher = {};
+          const hoverHandler = {
+            get: (hoverTarget, hoverProp) => {
+              if (hoverProp === "end") {
+                return () => {
+                  catcher.hover = { ...hoverCatcher };
+                  Object.keys(hoverCatcher).forEach((key) => delete hoverCatcher[key]);
+                  return proxy;
+                };
+              }
+              const mappedProp2 = shorthandMap[hoverProp] || hoverProp;
+              const cssProperty2 = mappedProp2.replace(/([A-Z])/g, "-$1").toLowerCase();
+              if (validProperties && validProperties.length > 0 && !validProperties.includes(cssProperty2)) {
+                console.warn(`Warning: '${cssProperty2}' may not be a valid CSS property`);
+              }
+              return (value) => {
+                hoverCatcher[mappedProp2] = resolveToken(value, useTokens, tokenContext);
+                return hoverProxy;
+              };
+            }
+          };
+          const hoverProxy = new Proxy({}, hoverHandler);
+          return hoverProxy;
+        };
+      }
+      if (handleShorthand(prop, null, catcher)) {
+        return (value) => {
+          handleShorthand(prop, resolveToken(value, useTokens, tokenContext), catcher);
+          return proxy;
+        };
+      }
+      const mappedProp = shorthandMap[prop] || prop;
+      const cssProperty = mappedProp.replace(/([A-Z])/g, "-$1").toLowerCase();
+      if (prop === "select") {
+        return function(selector) {
+          const nestedStyles = {};
+          const nestedHandler = {
+            get: (nestedTarget, nestedProp) => {
+              if (nestedProp === "block") {
+                return () => {
+                  if (!catcher.nestedRules)
+                    catcher.nestedRules = [];
+                  catcher.nestedRules.push({
+                    selector,
+                    styles: { ...nestedStyles }
+                  });
+                  return proxy;
+                };
+              }
+              return (value) => {
+                nestedStyles[nestedProp] = resolveToken(value, useTokens, tokenContext);
+                return nestedProxy;
+              };
+            }
+          };
+          const nestedProxy = new Proxy({}, nestedHandler);
+          return nestedProxy;
+        };
+      }
+      if (prop === "media") {
+        return function(query, callback) {
+          if (debugMode) {
+            console.log(`  \u{1F4F1} Media Query: ${query}`);
+          }
+          const subChain = chaincssv2(useTokens);
+          let result = callback(subChain);
+          if (result && typeof result.$el === "function") {
+            result = result.$el();
+          }
+          if (!catcher.atRules)
+            catcher.atRules = [];
+          const { selectors, ...pureStyles } = result || {};
+          catcher.atRules.push({
+            type: "media",
+            query,
+            styles: pureStyles
+          });
+          return proxy;
+        };
+      }
+      if (prop === "keyframes") {
+        return function(name, callback) {
+          const keyframeContext = { _keyframeSteps: {} };
+          const keyframeProxy = new Proxy(keyframeContext, {
+            get: (target2, stepProp) => {
+              if (stepProp === "from" || stepProp === "to") {
+                return function(stepCallback) {
+                  const subChain = chaincssv2(useTokens);
+                  const properties = stepCallback(subChain).$el();
+                  target2._keyframeSteps[stepProp] = properties;
+                  return keyframeProxy;
+                };
+              }
+              if (stepProp === "percent") {
+                return function(value, stepCallback) {
+                  const subChain = chaincssv2(useTokens);
+                  const properties = stepCallback(subChain).$el();
+                  target2._keyframeSteps[`${value}%`] = properties;
+                  return keyframeProxy;
+                };
+              }
+              return void 0;
+            }
+          });
+          callback(keyframeProxy);
+          if (!catcher.atRules)
+            catcher.atRules = [];
+          catcher.atRules.push({
+            type: "keyframes",
+            name,
+            steps: keyframeContext._keyframeSteps
+          });
+          return proxy;
+        };
+      }
+      if (prop === "fontFace") {
+        return function(callback) {
+          const fontProps = {};
+          const fontHandler = {
+            get: (target2, fontProp) => {
+              return (value) => {
+                fontProps[fontProp] = resolveToken(value, useTokens, tokenContext);
+                return fontProxy;
+              };
+            }
+          };
+          const fontProxy = new Proxy({}, fontHandler);
+          callback(fontProxy);
+          if (!catcher.atRules)
+            catcher.atRules = [];
+          catcher.atRules.push({
+            type: "font-face",
+            properties: fontProps
+          });
+          return proxy;
+        };
+      }
+      if (prop === "supports") {
+        return function(condition, callback) {
+          const subChain = chaincssv2(useTokens);
+          const result = callback(subChain);
+          if (!catcher.atRules)
+            catcher.atRules = [];
+          catcher.atRules.push({
+            type: "supports",
+            condition,
+            styles: result
+          });
+          return proxy;
+        };
+      }
+      if (prop === "container") {
+        return function(condition, callback) {
+          const subChain = chaincssv2(useTokens);
+          const result = callback(subChain);
+          if (!catcher.atRules)
+            catcher.atRules = [];
+          catcher.atRules.push({
+            type: "container",
+            condition,
+            styles: result
+          });
+          return proxy;
+        };
+      }
+      if (prop === "layer") {
+        return function(name, callback) {
+          const subChain = chaincssv2(useTokens);
+          const result = callback(subChain);
+          if (!catcher.atRules)
+            catcher.atRules = [];
+          catcher.atRules.push({
+            type: "layer",
+            name,
+            styles: result
+          });
+          return proxy;
+        };
+      }
+      if (prop === "counterStyle") {
+        return function(name, callback) {
+          const counterProps = {};
+          const counterHandler = {
+            get: (target2, counterProp) => {
+              return (value) => {
+                counterProps[counterProp] = resolveToken(value, useTokens, tokenContext);
+                return counterProxy;
+              };
+            }
+          };
+          const counterProxy = new Proxy({}, counterHandler);
+          callback(counterProxy);
+          if (!catcher.atRules)
+            catcher.atRules = [];
+          catcher.atRules.push({
+            type: "counter-style",
+            name,
+            properties: counterProps
+          });
+          return proxy;
+        };
+      }
+      if (prop === "property") {
+        return function(name, callback) {
+          const propertyDescs = {};
+          const propertyHandler = {
+            get: (target2, descProp) => {
+              return (value) => {
+                propertyDescs[descProp] = resolveToken(value, useTokens, tokenContext);
+                return propertyProxy;
+              };
+            }
+          };
+          const propertyProxy = new Proxy({}, propertyHandler);
+          callback(propertyProxy);
+          if (!catcher.atRules)
+            catcher.atRules = [];
+          catcher.atRules.push({
+            type: "property",
+            name,
+            descriptors: propertyDescs
+          });
+          return proxy;
+        };
+      }
+      if (prop === "theme") {
+        return function(themeTokens, callback) {
+          const originalTokens = tokens2;
+          const themeTokenStore = {
+            get: (path7) => {
+              const themeValue = themeTokens.get ? themeTokens.get(path7) : null;
+              if (themeValue !== null && themeValue !== void 0) {
+                return themeValue;
+              }
+              return originalTokens.get(path7);
+            },
+            ...themeTokens
+          };
+          const tempTokens = themeTokenStore;
+          const themed$ = (useTokensFlag = true) => {
+            const result2 = $(useTokensFlag);
+            return result2;
+          };
+          const result = callback(themed$);
+          if (!catcher.themes)
+            catcher.themes = [];
+          catcher.themes.push({
+            name: `theme-${Date.now()}`,
+            styles: result,
+            tokens: themeTokens,
+            fallback: originalTokens
+          });
+          return proxy;
+        };
+      }
+      return function(value) {
+        if (typeof value === "function") {
+          value = value(helpers);
+        }
+        if (debugMode) {
+          const cssProp = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+          console.log(`  \u{1F3A8} ${cssProp}: ${value}`);
+        }
+        catcher[prop] = resolveToken(value, useTokens, tokenContext);
+        return proxy;
+      };
+    }
+  };
+  const proxy = new Proxy({}, handler);
+  return proxy;
+}
+function processAtRule(rule, parentSelectors = null) {
+  let output = "";
+  switch (rule.type) {
+    case "media":
+      output = `@media ${rule.query} {
+`;
+      if (rule.styles && typeof rule.styles === "object") {
+        let ruleBody = "";
+        for (const prop in rule.styles) {
+          const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+          ruleBody += `    ${kebabKey}: ${rule.styles[prop]};
+`;
+        }
+        if (ruleBody.trim()) {
+          const selector = parentSelectors && parentSelectors.length > 0 ? parentSelectors.join(", ") : ".unknown-selector";
+          const sourceLocation = getSourceLocation();
+          if (enableSourceComments && sourceLocation) {
+            output += `  /* Generated from: ${sourceLocation} */
+`;
+          }
+          output += `  ${selector} {
+${ruleBody}  }
+`;
+        }
+      }
+      output += "}\n";
+      break;
+    case "keyframes":
+      output = `@keyframes ${rule.name} {
+`;
+      for (const step in rule.steps) {
+        output += `  ${step} {
+`;
+        for (const prop in rule.steps[step]) {
+          if (prop !== "selectors") {
+            const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+            output += `    ${kebabKey}: ${rule.steps[step][prop]};
+`;
+          }
+        }
+        output += "  }\n";
+      }
+      output += "}\n";
+      break;
+    case "font-face":
+      output = "@font-face {\n";
+      for (const prop in rule.properties) {
+        if (prop !== "selectors") {
+          const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+          output += `  ${kebabKey}: ${rule.properties[prop]};
+`;
+        }
+      }
+      output += "}\n";
+      break;
+    case "supports":
+      output = `@supports ${rule.condition} {
+`;
+      if (rule.styles && rule.styles.selectors) {
+        let ruleBody = "";
+        for (const prop in rule.styles) {
+          if (prop !== "selectors" && rule.styles.hasOwnProperty(prop)) {
+            const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+            ruleBody += `    ${kebabKey}: ${rule.styles[prop]};
+`;
+          }
+        }
+        if (ruleBody.trim()) {
+          output += `  ${rule.styles.selectors.join(", ")} {
+${ruleBody}  }
+`;
+        }
+      }
+      output += "}\n";
+      break;
+    case "container":
+      output = `@container ${rule.condition} {
+`;
+      if (rule.styles && rule.styles.selectors) {
+        let ruleBody = "";
+        for (const prop in rule.styles) {
+          if (prop !== "selectors" && rule.styles.hasOwnProperty(prop)) {
+            const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+            ruleBody += `    ${kebabKey}: ${rule.styles[prop]};
+`;
+          }
+        }
+        if (ruleBody.trim()) {
+          output += `  ${rule.styles.selectors.join(", ")} {
+${ruleBody}  }
+`;
+        }
+      }
+      output += "}\n";
+      break;
+    case "layer":
+      output = `@layer ${rule.name} {
+`;
+      if (rule.styles && rule.styles.selectors) {
+        let ruleBody = "";
+        for (const prop in rule.styles) {
+          if (prop !== "selectors" && rule.styles.hasOwnProperty(prop)) {
+            const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+            ruleBody += `    ${kebabKey}: ${rule.styles[prop]};
+`;
+          }
+        }
+        if (ruleBody.trim()) {
+          output += `  ${rule.styles.selectors.join(", ")} {
+${ruleBody}  }
+`;
+        }
+      }
+      output += "}\n";
+      break;
+    case "counter-style":
+      output = `@counter-style ${rule.name} {
+`;
+      for (const prop in rule.properties) {
+        if (prop !== "selectors") {
+          const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+          output += `  ${kebabKey}: ${rule.properties[prop]};
+`;
+        }
+      }
+      output += "}\n";
+      break;
+    case "property":
+      output = `@property ${rule.name} {
+`;
+      for (const desc in rule.descriptors) {
+        if (desc !== "selectors") {
+          const kebabKey = desc.replace(/([A-Z])/g, "-$1").toLowerCase();
+          output += `  ${kebabKey}: ${rule.descriptors[desc]};
+`;
+        }
+      }
+      output += "}\n";
+      break;
+  }
+  return output;
+}
+function processStandaloneAtRule(rule) {
+  let output = "";
+  switch (rule.type) {
+    case "font-face":
+      output = "@font-face {\n";
+      for (const prop in rule.properties) {
+        if (prop !== "selectors") {
+          const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+          output += `  ${kebabKey}: ${rule.properties[prop]};
+`;
+        }
+      }
+      output += "}\n";
+      break;
+    case "keyframes":
+      output = `@keyframes ${rule.name} {
+`;
+      for (const step in rule.steps) {
+        output += `  ${step} {
+`;
+        for (const prop in rule.steps[step]) {
+          if (prop !== "selectors") {
+            const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+            output += `    ${kebabKey}: ${rule.steps[step][prop]};
+`;
+          }
+        }
+        output += "  }\n";
+      }
+      output += "}\n";
+      break;
+    case "counter-style":
+      output = `@counter-style ${rule.name} {
+`;
+      for (const prop in rule.properties) {
+        if (prop !== "selectors") {
+          const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+          output += `  ${kebabKey}: ${rule.properties[prop]};
+`;
+        }
+      }
+      output += "}\n";
+      break;
+    case "property":
+      output = `@property ${rule.name} {
+`;
+      for (const desc in rule.descriptors) {
+        if (desc !== "selectors") {
+          const kebabKey = desc.replace(/([A-Z])/g, "-$1").toLowerCase();
+          output += `  ${kebabKey}: ${rule.descriptors[desc]};
+`;
+        }
+      }
+      output += "}\n";
+      break;
+  }
+  return output;
+}
+function recipe(options) {
+  const {
+    base,
+    variants = {},
+    defaultVariants = {},
+    compoundVariants = []
+  } = options;
+  const baseStyle = typeof base === "function" ? base() : base;
+  const variantStyles = {};
+  for (const [variantName, variantMap] of Object.entries(variants)) {
+    variantStyles[variantName] = {};
+    for (const [variantKey, variantStyle] of Object.entries(variantMap)) {
+      variantStyles[variantName][variantKey] = typeof variantStyle === "function" ? variantStyle() : variantStyle;
+    }
+  }
+  const compoundStyles = compoundVariants.map((cv) => ({
+    condition: cv.variants || cv,
+    style: typeof cv.style === "function" ? cv.style() : cv.style
+  }));
+  function mergeStyles(...styles) {
+    const merged = {};
+    for (const style of styles) {
+      if (!style)
+        continue;
+      for (const [key, value] of Object.entries(style)) {
+        if (key === "selectors") {
+          merged.selectors = merged.selectors || [];
+          merged.selectors.push(...Array.isArray(value) ? value : [value]);
+        } else if (key === "hover" && typeof value === "object") {
+          if (!merged.hover)
+            merged.hover = {};
+          Object.assign(merged.hover, value);
+        } else if (key !== "selectors") {
+          merged[key] = value;
+        }
+      }
+    }
+    return merged;
+  }
+  function pick(variantSelection = {}) {
+    const selected = { ...defaultVariants, ...variantSelection };
+    const stylesToMerge = [];
+    if (baseStyle)
+      stylesToMerge.push(baseStyle);
+    for (const [variantName, variantValue] of Object.entries(selected)) {
+      const variantStyle = variantStyles[variantName]?.[variantValue];
+      if (variantStyle)
+        stylesToMerge.push(variantStyle);
+    }
+    for (const cv of compoundStyles) {
+      const matches = Object.entries(cv.condition).every(
+        ([key, value]) => selected[key] === value
+      );
+      if (matches && cv.style)
+        stylesToMerge.push(cv.style);
+    }
+    const merged = mergeStyles(...stylesToMerge);
+    const styleBuilder = $(true);
+    for (const [prop, value] of Object.entries(merged)) {
+      if (prop === "selectors" || prop === "hover")
+        continue;
+      if (styleBuilder[prop])
+        styleBuilder[prop](value);
+    }
+    if (merged.hover) {
+      styleBuilder.hover();
+      for (const [hoverProp, hoverValue] of Object.entries(merged.hover)) {
+        if (styleBuilder[hoverProp])
+          styleBuilder[hoverProp](hoverValue);
+      }
+      styleBuilder.end();
+    }
+    const selectors = merged.selectors || [];
+    return styleBuilder.$el(...selectors);
+  }
+  pick.variants = variants;
+  pick.defaultVariants = defaultVariants;
+  pick.base = baseStyle;
+  pick.getAllVariants = () => {
+    const result = [];
+    const variantKeys = Object.keys(variants);
+    function generate(current, index) {
+      if (index === variantKeys.length) {
+        result.push({ ...current });
+        return;
+      }
+      const variantName = variantKeys[index];
+      for (const variantValue of Object.keys(variants[variantName])) {
+        current[variantName] = variantValue;
+        generate(current, index + 1);
+      }
+    }
+    generate({}, 0);
+    return result;
+  };
+  pick.compileAll = () => {
+    const allVariants = pick.getAllVariants();
+    const styles = [];
+    if (baseStyle)
+      styles.push(baseStyle);
+    for (const variantMap of Object.values(variants)) {
+      for (const variantStyle of Object.values(variantMap)) {
+        if (variantStyle)
+          styles.push(variantStyle);
+      }
+    }
+    for (const cv of compoundStyles) {
+      if (cv.style)
+        styles.push(cv.style);
+    }
+    if (atomicOptimizer && atomicOptimizer.options.enabled) {
+      const styleObj = {};
+      styles.forEach((style, i) => {
+        const selectors = style.selectors || [`variant-${i}`];
+        styleObj[selectors[0].replace(/^\./, "")] = style;
+      });
+      const result = atomicOptimizer.optimize(styleObj);
+      chain.cssOutput = (chain.cssOutput || "") + result.css;
+      chain.classMap = { ...chain.classMap, ...result.map };
+      return result.css;
+    }
+    return run(...styles);
+  };
+  return pick;
+}
+var styleHistory, styleChanges, timelineEnabled, currentSnapshotId, enableSourceComments, animationPresets, helpers, debugMode, currentDebugSelector, DEFAULT_BREAKPOINTS, currentBreakpoints, __filename, __dirname, chain, atomicOptimizer, fetchWithHttps, loadCSSProperties, tokens2, currentTokenContext, shorthandMap, handleShorthand, $, run, compile;
+var init_btt = __esm({
+  "src/compiler/btt.ts"() {
+    "use strict";
+    init_tokens();
+    init_commonProps();
+    styleHistory = [];
+    styleChanges = [];
+    timelineEnabled = false;
+    currentSnapshotId = 0;
+    enableSourceComments = true;
+    animationPresets = {
+      fadeIn: {
+        "0%": { opacity: 0 },
+        "100%": { opacity: 1 }
+      },
+      fadeOut: {
+        "0%": { opacity: 1 },
+        "100%": { opacity: 0 }
+      },
+      fadeInUp: {
+        "0%": { opacity: 0, transform: "translateY(20px)" },
+        "100%": { opacity: 1, transform: "translateY(0)" }
+      },
+      fadeInDown: {
+        "0%": { opacity: 0, transform: "translateY(-20px)" },
+        "100%": { opacity: 1, transform: "translateY(0)" }
+      },
+      fadeInLeft: {
+        "0%": { opacity: 0, transform: "translateX(-20px)" },
+        "100%": { opacity: 1, transform: "translateX(0)" }
+      },
+      fadeInRight: {
+        "0%": { opacity: 0, transform: "translateX(20px)" },
+        "100%": { opacity: 1, transform: "translateX(0)" }
+      },
+      slideInUp: {
+        "0%": { transform: "translateY(100%)" },
+        "100%": { transform: "translateY(0)" }
+      },
+      slideInDown: {
+        "0%": { transform: "translateY(-100%)" },
+        "100%": { transform: "translateY(0)" }
+      },
+      slideInLeft: {
+        "0%": { transform: "translateX(-100%)" },
+        "100%": { transform: "translateX(0)" }
+      },
+      slideInRight: {
+        "0%": { transform: "translateX(100%)" },
+        "100%": { transform: "translateX(0)" }
+      },
+      zoomIn: {
+        "0%": { opacity: 0, transform: "scale(0.8)" },
+        "100%": { opacity: 1, transform: "scale(1)" }
+      },
+      zoomOut: {
+        "0%": { opacity: 1, transform: "scale(1)" },
+        "100%": { opacity: 0, transform: "scale(0.8)" }
+      },
+      bounce: {
+        "0%, 100%": { transform: "translateY(0)" },
+        "50%": { transform: "translateY(-20px)" }
+      },
+      pulse: {
+        "0%, 100%": { transform: "scale(1)" },
+        "50%": { transform: "scale(1.05)" }
+      },
+      shake: {
+        "0%, 100%": { transform: "translateX(0)" },
+        "25%": { transform: "translateX(-5px)" },
+        "75%": { transform: "translateX(5px)" }
+      },
+      rotate: {
+        "0%": { transform: "rotate(0deg)" },
+        "100%": { transform: "rotate(360deg)" }
+      },
+      spin: {
+        "0%": { transform: "rotate(0deg)" },
+        "100%": { transform: "rotate(360deg)" }
+      },
+      wiggle: {
+        "0%, 100%": { transform: "rotate(-3deg)" },
+        "50%": { transform: "rotate(3deg)" }
+      },
+      flip: {
+        "0%": { transform: "perspective(400px) rotateY(0)" },
+        "100%": { transform: "perspective(400px) rotateY(360deg)" }
+      }
+    };
+    helpers = {
+      calc,
+      add,
+      subtract,
+      sub: subtract,
+      // alias
+      multiply,
+      mul: multiply,
+      // alias
+      divide,
+      div: divide,
+      // alias
+      percent,
+      vw,
+      vh,
+      rem,
+      em,
+      px,
+      min,
+      max,
+      clamp
+    };
+    debugMode = false;
+    currentDebugSelector = "";
+    DEFAULT_BREAKPOINTS = {
+      mobile: "(max-width: 768px)",
+      tablet: "(min-width: 769px) and (max-width: 1024px)",
+      desktop: "(min-width: 1025px)",
+      sm: "(max-width: 640px)",
+      md: "(min-width: 641px) and (max-width: 768px)",
+      lg: "(min-width: 769px) and (max-width: 1024px)",
+      xl: "(min-width: 1025px)",
+      "2xl": "(min-width: 1280px)"
+    };
+    currentBreakpoints = DEFAULT_BREAKPOINTS;
+    __filename = fileURLToPath(import.meta.url);
+    __dirname = path2.dirname(__filename);
+    chain = {
+      cssOutput: void 0,
+      catcher: {},
+      cachedValidProperties: [],
+      classMap: {},
+      atomicStats: null,
+      async initializeProperties() {
+        if (this.cachedValidProperties && this.cachedValidProperties.length > 0) {
+          return;
+        }
+        const properties = await loadCSSProperties();
+        this.cachedValidProperties = properties;
+      },
+      getCachedProperties() {
+        return this.cachedValidProperties;
+      }
+    };
+    atomicOptimizer = null;
+    fetchWithHttps = (url) => {
+      return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          req.destroy();
+          reject(new Error("Request timeout"));
+        }, 3e3);
+        const req = https.get(url, (response) => {
+          clearTimeout(timeout);
+          let data = "";
+          response.on("data", (chunk) => data += chunk);
+          response.on("end", () => {
+            try {
+              resolve(JSON.parse(data));
+            } catch (error) {
+              reject(error);
+            }
+          });
+        });
+        req.on("error", (error) => {
+          clearTimeout(timeout);
+          reject(error);
+        });
+      });
+    };
+    loadCSSProperties = async () => {
+      if (chain.cachedValidProperties !== null && chain.cachedValidProperties.length > 0) {
+        return chain.cachedValidProperties;
+      }
+      try {
+        const url = "https://raw.githubusercontent.com/mdn/data/main/css/properties.json";
+        let data;
+        if (typeof fetch !== "undefined") {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 3e3);
+          const response = await fetch(url, { signal: controller.signal });
+          clearTimeout(timeoutId);
+          data = await response.json();
+        } else {
+          data = await fetchWithHttps(url);
+        }
+        const allProperties = Object.keys(data);
+        const baseProperties = /* @__PURE__ */ new Set();
+        allProperties.forEach((prop) => {
+          const baseProp = prop.replace(/^-(webkit|moz|ms|o)-/, "");
+          baseProperties.add(baseProp);
+        });
+        chain.cachedValidProperties = Array.from(baseProperties).sort();
+        return chain.cachedValidProperties;
+      } catch (error) {
+        chain.cachedValidProperties = COMMON_CSS_PROPERTIES;
+        return chain.cachedValidProperties;
+      }
+    };
+    chain.initializeProperties().catch((err) => {
+      console.error("Failed to load CSS properties:", err.message);
+    });
+    tokens2 = tokens;
+    currentTokenContext = null;
+    shorthandMap = {
+      // Layout
+      "m": "margin",
+      "mt": "marginTop",
+      "mr": "marginRight",
+      "mb": "marginBottom",
+      "ml": "marginLeft",
+      "p": "padding",
+      "pt": "paddingTop",
+      "pr": "paddingRight",
+      "pb": "paddingBottom",
+      "pl": "paddingLeft",
+      // Display & Position
+      "d": "display",
+      "pos": "position",
+      // Sizing
+      "w": "width",
+      "h": "height",
+      "minW": "minWidth",
+      "maxW": "maxWidth",
+      "minH": "minHeight",
+      "maxH": "maxHeight",
+      // Colors & Background
+      "bg": "backgroundColor",
+      "c": "color",
+      // Flexbox
+      "flexDir": "flexDirection",
+      "flexWrap": "flexWrap",
+      "justify": "justifyContent",
+      "items": "alignItems",
+      "align": "alignSelf",
+      "gap": "gap",
+      "gapX": "columnGap",
+      "gapY": "rowGap",
+      // Grid
+      "gridCols": "gridTemplateColumns",
+      "gridRows": "gridTemplateRows",
+      // Borders
+      "rounded": "borderRadius",
+      "roundedT": "borderTopLeftRadius",
+      "roundedR": "borderTopRightRadius",
+      "roundedB": "borderBottomRightRadius",
+      "roundedL": "borderBottomLeftRadius",
+      "border": "border",
+      "borderW": "borderWidth",
+      "borderC": "borderColor",
+      // Typography
+      "font": "fontFamily",
+      "text": "color",
+      "textAlign": "textAlign",
+      "textSize": "fontSize",
+      "weight": "fontWeight",
+      // Spacing (margin/padding shortcuts)
+      "mx": "marginHorizontal",
+      // Need to handle this specially
+      "my": "marginVertical",
+      // Need to handle this specially
+      "px": "paddingHorizontal",
+      // Need to handle this specially
+      "py": "paddingVertical"
+      // Need to handle this specially
+    };
+    handleShorthand = (prop, value, catcher) => {
+      if (prop === "mx") {
+        catcher.marginLeft = value;
+        catcher.marginRight = value;
+        return true;
+      }
+      if (prop === "my") {
+        catcher.marginTop = value;
+        catcher.marginBottom = value;
+        return true;
+      }
+      if (prop === "px") {
+        catcher.paddingLeft = value;
+        catcher.paddingRight = value;
+        return true;
+      }
+      if (prop === "py") {
+        catcher.paddingTop = value;
+        catcher.paddingBottom = value;
+        return true;
+      }
+      return false;
+    };
+    $ = chaincssv2();
+    run = (...args) => {
+      let cssOutput = "";
+      const styleObjs = [];
+      args.forEach((value) => {
+        if (!value)
+          return;
+        styleObjs.push(value);
+        if (value.selectors) {
+          let mainRuleBody = "";
+          let atRulesOutput = "";
+          for (const key in value) {
+            if (key === "selectors" || !value.hasOwnProperty(key))
+              continue;
+            if (key === "atRules" && Array.isArray(value[key])) {
+              value[key].forEach((rule) => {
+                atRulesOutput += processAtRule(rule, value.selectors);
+              });
+              continue;
+            }
+            if (key === "nestedRules" && Array.isArray(value[key])) {
+              value[key].forEach((rule) => {
+                let nestedBody = "";
+                for (const prop in rule.styles) {
+                  const kebabKey2 = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+                  nestedBody += `    ${kebabKey2}: ${rule.styles[prop]};
+`;
+                }
+                if (nestedBody) {
+                  atRulesOutput += `${value.selectors.join(", ")} ${rule.selector} {
+${nestedBody}  }
+`;
+                }
+              });
+              continue;
+            }
+            if (key === "hover" && typeof value[key] === "object") {
+              let hoverBody = "";
+              for (const hoverKey in value[key]) {
+                const kebabKey2 = hoverKey.replace(/([A-Z])/g, "-$1").toLowerCase();
+                hoverBody += `  ${kebabKey2}: ${value[key][hoverKey]};
+`;
+              }
+              if (hoverBody) {
+                cssOutput += `${value.selectors.join(", ")}:hover {
+${hoverBody}}
+`;
+              }
+              continue;
+            }
+            const kebabKey = key.replace(/([A-Z])/g, "-$1").toLowerCase();
+            mainRuleBody += `  ${kebabKey}: ${value[key]};
+`;
+          }
+          if (mainRuleBody.trim()) {
+            cssOutput += `${value.selectors.join(", ")} {
+${mainRuleBody}}
+`;
+          }
+          cssOutput += atRulesOutput;
+        } else if (value.type) {
+          cssOutput += processStandaloneAtRule(value);
+        }
+      });
+      cssOutput = cssOutput.replace(/\n{3,}/g, "\n\n").trim();
+      chain.cssOutput = cssOutput;
+      if (atomicOptimizer && atomicOptimizer.options.enabled) {
+        const result = atomicOptimizer.optimize(styleObjs);
+        if (atomicOptimizer.options.outputStrategy === "component-first") {
+          chain.cssOutput = result.css;
+        } else {
+          chain.cssOutput = result.css;
+        }
+        chain.classMap = result.map;
+        chain.atomicStats = result.stats;
+        return chain.cssOutput;
+      }
+      return cssOutput;
+    };
+    compile = (obj) => {
+      let cssString = "";
+      const collected = [];
+      for (const key in obj) {
+        if (!obj.hasOwnProperty(key))
+          continue;
+        const element = obj[key];
+        const sourceLocation = getSourceLocation();
+        if (timelineEnabled && element.selectors) {
+          const styles = {};
+          for (const prop in element) {
+            if (prop !== "selectors" && prop !== "atRules" && prop !== "hover" && prop !== "nestedRules") {
+              styles[prop] = element[prop];
+            }
+          }
+          takeSnapshot(element.selectors[0], styles, sourceLocation || "unknown");
+        }
+        if (element.themes && Array.isArray(element.themes)) {
+          element.themes.forEach((theme) => {
+            if (theme.styles && theme.styles.selectors) {
+              let themeCSS = "";
+              const themeSelectors = theme.styles.selectors || [];
+              for (const prop in theme.styles) {
+                if (prop !== "selectors" && theme.styles.hasOwnProperty(prop)) {
+                  const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+                  themeCSS += `  ${kebabKey}: ${theme.styles[prop]};
+`;
+                }
+              }
+              if (themeCSS) {
+                let block = `${themeSelectors.join(", ")} {
+${themeCSS}}
+`;
+                block = addSourceComment(block, sourceLocation);
+                cssString += block;
+              }
+            }
+          });
+          continue;
+        }
+        if (element.atRules && Array.isArray(element.atRules)) {
+          let elementCSS = "";
+          for (const prop in element) {
+            if (prop === "selectors" || prop === "atRules" || prop === "hover" || !element.hasOwnProperty(prop))
+              continue;
+            const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+            elementCSS += `  ${kebabKey}: ${element[prop]};
+`;
+          }
+          if (elementCSS.trim()) {
+            let block = `${element.selectors.join(", ")} {
+${elementCSS}}
+`;
+            block = addSourceComment(block, sourceLocation);
+            cssString += block;
+          }
+          element.atRules.forEach((rule) => {
+            cssString += processAtRule(rule, element.selectors);
+          });
+          continue;
+        }
+        if (element.selectors) {
+          collected.push(element);
+          let elementCSS = "";
+          let atRulesCSS = "";
+          for (const prop in element) {
+            if (prop === "selectors" || !element.hasOwnProperty(prop))
+              continue;
+            if (prop === "atRules" && Array.isArray(element[prop])) {
+              element[prop].forEach((rule) => {
+                atRulesCSS += processAtRule(rule, element.selectors);
+              });
+            } else if (prop === "themes" && Array.isArray(element[prop])) {
+              continue;
+            } else if (prop === "hover" && typeof element[prop] === "object") {
+              let hoverBody = "";
+              for (const hoverKey in element[prop]) {
+                const kebabKey = hoverKey.replace(/([A-Z])/g, "-$1").toLowerCase();
+                hoverBody += `  ${kebabKey}: ${element[prop][hoverKey]};
+`;
+              }
+              if (hoverBody) {
+                let block = `${element.selectors.join(", ")}:hover {
+${hoverBody}}
+`;
+                block = addSourceComment(block, sourceLocation);
+                cssString += block;
+              }
+            } else {
+              const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+              elementCSS += `  ${kebabKey}: ${element[prop]};
+`;
+            }
+          }
+          if (elementCSS.trim()) {
+            let block = `${element.selectors.join(", ")} {
+${elementCSS}}
+`;
+            block = addSourceComment(block, sourceLocation);
+            cssString += block;
+          }
+          cssString += atRulesCSS;
+        }
+      }
+      chain.cssOutput = cssString.trim();
+      if (atomicOptimizer && atomicOptimizer.options.enabled) {
+        const result = atomicOptimizer.optimize(collected);
+        chain.cssOutput = result.css;
+        chain.classMap = result.map;
+        chain.atomicStats = result.stats;
+        chain.componentMap = result.componentMap;
+        return result.css;
+      }
+      return chain.cssOutput;
+    };
+  }
+});
+
+// src/compiler/atomic-optimizer.ts
+import crypto2 from "crypto";
+import path3 from "path";
+import fs2 from "fs";
+function hashKey(key) {
+  return crypto2.createHash("sha1").update(key).digest("hex").slice(0, 6);
+}
+function kebab(s) {
+  return s.replace(/([A-Z])/g, "-$1").toLowerCase();
+}
+var AtomicOptimizer;
+var init_atomic_optimizer = __esm({
+  "src/compiler/atomic-optimizer.ts"() {
+    "use strict";
+    AtomicOptimizer = class {
+      options;
+      usageCount;
+      atomicClasses;
+      componentClassMap;
+      stats;
+      constructor(options = {}) {
+        if (options.alwaysAtomic && !Array.isArray(options.alwaysAtomic)) {
+          options.alwaysAtomic = Object.values(options.alwaysAtomic);
+        }
+        if (options.neverAtomic && !Array.isArray(options.neverAtomic)) {
+          options.neverAtomic = Object.values(options.neverAtomic);
+        }
+        this.options = {
+          enabled: true,
+          threshold: 3,
+          naming: "hash",
+          cache: true,
+          cachePath: "./.chaincss-cache",
+          minify: true,
+          mode: "hybrid",
+          outputStrategy: "component-first",
+          alwaysAtomic: [],
+          neverAtomic: [
+            "content",
+            "animation",
+            "transition",
+            "keyframes",
+            "counterIncrement",
+            "counterReset"
+          ],
+          frameworkOutput: {
+            react: false,
+            vue: false,
+            vanilla: true
+          },
+          preserveSelectors: false,
+          verbose: false,
+          ...options
+        };
+        this.usageCount = /* @__PURE__ */ new Map();
+        this.atomicClasses = /* @__PURE__ */ new Map();
+        this.componentClassMap = /* @__PURE__ */ new Map();
+        this.stats = {
+          totalStyles: 0,
+          atomicStyles: 0,
+          standardStyles: 0,
+          uniqueProperties: 0,
+          savings: 0
+        };
+        if (this.options.cache) {
+          this.loadCache();
+        }
+      }
+      // ============================================================================
+      // Cache Management
+      // ============================================================================
+      loadCache() {
+        try {
+          if (!fs2.existsSync(this.options.cachePath))
+            return;
+          const data = JSON.parse(fs2.readFileSync(this.options.cachePath, "utf8"));
+          if (data.version !== "1.0.0") {
+            return;
+          }
+          if (data.config?.threshold !== this.options.threshold) {
+            return;
+          }
+          this.atomicClasses = new Map(data.atomicClasses || []);
+          this.componentClassMap = new Map(data.componentClassMap || []);
+          this.stats = data.stats || this.stats;
+        } catch (err) {
+          if (this.options.verbose) {
+            console.log("Could not load cache:", err.message);
+          }
+        }
+      }
+      saveCache() {
+        if (!this.options.cache)
+          return;
+        try {
+          const cacheDir = path3.dirname(this.options.cachePath);
+          if (!fs2.existsSync(cacheDir)) {
+            fs2.mkdirSync(cacheDir, { recursive: true });
+          }
+          const cache = {
+            version: "1.0.0",
+            timestamp: Date.now(),
+            atomicClasses: Array.from(this.atomicClasses.entries()),
+            componentClassMap: Array.from(this.componentClassMap.entries()),
+            stats: this.stats,
+            config: {
+              threshold: this.options.threshold,
+              naming: this.options.naming,
+              mode: this.options.mode,
+              outputStrategy: this.options.outputStrategy
+            }
+          };
+          fs2.writeFileSync(this.options.cachePath, JSON.stringify(cache, null, 2), "utf8");
+        } catch (err) {
+          if (this.options.verbose) {
+            console.log("Could not save cache:", err.message);
+          }
+        }
+      }
+      // ============================================================================
+      // Style Tracking
+      // ============================================================================
+      trackStyles(styles) {
+        const styleArray = Array.isArray(styles) ? styles : Object.values(styles);
+        for (const style of styleArray) {
+          if (!style || !style.selectors)
+            continue;
+          for (const [prop, value] of Object.entries(style)) {
+            if (prop === "selectors" || prop === "atRules")
+              continue;
+            if (prop === "hover" && value && typeof value === "object") {
+              for (const [hoverProp, hoverValue] of Object.entries(value)) {
+                this.incrementUsage(hoverProp, hoverValue);
+              }
+            } else {
+              this.incrementUsage(prop, value);
+            }
+          }
+        }
+        this.stats.uniqueProperties = this.usageCount.size;
+      }
+      incrementUsage(prop, value) {
+        const key = `${prop}:${value}`;
+        const count = (this.usageCount.get(key) || 0) + 1;
+        this.usageCount.set(key, count);
+        this.stats.totalStyles++;
+        if (this.atomicClasses.has(key)) {
+          const atomic = this.atomicClasses.get(key);
+          atomic.usageCount = count;
+        }
+      }
+      shouldBeAtomic(prop, value) {
+        if (this.options.mode === "standard")
+          return false;
+        if (this.options.mode === "atomic")
+          return true;
+        if (this.options.neverAtomic.includes(prop))
+          return false;
+        if (this.options.alwaysAtomic.includes(prop))
+          return true;
+        const criticalProps = ["position", "display", "flex", "grid", "zIndex", "top", "left", "right", "bottom"];
+        const isCritical = criticalProps.includes(prop);
+        const key = `${prop}:${value}`;
+        const usage = this.usageCount.get(key) || 0;
+        if (isCritical && usage < this.options.threshold * 2)
+          return false;
+        return usage >= this.options.threshold;
+      }
+      generateClassName(prop, value) {
+        const key = `${prop}:${value}`;
+        if (this.options.naming === "hash") {
+          return `c_${hashKey(key)}`;
+        }
+        const kebabProp = kebab(prop);
+        const safeValue = String(value).replace(/[^a-z0-9_-]/gi, "-").slice(0, 30);
+        return `${kebabProp}-${safeValue}`;
+      }
+      getOrCreateAtomic(prop, value) {
+        const key = `${prop}:${value}`;
+        if (!this.atomicClasses.has(key)) {
+          const className = this.generateClassName(prop, value);
+          this.atomicClasses.set(key, {
+            className,
+            prop,
+            value,
+            usageCount: this.usageCount.get(key) || 0
+          });
+          this.stats.atomicStyles++;
+        }
+        return this.atomicClasses.get(key).className;
+      }
+      getKeyFromClassName(className) {
+        for (const [key, atomic] of this.atomicClasses) {
+          if (atomic.className === className)
+            return key;
+        }
+        return null;
+      }
+      // ============================================================================
+      // CSS Generation
+      // ============================================================================
+      generateAtomicCSS() {
+        let css = "";
+        const sortedClasses = Array.from(this.atomicClasses.values()).sort((a, b) => b.usageCount - a.usageCount);
+        for (const atomic of sortedClasses) {
+          const kebabProp = kebab(atomic.prop);
+          if (this.options.minify) {
+            css += `.${atomic.className}{${kebabProp}:${atomic.value}}`;
+          } else {
+            css += `.${atomic.className} {
+  ${kebabProp}: ${atomic.value};
+}
+`;
+          }
+        }
+        return css;
+      }
+      generateComponentCSS(style, selectors) {
+        const atomicClasses = [];
+        const hoverAtomicClasses = [];
+        for (const [prop, value] of Object.entries(style)) {
+          if (prop === "selectors" || prop === "atRules")
+            continue;
+          if (prop === "hover" && typeof value === "object") {
+            for (const [hoverProp, hoverValue] of Object.entries(value)) {
+              if (this.shouldBeAtomic(hoverProp, hoverValue)) {
+                hoverAtomicClasses.push(this.getOrCreateAtomic(hoverProp, hoverValue));
+              }
+            }
+          } else if (this.shouldBeAtomic(prop, value)) {
+            atomicClasses.push(this.getOrCreateAtomic(prop, value));
+          }
+        }
+        let componentCSS = "";
+        const selectorStr = selectors.join(", ");
+        if (this.options.outputStrategy === "component-first") {
+          const allStyles = {};
+          for (const [prop, value] of Object.entries(style)) {
+            if (prop !== "selectors" && prop !== "atRules" && prop !== "hover") {
+              allStyles[prop] = value;
+            }
+          }
+          if (Object.keys(allStyles).length > 0) {
+            if (this.options.minify) {
+              componentCSS += `${selectorStr}{`;
+              for (const [prop, value] of Object.entries(allStyles)) {
+                const kebabProp = kebab(prop);
+                componentCSS += `${kebabProp}:${value};`;
+              }
+              componentCSS += `}`;
+            } else {
+              componentCSS += `${selectorStr} {
+`;
+              for (const [prop, value] of Object.entries(allStyles)) {
+                const kebabProp = kebab(prop);
+                componentCSS += `  ${kebabProp}: ${value};
+`;
+              }
+              componentCSS += `}
+`;
+            }
+          }
+          if (style.hover && typeof style.hover === "object") {
+            const allHoverStyles = {};
+            for (const [prop, value] of Object.entries(style.hover)) {
+              allHoverStyles[prop] = value;
+            }
+            if (Object.keys(allHoverStyles).length > 0) {
+              if (this.options.minify) {
+                componentCSS += `${selectorStr}:hover{`;
+                for (const [prop, value] of Object.entries(allHoverStyles)) {
+                  const kebabProp = kebab(prop);
+                  componentCSS += `${kebabProp}:${value};`;
+                }
+                componentCSS += `}`;
+              } else {
+                componentCSS += `${selectorStr}:hover {
+`;
+                for (const [prop, value] of Object.entries(allHoverStyles)) {
+                  const kebabProp = kebab(prop);
+                  componentCSS += `  ${kebabProp}: ${value};
+`;
+                }
+                componentCSS += `}
+`;
+              }
+            }
+          }
+        } else {
+          const standardStyles = {};
+          const hoverStandardStyles = {};
+          for (const [prop, value] of Object.entries(style)) {
+            if (prop === "selectors" || prop === "atRules")
+              continue;
+            if (prop === "hover" && typeof value === "object") {
+              for (const [hoverProp, hoverValue] of Object.entries(value)) {
+                if (!this.shouldBeAtomic(hoverProp, hoverValue)) {
+                  hoverStandardStyles[hoverProp] = hoverValue;
+                }
+              }
+            } else if (!this.shouldBeAtomic(prop, value)) {
+              standardStyles[prop] = value;
+            }
+          }
+          if (Object.keys(standardStyles).length > 0) {
+            if (this.options.minify) {
+              componentCSS += `${selectorStr}{`;
+              for (const [prop, value] of Object.entries(standardStyles)) {
+                const kebabProp = kebab(prop);
+                componentCSS += `${kebabProp}:${value};`;
+              }
+              componentCSS += `}`;
+            } else {
+              componentCSS += `${selectorStr} {
+`;
+              for (const [prop, value] of Object.entries(standardStyles)) {
+                const kebabProp = kebab(prop);
+                componentCSS += `  ${kebabProp}: ${value};
+`;
+              }
+              componentCSS += `}
+`;
+            }
+          }
+          if (Object.keys(hoverStandardStyles).length > 0) {
+            if (this.options.minify) {
+              componentCSS += `${selectorStr}:hover{`;
+              for (const [prop, value] of Object.entries(hoverStandardStyles)) {
+                const kebabProp = kebab(prop);
+                componentCSS += `${kebabProp}:${value};`;
+              }
+              componentCSS += `}`;
+            } else {
+              componentCSS += `${selectorStr}:hover {
+`;
+              for (const [prop, value] of Object.entries(hoverStandardStyles)) {
+                const kebabProp = kebab(prop);
+                componentCSS += `  ${kebabProp}: ${value};
+`;
+              }
+              componentCSS += `}
+`;
+            }
+          }
+        }
+        return {
+          css: componentCSS,
+          atomicClasses,
+          hoverAtomicClasses
+        };
+      }
+      // ============================================================================
+      // Main Optimize Method
+      // ============================================================================
+      optimize(stylesInput) {
+        if (!this.options.enabled) {
+          return {
+            css: "",
+            map: {},
+            stats: this.getStats(),
+            atomicCSS: "",
+            componentCSS: ""
+          };
+        }
+        this.stats = {
+          totalStyles: 0,
+          atomicStyles: 0,
+          standardStyles: 0,
+          uniqueProperties: 0,
+          savings: 0
+        };
+        this.usageCount.clear();
+        this.componentClassMap.clear();
+        let styleArray = [];
+        if (Array.isArray(stylesInput)) {
+          styleArray = stylesInput;
+        } else if (typeof stylesInput === "object") {
+          styleArray = Object.values(stylesInput).filter((v) => v && typeof v === "object");
+        }
+        if (styleArray.length === 0) {
+          return {
+            css: "",
+            map: {},
+            stats: this.getStats(),
+            atomicCSS: "",
+            componentCSS: ""
+          };
+        }
+        this.trackStyles(styleArray);
+        let componentCSS = "";
+        const classMap = {};
+        for (const style of styleArray) {
+          if (!style || !style.selectors)
+            continue;
+          const selectors = style.selectors;
+          const selectorKey = selectors.join(", ");
+          const { css, atomicClasses, hoverAtomicClasses } = this.generateComponentCSS(style, selectors);
+          componentCSS += css;
+          if (this.options.outputStrategy === "utility-first") {
+            if (atomicClasses.length > 0) {
+              classMap[selectorKey] = atomicClasses.join(" ");
+            }
+            if (hoverAtomicClasses.length > 0) {
+              classMap[`${selectorKey}:hover`] = hoverAtomicClasses.join(" ");
+            }
+          }
+          this.componentClassMap.set(selectorKey, {
+            atomicClasses,
+            hoverAtomicClasses,
+            selectors
+          });
+        }
+        const atomicCSS = this.generateAtomicCSS();
+        const finalCSS = atomicCSS + componentCSS;
+        if (this.options.cache) {
+          this.saveCache();
+        }
+        return {
+          css: finalCSS,
+          map: classMap,
+          stats: this.getStats(),
+          atomicCSS,
+          componentCSS,
+          componentMap: this.componentClassMap
+        };
+      }
+      getStats() {
+        const savings = this.stats.totalStyles > 0 ? ((this.stats.totalStyles - this.stats.atomicStyles) / this.stats.totalStyles * 100).toFixed(1) : 0;
+        return {
+          totalStyles: this.stats.totalStyles,
+          atomicStyles: this.stats.atomicStyles,
+          standardStyles: this.stats.standardStyles,
+          uniqueProperties: this.stats.uniqueProperties,
+          savings: `${savings}%`
+        };
+      }
+      getAtomicClass(prop, value) {
+        const key = `${prop}:${value}`;
+        const atomic = this.atomicClasses.get(key);
+        return atomic ? atomic.className : null;
+      }
+      getAllAtomicClasses() {
+        return Array.from(this.atomicClasses.values());
+      }
+      clearCache() {
+        this.atomicClasses.clear();
+        this.componentClassMap.clear();
+        this.usageCount.clear();
+        if (this.options.cache && fs2.existsSync(this.options.cachePath)) {
+          fs2.unlinkSync(this.options.cachePath);
+        }
+      }
+    };
+  }
+});
+
+// ../../node_modules/baseline-browser-mapping/dist/index.cjs
+var require_dist = __commonJS({
+  "../../node_modules/baseline-browser-mapping/dist/index.cjs"(exports) {
+    "use strict";
+    var s = { chrome: { releases: [["1", "2008-12-11", "r", "w", "528"], ["2", "2009-05-21", "r", "w", "530"], ["3", "2009-09-15", "r", "w", "532"], ["4", "2010-01-25", "r", "w", "532.5"], ["5", "2010-05-25", "r", "w", "533"], ["6", "2010-09-02", "r", "w", "534.3"], ["7", "2010-10-19", "r", "w", "534.7"], ["8", "2010-12-02", "r", "w", "534.10"], ["9", "2011-02-03", "r", "w", "534.13"], ["10", "2011-03-08", "r", "w", "534.16"], ["11", "2011-04-27", "r", "w", "534.24"], ["12", "2011-06-07", "r", "w", "534.30"], ["13", "2011-08-02", "r", "w", "535.1"], ["14", "2011-09-16", "r", "w", "535.1"], ["15", "2011-10-25", "r", "w", "535.2"], ["16", "2011-12-13", "r", "w", "535.7"], ["17", "2012-02-08", "r", "w", "535.11"], ["18", "2012-03-28", "r", "w", "535.19"], ["19", "2012-05-15", "r", "w", "536.5"], ["20", "2012-06-26", "r", "w", "536.10"], ["21", "2012-07-31", "r", "w", "537.1"], ["22", "2012-09-25", "r", "w", "537.4"], ["23", "2012-11-06", "r", "w", "537.11"], ["24", "2013-01-10", "r", "w", "537.17"], ["25", "2013-02-21", "r", "w", "537.22"], ["26", "2013-03-26", "r", "w", "537.31"], ["27", "2013-05-21", "r", "w", "537.36"], ["28", "2013-07-09", "r", "b", "28"], ["29", "2013-08-20", "r", "b", "29"], ["30", "2013-10-01", "r", "b", "30"], ["31", "2013-11-12", "r", "b", "31"], ["32", "2014-01-14", "r", "b", "32"], ["33", "2014-02-20", "r", "b", "33"], ["34", "2014-04-08", "r", "b", "34"], ["35", "2014-05-20", "r", "b", "35"], ["36", "2014-07-16", "r", "b", "36"], ["37", "2014-08-26", "r", "b", "37"], ["38", "2014-10-07", "r", "b", "38"], ["39", "2014-11-18", "r", "b", "39"], ["40", "2015-01-21", "r", "b", "40"], ["41", "2015-03-03", "r", "b", "41"], ["42", "2015-04-14", "r", "b", "42"], ["43", "2015-05-19", "r", "b", "43"], ["44", "2015-07-21", "r", "b", "44"], ["45", "2015-09-01", "r", "b", "45"], ["46", "2015-10-13", "r", "b", "46"], ["47", "2015-12-01", "r", "b", "47"], ["48", "2016-01-20", "r", "b", "48"], ["49", "2016-03-02", "r", "b", "49"], ["50", "2016-04-13", "r", "b", "50"], ["51", "2016-05-25", "r", "b", "51"], ["52", "2016-07-20", "r", "b", "52"], ["53", "2016-08-31", "r", "b", "53"], ["54", "2016-10-12", "r", "b", "54"], ["55", "2016-12-01", "r", "b", "55"], ["56", "2017-01-25", "r", "b", "56"], ["57", "2017-03-09", "r", "b", "57"], ["58", "2017-04-19", "r", "b", "58"], ["59", "2017-06-05", "r", "b", "59"], ["60", "2017-07-25", "r", "b", "60"], ["61", "2017-09-05", "r", "b", "61"], ["62", "2017-10-17", "r", "b", "62"], ["63", "2017-12-06", "r", "b", "63"], ["64", "2018-01-23", "r", "b", "64"], ["65", "2018-03-06", "r", "b", "65"], ["66", "2018-04-17", "r", "b", "66"], ["67", "2018-05-29", "r", "b", "67"], ["68", "2018-07-24", "r", "b", "68"], ["69", "2018-09-04", "r", "b", "69"], ["70", "2018-10-16", "r", "b", "70"], ["71", "2018-12-04", "r", "b", "71"], ["72", "2019-01-29", "r", "b", "72"], ["73", "2019-03-12", "r", "b", "73"], ["74", "2019-04-23", "r", "b", "74"], ["75", "2019-06-04", "r", "b", "75"], ["76", "2019-07-30", "r", "b", "76"], ["77", "2019-09-10", "r", "b", "77"], ["78", "2019-10-22", "r", "b", "78"], ["79", "2019-12-10", "r", "b", "79"], ["80", "2020-02-04", "r", "b", "80"], ["81", "2020-04-07", "r", "b", "81"], ["83", "2020-05-19", "r", "b", "83"], ["84", "2020-07-27", "r", "b", "84"], ["85", "2020-08-25", "r", "b", "85"], ["86", "2020-10-20", "r", "b", "86"], ["87", "2020-11-17", "r", "b", "87"], ["88", "2021-01-19", "r", "b", "88"], ["89", "2021-03-02", "r", "b", "89"], ["90", "2021-04-13", "r", "b", "90"], ["91", "2021-05-25", "r", "b", "91"], ["92", "2021-07-20", "r", "b", "92"], ["93", "2021-08-31", "r", "b", "93"], ["94", "2021-09-21", "r", "b", "94"], ["95", "2021-10-19", "r", "b", "95"], ["96", "2021-11-15", "r", "b", "96"], ["97", "2022-01-04", "r", "b", "97"], ["98", "2022-02-01", "r", "b", "98"], ["99", "2022-03-01", "r", "b", "99"], ["100", "2022-03-29", "r", "b", "100"], ["101", "2022-04-26", "r", "b", "101"], ["102", "2022-05-24", "r", "b", "102"], ["103", "2022-06-21", "r", "b", "103"], ["104", "2022-08-02", "r", "b", "104"], ["105", "2022-09-02", "r", "b", "105"], ["106", "2022-09-27", "r", "b", "106"], ["107", "2022-10-25", "r", "b", "107"], ["108", "2022-11-29", "r", "b", "108"], ["109", "2023-01-10", "r", "b", "109"], ["110", "2023-02-07", "r", "b", "110"], ["111", "2023-03-07", "r", "b", "111"], ["112", "2023-04-04", "r", "b", "112"], ["113", "2023-05-02", "r", "b", "113"], ["114", "2023-05-30", "r", "b", "114"], ["115", "2023-07-18", "r", "b", "115"], ["116", "2023-08-15", "r", "b", "116"], ["117", "2023-09-12", "r", "b", "117"], ["118", "2023-10-10", "r", "b", "118"], ["119", "2023-10-31", "r", "b", "119"], ["120", "2023-12-05", "r", "b", "120"], ["121", "2024-01-23", "r", "b", "121"], ["122", "2024-02-20", "r", "b", "122"], ["123", "2024-03-19", "r", "b", "123"], ["124", "2024-04-16", "r", "b", "124"], ["125", "2024-05-14", "r", "b", "125"], ["126", "2024-06-11", "r", "b", "126"], ["127", "2024-07-23", "r", "b", "127"], ["128", "2024-08-20", "r", "b", "128"], ["129", "2024-09-17", "r", "b", "129"], ["130", "2024-10-15", "r", "b", "130"], ["131", "2024-11-12", "r", "b", "131"], ["132", "2025-01-14", "r", "b", "132"], ["133", "2025-02-04", "r", "b", "133"], ["134", "2025-03-04", "r", "b", "134"], ["135", "2025-04-01", "r", "b", "135"], ["136", "2025-04-29", "r", "b", "136"], ["137", "2025-05-27", "r", "b", "137"], ["138", "2025-06-24", "r", "b", "138"], ["139", "2025-08-05", "r", "b", "139"], ["140", "2025-09-02", "r", "b", "140"], ["141", "2025-09-30", "r", "b", "141"], ["142", "2025-10-28", "r", "b", "142"], ["143", "2025-12-02", "r", "b", "143"], ["144", "2026-01-13", "r", "b", "144"], ["145", "2026-02-10", "r", "b", "145"], ["146", "2026-03-10", "c", "b", "146"], ["147", "2026-04-07", "b", "b", "147"], ["148", "2026-05-05", "n", "b", "148"], ["149", null, "p", "b", "149"]] }, chrome_android: { releases: [["18", "2012-06-27", "r", "w", "535.19"], ["25", "2013-02-27", "r", "w", "537.22"], ["26", "2013-04-03", "r", "w", "537.31"], ["27", "2013-05-22", "r", "w", "537.36"], ["28", "2013-07-10", "r", "b", "28"], ["29", "2013-08-21", "r", "b", "29"], ["30", "2013-10-02", "r", "b", "30"], ["31", "2013-11-14", "r", "b", "31"], ["32", "2014-01-15", "r", "b", "32"], ["33", "2014-02-26", "r", "b", "33"], ["34", "2014-04-02", "r", "b", "34"], ["35", "2014-05-20", "r", "b", "35"], ["36", "2014-07-16", "r", "b", "36"], ["37", "2014-09-03", "r", "b", "37"], ["38", "2014-10-08", "r", "b", "38"], ["39", "2014-11-12", "r", "b", "39"], ["40", "2015-01-21", "r", "b", "40"], ["41", "2015-03-11", "r", "b", "41"], ["42", "2015-04-15", "r", "b", "42"], ["43", "2015-05-27", "r", "b", "43"], ["44", "2015-07-29", "r", "b", "44"], ["45", "2015-09-01", "r", "b", "45"], ["46", "2015-10-14", "r", "b", "46"], ["47", "2015-12-02", "r", "b", "47"], ["48", "2016-01-26", "r", "b", "48"], ["49", "2016-03-09", "r", "b", "49"], ["50", "2016-04-13", "r", "b", "50"], ["51", "2016-06-08", "r", "b", "51"], ["52", "2016-07-27", "r", "b", "52"], ["53", "2016-09-07", "r", "b", "53"], ["54", "2016-10-19", "r", "b", "54"], ["55", "2016-12-06", "r", "b", "55"], ["56", "2017-02-01", "r", "b", "56"], ["57", "2017-03-16", "r", "b", "57"], ["58", "2017-04-25", "r", "b", "58"], ["59", "2017-06-06", "r", "b", "59"], ["60", "2017-08-01", "r", "b", "60"], ["61", "2017-09-05", "r", "b", "61"], ["62", "2017-10-24", "r", "b", "62"], ["63", "2017-12-05", "r", "b", "63"], ["64", "2018-01-23", "r", "b", "64"], ["65", "2018-03-06", "r", "b", "65"], ["66", "2018-04-17", "r", "b", "66"], ["67", "2018-05-31", "r", "b", "67"], ["68", "2018-07-24", "r", "b", "68"], ["69", "2018-09-04", "r", "b", "69"], ["70", "2018-10-17", "r", "b", "70"], ["71", "2018-12-04", "r", "b", "71"], ["72", "2019-01-29", "r", "b", "72"], ["73", "2019-03-12", "r", "b", "73"], ["74", "2019-04-24", "r", "b", "74"], ["75", "2019-06-04", "r", "b", "75"], ["76", "2019-07-30", "r", "b", "76"], ["77", "2019-09-10", "r", "b", "77"], ["78", "2019-10-22", "r", "b", "78"], ["79", "2019-12-17", "r", "b", "79"], ["80", "2020-02-04", "r", "b", "80"], ["81", "2020-04-07", "r", "b", "81"], ["83", "2020-05-19", "r", "b", "83"], ["84", "2020-07-27", "r", "b", "84"], ["85", "2020-08-25", "r", "b", "85"], ["86", "2020-10-20", "r", "b", "86"], ["87", "2020-11-17", "r", "b", "87"], ["88", "2021-01-19", "r", "b", "88"], ["89", "2021-03-02", "r", "b", "89"], ["90", "2021-04-13", "r", "b", "90"], ["91", "2021-05-25", "r", "b", "91"], ["92", "2021-07-20", "r", "b", "92"], ["93", "2021-08-31", "r", "b", "93"], ["94", "2021-09-21", "r", "b", "94"], ["95", "2021-10-19", "r", "b", "95"], ["96", "2021-11-15", "r", "b", "96"], ["97", "2022-01-04", "r", "b", "97"], ["98", "2022-02-01", "r", "b", "98"], ["99", "2022-03-01", "r", "b", "99"], ["100", "2022-03-29", "r", "b", "100"], ["101", "2022-04-26", "r", "b", "101"], ["102", "2022-05-24", "r", "b", "102"], ["103", "2022-06-21", "r", "b", "103"], ["104", "2022-08-02", "r", "b", "104"], ["105", "2022-09-02", "r", "b", "105"], ["106", "2022-09-27", "r", "b", "106"], ["107", "2022-10-25", "r", "b", "107"], ["108", "2022-11-29", "r", "b", "108"], ["109", "2023-01-10", "r", "b", "109"], ["110", "2023-02-07", "r", "b", "110"], ["111", "2023-03-07", "r", "b", "111"], ["112", "2023-04-04", "r", "b", "112"], ["113", "2023-05-02", "r", "b", "113"], ["114", "2023-05-30", "r", "b", "114"], ["115", "2023-07-21", "r", "b", "115"], ["116", "2023-08-15", "r", "b", "116"], ["117", "2023-09-12", "r", "b", "117"], ["118", "2023-10-10", "r", "b", "118"], ["119", "2023-10-31", "r", "b", "119"], ["120", "2023-12-05", "r", "b", "120"], ["121", "2024-01-23", "r", "b", "121"], ["122", "2024-02-20", "r", "b", "122"], ["123", "2024-03-19", "r", "b", "123"], ["124", "2024-04-16", "r", "b", "124"], ["125", "2024-05-14", "r", "b", "125"], ["126", "2024-06-11", "r", "b", "126"], ["127", "2024-07-23", "r", "b", "127"], ["128", "2024-08-20", "r", "b", "128"], ["129", "2024-09-17", "r", "b", "129"], ["130", "2024-10-15", "r", "b", "130"], ["131", "2024-11-12", "r", "b", "131"], ["132", "2025-01-14", "r", "b", "132"], ["133", "2025-02-04", "r", "b", "133"], ["134", "2025-03-04", "r", "b", "134"], ["135", "2025-04-01", "r", "b", "135"], ["136", "2025-04-29", "r", "b", "136"], ["137", "2025-05-27", "r", "b", "137"], ["138", "2025-06-24", "r", "b", "138"], ["139", "2025-08-05", "r", "b", "139"], ["140", "2025-09-02", "r", "b", "140"], ["141", "2025-09-30", "r", "b", "141"], ["142", "2025-10-28", "r", "b", "142"], ["143", "2025-12-02", "r", "b", "143"], ["144", "2026-01-13", "r", "b", "144"], ["145", "2026-02-10", "r", "b", "145"], ["146", "2026-03-10", "c", "b", "146"], ["147", "2026-04-07", "b", "b", "147"], ["148", "2026-05-05", "n", "b", "148"], ["149", null, "p", "b", "149"]] }, edge: { releases: [["12", "2015-07-29", "r", null, "12"], ["13", "2015-11-12", "r", null, "13"], ["14", "2016-08-02", "r", null, "14"], ["15", "2017-04-05", "r", null, "15"], ["16", "2017-10-17", "r", null, "16"], ["17", "2018-04-30", "r", null, "17"], ["18", "2018-10-02", "r", null, "18"], ["79", "2020-01-15", "r", "b", "79"], ["80", "2020-02-07", "r", "b", "80"], ["81", "2020-04-13", "r", "b", "81"], ["83", "2020-05-21", "r", "b", "83"], ["84", "2020-07-16", "r", "b", "84"], ["85", "2020-08-27", "r", "b", "85"], ["86", "2020-10-09", "r", "b", "86"], ["87", "2020-11-19", "r", "b", "87"], ["88", "2021-01-21", "r", "b", "88"], ["89", "2021-03-04", "r", "b", "89"], ["90", "2021-04-15", "r", "b", "90"], ["91", "2021-05-27", "r", "b", "91"], ["92", "2021-07-22", "r", "b", "92"], ["93", "2021-09-02", "r", "b", "93"], ["94", "2021-09-24", "r", "b", "94"], ["95", "2021-10-21", "r", "b", "95"], ["96", "2021-11-19", "r", "b", "96"], ["97", "2022-01-06", "r", "b", "97"], ["98", "2022-02-03", "r", "b", "98"], ["99", "2022-03-03", "r", "b", "99"], ["100", "2022-04-01", "r", "b", "100"], ["101", "2022-04-28", "r", "b", "101"], ["102", "2022-05-31", "r", "b", "102"], ["103", "2022-06-23", "r", "b", "103"], ["104", "2022-08-05", "r", "b", "104"], ["105", "2022-09-01", "r", "b", "105"], ["106", "2022-10-03", "r", "b", "106"], ["107", "2022-10-27", "r", "b", "107"], ["108", "2022-12-05", "r", "b", "108"], ["109", "2023-01-12", "r", "b", "109"], ["110", "2023-02-09", "r", "b", "110"], ["111", "2023-03-13", "r", "b", "111"], ["112", "2023-04-06", "r", "b", "112"], ["113", "2023-05-05", "r", "b", "113"], ["114", "2023-06-02", "r", "b", "114"], ["115", "2023-07-21", "r", "b", "115"], ["116", "2023-08-21", "r", "b", "116"], ["117", "2023-09-15", "r", "b", "117"], ["118", "2023-10-13", "r", "b", "118"], ["119", "2023-11-02", "r", "b", "119"], ["120", "2023-12-07", "r", "b", "120"], ["121", "2024-01-25", "r", "b", "121"], ["122", "2024-02-23", "r", "b", "122"], ["123", "2024-03-22", "r", "b", "123"], ["124", "2024-04-18", "r", "b", "124"], ["125", "2024-05-17", "r", "b", "125"], ["126", "2024-06-13", "r", "b", "126"], ["127", "2024-07-25", "r", "b", "127"], ["128", "2024-08-22", "r", "b", "128"], ["129", "2024-09-19", "r", "b", "129"], ["130", "2024-10-17", "r", "b", "130"], ["131", "2024-11-14", "r", "b", "131"], ["132", "2025-01-17", "r", "b", "132"], ["133", "2025-02-06", "r", "b", "133"], ["134", "2025-03-06", "r", "b", "134"], ["135", "2025-04-04", "r", "b", "135"], ["136", "2025-05-01", "r", "b", "136"], ["137", "2025-05-29", "r", "b", "137"], ["138", "2025-06-26", "r", "b", "138"], ["139", "2025-08-07", "r", "b", "139"], ["140", "2025-09-05", "r", "b", "140"], ["141", "2025-10-03", "r", "b", "141"], ["142", "2025-10-31", "r", "b", "142"], ["143", "2025-12-05", "r", "b", "143"], ["144", "2026-01-21", "r", "b", "144"], ["145", "2026-02-14", "r", "b", "145"], ["146", "2026-03-13", "c", "b", "146"], ["147", "2026-04-09", "b", "b", "147"], ["148", "2026-05-07", "n", "b", "148"], ["149", "2026-06-04", "p", "b", "149"]] }, firefox: { releases: [["1", "2004-11-09", "r", "g", "1.7"], ["2", "2006-10-24", "r", "g", "1.8.1"], ["3", "2008-06-17", "r", "g", "1.9"], ["4", "2011-03-22", "r", "g", "2"], ["5", "2011-06-21", "r", "g", "5"], ["6", "2011-08-16", "r", "g", "6"], ["7", "2011-09-27", "r", "g", "7"], ["8", "2011-11-08", "r", "g", "8"], ["9", "2011-12-20", "r", "g", "9"], ["10", "2012-01-31", "r", "g", "10"], ["11", "2012-03-13", "r", "g", "11"], ["12", "2012-04-24", "r", "g", "12"], ["13", "2012-06-05", "r", "g", "13"], ["14", "2012-07-17", "r", "g", "14"], ["15", "2012-08-28", "r", "g", "15"], ["16", "2012-10-09", "r", "g", "16"], ["17", "2012-11-20", "r", "g", "17"], ["18", "2013-01-08", "r", "g", "18"], ["19", "2013-02-19", "r", "g", "19"], ["20", "2013-04-02", "r", "g", "20"], ["21", "2013-05-14", "r", "g", "21"], ["22", "2013-06-25", "r", "g", "22"], ["23", "2013-08-06", "r", "g", "23"], ["24", "2013-09-17", "r", "g", "24"], ["25", "2013-10-29", "r", "g", "25"], ["26", "2013-12-10", "r", "g", "26"], ["27", "2014-02-04", "r", "g", "27"], ["28", "2014-03-18", "r", "g", "28"], ["29", "2014-04-29", "r", "g", "29"], ["30", "2014-06-10", "r", "g", "30"], ["31", "2014-07-22", "r", "g", "31"], ["32", "2014-09-02", "r", "g", "32"], ["33", "2014-10-14", "r", "g", "33"], ["34", "2014-12-01", "r", "g", "34"], ["35", "2015-01-13", "r", "g", "35"], ["36", "2015-02-24", "r", "g", "36"], ["37", "2015-03-31", "r", "g", "37"], ["38", "2015-05-12", "r", "g", "38"], ["39", "2015-07-02", "r", "g", "39"], ["40", "2015-08-11", "r", "g", "40"], ["41", "2015-09-22", "r", "g", "41"], ["42", "2015-11-03", "r", "g", "42"], ["43", "2015-12-15", "r", "g", "43"], ["44", "2016-01-26", "r", "g", "44"], ["45", "2016-03-08", "r", "g", "45"], ["46", "2016-04-26", "r", "g", "46"], ["47", "2016-06-07", "r", "g", "47"], ["48", "2016-08-02", "r", "g", "48"], ["49", "2016-09-20", "r", "g", "49"], ["50", "2016-11-15", "r", "g", "50"], ["51", "2017-01-24", "r", "g", "51"], ["52", "2017-03-07", "r", "g", "52"], ["53", "2017-04-19", "r", "g", "53"], ["54", "2017-06-13", "r", "g", "54"], ["55", "2017-08-08", "r", "g", "55"], ["56", "2017-09-28", "r", "g", "56"], ["57", "2017-11-14", "r", "g", "57"], ["58", "2018-01-23", "r", "g", "58"], ["59", "2018-03-13", "r", "g", "59"], ["60", "2018-05-09", "r", "g", "60"], ["61", "2018-06-26", "r", "g", "61"], ["62", "2018-09-05", "r", "g", "62"], ["63", "2018-10-23", "r", "g", "63"], ["64", "2018-12-11", "r", "g", "64"], ["65", "2019-01-29", "r", "g", "65"], ["66", "2019-03-19", "r", "g", "66"], ["67", "2019-05-21", "r", "g", "67"], ["68", "2019-07-09", "r", "g", "68"], ["69", "2019-09-03", "r", "g", "69"], ["70", "2019-10-22", "r", "g", "70"], ["71", "2019-12-10", "r", "g", "71"], ["72", "2020-01-07", "r", "g", "72"], ["73", "2020-02-11", "r", "g", "73"], ["74", "2020-03-10", "r", "g", "74"], ["75", "2020-04-07", "r", "g", "75"], ["76", "2020-05-05", "r", "g", "76"], ["77", "2020-06-02", "r", "g", "77"], ["78", "2020-06-30", "r", "g", "78"], ["79", "2020-07-28", "r", "g", "79"], ["80", "2020-08-25", "r", "g", "80"], ["81", "2020-09-22", "r", "g", "81"], ["82", "2020-10-20", "r", "g", "82"], ["83", "2020-11-17", "r", "g", "83"], ["84", "2020-12-15", "r", "g", "84"], ["85", "2021-01-26", "r", "g", "85"], ["86", "2021-02-23", "r", "g", "86"], ["87", "2021-03-23", "r", "g", "87"], ["88", "2021-04-19", "r", "g", "88"], ["89", "2021-06-01", "r", "g", "89"], ["90", "2021-07-13", "r", "g", "90"], ["91", "2021-08-10", "r", "g", "91"], ["92", "2021-09-07", "r", "g", "92"], ["93", "2021-10-05", "r", "g", "93"], ["94", "2021-11-02", "r", "g", "94"], ["95", "2021-12-07", "r", "g", "95"], ["96", "2022-01-11", "r", "g", "96"], ["97", "2022-02-08", "r", "g", "97"], ["98", "2022-03-08", "r", "g", "98"], ["99", "2022-04-05", "r", "g", "99"], ["100", "2022-05-03", "r", "g", "100"], ["101", "2022-05-31", "r", "g", "101"], ["102", "2022-06-28", "r", "g", "102"], ["103", "2022-07-26", "r", "g", "103"], ["104", "2022-08-23", "r", "g", "104"], ["105", "2022-09-20", "r", "g", "105"], ["106", "2022-10-18", "r", "g", "106"], ["107", "2022-11-15", "r", "g", "107"], ["108", "2022-12-13", "r", "g", "108"], ["109", "2023-01-17", "r", "g", "109"], ["110", "2023-02-14", "r", "g", "110"], ["111", "2023-03-14", "r", "g", "111"], ["112", "2023-04-11", "r", "g", "112"], ["113", "2023-05-09", "r", "g", "113"], ["114", "2023-06-06", "r", "g", "114"], ["115", "2023-07-04", "r", "g", "115"], ["116", "2023-08-01", "r", "g", "116"], ["117", "2023-08-29", "r", "g", "117"], ["118", "2023-09-26", "r", "g", "118"], ["119", "2023-10-24", "r", "g", "119"], ["120", "2023-11-21", "r", "g", "120"], ["121", "2023-12-19", "r", "g", "121"], ["122", "2024-01-23", "r", "g", "122"], ["123", "2024-02-20", "r", "g", "123"], ["124", "2024-03-19", "r", "g", "124"], ["125", "2024-04-16", "r", "g", "125"], ["126", "2024-05-14", "r", "g", "126"], ["127", "2024-06-11", "r", "g", "127"], ["128", "2024-07-09", "r", "g", "128"], ["129", "2024-08-06", "r", "g", "129"], ["130", "2024-09-03", "r", "g", "130"], ["131", "2024-10-01", "r", "g", "131"], ["132", "2024-10-29", "r", "g", "132"], ["133", "2024-11-26", "r", "g", "133"], ["134", "2025-01-07", "r", "g", "134"], ["135", "2025-02-04", "r", "g", "135"], ["136", "2025-03-04", "r", "g", "136"], ["137", "2025-04-01", "r", "g", "137"], ["138", "2025-04-29", "r", "g", "138"], ["139", "2025-05-27", "r", "g", "139"], ["140", "2025-06-24", "e", "g", "140"], ["141", "2025-07-22", "r", "g", "141"], ["142", "2025-08-19", "r", "g", "142"], ["143", "2025-09-16", "r", "g", "143"], ["144", "2025-10-14", "r", "g", "144"], ["145", "2025-11-11", "r", "g", "145"], ["146", "2025-12-09", "r", "g", "146"], ["147", "2026-01-13", "r", "g", "147"], ["148", "2026-02-24", "r", "g", "148"], ["149", "2026-03-24", "c", "g", "149"], ["150", "2026-04-21", "b", "g", "150"], ["151", "2026-05-19", "n", "g", "151"], ["152", "2026-06-16", "p", "g", "152"], ["1.5", "2005-11-29", "r", "g", "1.8"], ["3.5", "2009-06-30", "r", "g", "1.9.1"], ["3.6", "2010-01-21", "r", "g", "1.9.2"]] }, firefox_android: { releases: [["4", "2011-03-29", "r", "g", "2"], ["5", "2011-06-21", "r", "g", "5"], ["6", "2011-08-16", "r", "g", "6"], ["7", "2011-09-27", "r", "g", "7"], ["8", "2011-11-08", "r", "g", "8"], ["9", "2011-12-21", "r", "g", "9"], ["10", "2012-01-31", "r", "g", "10"], ["14", "2012-06-26", "r", "g", "14"], ["15", "2012-08-28", "r", "g", "15"], ["16", "2012-10-09", "r", "g", "16"], ["17", "2012-11-20", "r", "g", "17"], ["18", "2013-01-08", "r", "g", "18"], ["19", "2013-02-19", "r", "g", "19"], ["20", "2013-04-02", "r", "g", "20"], ["21", "2013-05-14", "r", "g", "21"], ["22", "2013-06-25", "r", "g", "22"], ["23", "2013-08-06", "r", "g", "23"], ["24", "2013-09-17", "r", "g", "24"], ["25", "2013-10-29", "r", "g", "25"], ["26", "2013-12-10", "r", "g", "26"], ["27", "2014-02-04", "r", "g", "27"], ["28", "2014-03-18", "r", "g", "28"], ["29", "2014-04-29", "r", "g", "29"], ["30", "2014-06-10", "r", "g", "30"], ["31", "2014-07-22", "r", "g", "31"], ["32", "2014-09-02", "r", "g", "32"], ["33", "2014-10-14", "r", "g", "33"], ["34", "2014-12-01", "r", "g", "34"], ["35", "2015-01-13", "r", "g", "35"], ["36", "2015-02-27", "r", "g", "36"], ["37", "2015-03-31", "r", "g", "37"], ["38", "2015-05-12", "r", "g", "38"], ["39", "2015-07-02", "r", "g", "39"], ["40", "2015-08-11", "r", "g", "40"], ["41", "2015-09-22", "r", "g", "41"], ["42", "2015-11-03", "r", "g", "42"], ["43", "2015-12-15", "r", "g", "43"], ["44", "2016-01-26", "r", "g", "44"], ["45", "2016-03-08", "r", "g", "45"], ["46", "2016-04-26", "r", "g", "46"], ["47", "2016-06-07", "r", "g", "47"], ["48", "2016-08-02", "r", "g", "48"], ["49", "2016-09-20", "r", "g", "49"], ["50", "2016-11-15", "r", "g", "50"], ["51", "2017-01-24", "r", "g", "51"], ["52", "2017-03-07", "r", "g", "52"], ["53", "2017-04-19", "r", "g", "53"], ["54", "2017-06-13", "r", "g", "54"], ["55", "2017-08-08", "r", "g", "55"], ["56", "2017-09-28", "r", "g", "56"], ["57", "2017-11-28", "r", "g", "57"], ["58", "2018-01-22", "r", "g", "58"], ["59", "2018-03-13", "r", "g", "59"], ["60", "2018-05-09", "r", "g", "60"], ["61", "2018-06-26", "r", "g", "61"], ["62", "2018-09-05", "r", "g", "62"], ["63", "2018-10-23", "r", "g", "63"], ["64", "2018-12-11", "r", "g", "64"], ["65", "2019-01-29", "r", "g", "65"], ["66", "2019-03-19", "r", "g", "66"], ["67", "2019-05-21", "r", "g", "67"], ["68", "2019-07-09", "r", "g", "68"], ["79", "2020-07-28", "r", "g", "79"], ["80", "2020-08-31", "r", "g", "80"], ["81", "2020-09-22", "r", "g", "81"], ["82", "2020-10-20", "r", "g", "82"], ["83", "2020-11-17", "r", "g", "83"], ["84", "2020-12-15", "r", "g", "84"], ["85", "2021-01-26", "r", "g", "85"], ["86", "2021-02-23", "r", "g", "86"], ["87", "2021-03-23", "r", "g", "87"], ["88", "2021-04-19", "r", "g", "88"], ["89", "2021-06-01", "r", "g", "89"], ["90", "2021-07-13", "r", "g", "90"], ["91", "2021-08-10", "r", "g", "91"], ["92", "2021-09-07", "r", "g", "92"], ["93", "2021-10-05", "r", "g", "93"], ["94", "2021-11-02", "r", "g", "94"], ["95", "2021-12-07", "r", "g", "95"], ["96", "2022-01-11", "r", "g", "96"], ["97", "2022-02-08", "r", "g", "97"], ["98", "2022-03-08", "r", "g", "98"], ["99", "2022-04-05", "r", "g", "99"], ["100", "2022-05-03", "r", "g", "100"], ["101", "2022-05-31", "r", "g", "101"], ["102", "2022-06-28", "r", "g", "102"], ["103", "2022-07-26", "r", "g", "103"], ["104", "2022-08-23", "r", "g", "104"], ["105", "2022-09-20", "r", "g", "105"], ["106", "2022-10-18", "r", "g", "106"], ["107", "2022-11-15", "r", "g", "107"], ["108", "2022-12-13", "r", "g", "108"], ["109", "2023-01-17", "r", "g", "109"], ["110", "2023-02-14", "r", "g", "110"], ["111", "2023-03-14", "r", "g", "111"], ["112", "2023-04-11", "r", "g", "112"], ["113", "2023-05-09", "r", "g", "113"], ["114", "2023-06-06", "r", "g", "114"], ["115", "2023-07-04", "r", "g", "115"], ["116", "2023-08-01", "r", "g", "116"], ["117", "2023-08-29", "r", "g", "117"], ["118", "2023-09-26", "r", "g", "118"], ["119", "2023-10-24", "r", "g", "119"], ["120", "2023-11-21", "r", "g", "120"], ["121", "2023-12-19", "r", "g", "121"], ["122", "2024-01-23", "r", "g", "122"], ["123", "2024-02-20", "r", "g", "123"], ["124", "2024-03-19", "r", "g", "124"], ["125", "2024-04-16", "r", "g", "125"], ["126", "2024-05-14", "r", "g", "126"], ["127", "2024-06-11", "r", "g", "127"], ["128", "2024-07-09", "r", "g", "128"], ["129", "2024-08-06", "r", "g", "129"], ["130", "2024-09-03", "r", "g", "130"], ["131", "2024-10-01", "r", "g", "131"], ["132", "2024-10-29", "r", "g", "132"], ["133", "2024-11-26", "r", "g", "133"], ["134", "2025-01-07", "r", "g", "134"], ["135", "2025-02-04", "r", "g", "135"], ["136", "2025-03-04", "r", "g", "136"], ["137", "2025-04-01", "r", "g", "137"], ["138", "2025-04-29", "r", "g", "138"], ["139", "2025-05-27", "r", "g", "139"], ["140", "2025-06-24", "e", "g", "140"], ["141", "2025-07-22", "r", "g", "141"], ["142", "2025-08-19", "r", "g", "142"], ["143", "2025-09-16", "r", "g", "143"], ["144", "2025-10-14", "r", "g", "144"], ["145", "2025-11-11", "r", "g", "145"], ["146", "2025-12-09", "r", "g", "146"], ["147", "2026-01-13", "r", "g", "147"], ["148", "2026-02-24", "r", "g", "148"], ["149", "2026-03-24", "c", "g", "149"], ["150", "2026-04-21", "b", "g", "150"], ["151", "2026-05-19", "n", "g", "151"], ["152", "2026-06-16", "p", "g", "152"]] }, opera: { releases: [["2", "1996-07-14", "r", null, null], ["3", "1997-12-01", "r", null, null], ["4", "2000-06-28", "r", null, null], ["5", "2000-12-06", "r", null, null], ["6", "2001-12-18", "r", null, null], ["7", "2003-01-28", "r", "p", "1"], ["8", "2005-04-19", "r", "p", "1"], ["9", "2006-06-20", "r", "p", "2"], ["10", "2009-09-01", "r", "p", "2.2"], ["11", "2010-12-16", "r", "p", "2.7"], ["12", "2012-06-14", "r", "p", "2.10"], ["15", "2013-07-02", "r", "b", "28"], ["16", "2013-08-27", "r", "b", "29"], ["17", "2013-10-08", "r", "b", "30"], ["18", "2013-11-19", "r", "b", "31"], ["19", "2014-01-28", "r", "b", "32"], ["20", "2014-03-04", "r", "b", "33"], ["21", "2014-05-06", "r", "b", "34"], ["22", "2014-06-03", "r", "b", "35"], ["23", "2014-07-22", "r", "b", "36"], ["24", "2014-09-02", "r", "b", "37"], ["25", "2014-10-15", "r", "b", "38"], ["26", "2014-12-03", "r", "b", "39"], ["27", "2015-01-27", "r", "b", "40"], ["28", "2015-03-10", "r", "b", "41"], ["29", "2015-04-28", "r", "b", "42"], ["30", "2015-06-09", "r", "b", "43"], ["31", "2015-08-04", "r", "b", "44"], ["32", "2015-09-15", "r", "b", "45"], ["33", "2015-10-27", "r", "b", "46"], ["34", "2015-12-08", "r", "b", "47"], ["35", "2016-02-02", "r", "b", "48"], ["36", "2016-03-15", "r", "b", "49"], ["37", "2016-05-04", "r", "b", "50"], ["38", "2016-06-08", "r", "b", "51"], ["39", "2016-08-02", "r", "b", "52"], ["40", "2016-09-20", "r", "b", "53"], ["41", "2016-10-25", "r", "b", "54"], ["42", "2016-12-13", "r", "b", "55"], ["43", "2017-02-07", "r", "b", "56"], ["44", "2017-03-21", "r", "b", "57"], ["45", "2017-05-10", "r", "b", "58"], ["46", "2017-06-22", "r", "b", "59"], ["47", "2017-08-09", "r", "b", "60"], ["48", "2017-09-27", "r", "b", "61"], ["49", "2017-11-08", "r", "b", "62"], ["50", "2018-01-04", "r", "b", "63"], ["51", "2018-02-07", "r", "b", "64"], ["52", "2018-03-22", "r", "b", "65"], ["53", "2018-05-10", "r", "b", "66"], ["54", "2018-06-28", "r", "b", "67"], ["55", "2018-08-16", "r", "b", "68"], ["56", "2018-09-25", "r", "b", "69"], ["57", "2018-11-28", "r", "b", "70"], ["58", "2019-01-23", "r", "b", "71"], ["60", "2019-04-09", "r", "b", "73"], ["62", "2019-06-27", "r", "b", "75"], ["63", "2019-08-20", "r", "b", "76"], ["64", "2019-10-07", "r", "b", "77"], ["65", "2019-11-13", "r", "b", "78"], ["66", "2020-01-07", "r", "b", "79"], ["67", "2020-03-03", "r", "b", "80"], ["68", "2020-04-22", "r", "b", "81"], ["69", "2020-06-24", "r", "b", "83"], ["70", "2020-07-27", "r", "b", "84"], ["71", "2020-09-15", "r", "b", "85"], ["72", "2020-10-21", "r", "b", "86"], ["73", "2020-12-09", "r", "b", "87"], ["74", "2021-02-02", "r", "b", "88"], ["75", "2021-03-24", "r", "b", "89"], ["76", "2021-04-28", "r", "b", "90"], ["77", "2021-06-09", "r", "b", "91"], ["78", "2021-08-03", "r", "b", "92"], ["79", "2021-09-14", "r", "b", "93"], ["80", "2021-10-05", "r", "b", "94"], ["81", "2021-11-04", "r", "b", "95"], ["82", "2021-12-02", "r", "b", "96"], ["83", "2022-01-19", "r", "b", "97"], ["84", "2022-02-16", "r", "b", "98"], ["85", "2022-03-23", "r", "b", "99"], ["86", "2022-04-20", "r", "b", "100"], ["87", "2022-05-17", "r", "b", "101"], ["88", "2022-06-08", "r", "b", "102"], ["89", "2022-07-07", "r", "b", "103"], ["90", "2022-08-18", "r", "b", "104"], ["91", "2022-09-14", "r", "b", "105"], ["92", "2022-10-19", "r", "b", "106"], ["93", "2022-11-17", "r", "b", "107"], ["94", "2022-12-15", "r", "b", "108"], ["95", "2023-02-01", "r", "b", "109"], ["96", "2023-02-22", "r", "b", "110"], ["97", "2023-03-22", "r", "b", "111"], ["98", "2023-04-20", "r", "b", "112"], ["99", "2023-05-16", "r", "b", "113"], ["100", "2023-06-29", "r", "b", "114"], ["101", "2023-07-26", "r", "b", "115"], ["102", "2023-08-23", "r", "b", "116"], ["103", "2023-10-03", "r", "b", "117"], ["104", "2023-10-23", "r", "b", "118"], ["105", "2023-11-14", "r", "b", "119"], ["106", "2023-12-19", "r", "b", "120"], ["107", "2024-02-07", "r", "b", "121"], ["108", "2024-03-05", "r", "b", "122"], ["109", "2024-03-27", "r", "b", "123"], ["110", "2024-05-14", "r", "b", "124"], ["111", "2024-06-12", "r", "b", "125"], ["112", "2024-07-11", "r", "b", "126"], ["113", "2024-08-22", "r", "b", "127"], ["114", "2024-09-25", "r", "b", "128"], ["115", "2024-11-27", "r", "b", "130"], ["116", "2025-01-08", "r", "b", "131"], ["117", "2025-02-13", "r", "b", "132"], ["118", "2025-04-15", "r", "b", "133"], ["119", "2025-05-13", "r", "b", "134"], ["120", "2025-07-02", "r", "b", "135"], ["121", "2025-08-27", "r", "b", "137"], ["122", "2025-09-11", "r", "b", "138"], ["123", "2025-10-28", "c", "b", "139"], ["124", null, "b", "b", "140"], ["125", null, "n", "b", "141"], ["10.1", "2009-11-23", "r", "p", "2.2"], ["10.5", "2010-03-02", "r", "p", "2.5"], ["10.6", "2010-07-01", "r", "p", "2.6"], ["11.1", "2011-04-12", "r", "p", "2.8"], ["11.5", "2011-06-28", "r", "p", "2.9"], ["11.6", "2011-12-06", "r", "p", "2.10"], ["12.1", "2012-11-20", "r", "p", "2.12"], ["3.5", "1998-11-18", "r", null, null], ["3.6", "1999-05-06", "r", null, null], ["5.1", "2001-04-10", "r", null, null], ["7.1", "2003-04-11", "r", "p", "1"], ["7.2", "2003-09-23", "r", "p", "1"], ["7.5", "2004-05-12", "r", "p", "1"], ["8.5", "2005-09-20", "r", "p", "1"], ["9.1", "2006-12-18", "r", "p", "2"], ["9.2", "2007-04-11", "r", "p", "2"], ["9.5", "2008-06-12", "r", "p", "2.1"], ["9.6", "2008-10-08", "r", "p", "2.1"]] }, opera_android: { releases: [["11", "2011-03-22", "r", "p", "2.7"], ["12", "2012-02-25", "r", "p", "2.10"], ["14", "2013-05-21", "r", "w", "537.31"], ["15", "2013-07-08", "r", "b", "28"], ["16", "2013-09-18", "r", "b", "29"], ["18", "2013-11-20", "r", "b", "31"], ["19", "2014-01-28", "r", "b", "32"], ["20", "2014-03-06", "r", "b", "33"], ["21", "2014-04-22", "r", "b", "34"], ["22", "2014-06-17", "r", "b", "35"], ["24", "2014-09-10", "r", "b", "37"], ["25", "2014-10-16", "r", "b", "38"], ["26", "2014-12-02", "r", "b", "39"], ["27", "2015-01-29", "r", "b", "40"], ["28", "2015-03-10", "r", "b", "41"], ["29", "2015-04-28", "r", "b", "42"], ["30", "2015-06-10", "r", "b", "43"], ["32", "2015-09-23", "r", "b", "45"], ["33", "2015-11-03", "r", "b", "46"], ["34", "2015-12-16", "r", "b", "47"], ["35", "2016-02-04", "r", "b", "48"], ["36", "2016-03-31", "r", "b", "49"], ["37", "2016-06-16", "r", "b", "50"], ["41", "2016-10-25", "r", "b", "54"], ["42", "2017-01-21", "r", "b", "55"], ["43", "2017-09-27", "r", "b", "59"], ["44", "2017-12-11", "r", "b", "60"], ["45", "2018-02-15", "r", "b", "61"], ["46", "2018-05-14", "r", "b", "63"], ["47", "2018-07-23", "r", "b", "66"], ["48", "2018-11-08", "r", "b", "69"], ["49", "2018-12-07", "r", "b", "70"], ["50", "2019-02-18", "r", "b", "71"], ["51", "2019-03-21", "r", "b", "72"], ["52", "2019-05-17", "r", "b", "73"], ["53", "2019-07-11", "r", "b", "74"], ["54", "2019-10-18", "r", "b", "76"], ["55", "2019-12-03", "r", "b", "77"], ["56", "2020-02-06", "r", "b", "78"], ["57", "2020-03-30", "r", "b", "80"], ["58", "2020-05-13", "r", "b", "81"], ["59", "2020-06-30", "r", "b", "83"], ["60", "2020-09-23", "r", "b", "85"], ["61", "2020-12-07", "r", "b", "86"], ["62", "2021-02-16", "r", "b", "87"], ["63", "2021-04-16", "r", "b", "89"], ["64", "2021-05-25", "r", "b", "91"], ["65", "2021-10-20", "r", "b", "92"], ["66", "2021-12-15", "r", "b", "94"], ["67", "2022-01-31", "r", "b", "96"], ["68", "2022-03-30", "r", "b", "99"], ["69", "2022-05-09", "r", "b", "100"], ["70", "2022-06-29", "r", "b", "102"], ["71", "2022-09-16", "r", "b", "104"], ["72", "2022-10-21", "r", "b", "106"], ["73", "2023-01-17", "r", "b", "108"], ["74", "2023-03-13", "r", "b", "110"], ["75", "2023-05-17", "r", "b", "112"], ["76", "2023-06-26", "r", "b", "114"], ["77", "2023-08-31", "r", "b", "115"], ["78", "2023-10-23", "r", "b", "117"], ["79", "2023-12-06", "r", "b", "119"], ["80", "2024-01-25", "r", "b", "120"], ["81", "2024-03-14", "r", "b", "122"], ["82", "2024-05-02", "r", "b", "124"], ["83", "2024-06-25", "r", "b", "126"], ["84", "2024-08-26", "r", "b", "127"], ["85", "2024-10-29", "r", "b", "128"], ["86", "2024-12-02", "r", "b", "130"], ["87", "2025-01-22", "r", "b", "132"], ["88", "2025-03-19", "r", "b", "134"], ["89", "2025-04-29", "r", "b", "135"], ["90", "2025-06-18", "r", "b", "137"], ["91", "2025-08-19", "r", "b", "139"], ["92", "2025-10-08", "r", "b", "140"], ["93", "2025-11-25", "r", "b", "142"], ["94", "2026-01-13", "r", "b", "143"], ["95", "2026-02-11", "r", "b", "144"], ["96", "2026-03-10", "c", "b", "145"], ["10.1", "2010-11-09", "r", "p", "2.5"], ["11.1", "2011-06-30", "r", "p", "2.8"], ["11.5", "2011-10-12", "r", "p", "2.9"], ["12.1", "2012-10-09", "r", "p", "2.11"]] }, safari: { releases: [["1", "2003-06-23", "r", "w", "85"], ["2", "2005-04-29", "r", "w", "412"], ["3", "2007-10-26", "r", "w", "523.10"], ["4", "2009-06-08", "r", "w", "530.17"], ["5", "2010-06-07", "r", "w", "533.16"], ["6", "2012-07-25", "r", "w", "536.25"], ["7", "2013-10-22", "r", "w", "537.71"], ["8", "2014-10-16", "r", "w", "538.35"], ["9", "2015-09-30", "r", "w", "601.1.56"], ["10", "2016-09-20", "r", "w", "602.1.50"], ["11", "2017-09-19", "r", "w", "604.2.4"], ["12", "2018-09-17", "r", "w", "606.1.36"], ["13", "2019-09-19", "r", "w", "608.2.11"], ["14", "2020-09-16", "r", "w", "610.1.28"], ["15", "2021-09-20", "r", "w", "612.1.27"], ["16", "2022-09-12", "r", "w", "614.1.25"], ["17", "2023-09-18", "r", "w", "616.1.27"], ["18", "2024-09-16", "r", "w", "619.1.26"], ["26", "2025-09-15", "r", "w", "622.1.22"], ["1.1", "2003-10-24", "r", "w", "100"], ["1.2", "2004-02-02", "r", "w", "125"], ["1.3", "2005-04-15", "r", "w", "312"], ["10.1", "2017-03-27", "r", "w", "603.2.1"], ["11.1", "2018-04-12", "r", "w", "605.1.33"], ["12.1", "2019-03-25", "r", "w", "607.1.40"], ["13.1", "2020-03-24", "r", "w", "609.1.20"], ["14.1", "2021-04-26", "r", "w", "611.1.21"], ["15.1", "2021-10-25", "r", "w", "612.2.9"], ["15.2", "2021-12-13", "r", "w", "612.3.6"], ["15.3", "2022-01-26", "r", "w", "612.4.9"], ["15.4", "2022-03-14", "r", "w", "613.1.17"], ["15.5", "2022-05-16", "r", "w", "613.2.7"], ["15.6", "2022-07-20", "r", "w", "613.3.9"], ["16.1", "2022-10-24", "r", "w", "614.2.9"], ["16.2", "2022-12-13", "r", "w", "614.3.7"], ["16.3", "2023-01-23", "r", "w", "614.4.6"], ["16.4", "2023-03-27", "r", "w", "615.1.26"], ["16.5", "2023-05-18", "r", "w", "615.2.9"], ["16.6", "2023-07-24", "r", "w", "615.3.12"], ["17.1", "2023-10-25", "r", "w", "616.2.9"], ["17.2", "2023-12-11", "r", "w", "617.1.17"], ["17.3", "2024-01-22", "r", "w", "617.2.4"], ["17.4", "2024-03-05", "r", "w", "618.1.15"], ["17.5", "2024-05-13", "r", "w", "618.2.12"], ["17.6", "2024-07-29", "r", "w", "618.3.11"], ["18.1", "2024-10-28", "r", "w", "619.2.8"], ["18.2", "2024-12-11", "r", "w", "620.1.16"], ["18.3", "2025-01-27", "r", "w", "620.2.4"], ["18.4", "2025-03-31", "r", "w", "621.1.15"], ["18.5", "2025-05-12", "r", "w", "621.2.5"], ["18.6", "2025-07-29", "r", "w", "621.3.11"], ["26.1", "2025-11-03", "r", "w", "622.2.11"], ["26.2", "2025-12-12", "r", "w", "623.1.14"], ["26.3", "2026-02-11", "r", "w", "623.2.7"], ["26.4", "2026-03-24", "c", "w", "624.1.16"], ["3.1", "2008-03-18", "r", "w", "525.13"], ["5.1", "2011-07-20", "r", "w", "534.48"], ["9.1", "2016-03-21", "r", "w", "601.5.17"]] }, safari_ios: { releases: [["1", "2007-06-29", "r", "w", "522.11"], ["2", "2008-07-11", "r", "w", "525.18"], ["3", "2009-06-17", "r", "w", "528.18"], ["4", "2010-06-21", "r", "w", "532.9"], ["5", "2011-10-12", "r", "w", "534.46"], ["6", "2012-09-10", "r", "w", "536.26"], ["7", "2013-09-18", "r", "w", "537.51"], ["8", "2014-09-17", "r", "w", "600.1.4"], ["9", "2015-09-16", "r", "w", "601.1.56"], ["10", "2016-09-13", "r", "w", "602.1.50"], ["11", "2017-09-19", "r", "w", "604.2.4"], ["12", "2018-09-17", "r", "w", "606.1.36"], ["13", "2019-09-19", "r", "w", "608.2.11"], ["14", "2020-09-16", "r", "w", "610.1.28"], ["15", "2021-09-20", "r", "w", "612.1.27"], ["16", "2022-09-12", "r", "w", "614.1.25"], ["17", "2023-09-18", "r", "w", "616.1.27"], ["18", "2024-09-16", "r", "w", "619.1.26"], ["26", "2025-09-15", "r", "w", "622.1.22"], ["10.3", "2017-03-27", "r", "w", "603.2.1"], ["11.3", "2018-03-29", "r", "w", "605.1.33"], ["12.2", "2019-03-25", "r", "w", "607.1.40"], ["13.4", "2020-03-24", "r", "w", "609.1.20"], ["14.5", "2021-04-26", "r", "w", "611.1.21"], ["15.1", "2021-10-25", "r", "w", "612.2.9"], ["15.2", "2021-12-13", "r", "w", "612.3.6"], ["15.3", "2022-01-26", "r", "w", "612.4.9"], ["15.4", "2022-03-14", "r", "w", "613.1.17"], ["15.5", "2022-05-16", "r", "w", "613.2.7"], ["15.6", "2022-07-20", "r", "w", "613.3.9"], ["16.1", "2022-10-24", "r", "w", "614.2.9"], ["16.2", "2022-12-13", "r", "w", "614.3.7"], ["16.3", "2023-01-23", "r", "w", "614.4.6"], ["16.4", "2023-03-27", "r", "w", "615.1.26"], ["16.5", "2023-05-18", "r", "w", "615.2.9"], ["16.6", "2023-07-24", "r", "w", "615.3.12"], ["17.1", "2023-10-25", "r", "w", "616.2.9"], ["17.2", "2023-12-11", "r", "w", "617.1.17"], ["17.3", "2024-01-22", "r", "w", "617.2.4"], ["17.4", "2024-03-05", "r", "w", "618.1.15"], ["17.5", "2024-05-13", "r", "w", "618.2.12"], ["17.6", "2024-07-29", "r", "w", "618.3.11"], ["18.1", "2024-10-28", "r", "w", "619.2.8"], ["18.2", "2024-12-11", "r", "w", "620.1.16"], ["18.3", "2025-01-27", "r", "w", "620.2.4"], ["18.4", "2025-03-31", "r", "w", "621.1.15"], ["18.5", "2025-05-12", "r", "w", "621.2.5"], ["18.6", "2025-07-29", "r", "w", "621.3.11"], ["26.1", "2025-11-03", "r", "w", "622.2.11"], ["26.2", "2025-12-12", "r", "w", "623.1.14"], ["26.3", "2026-02-11", "r", "w", "623.2.7"], ["26.4", "2026-03-24", "c", "w", "624.1.16"], ["3.2", "2010-04-03", "r", "w", "531.21"], ["4.2", "2010-11-22", "r", "w", "533.17"], ["9.3", "2016-03-21", "r", "w", "601.5.17"]] }, samsunginternet_android: { releases: [["1.0", "2013-04-27", "r", "w", "535.19"], ["1.5", "2013-09-25", "r", "b", "28"], ["1.6", "2014-04-11", "r", "b", "28"], ["10.0", "2019-08-22", "r", "b", "71"], ["10.2", "2019-10-09", "r", "b", "71"], ["11.0", "2019-12-05", "r", "b", "75"], ["11.2", "2020-03-22", "r", "b", "75"], ["12.0", "2020-06-19", "r", "b", "79"], ["12.1", "2020-07-07", "r", "b", "79"], ["13.0", "2020-12-02", "r", "b", "83"], ["13.2", "2021-01-20", "r", "b", "83"], ["14.0", "2021-04-17", "r", "b", "87"], ["14.2", "2021-06-25", "r", "b", "87"], ["15.0", "2021-08-13", "r", "b", "90"], ["16.0", "2021-11-25", "r", "b", "92"], ["16.2", "2022-03-06", "r", "b", "92"], ["17.0", "2022-05-04", "r", "b", "96"], ["18.0", "2022-08-08", "r", "b", "99"], ["18.1", "2022-09-09", "r", "b", "99"], ["19.0", "2022-11-01", "r", "b", "102"], ["19.1", "2022-11-08", "r", "b", "102"], ["2.0", "2014-10-17", "r", "b", "34"], ["2.1", "2015-01-07", "r", "b", "34"], ["20.0", "2023-02-10", "r", "b", "106"], ["21.0", "2023-05-19", "r", "b", "110"], ["22.0", "2023-07-14", "r", "b", "111"], ["23.0", "2023-10-18", "r", "b", "115"], ["24.0", "2024-01-25", "r", "b", "117"], ["25.0", "2024-04-24", "r", "b", "121"], ["26.0", "2024-06-07", "r", "b", "122"], ["27.0", "2024-11-06", "r", "b", "125"], ["28.0", "2025-04-02", "r", "b", "130"], ["29.0", "2025-10-25", "c", "b", "136"], ["3.0", "2015-04-10", "r", "b", "38"], ["3.2", "2015-08-24", "r", "b", "38"], ["4.0", "2016-03-11", "r", "b", "44"], ["4.2", "2016-08-02", "r", "b", "44"], ["5.0", "2016-12-15", "r", "b", "51"], ["5.2", "2017-04-21", "r", "b", "51"], ["5.4", "2017-05-17", "r", "b", "51"], ["6.0", "2017-08-23", "r", "b", "56"], ["6.2", "2017-10-26", "r", "b", "56"], ["6.4", "2018-02-19", "r", "b", "56"], ["7.0", "2018-03-16", "r", "b", "59"], ["7.2", "2018-06-20", "r", "b", "59"], ["7.4", "2018-09-12", "r", "b", "59"], ["8.0", "2018-07-18", "r", "b", "63"], ["8.2", "2018-12-21", "r", "b", "63"], ["9.0", "2018-09-15", "r", "b", "67"], ["9.2", "2019-04-02", "r", "b", "67"], ["9.4", "2019-07-25", "r", "b", "67"]] }, webview_android: { releases: [["1", "2008-09-23", "r", "w", "523.12"], ["2", "2009-10-26", "r", "w", "530.17"], ["3", "2011-02-22", "r", "w", "534.13"], ["4", "2011-10-18", "r", "w", "534.30"], ["37", "2014-09-03", "r", "b", "37"], ["38", "2014-10-08", "r", "b", "38"], ["39", "2014-11-12", "r", "b", "39"], ["40", "2015-01-21", "r", "b", "40"], ["41", "2015-03-11", "r", "b", "41"], ["42", "2015-04-15", "r", "b", "42"], ["43", "2015-05-27", "r", "b", "43"], ["44", "2015-07-29", "r", "b", "44"], ["45", "2015-09-01", "r", "b", "45"], ["46", "2015-10-14", "r", "b", "46"], ["47", "2015-12-02", "r", "b", "47"], ["48", "2016-01-26", "r", "b", "48"], ["49", "2016-03-09", "r", "b", "49"], ["50", "2016-04-13", "r", "b", "50"], ["51", "2016-06-08", "r", "b", "51"], ["52", "2016-07-27", "r", "b", "52"], ["53", "2016-09-07", "r", "b", "53"], ["54", "2016-10-19", "r", "b", "54"], ["55", "2016-12-06", "r", "b", "55"], ["56", "2017-02-01", "r", "b", "56"], ["57", "2017-03-16", "r", "b", "57"], ["58", "2017-04-25", "r", "b", "58"], ["59", "2017-06-06", "r", "b", "59"], ["60", "2017-08-01", "r", "b", "60"], ["61", "2017-09-05", "r", "b", "61"], ["62", "2017-10-24", "r", "b", "62"], ["63", "2017-12-05", "r", "b", "63"], ["64", "2018-01-23", "r", "b", "64"], ["65", "2018-03-06", "r", "b", "65"], ["66", "2018-04-17", "r", "b", "66"], ["67", "2018-05-31", "r", "b", "67"], ["68", "2018-07-24", "r", "b", "68"], ["69", "2018-09-04", "r", "b", "69"], ["70", "2018-10-17", "r", "b", "70"], ["71", "2018-12-04", "r", "b", "71"], ["72", "2019-01-29", "r", "b", "72"], ["73", "2019-03-12", "r", "b", "73"], ["74", "2019-04-24", "r", "b", "74"], ["75", "2019-06-04", "r", "b", "75"], ["76", "2019-07-30", "r", "b", "76"], ["77", "2019-09-10", "r", "b", "77"], ["78", "2019-10-22", "r", "b", "78"], ["79", "2019-12-17", "r", "b", "79"], ["80", "2020-02-04", "r", "b", "80"], ["81", "2020-04-07", "r", "b", "81"], ["83", "2020-05-19", "r", "b", "83"], ["84", "2020-07-27", "r", "b", "84"], ["85", "2020-08-25", "r", "b", "85"], ["86", "2020-10-20", "r", "b", "86"], ["87", "2020-11-17", "r", "b", "87"], ["88", "2021-01-19", "r", "b", "88"], ["89", "2021-03-02", "r", "b", "89"], ["90", "2021-04-13", "r", "b", "90"], ["91", "2021-05-25", "r", "b", "91"], ["92", "2021-07-20", "r", "b", "92"], ["93", "2021-08-31", "r", "b", "93"], ["94", "2021-09-21", "r", "b", "94"], ["95", "2021-10-19", "r", "b", "95"], ["96", "2021-11-15", "r", "b", "96"], ["97", "2022-01-04", "r", "b", "97"], ["98", "2022-02-01", "r", "b", "98"], ["99", "2022-03-01", "r", "b", "99"], ["100", "2022-03-29", "r", "b", "100"], ["101", "2022-04-26", "r", "b", "101"], ["102", "2022-05-24", "r", "b", "102"], ["103", "2022-06-21", "r", "b", "103"], ["104", "2022-08-02", "r", "b", "104"], ["105", "2022-09-02", "r", "b", "105"], ["106", "2022-09-27", "r", "b", "106"], ["107", "2022-10-25", "r", "b", "107"], ["108", "2022-11-29", "r", "b", "108"], ["109", "2023-01-10", "r", "b", "109"], ["110", "2023-02-07", "r", "b", "110"], ["111", "2023-03-01", "r", "b", "111"], ["112", "2023-04-04", "r", "b", "112"], ["113", "2023-05-02", "r", "b", "113"], ["114", "2023-05-30", "r", "b", "114"], ["115", "2023-07-21", "r", "b", "115"], ["116", "2023-08-15", "r", "b", "116"], ["117", "2023-09-12", "r", "b", "117"], ["118", "2023-10-10", "r", "b", "118"], ["119", "2023-10-31", "r", "b", "119"], ["120", "2023-12-05", "r", "b", "120"], ["121", "2024-01-23", "r", "b", "121"], ["122", "2024-02-20", "r", "b", "122"], ["123", "2024-03-19", "r", "b", "123"], ["124", "2024-04-16", "r", "b", "124"], ["125", "2024-05-14", "r", "b", "125"], ["126", "2024-06-11", "r", "b", "126"], ["127", "2024-07-23", "r", "b", "127"], ["128", "2024-08-20", "r", "b", "128"], ["129", "2024-09-17", "r", "b", "129"], ["130", "2024-10-15", "r", "b", "130"], ["131", "2024-11-12", "r", "b", "131"], ["132", "2025-01-14", "r", "b", "132"], ["133", "2025-02-04", "r", "b", "133"], ["134", "2025-03-04", "r", "b", "134"], ["135", "2025-04-01", "r", "b", "135"], ["136", "2025-04-29", "r", "b", "136"], ["137", "2025-05-27", "r", "b", "137"], ["138", "2025-06-24", "r", "b", "138"], ["139", "2025-08-05", "r", "b", "139"], ["140", "2025-09-02", "r", "b", "140"], ["141", "2025-09-30", "r", "b", "141"], ["142", "2025-10-28", "r", "b", "142"], ["143", "2025-12-02", "r", "b", "143"], ["144", "2026-01-13", "r", "b", "144"], ["145", "2026-02-10", "r", "b", "145"], ["146", "2026-03-10", "c", "b", "146"], ["147", "2026-04-07", "b", "b", "147"], ["148", "2026-05-05", "n", "b", "148"], ["149", null, "p", "b", "149"], ["1.5", "2009-04-27", "r", "w", "525.20"], ["2.2", "2010-05-20", "r", "w", "533.1"], ["4.4", "2013-12-09", "r", "b", "30"], ["4.4.3", "2014-06-02", "r", "b", "33"]] } };
+    var a = { ya_android: { releases: [["1.0", "u", "u", "b", "25"], ["1.5", "u", "u", "b", "22"], ["1.6", "u", "u", "b", "25"], ["1.7", "u", "u", "b", "25"], ["1.20", "u", "u", "b", "25"], ["2.5", "u", "u", "b", "25"], ["3.2", "u", "u", "b", "25"], ["4.6", "u", "u", "b", "25"], ["5.3", "u", "u", "b", "25"], ["5.4", "u", "u", "b", "25"], ["7.4", "u", "u", "b", "25"], ["9.6", "u", "u", "b", "25"], ["10.5", "u", "u", "b", "25"], ["11.4", "u", "u", "b", "25"], ["11.5", "u", "u", "b", "25"], ["12.7", "u", "u", "b", "25"], ["13.9", "u", "u", "b", "28"], ["13.10", "u", "u", "b", "28"], ["13.11", "u", "u", "b", "28"], ["13.12", "u", "u", "b", "30"], ["14.2", "u", "u", "b", "32"], ["14.4", "u", "u", "b", "33"], ["14.5", "u", "u", "b", "34"], ["14.7", "u", "u", "b", "35"], ["14.8", "u", "u", "b", "36"], ["14.10", "u", "u", "b", "37"], ["14.12", "u", "u", "b", "38"], ["15.2", "u", "u", "b", "40"], ["15.4", "u", "u", "b", "41"], ["15.6", "u", "u", "b", "42"], ["15.7", "u", "u", "b", "43"], ["15.9", "u", "u", "b", "44"], ["15.10", "u", "u", "b", "45"], ["15.12", "u", "u", "b", "46"], ["16.2", "u", "u", "b", "47"], ["16.3", "u", "u", "b", "47"], ["16.4", "u", "u", "b", "49"], ["16.6", "u", "u", "b", "50"], ["16.7", "u", "u", "b", "51"], ["16.9", "u", "u", "b", "52"], ["16.10", "u", "u", "b", "53"], ["16.11", "u", "u", "b", "54"], ["17.1", "u", "u", "b", "55"], ["17.3", "u", "u", "b", "56"], ["17.4", "u", "u", "b", "57"], ["17.6", "u", "u", "b", "58"], ["17.7", "u", "u", "b", "59"], ["17.9", "u", "u", "b", "60"], ["17.10", "u", "u", "b", "61"], ["17.11", "u", "u", "b", "62"], ["18.1", "u", "u", "b", "63"], ["18.2", "u", "u", "b", "63"], ["18.3", "u", "u", "b", "64"], ["18.4", "u", "u", "b", "65"], ["18.6", "u", "u", "b", "66"], ["18.7", "u", "u", "b", "67"], ["18.9", "u", "u", "b", "68"], ["18.10", "u", "u", "b", "69"], ["18.11", "u", "u", "b", "70"], ["19.1", "u", "u", "b", "71"], ["19.3", "u", "u", "b", "72"], ["19.4", "u", "u", "b", "73"], ["19.5", "u", "u", "b", "75"], ["19.6", "u", "u", "b", "75"], ["19.7", "u", "u", "b", "75"], ["19.9", "u", "u", "b", "76"], ["19.10", "u", "u", "b", "77"], ["19.11", "u", "u", "b", "78"], ["19.12", "u", "u", "b", "78"], ["20.2", "u", "u", "b", "79"], ["20.3", "u", "u", "b", "80"], ["20.4", "u", "u", "b", "81"], ["20.6", "u", "u", "b", "81"], ["20.7", "u", "u", "b", "83"], ["20.8", "2020-09-02", "u", "b", "84"], ["20.9", "2020-09-27", "u", "b", "85"], ["20.11", "2020-11-11", "u", "b", "86"], ["20.12", "2020-12-20", "u", "b", "87"], ["21.1", "2021-12-31", "u", "b", "88"], ["21.2", "u", "u", "b", "88"], ["21.3", "2021-04-04", "u", "b", "89"], ["21.5", "u", "u", "b", "90"], ["21.6", "2021-09-28", "u", "b", "91"], ["21.8", "2021-09-28", "u", "b", "92"], ["21.9", "2021-09-29", "u", "b", "93"], ["21.11", "2021-10-29", "u", "b", "94"], ["22.1", "2021-12-31", "u", "b", "96"], ["22.3", "2022-03-25", "u", "b", "98"], ["22.4", "u", "u", "b", "92"], ["22.5", "2022-05-20", "u", "b", "100"], ["22.7", "2022-07-07", "u", "b", "102"], ["22.8", "u", "u", "b", "104"], ["22.9", "2022-08-27", "u", "b", "104"], ["22.11", "2022-11-11", "u", "b", "106"], ["23.1", "2023-01-10", "u", "b", "108"], ["23.3", "2023-03-26", "u", "b", "110"], ["23.5", "2023-05-19", "u", "b", "112"], ["23.7", "2023-07-06", "u", "b", "114"], ["23.9", "2023-09-13", "u", "b", "116"], ["23.11", "2023-11-15", "u", "b", "118"], ["24.1", "2024-01-18", "u", "b", "120"], ["24.2", "2024-03-25", "u", "b", "120"], ["24.4", "2024-03-27", "u", "b", "122"], ["24.6", "2024-06-04", "u", "b", "124"], ["24.7", "2024-07-18", "u", "b", "126"], ["24.9", "2024-10-01", "u", "b", "126"], ["24.10", "2024-10-11", "u", "b", "128"], ["24.12", "2024-11-30", "u", "b", "130"], ["25.2", "2025-04-24", "u", "b", "132"], ["25.3", "2025-04-23", "u", "b", "132"], ["25.4", "2025-04-23", "u", "b", "134"], ["25.6", "2025-09-04", "u", "b", "136"], ["25.8", "2025-08-30", "u", "b", "138"], ["25.10", "2025-10-09", "u", "b", "140"], ["25.12", "2025-12-07", "u", "b", "142"], ["26.3", "2026-03-04", "u", "b", "144"]] }, uc_android: { releases: [["10.5", "u", "u", "b", "31"], ["10.7", "u", "u", "b", "31"], ["10.8", "u", "u", "b", "31"], ["10.10", "u", "u", "b", "31"], ["11.0", "u", "u", "b", "31"], ["11.1", "u", "u", "b", "40"], ["11.2", "u", "u", "b", "40"], ["11.3", "u", "u", "b", "40"], ["11.4", "u", "u", "b", "40"], ["11.5", "u", "u", "b", "40"], ["11.6", "u", "u", "b", "57"], ["11.8", "u", "u", "b", "57"], ["11.9", "u", "u", "b", "57"], ["12.0", "u", "u", "b", "57"], ["12.1", "u", "u", "b", "57"], ["12.2", "u", "u", "b", "57"], ["12.3", "u", "u", "b", "57"], ["12.4", "u", "u", "b", "57"], ["12.5", "u", "u", "b", "57"], ["12.6", "u", "u", "b", "57"], ["12.7", "u", "u", "b", "57"], ["12.8", "u", "u", "b", "57"], ["12.9", "u", "u", "b", "57"], ["12.10", "u", "u", "b", "57"], ["12.11", "u", "u", "b", "57"], ["12.12", "u", "u", "b", "57"], ["12.13", "u", "u", "b", "57"], ["12.14", "u", "u", "b", "57"], ["13.0", "u", "u", "b", "57"], ["13.1", "u", "u", "b", "57"], ["13.2", "u", "u", "b", "57"], ["13.3", "2020-09-09", "u", "b", "78"], ["13.4", "2021-09-28", "u", "b", "78"], ["13.5", "2023-08-25", "u", "b", "78"], ["13.6", "2023-12-17", "u", "b", "78"], ["13.7", "2023-06-24", "u", "b", "78"], ["13.8", "2022-04-30", "u", "b", "78"], ["13.9", "2022-05-18", "u", "b", "78"], ["15.0", "2022-08-24", "u", "b", "78"], ["15.1", "2022-11-11", "u", "b", "78"], ["15.2", "2023-04-23", "u", "b", "78"], ["15.3", "2023-03-17", "u", "b", "100"], ["15.4", "2023-10-25", "u", "b", "100"], ["15.5", "2023-08-22", "u", "b", "100"], ["16.0", "2023-08-24", "u", "b", "100"], ["16.1", "2023-10-15", "u", "b", "100"], ["16.2", "2023-12-09", "u", "b", "100"], ["16.3", "2024-03-08", "u", "b", "100"], ["16.4", "2024-10-03", "u", "b", "100"], ["16.5", "2024-05-30", "u", "b", "100"], ["16.6", "2024-07-23", "u", "b", "100"], ["17.0", "2024-08-24", "u", "b", "100"], ["17.1", "2024-09-26", "u", "b", "100"], ["17.2", "2024-11-29", "u", "b", "100"], ["17.3", "2025-01-07", "u", "b", "100"], ["17.4", "2025-02-26", "u", "b", "100"], ["17.5", "2025-04-08", "u", "b", "100"], ["17.6", "2025-05-15", "u", "b", "123"], ["17.7", "2025-06-11", "u", "b", "123"], ["17.8", "2025-07-30", "u", "b", "123"], ["18.0", "2025-08-17", "u", "b", "123"], ["18.1", "2025-10-04", "u", "b", "123"], ["18.2", "2025-11-04", "u", "b", "123"], ["18.3", "2025-12-12", "u", "b", "123"], ["18.4", "2026-01-09", "u", "b", "123"], ["18.5", "2026-01-28", "u", "b", "123"], ["18.6", "2026-03-21", "u", "b", "123"]] }, qq_android: { releases: [["6.0", "u", "u", "b", "37"], ["6.1", "u", "u", "b", "37"], ["6.2", "u", "u", "b", "37"], ["6.3", "u", "u", "b", "37"], ["6.4", "u", "u", "b", "37"], ["6.6", "u", "u", "b", "37"], ["6.7", "u", "u", "b", "37"], ["6.8", "u", "u", "b", "37"], ["6.9", "u", "u", "b", "37"], ["7.0", "u", "u", "b", "37"], ["7.1", "u", "u", "b", "37"], ["7.2", "u", "u", "b", "37"], ["7.3", "u", "u", "b", "37"], ["7.4", "u", "u", "b", "37"], ["7.5", "u", "u", "b", "37"], ["7.6", "u", "u", "b", "37"], ["7.7", "u", "u", "b", "37"], ["7.8", "u", "u", "b", "37"], ["7.9", "u", "u", "b", "37"], ["8.0", "u", "u", "b", "37"], ["8.1", "u", "u", "b", "57"], ["8.2", "u", "u", "b", "57"], ["8.3", "u", "u", "b", "57"], ["8.4", "u", "u", "b", "57"], ["8.5", "u", "u", "b", "57"], ["8.6", "u", "u", "b", "57"], ["8.7", "u", "u", "b", "57"], ["8.8", "u", "u", "b", "57"], ["8.9", "u", "u", "b", "57"], ["9.1", "u", "u", "b", "57"], ["9.6", "u", "u", "b", "66"], ["9.7", "u", "u", "b", "66"], ["9.8", "u", "u", "b", "66"], ["10.0", "u", "u", "b", "66"], ["10.1", "u", "u", "b", "66"], ["10.2", "u", "u", "b", "66"], ["10.3", "u", "u", "b", "66"], ["10.4", "u", "u", "b", "66"], ["10.5", "u", "u", "b", "66"], ["10.7", "2020-09-09", "u", "b", "66"], ["10.9", "2020-11-22", "u", "b", "77"], ["11.0", "u", "u", "b", "77"], ["11.2", "2021-01-30", "u", "b", "77"], ["11.3", "2021-03-31", "u", "b", "77"], ["11.7", "2021-11-02", "u", "b", "89"], ["11.9", "u", "u", "b", "89"], ["12.0", "2021-11-04", "u", "b", "89"], ["12.1", "2021-11-05", "u", "b", "89"], ["12.2", "2021-12-07", "u", "b", "89"], ["12.5", "2022-04-07", "u", "b", "89"], ["12.7", "2022-05-21", "u", "b", "89"], ["12.8", "2022-06-30", "u", "b", "89"], ["12.9", "2022-07-26", "u", "b", "89"], ["13.0", "2022-08-15", "u", "b", "89"], ["13.1", "2022-09-10", "u", "b", "89"], ["13.2", "2022-10-26", "u", "b", "89"], ["13.3", "2022-11-09", "u", "b", "89"], ["13.4", "2023-04-26", "u", "b", "98"], ["13.5", "2023-02-06", "u", "b", "98"], ["13.6", "2023-02-09", "u", "b", "98"], ["13.7", "2023-04-21", "u", "b", "98"], ["13.8", "2023-04-21", "u", "b", "98"], ["14.0", "2023-12-12", "u", "b", "98"], ["14.1", "2023-07-16", "u", "b", "98"], ["14.2", "2023-10-14", "u", "b", "109"], ["14.3", "2023-09-13", "u", "b", "109"], ["14.4", "2023-10-31", "u", "b", "109"], ["14.5", "2023-11-12", "u", "b", "109"], ["14.6", "2023-12-24", "u", "b", "109"], ["14.7", "2024-01-18", "u", "b", "109"], ["14.8", "2024-03-04", "u", "b", "109"], ["14.9", "2024-04-09", "u", "b", "109"], ["15.0", "2024-04-17", "u", "b", "109"], ["15.1", "2024-05-18", "u", "b", "109"], ["15.2", "2024-10-24", "u", "b", "109"], ["15.3", "2024-07-28", "u", "b", "109"], ["15.4", "2024-09-07", "u", "b", "109"], ["15.5", "2024-09-24", "u", "b", "109"], ["15.6", "2024-10-24", "u", "b", "109"], ["15.7", "2024-12-03", "u", "b", "109"], ["15.8", "2024-12-11", "u", "b", "109"], ["15.9", "2025-02-01", "u", "b", "109"], ["19.1", "2025-07-08", "u", "b", "121"], ["19.2", "2025-07-15", "u", "b", "121"], ["19.3", "2025-08-31", "u", "b", "121"], ["19.4", "2025-09-20", "u", "b", "121"], ["19.5", "2025-10-23", "u", "b", "121"], ["19.6", "2025-11-17", "u", "b", "121"], ["19.7", "2025-12-18", "u", "b", "121"], ["19.8", "2026-01-20", "u", "b", "121"], ["19.9", "2026-03-09", "u", "b", "121"]] }, kai_os: { releases: [["1.0", "2017-03-01", "u", "g", "37"], ["2.0", "2017-07-01", "u", "g", "48"], ["2.5", "2017-07-01", "u", "g", "48"], ["3.0", "2021-09-01", "u", "g", "84"], ["3.1", "2022-03-01", "u", "g", "84"], ["4.0", "2025-05-01", "u", "g", "123"]] }, facebook_android: { releases: [["66", "u", "u", "b", "48"], ["68", "u", "u", "b", "48"], ["74", "u", "u", "b", "50"], ["75", "u", "u", "b", "50"], ["76", "u", "u", "b", "50"], ["77", "u", "u", "b", "50"], ["78", "u", "u", "b", "50"], ["79", "u", "u", "b", "50"], ["80", "u", "u", "b", "51"], ["81", "u", "u", "b", "51"], ["82", "u", "u", "b", "51"], ["83", "u", "u", "b", "51"], ["84", "u", "u", "b", "51"], ["86", "u", "u", "b", "51"], ["87", "u", "u", "b", "52"], ["88", "u", "u", "b", "52"], ["89", "u", "u", "b", "52"], ["90", "u", "u", "b", "52"], ["91", "u", "u", "b", "52"], ["92", "u", "u", "b", "52"], ["93", "u", "u", "b", "52"], ["94", "u", "u", "b", "52"], ["95", "u", "u", "b", "53"], ["96", "u", "u", "b", "53"], ["97", "u", "u", "b", "53"], ["98", "u", "u", "b", "53"], ["99", "u", "u", "b", "53"], ["100", "u", "u", "b", "54"], ["101", "u", "u", "b", "54"], ["103", "u", "u", "b", "54"], ["104", "u", "u", "b", "54"], ["105", "u", "u", "b", "54"], ["106", "u", "u", "b", "55"], ["107", "u", "u", "b", "55"], ["108", "u", "u", "b", "55"], ["109", "u", "u", "b", "55"], ["110", "u", "u", "b", "55"], ["111", "u", "u", "b", "55"], ["112", "u", "u", "b", "56"], ["113", "u", "u", "b", "56"], ["114", "u", "u", "b", "56"], ["115", "u", "u", "b", "56"], ["116", "u", "u", "b", "56"], ["117", "u", "u", "b", "57"], ["118", "u", "u", "b", "57"], ["119", "u", "u", "b", "57"], ["120", "u", "u", "b", "57"], ["121", "u", "u", "b", "57"], ["122", "u", "u", "b", "58"], ["123", "u", "u", "b", "58"], ["124", "u", "u", "b", "58"], ["125", "u", "u", "b", "58"], ["126", "u", "u", "b", "58"], ["127", "u", "u", "b", "58"], ["128", "u", "u", "b", "58"], ["129", "u", "u", "b", "58"], ["130", "u", "u", "b", "59"], ["131", "u", "u", "b", "59"], ["132", "u", "u", "b", "59"], ["133", "u", "u", "b", "59"], ["134", "u", "u", "b", "59"], ["135", "u", "u", "b", "59"], ["136", "u", "u", "b", "59"], ["137", "u", "u", "b", "59"], ["138", "u", "u", "b", "60"], ["140", "u", "u", "b", "60"], ["142", "u", "u", "b", "61"], ["143", "u", "u", "b", "61"], ["144", "u", "u", "b", "61"], ["145", "u", "u", "b", "61"], ["146", "u", "u", "b", "61"], ["147", "u", "u", "b", "61"], ["148", "u", "u", "b", "61"], ["149", "u", "u", "b", "62"], ["150", "u", "u", "b", "62"], ["151", "u", "u", "b", "62"], ["152", "u", "u", "b", "62"], ["153", "u", "u", "b", "63"], ["154", "u", "u", "b", "63"], ["155", "u", "u", "b", "63"], ["156", "u", "u", "b", "63"], ["157", "u", "u", "b", "64"], ["158", "u", "u", "b", "64"], ["159", "u", "u", "b", "64"], ["160", "u", "u", "b", "64"], ["161", "u", "u", "b", "64"], ["162", "u", "u", "b", "64"], ["163", "u", "u", "b", "65"], ["164", "u", "u", "b", "65"], ["165", "u", "u", "b", "65"], ["166", "u", "u", "b", "65"], ["167", "u", "u", "b", "65"], ["168", "u", "u", "b", "65"], ["169", "u", "u", "b", "66"], ["170", "u", "u", "b", "66"], ["171", "u", "u", "b", "66"], ["172", "u", "u", "b", "66"], ["173", "u", "u", "b", "66"], ["174", "u", "u", "b", "66"], ["175", "u", "u", "b", "67"], ["176", "u", "u", "b", "67"], ["177", "u", "u", "b", "67"], ["178", "u", "u", "b", "67"], ["180", "u", "u", "b", "67"], ["181", "u", "u", "b", "67"], ["182", "u", "u", "b", "67"], ["183", "u", "u", "b", "68"], ["184", "u", "u", "b", "68"], ["185", "u", "u", "b", "68"], ["186", "u", "u", "b", "68"], ["187", "u", "u", "b", "68"], ["188", "u", "u", "b", "68"], ["202", "u", "u", "b", "71"], ["227", "u", "u", "b", "75"], ["228", "u", "u", "b", "75"], ["229", "u", "u", "b", "75"], ["230", "u", "u", "b", "75"], ["231", "u", "u", "b", "75"], ["233", "u", "u", "b", "76"], ["235", "u", "u", "b", "76"], ["236", "u", "u", "b", "76"], ["237", "u", "u", "b", "76"], ["238", "u", "u", "b", "76"], ["240", "u", "u", "b", "77"], ["241", "u", "u", "b", "77"], ["242", "u", "u", "b", "77"], ["243", "u", "u", "b", "77"], ["244", "u", "u", "b", "78"], ["245", "u", "u", "b", "78"], ["246", "u", "u", "b", "78"], ["247", "u", "u", "b", "78"], ["248", "u", "u", "b", "78"], ["249", "u", "u", "b", "78"], ["250", "u", "u", "b", "78"], ["251", "u", "u", "b", "79"], ["252", "u", "u", "b", "79"], ["253", "u", "u", "b", "79"], ["254", "u", "u", "b", "79"], ["255", "u", "u", "b", "79"], ["256", "u", "u", "b", "80"], ["257", "u", "u", "b", "80"], ["258", "u", "u", "b", "80"], ["259", "u", "u", "b", "80"], ["260", "u", "u", "b", "80"], ["261", "u", "u", "b", "80"], ["262", "u", "u", "b", "80"], ["263", "u", "u", "b", "80"], ["264", "u", "u", "b", "80"], ["265", "u", "u", "b", "80"], ["266", "u", "u", "b", "81"], ["267", "u", "u", "b", "81"], ["268", "u", "u", "b", "81"], ["269", "u", "u", "b", "81"], ["270", "u", "u", "b", "81"], ["271", "u", "u", "b", "81"], ["272", "u", "u", "b", "83"], ["273", "u", "u", "b", "83"], ["274", "u", "u", "b", "83"], ["275", "u", "u", "b", "83"], ["297", "2020-12-02", "u", "b", "86"], ["348", "2021-12-19", "u", "b", "96"], ["399", "2023-02-04", "u", "b", "109"], ["400", "2023-02-10", "u", "b", "109"], ["420", "2023-06-28", "u", "b", "114"], ["430", "2023-09-03", "u", "b", "116"], ["434", "2023-10-05", "u", "b", "117"], ["436", "2023-10-13", "u", "b", "117"], ["437", "u", "u", "b", "118"], ["438", "2023-10-28", "u", "b", "118"], ["439", "2023-11-11", "u", "b", "119"], ["440", "2023-11-12", "u", "b", "119"], ["441", "2023-11-20", "u", "b", "119"], ["442", "2023-11-29", "u", "b", "119"], ["443", "2023-12-07", "u", "b", "120"], ["444", "2023-12-13", "u", "b", "120"], ["445", "2023-12-21", "u", "b", "120"], ["446", "2024-01-06", "u", "b", "120"], ["447", "2024-01-12", "u", "b", "120"], ["448", "2024-01-29", "u", "b", "121"], ["449", "2024-02-02", "u", "b", "121"], ["450", "2024-02-05", "u", "b", "121"], ["451", "2024-02-17", "u", "b", "121"], ["452", "2024-02-25", "u", "b", "122"], ["453", "2024-02-28", "u", "b", "122"], ["454", "2024-03-04", "u", "b", "122"], ["465", "2024-07-07", "u", "b", "126"], ["466", "u", "u", "b", "126"], ["469", "u", "u", "b", "126"], ["471", "2024-07-10", "u", "b", "126"], ["472", "2024-07-11", "u", "b", "126"], ["474", "2024-07-30", "u", "b", "127"], ["475", "2024-08-01", "u", "b", "127"], ["476", "2024-08-09", "u", "b", "127"], ["477", "2024-08-16", "u", "b", "127"], ["478", "2024-08-21", "u", "b", "128"], ["479", "2024-08-31", "u", "b", "128"], ["480", "2024-09-07", "u", "b", "128"], ["481", "2024-09-14", "u", "b", "128"], ["482", "2024-09-20", "u", "b", "129"], ["483", "2024-09-27", "u", "b", "129"], ["484", "2024-10-04", "u", "b", "129"], ["485", "2024-10-11", "u", "b", "129"], ["486", "2024-10-18", "u", "b", "130"], ["487", "2024-10-26", "u", "b", "130"], ["488", "2024-11-02", "u", "b", "130"], ["489", "2024-11-09", "u", "b", "130"], ["494", "2024-12-26", "u", "b", "131"], ["497", "2025-01-26", "u", "b", "132"], ["503", "2025-03-12", "u", "b", "134"], ["514", "2025-05-28", "u", "b", "136"], ["515", "2025-05-31", "u", "b", "137"]] }, instagram_android: { releases: [["23", "u", "u", "b", "62"], ["24", "u", "u", "b", "62"], ["25", "u", "u", "b", "62"], ["26", "u", "u", "b", "63"], ["27", "u", "u", "b", "63"], ["28", "u", "u", "b", "63"], ["29", "u", "u", "b", "63"], ["30", "u", "u", "b", "63"], ["31", "u", "u", "b", "64"], ["32", "u", "u", "b", "64"], ["33", "u", "u", "b", "64"], ["34", "u", "u", "b", "64"], ["35", "u", "u", "b", "65"], ["36", "u", "u", "b", "65"], ["37", "u", "u", "b", "65"], ["38", "u", "u", "b", "65"], ["39", "u", "u", "b", "65"], ["40", "u", "u", "b", "65"], ["41", "u", "u", "b", "65"], ["42", "u", "u", "b", "66"], ["43", "u", "u", "b", "66"], ["44", "u", "u", "b", "66"], ["45", "u", "u", "b", "66"], ["46", "u", "u", "b", "66"], ["47", "u", "u", "b", "66"], ["48", "u", "u", "b", "67"], ["49", "u", "u", "b", "67"], ["50", "u", "u", "b", "67"], ["51", "u", "u", "b", "67"], ["52", "u", "u", "b", "67"], ["53", "u", "u", "b", "67"], ["54", "u", "u", "b", "67"], ["55", "u", "u", "b", "67"], ["56", "u", "u", "b", "68"], ["57", "u", "u", "b", "68"], ["58", "u", "u", "b", "68"], ["59", "u", "u", "b", "68"], ["60", "u", "u", "b", "68"], ["61", "u", "u", "b", "68"], ["65", "u", "u", "b", "69"], ["66", "u", "u", "b", "69"], ["68", "u", "u", "b", "69"], ["72", "u", "u", "b", "70"], ["74", "u", "u", "b", "71"], ["75", "u", "u", "b", "71"], ["79", "u", "u", "b", "71"], ["81", "u", "u", "b", "72"], ["82", "u", "u", "b", "72"], ["83", "u", "u", "b", "72"], ["84", "u", "u", "b", "73"], ["86", "u", "u", "b", "73"], ["95", "u", "u", "b", "74"], ["96", "u", "u", "b", "80"], ["97", "u", "u", "b", "80"], ["98", "u", "u", "b", "80"], ["103", "u", "u", "b", "80"], ["104", "u", "u", "b", "80"], ["117", "u", "u", "b", "80"], ["118", "u", "u", "b", "80"], ["119", "u", "u", "b", "80"], ["120", "u", "u", "b", "80"], ["121", "u", "u", "b", "80"], ["127", "u", "u", "b", "80"], ["128", "u", "u", "b", "80"], ["129", "u", "u", "b", "80"], ["130", "u", "u", "b", "80"], ["131", "u", "u", "b", "80"], ["132", "u", "u", "b", "80"], ["133", "u", "u", "b", "80"], ["134", "u", "u", "b", "80"], ["135", "u", "u", "b", "80"], ["136", "u", "u", "b", "80"], ["137", "u", "u", "b", "81"], ["138", "u", "u", "b", "81"], ["139", "u", "u", "b", "81"], ["140", "u", "u", "b", "81"], ["141", "u", "u", "b", "81"], ["142", "u", "u", "b", "81"], ["143", "u", "u", "b", "83"], ["144", "u", "u", "b", "83"], ["145", "u", "u", "b", "83"], ["146", "u", "u", "b", "83"], ["153", "u", "u", "b", "84"], ["163", "u", "u", "b", "92"], ["164", "u", "u", "b", "92"], ["230", "u", "u", "b", "92"], ["258", "2022-11-04", "u", "b", "106"], ["259", "2022-11-04", "u", "b", "106"], ["279", "2023-12-31", "u", "b", "109"], ["281", "u", "u", "b", "109"], ["288", "u", "u", "b", "114"], ["289", "2023-12-21", "u", "b", "114"], ["290", "2023-12-30", "u", "b", "114"], ["292", "u", "u", "b", "115"], ["295", "u", "u", "b", "115"], ["296", "u", "u", "b", "115"], ["297", "u", "u", "b", "115"], ["298", "2024-01-11", "u", "b", "115"], ["299", "u", "u", "b", "115"], ["300", "u", "u", "b", "116"], ["301", "2024-01-12", "u", "b", "116"], ["302", "u", "u", "b", "117"], ["303", "u", "u", "b", "117"], ["304", "u", "u", "b", "117"], ["305", "u", "u", "b", "117"], ["306", "2024-01-17", "u", "b", "118"], ["307", "u", "u", "b", "118"], ["308", "2024-01-19", "u", "b", "118"], ["309", "u", "u", "b", "119"], ["310", "u", "u", "b", "119"], ["311", "u", "u", "b", "120"], ["312", "u", "u", "b", "120"], ["313", "u", "u", "b", "120"], ["314", "u", "u", "b", "120"], ["315", "2024-01-19", "u", "b", "120"], ["316", "2024-01-25", "u", "b", "120"], ["317", "2024-02-03", "u", "b", "121"], ["318", "2024-02-16", "u", "b", "121"], ["320", "2024-03-04", "u", "b", "121"], ["321", "2024-03-07", "u", "b", "122"], ["338", "2024-07-06", "u", "b", "126"], ["346", "2024-09-01", "u", "b", "127"], ["347", "2024-09-11", "u", "b", "127"], ["349", "2024-09-20", "u", "b", "128"], ["355", "2024-11-06", "u", "b", "130"], ["366", "u", "u", "b", "132"], ["367", "2025-02-15", "u", "b", "132"], ["378", "2025-05-03", "u", "b", "135"], ["381", "2025-06-19", "u", "b", "137"], ["382", "2025-06-19", "u", "b", "137"], ["383", "2025-06-18", "u", "b", "137"], ["384", "2025-06-16", "u", "b", "137"], ["385", "2025-06-27", "u", "b", "137"], ["387", "2025-07-09", "u", "b", "137"], ["390", "2025-07-26", "u", "b", "138"], ["392", "2025-08-12", "u", "b", "138"], ["394", "2025-08-26", "u", "b", "139"], ["395", "2025-09-13", "u", "b", "139"], ["396", "2025-09-20", "u", "b", "139"], ["397", "2025-09-19", "u", "b", "139"], ["399", "2025-09-28", "u", "b", "140"], ["400", "2025-10-06", "u", "b", "141"], ["401", "2025-10-08", "u", "b", "141"], ["404", "2025-10-31", "u", "b", "141"], ["406", "2025-11-16", "u", "b", "141"], ["407", "2025-11-23", "u", "b", "142"], ["408", "2025-11-28", "u", "b", "142"], ["409", "2025-12-16", "u", "b", "143"], ["410", "2025-12-17", "u", "b", "143"], ["411", "2026-01-07", "u", "b", "143"]] } };
+    var r = [["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-07-29", { c: "2", ca: "18", e: "12", f: "1", fa: "4", s: "4", si: "3.2" }], ["2019-03-25", { c: "66", ca: "66", e: "16", f: "57", fa: "57", s: "12.1", si: "12.2" }], ["2019-03-25", { c: "66", ca: "66", e: "16", f: "57", fa: "57", s: "12.1", si: "12.2" }], ["2024-03-19", { c: "116", ca: "116", e: "116", f: "124", fa: "124", s: "17.4", si: "17.4" }], ["2024-04-18", { c: "124", ca: "124", e: "124", f: "100", fa: "100", s: "16", si: "16" }], ["2025-06-26", { c: "138", ca: "138", e: "138", f: "118", fa: "118", s: "15.4", si: "15.4" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-07-29", { c: "17", ca: "18", e: "12", f: "5", fa: "5", s: "6", si: "6" }], ["2026-01-13", { c: "125", ca: "125", e: "125", f: "147", fa: "147", s: "18.2", si: "18.2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2024-04-16", { c: "123", ca: "123", e: "123", f: "125", fa: "125", s: "17.4", si: "17.4" }], ["2020-01-15", { c: "37", ca: "37", e: "79", f: "27", fa: "27", s: "9.1", si: "9.3" }], ["2024-07-09", { c: "77", ca: "77", e: "79", f: "128", fa: "128", s: "17.4", si: "17.4" }], ["2016-06-07", { c: "32", ca: "30", e: "12", f: "47", fa: "47", s: "8", si: "8" }], ["2023-07-04", { c: "112", ca: "112", e: "112", f: "115", fa: "115", s: "16", si: "16" }], ["2015-09-30", { c: "43", ca: "43", e: "12", f: "16", fa: "16", s: "9", si: "9" }], ["2022-03-14", { c: "84", ca: "84", e: "84", f: "80", fa: "80", s: "15.4", si: "15.4" }], ["2023-10-24", { c: "103", ca: "103", e: "103", f: "119", fa: "119", s: "16.4", si: "16.4" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2022-03-14", { c: "92", ca: "92", e: "92", f: "90", fa: "90", s: "15.4", si: "15.4" }], ["2023-07-04", { c: "110", ca: "110", e: "110", f: "115", fa: "115", s: "16", si: "16" }], ["2016-09-20", { c: "45", ca: "45", e: "12", f: "34", fa: "34", s: "10", si: "10" }], ["2016-09-20", { c: "45", ca: "45", e: "12", f: "37", fa: "37", s: "10", si: "10" }], ["2016-09-20", { c: "45", ca: "45", e: "12", f: "37", fa: "37", s: "10", si: "10" }], ["2022-08-23", { c: "97", ca: "97", e: "97", f: "104", fa: "104", s: "15.4", si: "15.4" }], ["2020-01-15", { c: "69", ca: "69", e: "79", f: "62", fa: "62", s: "12", si: "12" }], ["2016-09-20", { c: "45", ca: "45", e: "12", f: "38", fa: "38", s: "10", si: "10" }], ["2024-01-25", { c: "121", ca: "121", e: "121", f: "115", fa: "115", s: "16.4", si: "16.4" }], ["2024-03-05", { c: "117", ca: "117", e: "117", f: "119", fa: "119", s: "17.4", si: "17.4" }], ["2016-09-20", { c: "47", ca: "47", e: "14", f: "43", fa: "43", s: "10", si: "10" }], ["2015-07-29", { c: "4", ca: "18", e: "12", f: "4", fa: "4", s: "5", si: "5" }], ["2015-07-29", { c: "3", ca: "18", e: "12", f: "3", fa: "4", s: "4", si: "3.2" }], ["2018-05-09", { c: "66", ca: "66", e: "14", f: "60", fa: "60", s: "10", si: "10" }], ["2016-09-20", { c: "45", ca: "45", e: "12", f: "38", fa: "38", s: "10", si: "10" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-07-29", { c: "5", ca: "18", e: "12", f: "4", fa: "4", s: "5", si: "4.2" }], ["2015-07-29", { c: "5", ca: "18", e: "12", f: "4", fa: "4", s: "5", si: "4.2" }], ["2021-09-20", { c: "88", ca: "88", e: "88", f: "89", fa: "89", s: "15", si: "15" }], ["2017-04-05", { c: "55", ca: "55", e: "15", f: "52", fa: "52", s: "10.1", si: "10.3" }], ["2024-06-11", { c: "76", ca: "76", e: "79", f: "127", fa: "127", s: "13.1", si: "13.4" }], ["2020-01-15", { c: "63", ca: "63", e: "79", f: "57", fa: "57", s: "12", si: "12" }], ["2020-01-15", { c: "63", ca: "63", e: "79", f: "57", fa: "57", s: "12", si: "12" }], ["2025-04-01", { c: "133", ca: "133", e: "133", f: "137", fa: "137", s: "18.4", si: "18.4" }], ["2025-11-11", { c: "90", ca: "90", e: "90", f: "145", fa: "145", s: "16.4", si: "16.4" }], ["2015-07-29", { c: "2", ca: "18", e: "12", f: "1", fa: "4", s: "3.1", si: "2" }], ["2015-07-29", { c: "3", ca: "18", e: "12", f: "3.5", fa: "4", s: "3.1", si: "3" }], ["2021-04-26", { c: "66", ca: "66", e: "79", f: "76", fa: "79", s: "14.1", si: "14.5" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "4", si: "3.2" }], ["2020-01-15", { c: "54", ca: "54", e: "79", f: "63", fa: "63", s: "10.1", si: "10.3" }], ["2024-01-25", { c: "85", ca: "85", e: "121", f: "113", fa: "113", s: "16.4", si: "16.1" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2022-03-14", { c: "37", ca: "37", e: "79", f: "47", fa: "47", s: "15.4", si: "15.4" }], ["2024-09-16", { c: "76", ca: "76", e: "79", f: "103", fa: "103", s: "18", si: "18" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "3.6", fa: "4", s: "1.3", si: "1" }], ["2020-01-15", { c: "35", ca: "59", e: "79", f: "30", fa: "54", s: "8", si: "8" }], ["2015-07-29", { c: "21", ca: "25", e: "12", f: "22", fa: "22", s: "5.1", si: "5" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "3.6", fa: "4", s: "1.3", si: "1" }], ["2015-07-29", { c: "21", ca: "25", e: "12", f: "22", fa: "22", s: "5.1", si: "4" }], ["2015-07-29", { c: "25", ca: "25", e: "12", f: "13", fa: "14", s: "7", si: "7" }], ["2016-09-20", { c: "30", ca: "30", e: "12", f: "49", fa: "49", s: "8", si: "8" }], ["2015-07-29", { c: "21", ca: "25", e: "12", f: "9", fa: "18", s: "5.1", si: "4.2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "3", si: "1" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "3", si: "2" }], ["2016-09-20", { c: "30", ca: "30", e: "12", f: "4", fa: "4", s: "10", si: "10" }], ["2020-01-15", { c: "16", ca: "18", e: "79", f: "10", fa: "10", s: "6", si: "6" }], ["2015-07-29", { c: "\u226415", ca: "18", e: "12", f: "10", fa: "10", s: "\u22644", si: "\u22643.2" }], ["2018-04-12", { c: "39", ca: "42", e: "14", f: "31", fa: "31", s: "11.1", si: "11.3" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1.5", fa: "4", s: "4", si: "3.2" }], ["2020-09-16", { c: "67", ca: "67", e: "79", f: "68", fa: "68", s: "14", si: "14" }], ["2021-09-20", { c: "67", ca: "67", e: "79", f: "68", fa: "68", s: "15", si: "15" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "\u22644", si: "\u22643.2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "3", si: "1" }], ["2017-02-01", { c: "56", ca: "56", e: "12", f: "50", fa: "50", s: "9.1", si: "9.3" }], ["2015-07-29", { c: "4", ca: "18", e: "12", f: "4", fa: "4", s: "5", si: "4.2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "14", s: "1", si: "3" }], ["2015-07-29", { c: "10", ca: "18", e: "12", f: "4", fa: "4", s: "5.1", si: "5" }], ["2015-07-29", { c: "10", ca: "18", e: "12", f: "29", fa: "29", s: "5.1", si: "6" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "3", si: "1" }], ["2022-03-14", { c: "54", ca: "54", e: "79", f: "38", fa: "38", s: "15.4", si: "15.4" }], ["2017-09-19", { c: "50", ca: "51", e: "15", f: "44", fa: "44", s: "11", si: "11" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-07-29", { c: "26", ca: "28", e: "12", f: "16", fa: "16", s: "7", si: "7" }], ["2023-06-06", { c: "110", ca: "110", e: "110", f: "114", fa: "114", s: "16", si: "16" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1.5", fa: "4", s: "2", si: "1" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1.5", fa: "4", s: "2", si: "1" }], ["2024-09-16", { c: "99", ca: "99", e: "99", f: "28", fa: "28", s: "18", si: "18" }], ["2023-04-11", { c: "99", ca: "99", e: "99", f: "112", fa: "112", s: "16.4", si: "16.4" }], ["2023-12-11", { c: "99", ca: "99", e: "99", f: "113", fa: "113", s: "17.2", si: "17.2" }], ["2023-04-11", { c: "99", ca: "99", e: "99", f: "112", fa: "112", s: "16.4", si: "16.4" }], ["2023-12-11", { c: "118", ca: "118", e: "118", f: "97", fa: "97", s: "17.2", si: "17.2" }], ["2020-01-15", { c: "51", ca: "51", e: "79", f: "43", fa: "43", s: "11", si: "11" }], ["2020-01-15", { c: "57", ca: "57", e: "79", f: "53", fa: "53", s: "11.1", si: "11.3" }], ["2022-03-14", { c: "99", ca: "99", e: "99", f: "97", fa: "97", s: "15.4", si: "15.4" }], ["2020-01-15", { c: "49", ca: "49", e: "79", f: "47", fa: "47", s: "9", si: "9" }], ["2015-07-29", { c: "27", ca: "27", e: "12", f: "1", fa: "4", s: "7", si: "7" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "3", si: "2" }], ["2015-09-22", { c: "4", ca: "18", e: "12", f: "41", fa: "41", s: "5", si: "4.2" }], ["2015-07-29", { c: "2", ca: "18", e: "12", f: "1.5", fa: "4", s: "4", si: "4" }], ["2024-03-05", { c: "105", ca: "105", e: "105", f: "106", fa: "106", s: "17.4", si: "17.4" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "\u22644", si: "\u22643.2" }], ["2016-03-08", { c: "42", ca: "42", e: "13", f: "45", fa: "45", s: "9", si: "9" }], ["2023-09-18", { c: "117", ca: "117", e: "117", f: "63", fa: "63", s: "17", si: "17" }], ["2021-01-21", { c: "88", ca: "88", e: "88", f: "71", fa: "79", s: "13.1", si: "13" }], ["2020-01-15", { c: "55", ca: "55", e: "79", f: "49", fa: "49", s: "12.1", si: "12.2" }], ["2023-11-02", { c: "119", ca: "119", e: "119", f: "54", fa: "54", s: "13.1", si: "13.4" }], ["2017-03-27", { c: "41", ca: "41", e: "12", f: "22", fa: "22", s: "10.1", si: "10.3" }], ["2025-03-31", { c: "121", ca: "121", e: "121", f: "127", fa: "127", s: "18.4", si: "18.4" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "\u22644", si: "\u22643.2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2023-05-09", { c: "111", ca: "111", e: "111", f: "113", fa: "113", s: "15", si: "15" }], ["2023-02-14", { c: "58", ca: "58", e: "79", f: "110", fa: "110", s: "10", si: "10" }], ["2023-05-09", { c: "111", ca: "111", e: "111", f: "113", fa: "113", s: "16.2", si: "16.2" }], ["2022-02-03", { c: "98", ca: "98", e: "98", f: "96", fa: "96", s: "13", si: "13" }], ["2020-01-15", { c: "53", ca: "53", e: "79", f: "31", fa: "31", s: "11.1", si: "11.3" }], ["2017-03-07", { c: "50", ca: "50", e: "12", f: "52", fa: "52", s: "9", si: "9" }], ["2020-07-28", { c: "50", ca: "50", e: "12", f: "71", fa: "79", s: "9", si: "9" }], ["2025-08-19", { c: "137", ca: "137", e: "137", f: "142", fa: "142", s: "17", si: "17" }], ["2017-04-19", { c: "26", ca: "26", e: "12", f: "53", fa: "53", s: "7", si: "7" }], ["2023-05-09", { c: "80", ca: "80", e: "80", f: "113", fa: "113", s: "16.4", si: "16.4" }], ["2020-11-17", { c: "69", ca: "69", e: "79", f: "83", fa: "83", s: "12.1", si: "12.2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "4", fa: "4", s: "3", si: "1" }], ["2018-12-11", { c: "40", ca: "40", e: "18", f: "51", fa: "64", s: "10.1", si: "10.3" }], ["2023-03-27", { c: "73", ca: "73", e: "79", f: "101", fa: "101", s: "16.4", si: "16.4" }], ["2022-03-14", { c: "52", ca: "52", e: "79", f: "69", fa: "79", s: "15.4", si: "15.4" }], ["2022-09-12", { c: "105", ca: "105", e: "105", f: "101", fa: "101", s: "16", si: "16" }], ["2023-09-18", { c: "83", ca: "83", e: "83", f: "107", fa: "107", s: "17", si: "17" }], ["2022-03-14", { c: "52", ca: "52", e: "79", f: "69", fa: "79", s: "15.4", si: "15.4" }], ["2022-03-14", { c: "52", ca: "52", e: "79", f: "69", fa: "79", s: "15.4", si: "15.4" }], ["2022-03-14", { c: "52", ca: "52", e: "79", f: "69", fa: "79", s: "15.4", si: "15.4" }], ["2022-07-26", { c: "52", ca: "52", e: "79", f: "103", fa: "103", s: "15.4", si: "15.4" }], ["2023-02-14", { c: "105", ca: "105", e: "105", f: "110", fa: "110", s: "16", si: "16" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2025-09-15", { c: "108", ca: "108", e: "108", f: "130", fa: "130", s: "26", si: "26" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "4", fa: "4", s: "\u22644", si: "\u22643.2" }], ["2025-03-04", { c: "51", ca: "51", e: "12", f: "136", fa: "136", s: "5.1", si: "5" }], ["2024-09-16", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "18", si: "18" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-07-29", { c: "4", ca: "18", e: "12", f: "3.5", fa: "4", s: "4", si: "3.2" }], ["2023-12-11", { c: "85", ca: "85", e: "85", f: "68", fa: "68", s: "17.2", si: "17.2" }], ["2023-09-18", { c: "91", ca: "91", e: "91", f: "33", fa: "33", s: "17", si: "17" }], ["2015-07-29", { c: "2", ca: "18", e: "12", f: "1", fa: "25", s: "3", si: "1" }], ["2023-12-11", { c: "59", ca: "59", e: "79", f: "98", fa: "98", s: "17.2", si: "17.2" }], ["2020-01-15", { c: "60", ca: "60", e: "79", f: "60", fa: "60", s: "13", si: "13" }], ["2016-08-02", { c: "25", ca: "25", e: "14", f: "23", fa: "23", s: "7", si: "7" }], ["2020-01-15", { c: "46", ca: "46", e: "79", f: "31", fa: "31", s: "10.1", si: "10.3" }], ["2015-09-30", { c: "28", ca: "28", e: "12", f: "22", fa: "22", s: "9", si: "9" }], ["2020-01-15", { c: "61", ca: "61", e: "79", f: "55", fa: "55", s: "11", si: "11" }], ["2015-07-29", { c: "16", ca: "18", e: "12", f: "4", fa: "4", s: "6", si: "6" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1.5", fa: "4", s: "4", si: "3.2" }], ["2017-04-05", { c: "49", ca: "49", e: "15", f: "31", fa: "31", s: "9.1", si: "9.3" }], ["2017-10-24", { c: "62", ca: "62", e: "14", f: "22", fa: "22", s: "10", si: "10" }], ["2015-07-29", { c: "\u22644", ca: "18", e: "12", f: "\u22642", fa: "4", s: "\u22643.1", si: "\u22642" }], ["2015-07-29", { c: "7", ca: "18", e: "12", f: "6", fa: "6", s: "5.1", si: "5" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2024-02-20", { c: "111", ca: "111", e: "111", f: "123", fa: "123", s: "16.4", si: "16.4" }], ["2015-07-29", { c: "4", ca: "18", e: "12", f: "4", fa: "4", s: "4", si: "5" }], ["2020-01-15", { c: "10", ca: "18", e: "79", f: "4", fa: "4", s: "5", si: "5" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "\u22644", si: "\u22643.2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "\u22644", si: "\u22643.2" }], ["2020-01-15", { c: "60", ca: "60", e: "79", f: "55", fa: "55", s: "11.1", si: "11.3" }], ["2020-01-15", { c: "12", ca: "18", e: "79", f: "49", fa: "49", s: "6", si: "6" }], ["2025-09-16", { c: "131", ca: "131", e: "131", f: "143", fa: "143", s: "18.4", si: "18.4" }], ["2024-09-03", { c: "120", ca: "120", e: "120", f: "130", fa: "130", s: "17.2", si: "17.2" }], ["2023-09-18", { c: "31", ca: "31", e: "12", f: "6", fa: "6", s: "17", si: "4.2" }], ["2015-07-29", { c: "15", ca: "18", e: "12", f: "1", fa: "4", s: "6", si: "6" }], ["2022-03-14", { c: "37", ca: "37", e: "79", f: "98", fa: "98", s: "15.4", si: "15.4" }], ["2023-12-07", { c: "120", ca: "120", e: "120", f: "49", fa: "49", s: "16.4", si: "16.4" }], ["2023-08-01", { c: "17", ca: "18", e: "79", f: "116", fa: "116", s: "6", si: "6" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2020-01-15", { c: "58", ca: "58", e: "79", f: "53", fa: "53", s: "13", si: "13" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["\u22642017-04-05", { c: "1", ca: "18", e: "\u226415", f: "3", fa: "4", s: "\u22644", si: "\u22643.2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2025-12-12", { c: "128", ca: "128", e: "128", f: "20", fa: "20", s: "26.2", si: "26.2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2020-01-15", { c: "61", ca: "61", e: "79", f: "33", fa: "33", s: "11", si: "11" }], ["2020-01-15", { c: "1", ca: "18", e: "79", f: "1", fa: "4", s: "4", si: "3.2" }], ["2016-03-21", { c: "31", ca: "31", e: "12", f: "12", fa: "14", s: "9.1", si: "9.3" }], ["2019-09-19", { c: "14", ca: "18", e: "18", f: "20", fa: "20", s: "10.1", si: "13" }], ["2015-07-29", { c: "3", ca: "18", e: "12", f: "3.5", fa: "4", s: "4", si: "3.2" }], ["2022-05-03", { c: "98", ca: "98", e: "98", f: "100", fa: "100", s: "13.1", si: "13.4" }], ["2020-01-15", { c: "43", ca: "43", e: "79", f: "46", fa: "46", s: "11.1", si: "11.3" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "\u22644", si: "\u22643.2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2020-01-15", { c: "1", ca: "18", e: "79", f: "1.5", fa: "4", s: "\u22644", si: "\u22643.2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "3.1", si: "2" }], ["2019-03-25", { c: "42", ca: "42", e: "13", f: "38", fa: "38", s: "12.1", si: "12.2" }], ["2021-11-02", { c: "77", ca: "77", e: "79", f: "94", fa: "94", s: "13.1", si: "13.4" }], ["2021-09-20", { c: "93", ca: "93", e: "93", f: "91", fa: "91", s: "15", si: "15" }], ["2025-12-12", { c: "76", ca: "76", e: "79", f: "89", fa: "89", s: "26.2", si: "26.2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2023-12-07", { c: "120", ca: "120", e: "120", f: "118", fa: "118", s: "15.4", si: "15.4" }], ["2017-03-27", { c: "52", ca: "52", e: "14", f: "52", fa: "52", s: "10.1", si: "10.3" }], ["2018-04-30", { c: "38", ca: "38", e: "17", f: "47", fa: "35", s: "9", si: "9" }], ["2021-09-20", { c: "56", ca: "56", e: "79", f: "51", fa: "51", s: "15", si: "15" }], ["2020-09-16", { c: "63", ca: "63", e: "17", f: "47", fa: "36", s: "14", si: "14" }], ["2020-02-07", { c: "40", ca: "40", e: "80", f: "58", fa: "28", s: "9", si: "9" }], ["2016-06-07", { c: "34", ca: "34", e: "12", f: "47", fa: "47", s: "9.1", si: "9.3" }], ["2017-03-27", { c: "42", ca: "42", e: "14", f: "39", fa: "39", s: "10.1", si: "10.3" }], ["2024-10-29", { c: "103", ca: "103", e: "103", f: "132", fa: "132", s: "17.2", si: "17.2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "\u22644", si: "\u22643.2" }], ["2015-07-29", { c: "8", ca: "18", e: "12", f: "4", fa: "4", s: "5.1", si: "5" }], ["2020-01-15", { c: "38", ca: "38", e: "79", f: "28", fa: "28", s: "10.1", si: "10.3" }], ["2021-04-26", { c: "89", ca: "89", e: "89", f: "82", fa: "82", s: "14.1", si: "14.5" }], ["2016-09-07", { c: "53", ca: "53", e: "12", f: "35", fa: "35", s: "9.1", si: "9.3" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2021-11-02", { c: "46", ca: "46", e: "79", f: "94", fa: "94", s: "11", si: "11" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-09-30", { c: "29", ca: "29", e: "12", f: "20", fa: "20", s: "9", si: "9" }], ["2021-04-26", { c: "84", ca: "84", e: "84", f: "63", fa: "63", s: "14.1", si: "14.5" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2025-04-04", { c: "135", ca: "135", e: "135", f: "129", fa: "129", s: "18.2", si: "18.2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "24", fa: "24", s: "3.1", si: "2" }], ["2022-03-14", { c: "86", ca: "86", e: "86", f: "85", fa: "85", s: "15.4", si: "15.4" }], ["2020-01-15", { c: "60", ca: "60", e: "79", f: "52", fa: "52", s: "10.1", si: "10.3" }], ["2020-01-15", { c: "60", ca: "60", e: "79", f: "58", fa: "58", s: "11.1", si: "11.3" }], ["2016-09-20", { c: "36", ca: "36", e: "14", f: "39", fa: "39", s: "10", si: "10" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2026-03-24", { c: "109", ca: "109", e: "109", f: "149", fa: "149", s: "26.2", si: "26.2" }], ["2021-09-07", { c: "56", ca: "56", e: "79", f: "92", fa: "92", s: "11", si: "11" }], ["2017-04-05", { c: "48", ca: "48", e: "15", f: "34", fa: "34", s: "9.1", si: "9.3" }], ["2020-01-15", { c: "33", ca: "33", e: "79", f: "32", fa: "32", s: "9", si: "9" }], ["2020-01-15", { c: "35", ca: "35", e: "79", f: "41", fa: "41", s: "10", si: "10" }], ["2020-03-24", { c: "79", ca: "79", e: "17", f: "62", fa: "62", s: "13.1", si: "13.4" }], ["2022-11-15", { c: "101", ca: "101", e: "101", f: "107", fa: "107", s: "15.4", si: "15.4" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2024-07-25", { c: "127", ca: "127", e: "127", f: "118", fa: "118", s: "17", si: "17" }], ["2020-01-15", { c: "62", ca: "62", e: "79", f: "62", fa: "62", s: "11.1", si: "11.3" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2022-01-06", { c: "97", ca: "97", e: "97", f: "34", fa: "34", s: "9", si: "9" }], ["2023-03-27", { c: "97", ca: "97", e: "97", f: "111", fa: "111", s: "16.4", si: "16.4" }], ["2023-03-27", { c: "97", ca: "97", e: "97", f: "111", fa: "111", s: "16.4", si: "16.4" }], ["2023-03-27", { c: "97", ca: "97", e: "97", f: "111", fa: "111", s: "16.4", si: "16.4" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2023-03-13", { c: "111", ca: "111", e: "111", f: "34", fa: "34", s: "9.1", si: "9.3" }], ["2020-01-15", { c: "52", ca: "52", e: "79", f: "34", fa: "34", s: "9.1", si: "9.3" }], ["2020-01-15", { c: "63", ca: "63", e: "79", f: "34", fa: "34", s: "9.1", si: "9.3" }], ["2020-01-15", { c: "34", ca: "34", e: "79", f: "34", fa: "34", s: "9.1", si: "9.3" }], ["2020-01-15", { c: "52", ca: "52", e: "79", f: "34", fa: "34", s: "9.1", si: "9.3" }], ["2018-09-05", { c: "62", ca: "62", e: "17", f: "62", fa: "62", s: "11", si: "11" }], ["2015-07-29", { c: "2", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2022-09-12", { c: "89", ca: "89", e: "79", f: "89", fa: "89", s: "16", si: "16" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "3", si: "2" }], ["2023-03-27", { c: "77", ca: "77", e: "79", f: "98", fa: "98", s: "16.4", si: "16.4" }], ["2015-07-29", { c: "10", ca: "18", e: "12", f: "4", fa: "4", s: "5", si: "5" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2017-03-27", { c: "35", ca: "35", e: "12", f: "29", fa: "32", s: "10.1", si: "10.3" }], ["2016-09-20", { c: "39", ca: "39", e: "13", f: "26", fa: "26", s: "10", si: "10" }], ["2015-07-29", { c: "5", ca: "18", e: "12", f: "3.5", fa: "4", s: "5", si: "\u22643" }], ["2015-07-29", { c: "11", ca: "18", e: "12", f: "3.5", fa: "4", s: "5.1", si: "5" }], ["2024-09-16", { c: "125", ca: "125", e: "125", f: "128", fa: "128", s: "18", si: "18" }], ["2026-02-14", { c: "145", ca: "145", e: "145", f: "144", fa: "144", s: "26.2", si: "26.2" }], ["2020-01-15", { c: "71", ca: "71", e: "79", f: "65", fa: "65", s: "12.1", si: "12.2" }], ["2024-06-11", { c: "111", ca: "111", e: "111", f: "127", fa: "127", s: "16.2", si: "16.2" }], ["2015-07-29", { c: "26", ca: "26", e: "12", f: "3.6", fa: "4", s: "7", si: "7" }], ["2017-10-17", { c: "57", ca: "57", e: "16", f: "52", fa: "52", s: "10.1", si: "10.3" }], ["2022-10-27", { c: "107", ca: "107", e: "107", f: "66", fa: "66", s: "16", si: "16" }], ["2022-03-14", { c: "37", ca: "37", e: "15", f: "48", fa: "48", s: "15.4", si: "15.4" }], ["2023-12-19", { c: "105", ca: "105", e: "105", f: "121", fa: "121", s: "15.4", si: "15.4" }], ["2020-03-24", { c: "74", ca: "74", e: "79", f: "67", fa: "67", s: "13.1", si: "13.4" }], ["2015-07-29", { c: "16", ca: "18", e: "12", f: "11", fa: "14", s: "6", si: "6" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-07-29", { c: "5", ca: "18", e: "12", f: "4", fa: "4", s: "5", si: "4.2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "3", si: "1" }], ["2015-07-29", { c: "5", ca: "18", e: "12", f: "4", fa: "4", s: "5", si: "4.2" }], ["2015-07-29", { c: "5", ca: "18", e: "12", f: "4", fa: "4", s: "5", si: "4" }], ["2020-01-15", { c: "54", ca: "54", e: "79", f: "63", fa: "63", s: "10", si: "10" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "3", si: "1" }], ["2020-01-15", { c: "65", ca: "65", e: "79", f: "52", fa: "52", s: "12.1", si: "12.2" }], ["2015-07-29", { c: "4", ca: "18", e: "12", f: "4", fa: "4", s: "7", si: "7" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-09-30", { c: "41", ca: "41", e: "12", f: "36", fa: "36", s: "9", si: "9" }], ["2024-09-16", { c: "87", ca: "87", e: "87", f: "88", fa: "88", s: "18", si: "18" }], ["2022-04-28", { c: "101", ca: "101", e: "101", f: "96", fa: "96", s: "15", si: "15" }], ["2023-09-18", { c: "106", ca: "106", e: "106", f: "98", fa: "98", s: "17", si: "17" }], ["2023-09-18", { c: "88", ca: "55", e: "88", f: "43", fa: "43", s: "17", si: "17" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2022-10-03", { c: "106", ca: "106", e: "106", f: "97", fa: "97", s: "15.4", si: "15.4" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "\u22644", si: "\u22643.2" }], ["2015-07-29", { c: "5", ca: "18", e: "12", f: "17", fa: "17", s: "5", si: "4" }], ["2020-01-15", { c: "20", ca: "25", e: "79", f: "25", fa: "25", s: "6", si: "6" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2020-04-13", { c: "81", ca: "81", e: "81", f: "26", fa: "26", s: "13.1", si: "13.4" }], ["2021-10-05", { c: "41", ca: "41", e: "79", f: "93", fa: "93", s: "10", si: "10" }], ["2023-09-18", { c: "113", ca: "113", e: "113", f: "89", fa: "89", s: "17", si: "17" }], ["2020-01-15", { c: "66", ca: "66", e: "79", f: "50", fa: "50", s: "11.1", si: "11.3" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2023-03-27", { c: "89", ca: "89", e: "89", f: "108", fa: "108", s: "16.4", si: "16.4" }], ["2020-01-15", { c: "39", ca: "39", e: "79", f: "51", fa: "51", s: "10", si: "10" }], ["2021-09-20", { c: "58", ca: "58", e: "79", f: "51", fa: "51", s: "15", si: "15" }], ["2022-08-05", { c: "104", ca: "104", e: "104", f: "72", fa: "79", s: "14.1", si: "14.5" }], ["2023-04-11", { c: "102", ca: "102", e: "102", f: "112", fa: "112", s: "15.5", si: "15.5" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-11-12", { c: "1", ca: "18", e: "13", f: "19", fa: "19", s: "1.2", si: "1" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "3.6", fa: "4", s: "3", si: "1" }], ["2021-04-26", { c: "20", ca: "25", e: "12", f: "57", fa: "57", s: "14.1", si: "5" }], ["2015-07-29", { c: "5", ca: "18", e: "12", f: "4", fa: "4", s: "5", si: "3" }], ["2020-01-15", { c: "1", ca: "18", e: "79", f: "6", fa: "6", s: "3.1", si: "2" }], ["2015-07-29", { c: "2", ca: "18", e: "12", f: "3", fa: "4", s: "4", si: "3" }], ["2015-07-29", { c: "2", ca: "18", e: "12", f: "3.6", fa: "4", s: "4", si: "3.2" }], ["2025-08-19", { c: "13", ca: "132", e: "13", f: "50", fa: "142", s: "11.1", si: "18.4" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-07-29", { c: "7", ca: "18", e: "12", f: "29", fa: "29", s: "5.1", si: "5" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2017-03-16", { c: "4", ca: "57", e: "12", f: "23", fa: "52", s: "3.1", si: "5" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "3.1", si: "2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2021-12-07", { c: "66", ca: "66", e: "79", f: "95", fa: "79", s: "12.1", si: "12.2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "\u22644", si: "\u22643.2" }], ["2018-12-11", { c: "41", ca: "41", e: "12", f: "64", fa: "64", s: "9", si: "9" }], ["2019-03-25", { c: "58", ca: "58", e: "16", f: "55", fa: "55", s: "12.1", si: "12.2" }], ["2017-09-28", { c: "24", ca: "25", e: "12", f: "29", fa: "56", s: "10", si: "10" }], ["2021-04-26", { c: "81", ca: "81", e: "81", f: "86", fa: "86", s: "14.1", si: "14.5" }], ["2025-03-04", { c: "129", ca: "129", e: "129", f: "136", fa: "136", s: "16.4", si: "16.4" }], ["2021-04-26", { c: "72", ca: "72", e: "79", f: "78", fa: "79", s: "14.1", si: "14.5" }], ["2020-09-16", { c: "74", ca: "74", e: "79", f: "75", fa: "79", s: "14", si: "14" }], ["2019-09-19", { c: "63", ca: "63", e: "18", f: "58", fa: "58", s: "13", si: "13" }], ["2020-09-16", { c: "71", ca: "71", e: "79", f: "76", fa: "79", s: "14", si: "14" }], ["2024-04-16", { c: "87", ca: "87", e: "87", f: "125", fa: "125", s: "14.1", si: "14.5" }], ["2025-12-12", { c: "135", ca: "135", e: "135", f: "144", fa: "144", s: "26.2", si: "26.2" }], ["2021-01-21", { c: "88", ca: "88", e: "88", f: "82", fa: "82", s: "14", si: "14" }], ["2018-04-12", { c: "55", ca: "55", e: "15", f: "52", fa: "52", s: "11.1", si: "11.3" }], ["2020-01-15", { c: "41", ca: "41", e: "79", f: "36", fa: "36", s: "8", si: "8" }], ["2026-03-24", { c: "146", ca: "146", e: "146", f: "147", fa: "147", s: "26.4", si: "26.4" }], ["2025-03-31", { c: "122", ca: "122", e: "122", f: "131", fa: "131", s: "18.4", si: "18.4" }], ["2015-07-29", { c: "38", ca: "38", e: "12", f: "13", fa: "14", s: "7", si: "7" }], ["2015-07-29", { c: "5", ca: "18", e: "12", f: "1", fa: "4", s: "5", si: "4.2" }], ["2018-05-09", { c: "61", ca: "61", e: "16", f: "60", fa: "60", s: "11", si: "11" }], ["2026-01-13", { c: "91", ca: "91", e: "91", f: "147", fa: "147", s: "15", si: "15" }], ["2023-06-06", { c: "80", ca: "80", e: "80", f: "114", fa: "114", s: "15", si: "15" }], ["2015-07-29", { c: "3", ca: "18", e: "12", f: "3.5", fa: "4", s: "4", si: "4" }], ["2025-04-29", { c: "123", ca: "123", e: "123", f: "138", fa: "138", s: "17.2", si: "17.2" }], ["2025-03-31", { c: "114", ca: "114", e: "114", f: "135", fa: "135", s: "18.4", si: "18.4" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "\u22644", si: "\u22643.2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "6", fa: "6", s: "1.2", si: "1" }], ["2023-05-09", { c: "111", ca: "111", e: "111", f: "113", fa: "113", s: "15", si: "15" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "\u22644", si: "\u22643.2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "3.1", si: "2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "\u22644", si: "\u22643.2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2025-12-12", { c: "77", ca: "77", e: "79", f: "122", fa: "122", s: "26.2", si: "26.2" }], ["2020-01-15", { c: "48", ca: "48", e: "79", f: "50", fa: "50", s: "11", si: "11" }], ["2016-09-20", { c: "49", ca: "49", e: "14", f: "44", fa: "44", s: "10", si: "10" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2023-11-21", { c: "109", ca: "109", e: "109", f: "120", fa: "120", s: "16.4", si: "16.4" }], ["2024-05-13", { c: "123", ca: "123", e: "123", f: "120", fa: "120", s: "17.5", si: "17.5" }], ["2020-07-28", { c: "83", ca: "83", e: "83", f: "69", fa: "79", s: "13", si: "13" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2023-12-11", { c: "113", ca: "113", e: "113", f: "112", fa: "112", s: "17.2", si: "17.2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "\u22644", si: "\u22643.2" }], ["2025-09-15", { c: "46", ca: "46", e: "79", f: "127", fa: "127", s: "5", si: "26" }], ["2020-01-15", { c: "46", ca: "46", e: "79", f: "39", fa: "39", s: "11.1", si: "11.3" }], ["2021-01-26", { c: "50", ca: "50", e: "79", f: "85", fa: "85", s: "11.1", si: "11.3" }], ["2020-01-15", { c: "65", ca: "65", e: "79", f: "50", fa: "50", s: "9", si: "9" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "\u22644", si: "\u22643.2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2023-12-19", { c: "77", ca: "77", e: "79", f: "121", fa: "121", s: "16.4", si: "16.4" }], ["2015-07-29", { c: "4", ca: "18", e: "12", f: "3.5", fa: "6", s: "4", si: "3.2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2020-09-16", { c: "85", ca: "85", e: "85", f: "79", fa: "79", s: "14", si: "14" }], ["2021-09-20", { c: "89", ca: "89", e: "89", f: "66", fa: "66", s: "15", si: "15" }], ["2015-07-29", { c: "26", ca: "26", e: "12", f: "21", fa: "21", s: "7", si: "7" }], ["2015-07-29", { c: "38", ca: "38", e: "12", f: "13", fa: "14", s: "8", si: "8" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-07-29", { c: "7", ca: "18", e: "12", f: "4", fa: "4", s: "5.1", si: "5" }], ["2020-01-15", { c: "24", ca: "25", e: "79", f: "35", fa: "35", s: "7", si: "7" }], ["2023-12-07", { c: "120", ca: "120", e: "120", f: "53", fa: "53", s: "15.4", si: "15.4" }], ["2015-07-29", { c: "9", ca: "18", e: "12", f: "6", fa: "6", s: "5.1", si: "5" }], ["2023-01-12", { c: "109", ca: "109", e: "109", f: "4", fa: "4", s: "5.1", si: "5" }], ["2022-04-28", { c: "101", ca: "101", e: "101", f: "63", fa: "63", s: "15.4", si: "15.4" }], ["2017-09-19", { c: "53", ca: "53", e: "12", f: "36", fa: "36", s: "11", si: "11" }], ["2020-02-04", { c: "80", ca: "80", e: "12", f: "42", fa: "42", s: "8", si: "12.2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "3", si: "1" }], ["2023-03-27", { c: "104", ca: "104", e: "104", f: "102", fa: "102", s: "16.4", si: "16.4" }], ["2021-04-26", { c: "49", ca: "49", e: "79", f: "25", fa: "25", s: "14.1", si: "14" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "3", si: "1" }], ["2023-03-27", { c: "60", ca: "60", e: "18", f: "57", fa: "57", s: "16.4", si: "16.4" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2018-10-02", { c: "6", ca: "18", e: "18", f: "56", fa: "56", s: "6", si: "10.3" }], ["2020-07-28", { c: "79", ca: "79", e: "79", f: "75", fa: "79", s: "13.1", si: "13.4" }], ["2020-01-15", { c: "46", ca: "46", e: "79", f: "66", fa: "66", s: "11", si: "11" }], ["2015-07-29", { c: "18", ca: "18", e: "12", f: "1", fa: "4", s: "1.3", si: "1" }], ["2020-01-15", { c: "41", ca: "41", e: "79", f: "32", fa: "32", s: "8", si: "8" }], ["2020-01-15", { c: "\u226479", ca: "\u226479", e: "79", f: "\u226423", fa: "\u226423", s: "\u22649.1", si: "\u22649.3" }], ["2022-09-02", { c: "105", ca: "105", e: "105", f: "103", fa: "103", s: "15.6", si: "15.6" }], ["2023-09-18", { c: "66", ca: "66", e: "79", f: "115", fa: "115", s: "17", si: "17" }], ["2022-09-12", { c: "55", ca: "55", e: "79", f: "72", fa: "79", s: "16", si: "16" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2017-03-07", { c: "50", ca: "50", e: "12", f: "52", fa: "52", s: "9", si: "9" }], ["2015-07-29", { c: "26", ca: "26", e: "12", f: "14", fa: "14", s: "7", si: "7" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-07-29", { c: "5", ca: "18", e: "12", f: "4", fa: "4", s: "5", si: "4.2" }], ["2026-01-13", { c: "102", ca: "102", e: "102", f: "147", fa: "147", s: "26.2", si: "26.2" }], ["2021-10-25", { c: "57", ca: "57", e: "12", f: "58", fa: "58", s: "15", si: "15.1" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2023-12-11", { c: "120", ca: "120", e: "120", f: "117", fa: "117", s: "17.2", si: "17.2" }], ["2021-01-21", { c: "88", ca: "88", e: "88", f: "84", fa: "84", s: "9", si: "9" }], ["2023-03-27", { c: "20", ca: "42", e: "14", f: "22", fa: "22", s: "7", si: "16.4" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "3.5", fa: "4", s: "3.1", si: "2" }], ["2023-05-09", { c: "111", ca: "111", e: "111", f: "113", fa: "113", s: "9", si: "9" }], ["2015-07-29", { c: "4", ca: "18", e: "12", f: "3.5", fa: "4", s: "3.1", si: "2" }], ["2020-09-16", { c: "85", ca: "85", e: "85", f: "79", fa: "79", s: "14", si: "14" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2020-07-28", { c: "75", ca: "75", e: "79", f: "70", fa: "79", s: "13", si: "13" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "3", si: "2" }], ["2020-01-15", { c: "32", ca: "32", e: "79", f: "36", fa: "36", s: "10", si: "10" }], ["2022-03-14", { c: "93", ca: "93", e: "93", f: "92", fa: "92", s: "15.4", si: "15.4" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2020-01-15", { c: "32", ca: "32", e: "79", f: "36", fa: "36", s: "10", si: "10" }], ["2015-07-29", { c: "24", ca: "25", e: "12", f: "24", fa: "24", s: "8", si: "8" }], ["2021-04-26", { c: "80", ca: "80", e: "80", f: "71", fa: "79", s: "14.1", si: "14.5" }], ["2015-07-29", { c: "10", ca: "18", e: "12", f: "10", fa: "10", s: "8", si: "8" }], ["2015-07-29", { c: "10", ca: "18", e: "12", f: "6", fa: "6", s: "8", si: "8" }], ["2015-07-29", { c: "29", ca: "29", e: "12", f: "24", fa: "24", s: "8", si: "8" }], ["2016-08-02", { c: "27", ca: "27", e: "14", f: "29", fa: "29", s: "8", si: "8" }], ["2018-04-30", { c: "24", ca: "25", e: "17", f: "25", fa: "25", s: "8", si: "9" }], ["2021-04-26", { c: "35", ca: "35", e: "12", f: "25", fa: "25", s: "14.1", si: "14.5" }], ["2023-03-27", { c: "69", ca: "69", e: "79", f: "105", fa: "105", s: "16.4", si: "16.4" }], ["2023-05-09", { c: "111", ca: "111", e: "111", f: "113", fa: "113", s: "15.4", si: "15.4" }], ["2015-07-29", { c: "2", ca: "18", e: "12", f: "1.5", fa: "4", s: "4", si: "3.2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "2", si: "1" }], ["\u22642020-03-24", { c: "\u226480", ca: "\u226480", e: "\u226480", f: "1.5", fa: "4", s: "\u226413.1", si: "\u226413.4" }], ["2020-01-15", { c: "66", ca: "66", e: "79", f: "58", fa: "58", s: "11.1", si: "11.3" }], ["2023-03-27", { c: "108", ca: "109", e: "108", f: "111", fa: "111", s: "16.4", si: "16.4" }], ["2023-03-27", { c: "94", ca: "94", e: "94", f: "88", fa: "88", s: "16.4", si: "16.4" }], ["2017-04-05", { c: "1", ca: "18", e: "15", f: "1.5", fa: "4", s: "1.2", si: "1" }], ["\u22642018-10-02", { c: "10", ca: "18", e: "\u226418", f: "4", fa: "4", s: "7", si: "7" }], ["2023-09-18", { c: "113", ca: "113", e: "113", f: "66", fa: "66", s: "17", si: "17" }], ["2022-09-12", { c: "90", ca: "90", e: "90", f: "81", fa: "81", s: "16", si: "16" }], ["2020-03-24", { c: "68", ca: "68", e: "79", f: "61", fa: "61", s: "13.1", si: "13.4" }], ["2018-10-02", { c: "23", ca: "25", e: "18", f: "49", fa: "49", s: "7", si: "7" }], ["2022-09-12", { c: "63", ca: "63", e: "18", f: "59", fa: "59", s: "16", si: "16" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "3", si: "1" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2019-01-29", { c: "50", ca: "50", e: "12", f: "65", fa: "65", s: "10", si: "10" }], ["2024-12-11", { c: "15", ca: "18", e: "79", f: "95", fa: "95", s: "18.2", si: "18.2" }], ["2015-07-29", { c: "4", ca: "18", e: "12", f: "1.5", fa: "4", s: "5", si: "4" }], ["2015-07-29", { c: "33", ca: "33", e: "12", f: "18", fa: "18", s: "7", si: "7" }], ["2024-03-22", { c: "123", ca: "123", e: "123", f: "\u226466", fa: "\u226466", s: "\u226412", si: "\u226412" }], ["2021-04-26", { c: "60", ca: "60", e: "79", f: "84", fa: "84", s: "14.1", si: "14.5" }], ["2025-09-15", { c: "124", ca: "124", e: "124", f: "128", fa: "128", s: "26", si: "26" }], ["2023-03-27", { c: "94", ca: "94", e: "94", f: "99", fa: "99", s: "16.4", si: "16.4" }], ["2015-09-16", { c: "6", ca: "18", e: "12", f: "7", fa: "7", s: "8", si: "9" }], ["2022-09-12", { c: "44", ca: "44", e: "79", f: "46", fa: "46", s: "16", si: "16" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2016-03-21", { c: "38", ca: "38", e: "13", f: "38", fa: "38", s: "9.1", si: "9.3" }], ["2020-01-15", { c: "57", ca: "57", e: "79", f: "51", fa: "51", s: "10.1", si: "10.3" }], ["2020-01-15", { c: "47", ca: "47", e: "79", f: "51", fa: "51", s: "9", si: "9" }], ["2020-01-15", { c: "59", ca: "59", e: "79", f: "3", fa: "4", s: "8", si: "8" }], ["2015-07-29", { c: "2", ca: "18", e: "12", f: "3.6", fa: "4", s: "4", si: "3.2" }], ["2020-07-28", { c: "55", ca: "55", e: "12", f: "59", fa: "79", s: "13", si: "13" }], ["2025-01-27", { c: "116", ca: "116", e: "116", f: "125", fa: "125", s: "17", si: "18.3" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-07-29", { c: "2", ca: "18", e: "12", f: "3", fa: "4", s: "4", si: "3.2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "\u22644", si: "\u22643.2" }], ["2020-01-15", { c: "76", ca: "76", e: "79", f: "67", fa: "67", s: "12.1", si: "13" }], ["2022-05-31", { c: "96", ca: "96", e: "96", f: "101", fa: "101", s: "14.1", si: "14.5" }], ["2020-01-15", { c: "74", ca: "74", e: "79", f: "63", fa: "64", s: "10.1", si: "10.3" }], ["2023-12-11", { c: "73", ca: "73", e: "79", f: "78", fa: "79", s: "17.2", si: "17.2" }], ["2023-12-11", { c: "86", ca: "86", e: "86", f: "101", fa: "101", s: "17.2", si: "17.2" }], ["2023-06-06", { c: "1", ca: "18", e: "12", f: "1", fa: "114", s: "1.1", si: "1" }], ["2025-05-01", { c: "136", ca: "136", e: "136", f: "97", fa: "97", s: "15.4", si: "15.4" }], ["2019-09-19", { c: "63", ca: "63", e: "12", f: "6", fa: "6", s: "13", si: "13" }], ["2015-07-29", { c: "6", ca: "18", e: "12", f: "6", fa: "6", s: "6", si: "7" }], ["2015-07-29", { c: "32", ca: "32", e: "12", f: "29", fa: "29", s: "8", si: "8" }], ["2020-07-28", { c: "76", ca: "76", e: "79", f: "71", fa: "79", s: "13", si: "13" }], ["2020-09-16", { c: "85", ca: "85", e: "85", f: "79", fa: "79", s: "14", si: "14" }], ["2018-10-02", { c: "63", ca: "63", e: "18", f: "58", fa: "58", s: "11.1", si: "11.3" }], ["2025-01-07", { c: "128", ca: "128", e: "128", f: "134", fa: "134", s: "18.2", si: "18.2" }], ["2024-03-05", { c: "119", ca: "119", e: "119", f: "121", fa: "121", s: "17.4", si: "17.4" }], ["2016-09-20", { c: "49", ca: "49", e: "12", f: "18", fa: "18", s: "10", si: "10" }], ["2023-03-27", { c: "50", ca: "50", e: "17", f: "44", fa: "48", s: "16", si: "16.4" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "3", si: "2" }], ["2020-03-24", { c: "63", ca: "63", e: "79", f: "49", fa: "49", s: "13.1", si: "13.4" }], ["2020-07-28", { c: "71", ca: "71", e: "79", f: "69", fa: "79", s: "12.1", si: "12.2" }], ["2021-04-26", { c: "87", ca: "87", e: "87", f: "70", fa: "79", s: "14.1", si: "14.5" }], ["2026-01-13", { c: "118", ca: "118", e: "118", f: "147", fa: "147", s: "17.2", si: "17.2" }], ["2026-01-13", { c: "111", ca: "111", e: "111", f: "147", fa: "147", s: "17.2", si: "17.2" }], ["2020-07-28", { c: "1", ca: "18", e: "13", f: "78", fa: "79", s: "4", si: "3.2" }], ["2026-03-24", { c: "89", ca: "89", e: "89", f: "102", fa: "102", s: "26.4", si: "26.4" }], ["2024-01-23", { c: "119", ca: "119", e: "119", f: "122", fa: "122", s: "17.2", si: "17.2" }], ["2021-09-20", { c: "85", ca: "85", e: "85", f: "87", fa: "87", s: "15", si: "15" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2025-05-01", { c: "136", ca: "136", e: "136", f: "134", fa: "134", s: "18.2", si: "18.2" }], ["2024-07-09", { c: "85", ca: "85", e: "85", f: "128", fa: "128", s: "16.4", si: "16.4" }], ["2024-09-16", { c: "125", ca: "125", e: "125", f: "128", fa: "128", s: "18", si: "18" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-07-29", { c: "4", ca: "18", e: "12", f: "3.6", fa: "4", s: "5", si: "4" }], ["2026-03-24", { c: "96", ca: "96", e: "96", f: "149", fa: "149", s: "16.4", si: "16.4" }], ["2015-07-29", { c: "24", ca: "25", e: "12", f: "23", fa: "23", s: "7", si: "7" }], ["2023-03-27", { c: "69", ca: "69", e: "79", f: "99", fa: "99", s: "16.4", si: "16.4" }], ["2024-10-29", { c: "83", ca: "83", e: "83", f: "132", fa: "132", s: "15.4", si: "15.4" }], ["2025-05-27", { c: "134", ca: "134", e: "134", f: "139", fa: "139", s: "18.4", si: "18.4" }], ["2024-07-09", { c: "111", ca: "111", e: "111", f: "128", fa: "128", s: "16.4", si: "16.4" }], ["2020-07-28", { c: "64", ca: "64", e: "79", f: "69", fa: "79", s: "13.1", si: "13.4" }], ["2022-09-12", { c: "68", ca: "68", e: "79", f: "62", fa: "62", s: "16", si: "16" }], ["2018-10-23", { c: "1", ca: "18", e: "12", f: "63", fa: "63", s: "3", si: "1" }], ["2023-03-27", { c: "54", ca: "54", e: "17", f: "45", fa: "45", s: "16.4", si: "16.4" }], ["2017-09-19", { c: "29", ca: "29", e: "12", f: "35", fa: "35", s: "11", si: "11" }], ["2020-07-27", { c: "84", ca: "84", e: "84", f: "67", fa: "67", s: "9.1", si: "9.3" }], ["2026-01-13", { c: "111", ca: "111", e: "111", f: "147", fa: "147", s: "17.2", si: "17.2" }], ["2020-01-15", { c: "65", ca: "65", e: "79", f: "52", fa: "52", s: "12.1", si: "12.2" }], ["2026-01-13", { c: "111", ca: "111", e: "111", f: "147", fa: "147", s: "17.2", si: "17.2" }], ["2023-11-21", { c: "111", ca: "111", e: "111", f: "120", fa: "120", s: "16.4", si: "16.4" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2024-05-17", { c: "125", ca: "125", e: "125", f: "118", fa: "118", s: "17.2", si: "17.2" }], ["2015-07-29", { c: "5", ca: "18", e: "12", f: "38", fa: "38", s: "5", si: "4.2" }], ["2024-12-11", { c: "128", ca: "128", e: "128", f: "38", fa: "38", s: "18.2", si: "18.2" }], ["2024-12-11", { c: "84", ca: "84", e: "84", f: "38", fa: "38", s: "18.2", si: "18.2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "\u22644", si: "\u22643.2" }], ["2020-01-15", { c: "69", ca: "69", e: "79", f: "65", fa: "65", s: "11.1", si: "11.3" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "\u22644", si: "\u22643.2" }], ["2025-12-12", { c: "143", ca: "143", e: "143", f: "146", fa: "146", s: "26.2", si: "26.2" }], ["2020-01-15", { c: "27", ca: "27", e: "79", f: "32", fa: "32", s: "7", si: "7" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2023-03-27", { c: "38", ca: "39", e: "79", f: "43", fa: "43", s: "16.4", si: "16.4" }], ["2025-03-31", { c: "84", ca: "84", e: "84", f: "126", fa: "126", s: "16.4", si: "18.4" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "3", si: "2" }], ["2023-12-07", { c: "120", ca: "120", e: "120", f: "113", fa: "113", s: "17", si: "17" }], ["2022-03-14", { c: "61", ca: "61", e: "79", f: "36", fa: "36", s: "15.4", si: "15.4" }], ["2020-09-16", { c: "61", ca: "61", e: "79", f: "36", fa: "36", s: "14", si: "14" }], ["2020-01-15", { c: "1", ca: "18", e: "79", f: "1", fa: "4", s: "3", si: "1" }], ["2020-01-15", { c: "69", ca: "69", e: "79", f: "68", fa: "68", s: "11", si: "11" }], ["2024-10-01", { c: "80", ca: "80", e: "80", f: "131", fa: "131", s: "16.1", si: "16.1" }], ["2025-12-12", { c: "121", ca: "121", e: "121", f: "64", fa: "64", s: "26.2", si: "26.2" }], ["2024-12-11", { c: "94", ca: "94", e: "94", f: "97", fa: "97", s: "18.2", si: "18.2" }], ["2024-12-11", { c: "121", ca: "121", e: "121", f: "64", fa: "64", s: "18.2", si: "18.2" }], ["2025-12-12", { c: "114", ca: "114", e: "114", f: "109", fa: "109", s: "26.2", si: "26.2" }], ["2023-10-13", { c: "118", ca: "118", e: "118", f: "118", fa: "118", s: "17", si: "17" }], ["2015-07-29", { c: "5", ca: "18", e: "12", f: "4", fa: "4", s: "5", si: "4.2" }], ["2015-07-29", { c: "5", ca: "18", e: "12", f: "4", fa: "4", s: "5", si: "4.2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2017-03-07", { c: "11", ca: "18", e: "12", f: "52", fa: "52", s: "5.1", si: "5" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "3", si: "1" }], ["2020-01-15", { c: "6", ca: "18", e: "79", f: "6", fa: "45", s: "5", si: "5" }], ["2023-03-27", { c: "65", ca: "65", e: "79", f: "61", fa: "61", s: "16.4", si: "16.4" }], ["2018-04-30", { c: "45", ca: "45", e: "17", f: "44", fa: "44", s: "11.1", si: "11.3" }], ["2015-07-29", { c: "38", ca: "38", e: "12", f: "13", fa: "14", s: "8", si: "8" }], ["2024-06-11", { c: "122", ca: "122", e: "122", f: "127", fa: "127", s: "17", si: "17" }], ["2015-07-29", { c: "3", ca: "18", e: "12", f: "3.5", fa: "4", s: "4", si: "5" }], ["2015-07-29", { c: "3", ca: "18", e: "12", f: "3.5", fa: "4", s: "4", si: "5" }], ["2020-01-15", { c: "53", ca: "53", e: "79", f: "63", fa: "63", s: "10", si: "10" }], ["2020-07-28", { c: "73", ca: "73", e: "79", f: "72", fa: "79", s: "13.1", si: "13.4" }], ["2026-02-24", { c: "135", ca: "135", e: "135", f: "148", fa: "148", s: "18.4", si: "18.4" }], ["2020-01-15", { c: "37", ca: "37", e: "79", f: "62", fa: "62", s: "10.1", si: "10.3" }], ["2020-01-15", { c: "37", ca: "37", e: "79", f: "54", fa: "54", s: "10.1", si: "10.3" }], ["2021-12-13", { c: "68", ca: "89", e: "79", f: "79", fa: "79", s: "15.2", si: "15.2" }], ["2020-01-15", { c: "53", ca: "53", e: "79", f: "63", fa: "63", s: "10", si: "10" }], ["2023-03-27", { c: "92", ca: "92", e: "92", f: "92", fa: "92", s: "16.4", si: "16.4" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "\u22644", si: "\u22643.2" }], ["2020-01-15", { c: "19", ca: "25", e: "79", f: "4", fa: "4", s: "6", si: "6" }], ["2015-07-29", { c: "3", ca: "18", e: "12", f: "3.5", fa: "4", s: "3.1", si: "2" }], ["2020-01-15", { c: "18", ca: "18", e: "79", f: "55", fa: "55", s: "7", si: "7" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2018-09-05", { c: "33", ca: "33", e: "14", f: "49", fa: "62", s: "7", si: "7" }], ["2017-11-28", { c: "9", ca: "47", e: "12", f: "2", fa: "57", s: "5.1", si: "5" }], ["2020-01-15", { c: "60", ca: "60", e: "79", f: "55", fa: "55", s: "11.1", si: "11.3" }], ["2017-03-27", { c: "38", ca: "38", e: "13", f: "38", fa: "38", s: "10.1", si: "10.3" }], ["2020-01-15", { c: "70", ca: "70", e: "79", f: "3", fa: "4", s: "10.1", si: "10.3" }], ["2024-08-06", { c: "117", ca: "117", e: "117", f: "129", fa: "129", s: "17.5", si: "17.5" }], ["2024-05-17", { c: "125", ca: "125", e: "125", f: "126", fa: "126", s: "17.4", si: "17.4" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2020-09-16", { c: "77", ca: "77", e: "79", f: "65", fa: "65", s: "14", si: "14" }], ["2019-09-19", { c: "56", ca: "56", e: "16", f: "59", fa: "59", s: "13", si: "13" }], ["2023-12-05", { c: "119", ca: "120", e: "85", f: "65", fa: "65", s: "11.1", si: "11.3" }], ["2023-09-18", { c: "61", ca: "61", e: "79", f: "57", fa: "57", s: "17", si: "17" }], ["2022-06-28", { c: "67", ca: "67", e: "79", f: "102", fa: "102", s: "14.1", si: "14.5" }], ["2022-03-14", { c: "92", ca: "92", e: "92", f: "90", fa: "90", s: "15.4", si: "15.4" }], ["2015-09-30", { c: "41", ca: "41", e: "12", f: "29", fa: "29", s: "9", si: "9" }], ["2015-09-30", { c: "41", ca: "41", e: "12", f: "40", fa: "40", s: "9", si: "9" }], ["2020-01-15", { c: "73", ca: "73", e: "79", f: "67", fa: "67", s: "13", si: "13" }], ["2016-09-20", { c: "34", ca: "34", e: "12", f: "31", fa: "31", s: "10", si: "10" }], ["2017-04-05", { c: "57", ca: "57", e: "15", f: "48", fa: "48", s: "10", si: "10" }], ["2015-09-30", { c: "41", ca: "41", e: "12", f: "34", fa: "34", s: "9", si: "9" }], ["2015-09-30", { c: "41", ca: "36", e: "12", f: "24", fa: "24", s: "9", si: "9" }], ["2020-08-27", { c: "85", ca: "85", e: "85", f: "77", fa: "79", s: "13.1", si: "13.4" }], ["2015-09-30", { c: "41", ca: "36", e: "12", f: "17", fa: "17", s: "9", si: "9" }], ["2020-01-15", { c: "66", ca: "66", e: "79", f: "61", fa: "61", s: "12", si: "12" }], ["2023-10-24", { c: "111", ca: "111", e: "111", f: "119", fa: "119", s: "16.4", si: "16.4" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "\u22644", si: "\u22643.2" }], ["2022-03-14", { c: "98", ca: "98", e: "98", f: "94", fa: "94", s: "15.4", si: "15.4" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "\u22644", si: "\u22643.2" }], ["2023-09-15", { c: "117", ca: "117", e: "117", f: "71", fa: "79", s: "16", si: "16" }], ["2015-09-30", { c: "28", ca: "28", e: "12", f: "22", fa: "22", s: "9", si: "9" }], ["2016-09-20", { c: "2", ca: "18", e: "12", f: "49", fa: "49", s: "4", si: "3.2" }], ["2020-01-15", { c: "1", ca: "18", e: "79", f: "3", fa: "4", s: "3", si: "2" }], ["2015-07-29", { c: "5", ca: "18", e: "12", f: "3", fa: "4", s: "6", si: "6" }], ["2015-09-30", { c: "38", ca: "38", e: "12", f: "36", fa: "36", s: "9", si: "9" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2021-08-10", { c: "42", ca: "42", e: "79", f: "91", fa: "91", s: "13.1", si: "13.4" }], ["2018-10-02", { c: "1", ca: "18", e: "18", f: "1.5", fa: "4", s: "3.1", si: "2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1.3", si: "2" }], ["2024-12-11", { c: "89", ca: "89", e: "89", f: "131", fa: "131", s: "18.2", si: "18.2" }], ["2015-11-12", { c: "26", ca: "26", e: "13", f: "22", fa: "22", s: "8", si: "8" }], ["2020-01-15", { c: "62", ca: "62", e: "79", f: "53", fa: "53", s: "11", si: "11" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2022-09-12", { c: "47", ca: "47", e: "12", f: "49", fa: "49", s: "16", si: "16" }], ["2022-03-14", { c: "48", ca: "48", e: "79", f: "48", fa: "48", s: "15.4", si: "15.4" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2022-03-14", { c: "64", ca: "64", e: "79", f: "70", fa: "79", s: "15.4", si: "15.4" }], ["2025-12-12", { c: "121", ca: "121", e: "121", f: "137", fa: "137", s: "26.2", si: "26.2" }], ["2022-03-03", { c: "99", ca: "99", e: "99", f: "46", fa: "46", s: "7", si: "7" }], ["2020-01-15", { c: "38", ca: "38", e: "79", f: "19", fa: "19", s: "10.1", si: "10.3" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2026-03-13", { c: "146", ca: "146", e: "146", f: "121", fa: "121", s: "15", si: "15" }], ["2026-03-13", { c: "146", ca: "146", e: "146", f: "121", fa: "121", s: "15", si: "15" }], ["2020-09-16", { c: "48", ca: "48", e: "79", f: "41", fa: "41", s: "14", si: "14" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "7", fa: "7", s: "1.3", si: "1" }], ["2015-07-29", { c: "2", ca: "18", e: "12", f: "3.5", fa: "4", s: "1.1", si: "1" }], ["2017-04-05", { c: "4", ca: "18", e: "15", f: "49", fa: "49", s: "3", si: "2" }], ["2015-07-29", { c: "23", ca: "25", e: "12", f: "31", fa: "31", s: "6", si: "6" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2020-11-19", { c: "87", ca: "87", e: "87", f: "70", fa: "79", s: "12.1", si: "12.2" }], ["2020-07-28", { c: "33", ca: "33", e: "12", f: "74", fa: "79", s: "12.1", si: "12.2" }], ["2024-10-17", { c: "130", ca: "130", e: "130", f: "124", fa: "124", s: "17.5", si: "17.5" }], ["2024-05-13", { c: "114", ca: "114", e: "114", f: "121", fa: "121", s: "17.5", si: "17.5" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "\u22644", si: "\u22643" }], ["2017-10-24", { c: "62", ca: "62", e: "14", f: "22", fa: "22", s: "10", si: "10" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "\u22644", si: "\u22643.2" }], ["2019-09-19", { c: "36", ca: "36", e: "12", f: "52", fa: "52", s: "13", si: "9.3" }], ["2024-03-05", { c: "114", ca: "114", e: "114", f: "122", fa: "122", s: "17.4", si: "17.4" }], ["2024-04-16", { c: "118", ca: "118", e: "118", f: "125", fa: "125", s: "13.1", si: "13.4" }], ["2015-09-30", { c: "36", ca: "36", e: "12", f: "16", fa: "16", s: "9", si: "9" }], ["2022-03-14", { c: "36", ca: "36", e: "12", f: "16", fa: "16", s: "15.4", si: "15.4" }], ["2024-08-06", { c: "117", ca: "117", e: "117", f: "129", fa: "129", s: "17.4", si: "17.4" }], ["2015-09-30", { c: "26", ca: "26", e: "12", f: "16", fa: "16", s: "9", si: "9" }], ["2023-03-14", { c: "19", ca: "25", e: "79", f: "111", fa: "111", s: "6", si: "6" }], ["2023-03-13", { c: "111", ca: "111", e: "111", f: "108", fa: "108", s: "15.4", si: "15.4" }], ["2026-02-24", { c: "83", ca: "83", e: "83", f: "148", fa: "148", s: "26", si: "26" }], ["2023-07-21", { c: "115", ca: "115", e: "115", f: "70", fa: "79", s: "15", si: "15" }], ["2016-09-20", { c: "45", ca: "45", e: "12", f: "38", fa: "38", s: "10", si: "10" }], ["2016-09-20", { c: "45", ca: "45", e: "12", f: "37", fa: "37", s: "10", si: "10" }], ["2015-07-29", { c: "7", ca: "18", e: "12", f: "4", fa: "4", s: "5.1", si: "4.2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2025-09-05", { c: "140", ca: "140", e: "140", f: "133", fa: "133", s: "18.2", si: "18.2" }], ["2015-09-30", { c: "44", ca: "44", e: "12", f: "40", fa: "40", s: "9", si: "9" }], ["2016-03-21", { c: "41", ca: "41", e: "13", f: "27", fa: "27", s: "9.1", si: "9.3" }], ["2023-09-18", { c: "113", ca: "113", e: "113", f: "102", fa: "102", s: "17", si: "17" }], ["2018-04-30", { c: "44", ca: "44", e: "17", f: "48", fa: "48", s: "10.1", si: "10.3" }], ["2015-07-29", { c: "32", ca: "32", e: "12", f: "19", fa: "19", s: "7", si: "7" }], ["2023-12-07", { c: "120", ca: "120", e: "120", f: "115", fa: "115", s: "17", si: "17" }], ["2025-09-15", { c: "95", ca: "95", e: "95", f: "142", fa: "142", s: "26", si: "26" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "2", si: "1" }], ["2023-11-21", { c: "72", ca: "72", e: "79", f: "120", fa: "120", s: "16.4", si: "16.4" }], ["2015-07-29", { c: "4", ca: "18", e: "12", f: "3.5", fa: "4", s: "4", si: "5" }], ["2023-11-02", { c: "119", ca: "119", e: "119", f: "88", fa: "88", s: "16.5", si: "16.5" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "\u22644", si: "\u22643.2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2024-04-18", { c: "124", ca: "124", e: "124", f: "120", fa: "120", s: "17.4", si: "17.4" }], ["2015-07-29", { c: "3", ca: "18", e: "12", f: "3.5", fa: "4", s: "3.1", si: "3" }], ["2025-10-14", { c: "125", ca: "125", e: "125", f: "144", fa: "144", s: "18.2", si: "18.2" }], ["2025-10-14", { c: "111", ca: "111", e: "111", f: "144", fa: "144", s: "18", si: "18" }], ["2022-12-05", { c: "108", ca: "108", e: "108", f: "101", fa: "101", s: "15.4", si: "15.4" }], ["2017-10-17", { c: "26", ca: "26", e: "16", f: "19", fa: "19", s: "7", si: "7" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1.3", si: "1" }], ["2021-08-10", { c: "61", ca: "61", e: "79", f: "91", fa: "68", s: "13", si: "13" }], ["2017-10-17", { c: "57", ca: "57", e: "16", f: "52", fa: "52", s: "11", si: "11" }], ["2021-04-26", { c: "85", ca: "85", e: "85", f: "78", fa: "79", s: "14.1", si: "14.5" }], ["2021-10-25", { c: "75", ca: "75", e: "79", f: "78", fa: "79", s: "15.1", si: "15.1" }], ["2022-05-03", { c: "95", ca: "95", e: "95", f: "100", fa: "100", s: "15.2", si: "15.2" }], ["2024-03-05", { c: "114", ca: "114", e: "114", f: "112", fa: "112", s: "17.4", si: "17.4" }], ["2024-12-11", { c: "119", ca: "119", e: "119", f: "120", fa: "120", s: "18.2", si: "18.2" }], ["2020-10-20", { c: "86", ca: "86", e: "86", f: "78", fa: "79", s: "13.1", si: "13.4" }], ["2020-03-24", { c: "69", ca: "69", e: "79", f: "62", fa: "62", s: "13.1", si: "13.4" }], ["2021-10-25", { c: "75", ca: "75", e: "18", f: "64", fa: "64", s: "15.1", si: "15.1" }], ["2021-11-19", { c: "96", ca: "96", e: "96", f: "79", fa: "79", s: "15.1", si: "15.1" }], ["2021-04-26", { c: "69", ca: "69", e: "18", f: "62", fa: "62", s: "14.1", si: "14.5" }], ["2023-03-27", { c: "91", ca: "91", e: "91", f: "89", fa: "89", s: "16.4", si: "16.4" }], ["2024-12-11", { c: "112", ca: "112", e: "112", f: "121", fa: "121", s: "18.2", si: "18.2" }], ["2021-12-13", { c: "74", ca: "88", e: "79", f: "79", fa: "79", s: "15.2", si: "15.2" }], ["2024-09-16", { c: "119", ca: "119", e: "119", f: "120", fa: "120", s: "18", si: "18" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "4", si: "3.2" }], ["2021-04-26", { c: "84", ca: "84", e: "84", f: "79", fa: "79", s: "14.1", si: "14.5" }], ["2015-07-29", { c: "36", ca: "36", e: "12", f: "6", fa: "6", s: "8", si: "8" }], ["2015-09-30", { c: "36", ca: "36", e: "12", f: "34", fa: "34", s: "9", si: "9" }], ["2020-09-16", { c: "84", ca: "84", e: "84", f: "75", fa: "79", s: "14", si: "14" }], ["2021-04-26", { c: "35", ca: "35", e: "12", f: "25", fa: "25", s: "14.1", si: "14.5" }], ["2015-07-29", { c: "37", ca: "37", e: "12", f: "34", fa: "34", s: "11", si: "11" }], ["2022-03-14", { c: "69", ca: "69", e: "79", f: "96", fa: "96", s: "15.4", si: "15.4" }], ["2021-09-07", { c: "67", ca: "70", e: "18", f: "60", fa: "92", s: "13", si: "13" }], ["2023-10-24", { c: "85", ca: "85", e: "85", f: "119", fa: "119", s: "16", si: "16" }], ["2015-07-29", { c: "9", ca: "25", e: "12", f: "4", fa: "4", s: "5.1", si: "8" }], ["2021-09-20", { c: "63", ca: "63", e: "17", f: "30", fa: "30", s: "14", si: "15" }], ["2024-10-29", { c: "104", ca: "104", e: "104", f: "132", fa: "132", s: "16.4", si: "16.4" }], ["2020-01-15", { c: "47", ca: "47", e: "79", f: "53", fa: "53", s: "12", si: "12" }], ["2017-04-19", { c: "33", ca: "33", e: "12", f: "53", fa: "53", s: "9.1", si: "9.3" }], ["2020-09-16", { c: "47", ca: "47", e: "79", f: "56", fa: "56", s: "14", si: "14" }], ["2015-07-29", { c: "26", ca: "26", e: "12", f: "22", fa: "22", s: "8", si: "8" }], ["2018-04-30", { c: "26", ca: "26", e: "17", f: "22", fa: "22", s: "8", si: "8" }], ["2022-12-13", { c: "100", ca: "100", e: "100", f: "108", fa: "108", s: "16", si: "16" }], ["2021-09-20", { c: "56", ca: "58", e: "79", f: "51", fa: "51", s: "15", si: "15" }], ["2024-10-29", { c: "104", ca: "104", e: "104", f: "132", fa: "132", s: "16.4", si: "16.4" }], ["2020-09-16", { c: "32", ca: "32", e: "18", f: "65", fa: "65", s: "14", si: "14" }], ["2020-01-15", { c: "56", ca: "56", e: "79", f: "22", fa: "24", s: "11", si: "11" }], ["2025-10-03", { c: "141", ca: "141", e: "141", f: "117", fa: "117", s: "15.4", si: "15.4" }], ["2023-05-09", { c: "76", ca: "76", e: "79", f: "113", fa: "113", s: "15.4", si: "15.4" }], ["2020-01-15", { c: "58", ca: "58", e: "79", f: "44", fa: "44", s: "11", si: "11" }], ["2015-07-29", { c: "5", ca: "18", e: "12", f: "11", fa: "14", s: "5", si: "4.2" }], ["2026-03-24", { c: "97", ca: "97", e: "97", f: "114", fa: "114", s: "26.4", si: "26.4" }], ["2015-07-29", { c: "23", ca: "25", e: "12", f: "31", fa: "31", s: "6", si: "8" }], ["2020-01-15", { c: "23", ca: "25", e: "79", f: "31", fa: "31", s: "6", si: "8" }], ["2021-01-21", { c: "88", ca: "88", e: "88", f: "82", fa: "82", s: "14", si: "14" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2024-03-19", { c: "114", ca: "114", e: "114", f: "124", fa: "124", s: "17.4", si: "17.4" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2020-01-15", { c: "36", ca: "36", e: "79", f: "36", fa: "36", s: "9.1", si: "9.3" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2015-09-30", { c: "44", ca: "44", e: "12", f: "15", fa: "15", s: "9", si: "9" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "1", si: "1" }], ["2017-03-27", { c: "48", ca: "48", e: "12", f: "41", fa: "41", s: "10.1", si: "10.3" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "3", si: "1" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "3", si: "1" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "3", si: "1" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "1", fa: "4", s: "3.1", si: "2" }], ["2015-07-29", { c: "1", ca: "18", e: "12", f: "3", fa: "4", s: "1", si: "1" }], ["2024-05-14", { c: "1", ca: "18", e: "12", f: "126", fa: "126", s: "3.1", si: "3" }], ["2026-02-11", { c: "123", ca: "123", e: "123", f: "126", fa: "126", s: "26.3", si: "26.3" }]];
+    var c = { w: "WebKit", g: "Gecko", p: "Presto", b: "Blink" };
+    var f = { r: "retired", c: "current", b: "beta", n: "nightly", p: "planned", u: "unknown", e: "esr" };
+    var e = (s2) => {
+      const a2 = {};
+      return Object.keys(s2).forEach((r2) => {
+        const e2 = s2[r2];
+        if (e2 && e2.releases) {
+          a2[r2] || (a2[r2] = { releases: {} });
+          const s3 = a2[r2].releases;
+          e2.releases.forEach((a3) => {
+            s3[a3[0]] = { version: a3[0], release_date: "u" == a3[1] ? "unknown" : a3[1], status: f[a3[2]], engine: a3[3] ? c[a3[3]] : void 0, engine_version: a3[4] };
+          });
+        }
+      }), a2;
+    };
+    var b = (() => {
+      const s2 = [];
+      return r.forEach((a2) => {
+        var r2;
+        s2.push({ status: { baseline_low_date: a2[0], support: (r2 = a2[1], { chrome: r2.c, chrome_android: r2.ca, edge: r2.e, firefox: r2.f, firefox_android: r2.fa, safari: r2.s, safari_ios: r2.si }) } });
+      }), s2;
+    })();
+    var u = e(s);
+    var i = e(a);
+    var n = false;
+    var o = ["chrome", "chrome_android", "edge", "firefox", "firefox_android", "safari", "safari_ios"];
+    var g = Object.keys(u).map((s2) => [s2, u[s2]]).filter(([s2]) => o.includes(s2));
+    var t = ["webview_android", "samsunginternet_android", "opera_android", "opera"];
+    var l = [...Object.keys(u).map((s2) => [s2, u[s2]]).filter(([s2]) => t.includes(s2)), ...Object.keys(i).map((s2) => [s2, i[s2]])];
+    var w = ["current", "esr", "retired", "unknown", "beta", "nightly"];
+    var p = false;
+    var d = (s2) => {
+      if (false === s2.includeDownstreamBrowsers && true === s2.includeKaiOS) {
+        if (console.log(new Error("KaiOS is a downstream browser and can only be included if you include other downstream browsers. Please ensure you use `includeDownstreamBrowsers: true`.")), "undefined" == typeof process || !process.exit)
+          throw new Error("KaiOS configuration error: process.exit is not available");
+        process.exit(1);
+      }
+    };
+    var v = (s2) => s2 && s2.startsWith("\u2264") ? s2.slice(1) : s2;
+    var _ = (s2, a2) => {
+      if (s2 === a2)
+        return 0;
+      const [r2 = 0, c2 = 0] = s2.split(".", 2).map(Number), [f2 = 0, e2 = 0] = a2.split(".", 2).map(Number);
+      if (isNaN(r2) || isNaN(c2))
+        throw new Error(`Invalid version: ${s2}`);
+      if (isNaN(f2) || isNaN(e2))
+        throw new Error(`Invalid version: ${a2}`);
+      return r2 !== f2 ? r2 > f2 ? 1 : -1 : c2 !== e2 ? c2 > e2 ? 1 : -1 : 0;
+    };
+    var h = (s2) => {
+      let a2 = [];
+      return s2.forEach((s3) => {
+        let r2 = g.find((a3) => a3[0] === s3.browser);
+        if (r2) {
+          Object.keys(r2[1].releases).map((s4) => [s4, r2[1].releases[s4]]).filter(([, s4]) => w.includes(s4.status)).sort((s4, a3) => _(s4[0], a3[0])).forEach(([r3, c2]) => !!w.includes(c2.status) && (1 === _(r3, s3.version) && (a2.push({ browser: s3.browser, version: r3, release_date: c2.release_date ? c2.release_date : "unknown" }), true)));
+        }
+      }), a2;
+    };
+    var m = (s2, a2 = false) => {
+      if (s2.getFullYear() < 2015 && !p && console.warn(new Error("There are no browser versions compatible with Baseline before 2015.  You may receive unexpected results.")), s2.getFullYear() < 2002)
+        throw new Error("None of the browsers in the core set were released before 2002.  Please use a date after 2002.");
+      if (s2.getFullYear() > (/* @__PURE__ */ new Date()).getFullYear())
+        throw new Error("There are no browser versions compatible with Baseline in the future");
+      const r2 = ((s3) => b.filter((a3) => a3.status.baseline_low_date && new Date(a3.status.baseline_low_date) <= s3).map((s4) => ({ baseline_low_date: s4.status.baseline_low_date, support: s4.status.support })))(s2), c2 = ((s3) => {
+        let a3 = {};
+        return g.forEach((s4) => {
+          a3[s4[0]] = { browser: s4[0], version: "0", release_date: "" };
+        }), s3.forEach((s4) => {
+          Object.keys(s4.support).forEach((r3) => {
+            const c3 = s4.support[r3], f2 = v(c3);
+            a3[r3] && 1 === _(f2, v(a3[r3].version)) && (a3[r3] = { browser: r3, version: f2, release_date: s4.baseline_low_date });
+          });
+        }), Object.keys(a3).map((s4) => a3[s4]);
+      })(r2);
+      return a2 ? [...c2, ...h(c2)].sort((s3, a3) => s3.browser < a3.browser ? -1 : s3.browser > a3.browser ? 1 : _(s3.version, a3.version)) : c2;
+    };
+    var y = (s2 = [], a2 = true, r2 = false) => {
+      const c2 = (a3) => {
+        var r3;
+        return s2 && s2.length > 0 ? null === (r3 = s2.filter((s3) => s3.browser === a3).sort((s3, a4) => _(s3.version, a4.version))[0]) || void 0 === r3 ? void 0 : r3.version : void 0;
+      }, f2 = c2("chrome"), e2 = c2("firefox");
+      if (!f2 && !e2)
+        throw new Error("There are no browser versions compatible with Baseline before Chrome and Firefox");
+      let b2 = [];
+      return l.filter(([s3]) => !("kai_os" === s3 && !r2)).forEach(([s3, r3]) => {
+        var c3;
+        if (!r3.releases)
+          return;
+        let u2 = Object.keys(r3.releases).map((s4) => [s4, r3.releases[s4]]).filter(([, s4]) => {
+          const { engine: a3, engine_version: r4 } = s4;
+          return !(!a3 || !r4) && ("Blink" === a3 && f2 ? _(r4, f2) >= 0 : !("Gecko" !== a3 || !e2) && _(r4, e2) >= 0);
+        }).sort((s4, a3) => _(s4[0], a3[0]));
+        for (let r4 = 0; r4 < u2.length; r4++) {
+          const f3 = u2[r4];
+          if (f3) {
+            const [r5, e3] = f3;
+            let u3 = { browser: s3, version: r5, release_date: null !== (c3 = e3.release_date) && void 0 !== c3 ? c3 : "unknown" };
+            if (e3.engine && e3.engine_version && (u3.engine = e3.engine, u3.engine_version = e3.engine_version), b2.push(u3), !a2)
+              break;
+          }
+        }
+      }), b2;
+    };
+    function O(s2) {
+      var a2, r2, c2, f2, e2, b2, u2;
+      let i2 = null != s2 ? s2 : {}, o2 = { listAllCompatibleVersions: null !== (a2 = i2.listAllCompatibleVersions) && void 0 !== a2 && a2, includeDownstreamBrowsers: null !== (r2 = i2.includeDownstreamBrowsers) && void 0 !== r2 && r2, widelyAvailableOnDate: null !== (c2 = i2.widelyAvailableOnDate) && void 0 !== c2 ? c2 : void 0, targetYear: null !== (f2 = i2.targetYear) && void 0 !== f2 ? f2 : void 0, includeKaiOS: null !== (e2 = i2.includeKaiOS) && void 0 !== e2 && e2, overrideLastUpdated: null !== (b2 = i2.overrideLastUpdated) && void 0 !== b2 ? b2 : void 0, suppressWarnings: null !== (u2 = i2.suppressWarnings) && void 0 !== u2 && u2 }, g2 = /* @__PURE__ */ new Date();
+      if (d(o2), o2.widelyAvailableOnDate || o2.targetYear)
+        if (o2.targetYear && o2.widelyAvailableOnDate) {
+          if (console.log(new Error("You cannot use targetYear and widelyAvailableOnDate at the same time.  Please remove one of these options and try again.")), "undefined" == typeof process || !process.exit)
+            throw new Error("Configuration error: targetYear and widelyAvailableOnDate cannot be used together");
+          process.exit(1);
+        } else
+          o2.widelyAvailableOnDate ? g2 = new Date(o2.widelyAvailableOnDate) : o2.targetYear && (g2 = /* @__PURE__ */ new Date(`${o2.targetYear}-12-31`));
+      else
+        g2 = /* @__PURE__ */ new Date();
+      (o2.widelyAvailableOnDate || void 0 === o2.targetYear) && g2.setMonth(g2.getMonth() - 30);
+      let t2 = m(g2, o2.listAllCompatibleVersions);
+      return o2.suppressWarnings || ((s3, a3) => {
+        if (n || "undefined" != typeof process && process.env && (process.env.BROWSERSLIST_IGNORE_OLD_DATA || process.env.BASELINE_BROWSER_MAPPING_IGNORE_OLD_DATA))
+          return;
+        const r3 = /* @__PURE__ */ new Date();
+        r3.setMonth(r3.getMonth() - 2), s3 > r3 && (null != a3 ? a3 : 1774968778517) < r3.getTime() && (console.warn("[baseline-browser-mapping] The data in this module is over two months old and you are targetting a recent feature cut off date of " + s3.toISOString().slice(0, 10) + ". To ensure accurate Baseline data, please update to the latest version of this module using the package manager of your choice.You can suppress these warnings using the environment variables `BROWSERSLIST_IGNORE_OLD_DATA=true` or `BASELINE_BROWSER_MAPPING_IGNORE_OLD_DATA=true` or by passing `suppressWarnings: true` when you call `getCompatibleVersions()` or `getAllVersions()`."), n = true);
+      })(g2, o2.overrideLastUpdated), false === o2.includeDownstreamBrowsers ? t2 : [...t2, ...y(t2, o2.listAllCompatibleVersions, o2.includeKaiOS)];
+    }
+    exports._resetHasWarned = function() {
+      n = false;
+    }, exports.getAllVersions = function(s2) {
+      var a2, r2, c2, f2, e2;
+      p = true;
+      let b2 = null != s2 ? s2 : {}, u2 = { outputFormat: null !== (a2 = b2.outputFormat) && void 0 !== a2 ? a2 : "array", includeDownstreamBrowsers: null !== (r2 = b2.includeDownstreamBrowsers) && void 0 !== r2 && r2, useSupports: null !== (c2 = b2.useSupports) && void 0 !== c2 && c2, includeKaiOS: null !== (f2 = b2.includeKaiOS) && void 0 !== f2 && f2, suppressWarnings: null !== (e2 = b2.suppressWarnings) && void 0 !== e2 && e2 };
+      d(u2);
+      let i2 = (/* @__PURE__ */ new Date()).getFullYear() + 1;
+      const n2 = [...Array(i2).keys()].slice(2002), g2 = {};
+      n2.forEach((s3) => {
+        g2[s3] = {}, O({ targetYear: s3, suppressWarnings: u2.suppressWarnings }).forEach((a3) => {
+          g2[s3] && (g2[s3][a3.browser] = a3);
+        });
+      });
+      const t2 = O({ suppressWarnings: u2.suppressWarnings }), l2 = {};
+      t2.forEach((s3) => {
+        l2[s3.browser] = s3;
+      });
+      const w2 = /* @__PURE__ */ new Date();
+      w2.setMonth(w2.getMonth() + 30);
+      const v2 = O({ widelyAvailableOnDate: w2.toISOString().slice(0, 10), suppressWarnings: u2.suppressWarnings }), h2 = {};
+      v2.forEach((s3) => {
+        h2[s3.browser] = s3;
+      });
+      const m2 = O({ targetYear: 2002, listAllCompatibleVersions: true, suppressWarnings: u2.suppressWarnings }), E = [];
+      if (o.forEach((s3) => {
+        var a3, r3, c3, f3;
+        let e3 = m2.filter((a4) => a4.browser == s3).sort((s4, a4) => _(s4.version, a4.version)), b3 = null !== (r3 = null === (a3 = l2[s3]) || void 0 === a3 ? void 0 : a3.version) && void 0 !== r3 ? r3 : "0", o2 = null !== (f3 = null === (c3 = h2[s3]) || void 0 === c3 ? void 0 : c3.version) && void 0 !== f3 ? f3 : "0";
+        n2.forEach((a4) => {
+          var r4;
+          if (g2[a4]) {
+            let c4 = (null !== (r4 = g2[a4][s3]) && void 0 !== r4 ? r4 : { version: "0" }).version, f4 = e3.findIndex((s4) => 0 === _(s4.version, c4));
+            (a4 === i2 - 1 ? e3 : e3.slice(0, f4)).forEach((s4) => {
+              let r5 = _(s4.version, b3) >= 0, c5 = _(s4.version, o2) >= 0, f5 = Object.assign(Object.assign({}, s4), { year: a4 <= 2015 ? "pre_baseline" : a4 - 1 });
+              u2.useSupports ? (r5 && (f5.supports = "widely"), c5 && (f5.supports = "newly")) : f5 = Object.assign(Object.assign({}, f5), { wa_compatible: r5 }), E.push(f5);
+            }), e3 = e3.slice(f4, e3.length);
+          }
+        });
+      }), u2.includeDownstreamBrowsers) {
+        y(E, true, u2.includeKaiOS).forEach((s3) => {
+          let a3 = E.find((a4) => "chrome" === a4.browser && a4.version === s3.engine_version);
+          a3 && (u2.useSupports ? E.push(Object.assign(Object.assign({}, s3), { year: a3.year, supports: a3.supports })) : E.push(Object.assign(Object.assign({}, s3), { year: a3.year, wa_compatible: a3.wa_compatible })));
+        });
+      }
+      if (E.sort((s3, a3) => {
+        if ("pre_baseline" === s3.year && "pre_baseline" !== a3.year)
+          return -1;
+        if ("pre_baseline" === a3.year && "pre_baseline" !== s3.year)
+          return 1;
+        if ("pre_baseline" !== s3.year && "pre_baseline" !== a3.year) {
+          if (s3.year < a3.year)
+            return -1;
+          if (s3.year > a3.year)
+            return 1;
+        }
+        return s3.browser < a3.browser ? -1 : s3.browser > a3.browser ? 1 : _(s3.version, a3.version);
+      }), "object" === u2.outputFormat) {
+        const s3 = {};
+        return E.forEach((a3) => {
+          s3[a3.browser] || (s3[a3.browser] = {});
+          let r3 = { year: a3.year, release_date: a3.release_date, engine: a3.engine, engine_version: a3.engine_version };
+          s3[a3.browser][a3.version] = u2.useSupports ? a3.supports ? Object.assign(Object.assign({}, r3), { supports: a3.supports }) : r3 : Object.assign(Object.assign({}, r3), { wa_compatible: a3.wa_compatible });
+        }), null != s3 ? s3 : {};
+      }
+      if ("csv" === u2.outputFormat) {
+        let s3 = `"browser","version","year","${u2.useSupports ? "supports" : "wa_compatible"}","release_date","engine","engine_version"`;
+        return E.forEach((a3) => {
+          var r3, c3, f3, e3;
+          let b3 = { browser: a3.browser, version: a3.version, year: a3.year, release_date: null !== (r3 = a3.release_date) && void 0 !== r3 ? r3 : "NULL", engine: null !== (c3 = a3.engine) && void 0 !== c3 ? c3 : "NULL", engine_version: null !== (f3 = a3.engine_version) && void 0 !== f3 ? f3 : "NULL" };
+          b3 = u2.useSupports ? Object.assign(Object.assign({}, b3), { supports: null !== (e3 = a3.supports) && void 0 !== e3 ? e3 : "" }) : Object.assign(Object.assign({}, b3), { wa_compatible: a3.wa_compatible }), s3 += `
+"${b3.browser}","${b3.version}","${b3.year}","${u2.useSupports ? b3.supports : b3.wa_compatible}","${b3.release_date}","${b3.engine}","${b3.engine_version}"`;
+        }), s3;
+      }
+      return E;
+    }, exports.getCompatibleVersions = O;
+  }
+});
+
+// ../../node_modules/node-releases/data/processed/envs.json
+var require_envs = __commonJS({
+  "../../node_modules/node-releases/data/processed/envs.json"(exports, module) {
+    module.exports = [{ name: "nodejs", version: "0.2.0", date: "2011-08-26", lts: false, security: false, v8: "2.3.8.0" }, { name: "nodejs", version: "0.3.0", date: "2011-08-26", lts: false, security: false, v8: "2.5.1.0" }, { name: "nodejs", version: "0.4.0", date: "2011-08-26", lts: false, security: false, v8: "3.1.2.0" }, { name: "nodejs", version: "0.5.0", date: "2011-08-26", lts: false, security: false, v8: "3.1.8.25" }, { name: "nodejs", version: "0.6.0", date: "2011-11-04", lts: false, security: false, v8: "3.6.6.6" }, { name: "nodejs", version: "0.7.0", date: "2012-01-17", lts: false, security: false, v8: "3.8.6.0" }, { name: "nodejs", version: "0.8.0", date: "2012-06-22", lts: false, security: false, v8: "3.11.10.10" }, { name: "nodejs", version: "0.9.0", date: "2012-07-20", lts: false, security: false, v8: "3.11.10.15" }, { name: "nodejs", version: "0.10.0", date: "2013-03-11", lts: false, security: false, v8: "3.14.5.8" }, { name: "nodejs", version: "0.11.0", date: "2013-03-28", lts: false, security: false, v8: "3.17.13.0" }, { name: "nodejs", version: "0.12.0", date: "2015-02-06", lts: false, security: false, v8: "3.28.73.0" }, { name: "nodejs", version: "4.0.0", date: "2015-09-08", lts: false, security: false, v8: "4.5.103.30" }, { name: "nodejs", version: "4.1.0", date: "2015-09-17", lts: false, security: false, v8: "4.5.103.33" }, { name: "nodejs", version: "4.2.0", date: "2015-10-12", lts: "Argon", security: false, v8: "4.5.103.35" }, { name: "nodejs", version: "4.3.0", date: "2016-02-09", lts: "Argon", security: false, v8: "4.5.103.35" }, { name: "nodejs", version: "4.4.0", date: "2016-03-08", lts: "Argon", security: false, v8: "4.5.103.35" }, { name: "nodejs", version: "4.5.0", date: "2016-08-16", lts: "Argon", security: false, v8: "4.5.103.37" }, { name: "nodejs", version: "4.6.0", date: "2016-09-27", lts: "Argon", security: true, v8: "4.5.103.37" }, { name: "nodejs", version: "4.7.0", date: "2016-12-06", lts: "Argon", security: false, v8: "4.5.103.43" }, { name: "nodejs", version: "4.8.0", date: "2017-02-21", lts: "Argon", security: false, v8: "4.5.103.45" }, { name: "nodejs", version: "4.9.0", date: "2018-03-28", lts: "Argon", security: true, v8: "4.5.103.53" }, { name: "nodejs", version: "5.0.0", date: "2015-10-29", lts: false, security: false, v8: "4.6.85.28" }, { name: "nodejs", version: "5.1.0", date: "2015-11-17", lts: false, security: false, v8: "4.6.85.31" }, { name: "nodejs", version: "5.2.0", date: "2015-12-09", lts: false, security: false, v8: "4.6.85.31" }, { name: "nodejs", version: "5.3.0", date: "2015-12-15", lts: false, security: false, v8: "4.6.85.31" }, { name: "nodejs", version: "5.4.0", date: "2016-01-06", lts: false, security: false, v8: "4.6.85.31" }, { name: "nodejs", version: "5.5.0", date: "2016-01-21", lts: false, security: false, v8: "4.6.85.31" }, { name: "nodejs", version: "5.6.0", date: "2016-02-09", lts: false, security: false, v8: "4.6.85.31" }, { name: "nodejs", version: "5.7.0", date: "2016-02-23", lts: false, security: false, v8: "4.6.85.31" }, { name: "nodejs", version: "5.8.0", date: "2016-03-09", lts: false, security: false, v8: "4.6.85.31" }, { name: "nodejs", version: "5.9.0", date: "2016-03-16", lts: false, security: false, v8: "4.6.85.31" }, { name: "nodejs", version: "5.10.0", date: "2016-04-01", lts: false, security: false, v8: "4.6.85.31" }, { name: "nodejs", version: "5.11.0", date: "2016-04-21", lts: false, security: false, v8: "4.6.85.31" }, { name: "nodejs", version: "5.12.0", date: "2016-06-23", lts: false, security: false, v8: "4.6.85.32" }, { name: "nodejs", version: "6.0.0", date: "2016-04-26", lts: false, security: false, v8: "5.0.71.35" }, { name: "nodejs", version: "6.1.0", date: "2016-05-05", lts: false, security: false, v8: "5.0.71.35" }, { name: "nodejs", version: "6.2.0", date: "2016-05-17", lts: false, security: false, v8: "5.0.71.47" }, { name: "nodejs", version: "6.3.0", date: "2016-07-06", lts: false, security: false, v8: "5.0.71.52" }, { name: "nodejs", version: "6.4.0", date: "2016-08-12", lts: false, security: false, v8: "5.0.71.60" }, { name: "nodejs", version: "6.5.0", date: "2016-08-26", lts: false, security: false, v8: "5.1.281.81" }, { name: "nodejs", version: "6.6.0", date: "2016-09-14", lts: false, security: false, v8: "5.1.281.83" }, { name: "nodejs", version: "6.7.0", date: "2016-09-27", lts: false, security: true, v8: "5.1.281.83" }, { name: "nodejs", version: "6.8.0", date: "2016-10-12", lts: false, security: false, v8: "5.1.281.84" }, { name: "nodejs", version: "6.9.0", date: "2016-10-18", lts: "Boron", security: false, v8: "5.1.281.84" }, { name: "nodejs", version: "6.10.0", date: "2017-02-21", lts: "Boron", security: false, v8: "5.1.281.93" }, { name: "nodejs", version: "6.11.0", date: "2017-06-06", lts: "Boron", security: false, v8: "5.1.281.102" }, { name: "nodejs", version: "6.12.0", date: "2017-11-06", lts: "Boron", security: false, v8: "5.1.281.108" }, { name: "nodejs", version: "6.13.0", date: "2018-02-10", lts: "Boron", security: false, v8: "5.1.281.111" }, { name: "nodejs", version: "6.14.0", date: "2018-03-28", lts: "Boron", security: true, v8: "5.1.281.111" }, { name: "nodejs", version: "6.15.0", date: "2018-11-27", lts: "Boron", security: true, v8: "5.1.281.111" }, { name: "nodejs", version: "6.16.0", date: "2018-12-26", lts: "Boron", security: false, v8: "5.1.281.111" }, { name: "nodejs", version: "6.17.0", date: "2019-02-28", lts: "Boron", security: true, v8: "5.1.281.111" }, { name: "nodejs", version: "7.0.0", date: "2016-10-25", lts: false, security: false, v8: "5.4.500.36" }, { name: "nodejs", version: "7.1.0", date: "2016-11-08", lts: false, security: false, v8: "5.4.500.36" }, { name: "nodejs", version: "7.2.0", date: "2016-11-22", lts: false, security: false, v8: "5.4.500.43" }, { name: "nodejs", version: "7.3.0", date: "2016-12-20", lts: false, security: false, v8: "5.4.500.45" }, { name: "nodejs", version: "7.4.0", date: "2017-01-04", lts: false, security: false, v8: "5.4.500.45" }, { name: "nodejs", version: "7.5.0", date: "2017-01-31", lts: false, security: false, v8: "5.4.500.48" }, { name: "nodejs", version: "7.6.0", date: "2017-02-21", lts: false, security: false, v8: "5.5.372.40" }, { name: "nodejs", version: "7.7.0", date: "2017-02-28", lts: false, security: false, v8: "5.5.372.41" }, { name: "nodejs", version: "7.8.0", date: "2017-03-29", lts: false, security: false, v8: "5.5.372.43" }, { name: "nodejs", version: "7.9.0", date: "2017-04-11", lts: false, security: false, v8: "5.5.372.43" }, { name: "nodejs", version: "7.10.0", date: "2017-05-02", lts: false, security: false, v8: "5.5.372.43" }, { name: "nodejs", version: "8.0.0", date: "2017-05-30", lts: false, security: false, v8: "5.8.283.41" }, { name: "nodejs", version: "8.1.0", date: "2017-06-08", lts: false, security: false, v8: "5.8.283.41" }, { name: "nodejs", version: "8.2.0", date: "2017-07-19", lts: false, security: false, v8: "5.8.283.41" }, { name: "nodejs", version: "8.3.0", date: "2017-08-08", lts: false, security: false, v8: "6.0.286.52" }, { name: "nodejs", version: "8.4.0", date: "2017-08-15", lts: false, security: false, v8: "6.0.286.52" }, { name: "nodejs", version: "8.5.0", date: "2017-09-12", lts: false, security: false, v8: "6.0.287.53" }, { name: "nodejs", version: "8.6.0", date: "2017-09-26", lts: false, security: false, v8: "6.0.287.53" }, { name: "nodejs", version: "8.7.0", date: "2017-10-11", lts: false, security: false, v8: "6.1.534.42" }, { name: "nodejs", version: "8.8.0", date: "2017-10-24", lts: false, security: false, v8: "6.1.534.42" }, { name: "nodejs", version: "8.9.0", date: "2017-10-31", lts: "Carbon", security: false, v8: "6.1.534.46" }, { name: "nodejs", version: "8.10.0", date: "2018-03-06", lts: "Carbon", security: false, v8: "6.2.414.50" }, { name: "nodejs", version: "8.11.0", date: "2018-03-28", lts: "Carbon", security: true, v8: "6.2.414.50" }, { name: "nodejs", version: "8.12.0", date: "2018-09-10", lts: "Carbon", security: false, v8: "6.2.414.66" }, { name: "nodejs", version: "8.13.0", date: "2018-11-20", lts: "Carbon", security: false, v8: "6.2.414.72" }, { name: "nodejs", version: "8.14.0", date: "2018-11-27", lts: "Carbon", security: true, v8: "6.2.414.72" }, { name: "nodejs", version: "8.15.0", date: "2018-12-26", lts: "Carbon", security: false, v8: "6.2.414.75" }, { name: "nodejs", version: "8.16.0", date: "2019-04-16", lts: "Carbon", security: false, v8: "6.2.414.77" }, { name: "nodejs", version: "8.17.0", date: "2019-12-17", lts: "Carbon", security: true, v8: "6.2.414.78" }, { name: "nodejs", version: "9.0.0", date: "2017-10-31", lts: false, security: false, v8: "6.2.414.32" }, { name: "nodejs", version: "9.1.0", date: "2017-11-07", lts: false, security: false, v8: "6.2.414.32" }, { name: "nodejs", version: "9.2.0", date: "2017-11-14", lts: false, security: false, v8: "6.2.414.44" }, { name: "nodejs", version: "9.3.0", date: "2017-12-12", lts: false, security: false, v8: "6.2.414.46" }, { name: "nodejs", version: "9.4.0", date: "2018-01-10", lts: false, security: false, v8: "6.2.414.46" }, { name: "nodejs", version: "9.5.0", date: "2018-01-31", lts: false, security: false, v8: "6.2.414.46" }, { name: "nodejs", version: "9.6.0", date: "2018-02-21", lts: false, security: false, v8: "6.2.414.46" }, { name: "nodejs", version: "9.7.0", date: "2018-03-01", lts: false, security: false, v8: "6.2.414.46" }, { name: "nodejs", version: "9.8.0", date: "2018-03-07", lts: false, security: false, v8: "6.2.414.46" }, { name: "nodejs", version: "9.9.0", date: "2018-03-21", lts: false, security: false, v8: "6.2.414.46" }, { name: "nodejs", version: "9.10.0", date: "2018-03-28", lts: false, security: true, v8: "6.2.414.46" }, { name: "nodejs", version: "9.11.0", date: "2018-04-04", lts: false, security: false, v8: "6.2.414.46" }, { name: "nodejs", version: "10.0.0", date: "2018-04-24", lts: false, security: false, v8: "6.6.346.24" }, { name: "nodejs", version: "10.1.0", date: "2018-05-08", lts: false, security: false, v8: "6.6.346.27" }, { name: "nodejs", version: "10.2.0", date: "2018-05-23", lts: false, security: false, v8: "6.6.346.32" }, { name: "nodejs", version: "10.3.0", date: "2018-05-29", lts: false, security: false, v8: "6.6.346.32" }, { name: "nodejs", version: "10.4.0", date: "2018-06-06", lts: false, security: false, v8: "6.7.288.43" }, { name: "nodejs", version: "10.5.0", date: "2018-06-20", lts: false, security: false, v8: "6.7.288.46" }, { name: "nodejs", version: "10.6.0", date: "2018-07-04", lts: false, security: false, v8: "6.7.288.46" }, { name: "nodejs", version: "10.7.0", date: "2018-07-18", lts: false, security: false, v8: "6.7.288.49" }, { name: "nodejs", version: "10.8.0", date: "2018-08-01", lts: false, security: false, v8: "6.7.288.49" }, { name: "nodejs", version: "10.9.0", date: "2018-08-15", lts: false, security: false, v8: "6.8.275.24" }, { name: "nodejs", version: "10.10.0", date: "2018-09-06", lts: false, security: false, v8: "6.8.275.30" }, { name: "nodejs", version: "10.11.0", date: "2018-09-19", lts: false, security: false, v8: "6.8.275.32" }, { name: "nodejs", version: "10.12.0", date: "2018-10-10", lts: false, security: false, v8: "6.8.275.32" }, { name: "nodejs", version: "10.13.0", date: "2018-10-30", lts: "Dubnium", security: false, v8: "6.8.275.32" }, { name: "nodejs", version: "10.14.0", date: "2018-11-27", lts: "Dubnium", security: true, v8: "6.8.275.32" }, { name: "nodejs", version: "10.15.0", date: "2018-12-26", lts: "Dubnium", security: false, v8: "6.8.275.32" }, { name: "nodejs", version: "10.16.0", date: "2019-05-28", lts: "Dubnium", security: false, v8: "6.8.275.32" }, { name: "nodejs", version: "10.17.0", date: "2019-10-22", lts: "Dubnium", security: false, v8: "6.8.275.32" }, { name: "nodejs", version: "10.18.0", date: "2019-12-17", lts: "Dubnium", security: true, v8: "6.8.275.32" }, { name: "nodejs", version: "10.19.0", date: "2020-02-05", lts: "Dubnium", security: true, v8: "6.8.275.32" }, { name: "nodejs", version: "10.20.0", date: "2020-03-26", lts: "Dubnium", security: false, v8: "6.8.275.32" }, { name: "nodejs", version: "10.21.0", date: "2020-06-02", lts: "Dubnium", security: true, v8: "6.8.275.32" }, { name: "nodejs", version: "10.22.0", date: "2020-07-21", lts: "Dubnium", security: false, v8: "6.8.275.32" }, { name: "nodejs", version: "10.23.0", date: "2020-10-27", lts: "Dubnium", security: false, v8: "6.8.275.32" }, { name: "nodejs", version: "10.24.0", date: "2021-02-23", lts: "Dubnium", security: true, v8: "6.8.275.32" }, { name: "nodejs", version: "11.0.0", date: "2018-10-23", lts: false, security: false, v8: "7.0.276.28" }, { name: "nodejs", version: "11.1.0", date: "2018-10-30", lts: false, security: false, v8: "7.0.276.32" }, { name: "nodejs", version: "11.2.0", date: "2018-11-15", lts: false, security: false, v8: "7.0.276.38" }, { name: "nodejs", version: "11.3.0", date: "2018-11-27", lts: false, security: true, v8: "7.0.276.38" }, { name: "nodejs", version: "11.4.0", date: "2018-12-07", lts: false, security: false, v8: "7.0.276.38" }, { name: "nodejs", version: "11.5.0", date: "2018-12-18", lts: false, security: false, v8: "7.0.276.38" }, { name: "nodejs", version: "11.6.0", date: "2018-12-26", lts: false, security: false, v8: "7.0.276.38" }, { name: "nodejs", version: "11.7.0", date: "2019-01-17", lts: false, security: false, v8: "7.0.276.38" }, { name: "nodejs", version: "11.8.0", date: "2019-01-24", lts: false, security: false, v8: "7.0.276.38" }, { name: "nodejs", version: "11.9.0", date: "2019-01-30", lts: false, security: false, v8: "7.0.276.38" }, { name: "nodejs", version: "11.10.0", date: "2019-02-14", lts: false, security: false, v8: "7.0.276.38" }, { name: "nodejs", version: "11.11.0", date: "2019-03-05", lts: false, security: false, v8: "7.0.276.38" }, { name: "nodejs", version: "11.12.0", date: "2019-03-14", lts: false, security: false, v8: "7.0.276.38" }, { name: "nodejs", version: "11.13.0", date: "2019-03-28", lts: false, security: false, v8: "7.0.276.38" }, { name: "nodejs", version: "11.14.0", date: "2019-04-10", lts: false, security: false, v8: "7.0.276.38" }, { name: "nodejs", version: "11.15.0", date: "2019-04-30", lts: false, security: false, v8: "7.0.276.38" }, { name: "nodejs", version: "12.0.0", date: "2019-04-23", lts: false, security: false, v8: "7.4.288.21" }, { name: "nodejs", version: "12.1.0", date: "2019-04-29", lts: false, security: false, v8: "7.4.288.21" }, { name: "nodejs", version: "12.2.0", date: "2019-05-07", lts: false, security: false, v8: "7.4.288.21" }, { name: "nodejs", version: "12.3.0", date: "2019-05-21", lts: false, security: false, v8: "7.4.288.27" }, { name: "nodejs", version: "12.4.0", date: "2019-06-04", lts: false, security: false, v8: "7.4.288.27" }, { name: "nodejs", version: "12.5.0", date: "2019-06-26", lts: false, security: false, v8: "7.5.288.22" }, { name: "nodejs", version: "12.6.0", date: "2019-07-03", lts: false, security: false, v8: "7.5.288.22" }, { name: "nodejs", version: "12.7.0", date: "2019-07-23", lts: false, security: false, v8: "7.5.288.22" }, { name: "nodejs", version: "12.8.0", date: "2019-08-06", lts: false, security: false, v8: "7.5.288.22" }, { name: "nodejs", version: "12.9.0", date: "2019-08-20", lts: false, security: false, v8: "7.6.303.29" }, { name: "nodejs", version: "12.10.0", date: "2019-09-04", lts: false, security: false, v8: "7.6.303.29" }, { name: "nodejs", version: "12.11.0", date: "2019-09-25", lts: false, security: false, v8: "7.7.299.11" }, { name: "nodejs", version: "12.12.0", date: "2019-10-11", lts: false, security: false, v8: "7.7.299.13" }, { name: "nodejs", version: "12.13.0", date: "2019-10-21", lts: "Erbium", security: false, v8: "7.7.299.13" }, { name: "nodejs", version: "12.14.0", date: "2019-12-17", lts: "Erbium", security: true, v8: "7.7.299.13" }, { name: "nodejs", version: "12.15.0", date: "2020-02-05", lts: "Erbium", security: true, v8: "7.7.299.13" }, { name: "nodejs", version: "12.16.0", date: "2020-02-11", lts: "Erbium", security: false, v8: "7.8.279.23" }, { name: "nodejs", version: "12.17.0", date: "2020-05-26", lts: "Erbium", security: false, v8: "7.8.279.23" }, { name: "nodejs", version: "12.18.0", date: "2020-06-02", lts: "Erbium", security: true, v8: "7.8.279.23" }, { name: "nodejs", version: "12.19.0", date: "2020-10-06", lts: "Erbium", security: false, v8: "7.8.279.23" }, { name: "nodejs", version: "12.20.0", date: "2020-11-24", lts: "Erbium", security: false, v8: "7.8.279.23" }, { name: "nodejs", version: "12.21.0", date: "2021-02-23", lts: "Erbium", security: true, v8: "7.8.279.23" }, { name: "nodejs", version: "12.22.0", date: "2021-03-30", lts: "Erbium", security: false, v8: "7.8.279.23" }, { name: "nodejs", version: "13.0.0", date: "2019-10-22", lts: false, security: false, v8: "7.8.279.17" }, { name: "nodejs", version: "13.1.0", date: "2019-11-05", lts: false, security: false, v8: "7.8.279.17" }, { name: "nodejs", version: "13.2.0", date: "2019-11-21", lts: false, security: false, v8: "7.9.317.23" }, { name: "nodejs", version: "13.3.0", date: "2019-12-03", lts: false, security: false, v8: "7.9.317.25" }, { name: "nodejs", version: "13.4.0", date: "2019-12-17", lts: false, security: true, v8: "7.9.317.25" }, { name: "nodejs", version: "13.5.0", date: "2019-12-18", lts: false, security: false, v8: "7.9.317.25" }, { name: "nodejs", version: "13.6.0", date: "2020-01-07", lts: false, security: false, v8: "7.9.317.25" }, { name: "nodejs", version: "13.7.0", date: "2020-01-21", lts: false, security: false, v8: "7.9.317.25" }, { name: "nodejs", version: "13.8.0", date: "2020-02-05", lts: false, security: true, v8: "7.9.317.25" }, { name: "nodejs", version: "13.9.0", date: "2020-02-18", lts: false, security: false, v8: "7.9.317.25" }, { name: "nodejs", version: "13.10.0", date: "2020-03-04", lts: false, security: false, v8: "7.9.317.25" }, { name: "nodejs", version: "13.11.0", date: "2020-03-12", lts: false, security: false, v8: "7.9.317.25" }, { name: "nodejs", version: "13.12.0", date: "2020-03-26", lts: false, security: false, v8: "7.9.317.25" }, { name: "nodejs", version: "13.13.0", date: "2020-04-14", lts: false, security: false, v8: "7.9.317.25" }, { name: "nodejs", version: "13.14.0", date: "2020-04-29", lts: false, security: false, v8: "7.9.317.25" }, { name: "nodejs", version: "14.0.0", date: "2020-04-21", lts: false, security: false, v8: "8.1.307.30" }, { name: "nodejs", version: "14.1.0", date: "2020-04-29", lts: false, security: false, v8: "8.1.307.31" }, { name: "nodejs", version: "14.2.0", date: "2020-05-05", lts: false, security: false, v8: "8.1.307.31" }, { name: "nodejs", version: "14.3.0", date: "2020-05-19", lts: false, security: false, v8: "8.1.307.31" }, { name: "nodejs", version: "14.4.0", date: "2020-06-02", lts: false, security: true, v8: "8.1.307.31" }, { name: "nodejs", version: "14.5.0", date: "2020-06-30", lts: false, security: false, v8: "8.3.110.9" }, { name: "nodejs", version: "14.6.0", date: "2020-07-20", lts: false, security: false, v8: "8.4.371.19" }, { name: "nodejs", version: "14.7.0", date: "2020-07-29", lts: false, security: false, v8: "8.4.371.19" }, { name: "nodejs", version: "14.8.0", date: "2020-08-11", lts: false, security: false, v8: "8.4.371.19" }, { name: "nodejs", version: "14.9.0", date: "2020-08-27", lts: false, security: false, v8: "8.4.371.19" }, { name: "nodejs", version: "14.10.0", date: "2020-09-08", lts: false, security: false, v8: "8.4.371.19" }, { name: "nodejs", version: "14.11.0", date: "2020-09-15", lts: false, security: true, v8: "8.4.371.19" }, { name: "nodejs", version: "14.12.0", date: "2020-09-22", lts: false, security: false, v8: "8.4.371.19" }, { name: "nodejs", version: "14.13.0", date: "2020-09-29", lts: false, security: false, v8: "8.4.371.19" }, { name: "nodejs", version: "14.14.0", date: "2020-10-15", lts: false, security: false, v8: "8.4.371.19" }, { name: "nodejs", version: "14.15.0", date: "2020-10-27", lts: "Fermium", security: false, v8: "8.4.371.19" }, { name: "nodejs", version: "14.16.0", date: "2021-02-23", lts: "Fermium", security: true, v8: "8.4.371.19" }, { name: "nodejs", version: "14.17.0", date: "2021-05-11", lts: "Fermium", security: false, v8: "8.4.371.23" }, { name: "nodejs", version: "14.18.0", date: "2021-09-28", lts: "Fermium", security: false, v8: "8.4.371.23" }, { name: "nodejs", version: "14.19.0", date: "2022-02-01", lts: "Fermium", security: false, v8: "8.4.371.23" }, { name: "nodejs", version: "14.20.0", date: "2022-07-07", lts: "Fermium", security: true, v8: "8.4.371.23" }, { name: "nodejs", version: "14.21.0", date: "2022-11-01", lts: "Fermium", security: false, v8: "8.4.371.23" }, { name: "nodejs", version: "15.0.0", date: "2020-10-20", lts: false, security: false, v8: "8.6.395.16" }, { name: "nodejs", version: "15.1.0", date: "2020-11-04", lts: false, security: false, v8: "8.6.395.17" }, { name: "nodejs", version: "15.2.0", date: "2020-11-10", lts: false, security: false, v8: "8.6.395.17" }, { name: "nodejs", version: "15.3.0", date: "2020-11-24", lts: false, security: false, v8: "8.6.395.17" }, { name: "nodejs", version: "15.4.0", date: "2020-12-09", lts: false, security: false, v8: "8.6.395.17" }, { name: "nodejs", version: "15.5.0", date: "2020-12-22", lts: false, security: false, v8: "8.6.395.17" }, { name: "nodejs", version: "15.6.0", date: "2021-01-14", lts: false, security: false, v8: "8.6.395.17" }, { name: "nodejs", version: "15.7.0", date: "2021-01-25", lts: false, security: false, v8: "8.6.395.17" }, { name: "nodejs", version: "15.8.0", date: "2021-02-02", lts: false, security: false, v8: "8.6.395.17" }, { name: "nodejs", version: "15.9.0", date: "2021-02-18", lts: false, security: false, v8: "8.6.395.17" }, { name: "nodejs", version: "15.10.0", date: "2021-02-23", lts: false, security: true, v8: "8.6.395.17" }, { name: "nodejs", version: "15.11.0", date: "2021-03-03", lts: false, security: false, v8: "8.6.395.17" }, { name: "nodejs", version: "15.12.0", date: "2021-03-17", lts: false, security: false, v8: "8.6.395.17" }, { name: "nodejs", version: "15.13.0", date: "2021-03-31", lts: false, security: false, v8: "8.6.395.17" }, { name: "nodejs", version: "15.14.0", date: "2021-04-06", lts: false, security: false, v8: "8.6.395.17" }, { name: "nodejs", version: "16.0.0", date: "2021-04-20", lts: false, security: false, v8: "9.0.257.17" }, { name: "nodejs", version: "16.1.0", date: "2021-05-04", lts: false, security: false, v8: "9.0.257.24" }, { name: "nodejs", version: "16.2.0", date: "2021-05-19", lts: false, security: false, v8: "9.0.257.25" }, { name: "nodejs", version: "16.3.0", date: "2021-06-03", lts: false, security: false, v8: "9.0.257.25" }, { name: "nodejs", version: "16.4.0", date: "2021-06-23", lts: false, security: false, v8: "9.1.269.36" }, { name: "nodejs", version: "16.5.0", date: "2021-07-14", lts: false, security: false, v8: "9.1.269.38" }, { name: "nodejs", version: "16.6.0", date: "2021-07-29", lts: false, security: true, v8: "9.2.230.21" }, { name: "nodejs", version: "16.7.0", date: "2021-08-18", lts: false, security: false, v8: "9.2.230.21" }, { name: "nodejs", version: "16.8.0", date: "2021-08-25", lts: false, security: false, v8: "9.2.230.21" }, { name: "nodejs", version: "16.9.0", date: "2021-09-07", lts: false, security: false, v8: "9.3.345.16" }, { name: "nodejs", version: "16.10.0", date: "2021-09-22", lts: false, security: false, v8: "9.3.345.19" }, { name: "nodejs", version: "16.11.0", date: "2021-10-08", lts: false, security: false, v8: "9.4.146.19" }, { name: "nodejs", version: "16.12.0", date: "2021-10-20", lts: false, security: false, v8: "9.4.146.19" }, { name: "nodejs", version: "16.13.0", date: "2021-10-26", lts: "Gallium", security: false, v8: "9.4.146.19" }, { name: "nodejs", version: "16.14.0", date: "2022-02-08", lts: "Gallium", security: false, v8: "9.4.146.24" }, { name: "nodejs", version: "16.15.0", date: "2022-04-26", lts: "Gallium", security: false, v8: "9.4.146.24" }, { name: "nodejs", version: "16.16.0", date: "2022-07-07", lts: "Gallium", security: true, v8: "9.4.146.24" }, { name: "nodejs", version: "16.17.0", date: "2022-08-16", lts: "Gallium", security: false, v8: "9.4.146.26" }, { name: "nodejs", version: "16.18.0", date: "2022-10-12", lts: "Gallium", security: false, v8: "9.4.146.26" }, { name: "nodejs", version: "16.19.0", date: "2022-12-13", lts: "Gallium", security: false, v8: "9.4.146.26" }, { name: "nodejs", version: "16.20.0", date: "2023-03-28", lts: "Gallium", security: false, v8: "9.4.146.26" }, { name: "nodejs", version: "17.0.0", date: "2021-10-19", lts: false, security: false, v8: "9.5.172.21" }, { name: "nodejs", version: "17.1.0", date: "2021-11-09", lts: false, security: false, v8: "9.5.172.25" }, { name: "nodejs", version: "17.2.0", date: "2021-11-30", lts: false, security: false, v8: "9.6.180.14" }, { name: "nodejs", version: "17.3.0", date: "2021-12-17", lts: false, security: false, v8: "9.6.180.15" }, { name: "nodejs", version: "17.4.0", date: "2022-01-18", lts: false, security: false, v8: "9.6.180.15" }, { name: "nodejs", version: "17.5.0", date: "2022-02-10", lts: false, security: false, v8: "9.6.180.15" }, { name: "nodejs", version: "17.6.0", date: "2022-02-22", lts: false, security: false, v8: "9.6.180.15" }, { name: "nodejs", version: "17.7.0", date: "2022-03-09", lts: false, security: false, v8: "9.6.180.15" }, { name: "nodejs", version: "17.8.0", date: "2022-03-22", lts: false, security: false, v8: "9.6.180.15" }, { name: "nodejs", version: "17.9.0", date: "2022-04-07", lts: false, security: false, v8: "9.6.180.15" }, { name: "nodejs", version: "18.0.0", date: "2022-04-18", lts: false, security: false, v8: "10.1.124.8" }, { name: "nodejs", version: "18.1.0", date: "2022-05-03", lts: false, security: false, v8: "10.1.124.8" }, { name: "nodejs", version: "18.2.0", date: "2022-05-17", lts: false, security: false, v8: "10.1.124.8" }, { name: "nodejs", version: "18.3.0", date: "2022-06-02", lts: false, security: false, v8: "10.2.154.4" }, { name: "nodejs", version: "18.4.0", date: "2022-06-16", lts: false, security: false, v8: "10.2.154.4" }, { name: "nodejs", version: "18.5.0", date: "2022-07-06", lts: false, security: true, v8: "10.2.154.4" }, { name: "nodejs", version: "18.6.0", date: "2022-07-13", lts: false, security: false, v8: "10.2.154.13" }, { name: "nodejs", version: "18.7.0", date: "2022-07-26", lts: false, security: false, v8: "10.2.154.13" }, { name: "nodejs", version: "18.8.0", date: "2022-08-24", lts: false, security: false, v8: "10.2.154.13" }, { name: "nodejs", version: "18.9.0", date: "2022-09-07", lts: false, security: false, v8: "10.2.154.15" }, { name: "nodejs", version: "18.10.0", date: "2022-09-28", lts: false, security: false, v8: "10.2.154.15" }, { name: "nodejs", version: "18.11.0", date: "2022-10-13", lts: false, security: false, v8: "10.2.154.15" }, { name: "nodejs", version: "18.12.0", date: "2022-10-25", lts: "Hydrogen", security: false, v8: "10.2.154.15" }, { name: "nodejs", version: "18.13.0", date: "2023-01-05", lts: "Hydrogen", security: false, v8: "10.2.154.23" }, { name: "nodejs", version: "18.14.0", date: "2023-02-01", lts: "Hydrogen", security: false, v8: "10.2.154.23" }, { name: "nodejs", version: "18.15.0", date: "2023-03-05", lts: "Hydrogen", security: false, v8: "10.2.154.26" }, { name: "nodejs", version: "18.16.0", date: "2023-04-12", lts: "Hydrogen", security: false, v8: "10.2.154.26" }, { name: "nodejs", version: "18.17.0", date: "2023-07-18", lts: "Hydrogen", security: false, v8: "10.2.154.26" }, { name: "nodejs", version: "18.18.0", date: "2023-09-18", lts: "Hydrogen", security: false, v8: "10.2.154.26" }, { name: "nodejs", version: "18.19.0", date: "2023-11-29", lts: "Hydrogen", security: false, v8: "10.2.154.26" }, { name: "nodejs", version: "18.20.0", date: "2024-03-26", lts: "Hydrogen", security: false, v8: "10.2.154.26" }, { name: "nodejs", version: "19.0.0", date: "2022-10-17", lts: false, security: false, v8: "10.7.193.13" }, { name: "nodejs", version: "19.1.0", date: "2022-11-14", lts: false, security: false, v8: "10.7.193.20" }, { name: "nodejs", version: "19.2.0", date: "2022-11-29", lts: false, security: false, v8: "10.8.168.20" }, { name: "nodejs", version: "19.3.0", date: "2022-12-14", lts: false, security: false, v8: "10.8.168.21" }, { name: "nodejs", version: "19.4.0", date: "2023-01-05", lts: false, security: false, v8: "10.8.168.25" }, { name: "nodejs", version: "19.5.0", date: "2023-01-24", lts: false, security: false, v8: "10.8.168.25" }, { name: "nodejs", version: "19.6.0", date: "2023-02-01", lts: false, security: false, v8: "10.8.168.25" }, { name: "nodejs", version: "19.7.0", date: "2023-02-21", lts: false, security: false, v8: "10.8.168.25" }, { name: "nodejs", version: "19.8.0", date: "2023-03-14", lts: false, security: false, v8: "10.8.168.25" }, { name: "nodejs", version: "19.9.0", date: "2023-04-10", lts: false, security: false, v8: "10.8.168.25" }, { name: "nodejs", version: "20.0.0", date: "2023-04-17", lts: false, security: false, v8: "11.3.244.4" }, { name: "nodejs", version: "20.1.0", date: "2023-05-03", lts: false, security: false, v8: "11.3.244.8" }, { name: "nodejs", version: "20.2.0", date: "2023-05-16", lts: false, security: false, v8: "11.3.244.8" }, { name: "nodejs", version: "20.3.0", date: "2023-06-08", lts: false, security: false, v8: "11.3.244.8" }, { name: "nodejs", version: "20.4.0", date: "2023-07-04", lts: false, security: false, v8: "11.3.244.8" }, { name: "nodejs", version: "20.5.0", date: "2023-07-19", lts: false, security: false, v8: "11.3.244.8" }, { name: "nodejs", version: "20.6.0", date: "2023-08-23", lts: false, security: false, v8: "11.3.244.8" }, { name: "nodejs", version: "20.7.0", date: "2023-09-18", lts: false, security: false, v8: "11.3.244.8" }, { name: "nodejs", version: "20.8.0", date: "2023-09-28", lts: false, security: false, v8: "11.3.244.8" }, { name: "nodejs", version: "20.9.0", date: "2023-10-24", lts: "Iron", security: false, v8: "11.3.244.8" }, { name: "nodejs", version: "20.10.0", date: "2023-11-22", lts: "Iron", security: false, v8: "11.3.244.8" }, { name: "nodejs", version: "20.11.0", date: "2024-01-09", lts: "Iron", security: false, v8: "11.3.244.8" }, { name: "nodejs", version: "20.12.0", date: "2024-03-26", lts: "Iron", security: false, v8: "11.3.244.8" }, { name: "nodejs", version: "20.13.0", date: "2024-05-07", lts: "Iron", security: false, v8: "11.3.244.8" }, { name: "nodejs", version: "20.14.0", date: "2024-05-28", lts: "Iron", security: false, v8: "11.3.244.8" }, { name: "nodejs", version: "20.15.0", date: "2024-06-20", lts: "Iron", security: false, v8: "11.3.244.8" }, { name: "nodejs", version: "20.16.0", date: "2024-07-24", lts: "Iron", security: false, v8: "11.3.244.8" }, { name: "nodejs", version: "20.17.0", date: "2024-08-21", lts: "Iron", security: false, v8: "11.3.244.8" }, { name: "nodejs", version: "20.18.0", date: "2024-10-03", lts: "Iron", security: false, v8: "11.3.244.8" }, { name: "nodejs", version: "20.19.0", date: "2025-03-13", lts: "Iron", security: false, v8: "11.3.244.8" }, { name: "nodejs", version: "20.20.0", date: "2026-01-12", lts: "Iron", security: true, v8: "11.3.244.8" }, { name: "nodejs", version: "21.0.0", date: "2023-10-17", lts: false, security: false, v8: "11.8.172.13" }, { name: "nodejs", version: "21.1.0", date: "2023-10-24", lts: false, security: false, v8: "11.8.172.15" }, { name: "nodejs", version: "21.2.0", date: "2023-11-14", lts: false, security: false, v8: "11.8.172.17" }, { name: "nodejs", version: "21.3.0", date: "2023-11-30", lts: false, security: false, v8: "11.8.172.17" }, { name: "nodejs", version: "21.4.0", date: "2023-12-05", lts: false, security: false, v8: "11.8.172.17" }, { name: "nodejs", version: "21.5.0", date: "2023-12-19", lts: false, security: false, v8: "11.8.172.17" }, { name: "nodejs", version: "21.6.0", date: "2024-01-14", lts: false, security: false, v8: "11.8.172.17" }, { name: "nodejs", version: "21.7.0", date: "2024-03-06", lts: false, security: false, v8: "11.8.172.17" }, { name: "nodejs", version: "22.0.0", date: "2024-04-24", lts: false, security: false, v8: "12.4.254.14" }, { name: "nodejs", version: "22.1.0", date: "2024-05-02", lts: false, security: false, v8: "12.4.254.14" }, { name: "nodejs", version: "22.2.0", date: "2024-05-15", lts: false, security: false, v8: "12.4.254.14" }, { name: "nodejs", version: "22.3.0", date: "2024-06-11", lts: false, security: false, v8: "12.4.254.20" }, { name: "nodejs", version: "22.4.0", date: "2024-07-02", lts: false, security: false, v8: "12.4.254.21" }, { name: "nodejs", version: "22.5.0", date: "2024-07-17", lts: false, security: false, v8: "12.4.254.21" }, { name: "nodejs", version: "22.6.0", date: "2024-08-06", lts: false, security: false, v8: "12.4.254.21" }, { name: "nodejs", version: "22.7.0", date: "2024-08-21", lts: false, security: false, v8: "12.4.254.21" }, { name: "nodejs", version: "22.8.0", date: "2024-09-03", lts: false, security: false, v8: "12.4.254.21" }, { name: "nodejs", version: "22.9.0", date: "2024-09-17", lts: false, security: false, v8: "12.4.254.21" }, { name: "nodejs", version: "22.10.0", date: "2024-10-16", lts: false, security: false, v8: "12.4.254.21" }, { name: "nodejs", version: "22.11.0", date: "2024-10-29", lts: "Jod", security: false, v8: "12.4.254.21" }, { name: "nodejs", version: "22.12.0", date: "2024-12-02", lts: "Jod", security: false, v8: "12.4.254.21" }, { name: "nodejs", version: "22.13.0", date: "2025-01-06", lts: "Jod", security: false, v8: "12.4.254.21" }, { name: "nodejs", version: "22.14.0", date: "2025-02-11", lts: "Jod", security: false, v8: "12.4.254.21" }, { name: "nodejs", version: "22.15.0", date: "2025-04-22", lts: "Jod", security: false, v8: "12.4.254.21" }, { name: "nodejs", version: "22.16.0", date: "2025-05-20", lts: "Jod", security: false, v8: "12.4.254.21" }, { name: "nodejs", version: "22.17.0", date: "2025-06-24", lts: "Jod", security: false, v8: "12.4.254.21" }, { name: "nodejs", version: "22.18.0", date: "2025-07-31", lts: "Jod", security: false, v8: "12.4.254.21" }, { name: "nodejs", version: "22.19.0", date: "2025-08-28", lts: "Jod", security: false, v8: "12.4.254.21" }, { name: "nodejs", version: "22.20.0", date: "2025-09-24", lts: "Jod", security: false, v8: "12.4.254.21" }, { name: "nodejs", version: "22.21.0", date: "2025-10-20", lts: "Jod", security: false, v8: "12.4.254.21" }, { name: "nodejs", version: "22.22.0", date: "2026-01-12", lts: "Jod", security: true, v8: "12.4.254.21" }, { name: "nodejs", version: "23.0.0", date: "2024-10-16", lts: false, security: false, v8: "12.9.202.26" }, { name: "nodejs", version: "23.1.0", date: "2024-10-24", lts: false, security: false, v8: "12.9.202.28" }, { name: "nodejs", version: "23.2.0", date: "2024-11-11", lts: false, security: false, v8: "12.9.202.28" }, { name: "nodejs", version: "23.3.0", date: "2024-11-20", lts: false, security: false, v8: "12.9.202.28" }, { name: "nodejs", version: "23.4.0", date: "2024-12-10", lts: false, security: false, v8: "12.9.202.28" }, { name: "nodejs", version: "23.5.0", date: "2024-12-19", lts: false, security: false, v8: "12.9.202.28" }, { name: "nodejs", version: "23.6.0", date: "2025-01-07", lts: false, security: false, v8: "12.9.202.28" }, { name: "nodejs", version: "23.7.0", date: "2025-01-30", lts: false, security: false, v8: "12.9.202.28" }, { name: "nodejs", version: "23.8.0", date: "2025-02-13", lts: false, security: false, v8: "12.9.202.28" }, { name: "nodejs", version: "23.9.0", date: "2025-02-26", lts: false, security: false, v8: "12.9.202.28" }, { name: "nodejs", version: "23.10.0", date: "2025-03-13", lts: false, security: false, v8: "12.9.202.28" }, { name: "nodejs", version: "23.11.0", date: "2025-04-01", lts: false, security: false, v8: "12.9.202.28" }, { name: "nodejs", version: "24.0.0", date: "2025-05-06", lts: false, security: false, v8: "13.6.233.8" }, { name: "nodejs", version: "24.1.0", date: "2025-05-20", lts: false, security: false, v8: "13.6.233.10" }, { name: "nodejs", version: "24.2.0", date: "2025-06-09", lts: false, security: false, v8: "13.6.233.10" }, { name: "nodejs", version: "24.3.0", date: "2025-06-24", lts: false, security: false, v8: "13.6.233.10" }, { name: "nodejs", version: "24.4.0", date: "2025-07-09", lts: false, security: false, v8: "13.6.233.10" }, { name: "nodejs", version: "24.5.0", date: "2025-07-31", lts: false, security: false, v8: "13.6.233.10" }, { name: "nodejs", version: "24.6.0", date: "2025-08-14", lts: false, security: false, v8: "13.6.233.10" }, { name: "nodejs", version: "24.7.0", date: "2025-08-27", lts: false, security: false, v8: "13.6.233.10" }, { name: "nodejs", version: "24.8.0", date: "2025-09-10", lts: false, security: false, v8: "13.6.233.10" }, { name: "nodejs", version: "24.9.0", date: "2025-09-25", lts: false, security: false, v8: "13.6.233.10" }, { name: "nodejs", version: "24.10.0", date: "2025-10-08", lts: false, security: false, v8: "13.6.233.10" }, { name: "nodejs", version: "24.11.0", date: "2025-10-28", lts: "Krypton", security: false, v8: "13.6.233.10" }, { name: "nodejs", version: "24.12.0", date: "2025-12-10", lts: "Krypton", security: false, v8: "13.6.233.17" }, { name: "nodejs", version: "24.13.0", date: "2026-01-12", lts: "Krypton", security: true, v8: "13.6.233.17" }, { name: "nodejs", version: "24.14.0", date: "2026-02-24", lts: "Krypton", security: false, v8: "13.6.233.17" }, { name: "nodejs", version: "25.0.0", date: "2025-10-15", lts: false, security: false, v8: "14.1.146.11" }, { name: "nodejs", version: "25.1.0", date: "2025-10-28", lts: false, security: false, v8: "14.1.146.11" }, { name: "nodejs", version: "25.2.0", date: "2025-11-11", lts: false, security: false, v8: "14.1.146.11" }, { name: "nodejs", version: "25.3.0", date: "2026-01-12", lts: false, security: true, v8: "14.1.146.11" }, { name: "nodejs", version: "25.4.0", date: "2026-01-19", lts: false, security: false, v8: "14.1.146.11" }, { name: "nodejs", version: "25.5.0", date: "2026-01-26", lts: false, security: false, v8: "14.1.146.11" }, { name: "nodejs", version: "25.6.0", date: "2026-02-02", lts: false, security: false, v8: "14.1.146.11" }, { name: "nodejs", version: "25.7.0", date: "2026-02-24", lts: false, security: false, v8: "14.1.146.11" }, { name: "nodejs", version: "25.8.0", date: "2026-03-03", lts: false, security: false, v8: "14.1.146.11" }];
+  }
+});
+
+// ../../node_modules/caniuse-lite/data/browsers.js
+var require_browsers = __commonJS({
+  "../../node_modules/caniuse-lite/data/browsers.js"(exports, module) {
+    module.exports = { A: "ie", B: "edge", C: "firefox", D: "chrome", E: "safari", F: "opera", G: "ios_saf", H: "op_mini", I: "android", J: "bb", K: "op_mob", L: "and_chr", M: "and_ff", N: "ie_mob", O: "and_uc", P: "samsung", Q: "and_qq", R: "baidu", S: "kaios" };
+  }
+});
+
+// ../../node_modules/caniuse-lite/dist/unpacker/browsers.js
+var require_browsers2 = __commonJS({
+  "../../node_modules/caniuse-lite/dist/unpacker/browsers.js"(exports, module) {
+    module.exports.browsers = require_browsers();
+  }
+});
+
+// ../../node_modules/caniuse-lite/data/browserVersions.js
+var require_browserVersions = __commonJS({
+  "../../node_modules/caniuse-lite/data/browserVersions.js"(exports, module) {
+    module.exports = { "0": "117", "1": "118", "2": "119", "3": "120", "4": "121", "5": "122", "6": "123", "7": "124", "8": "125", "9": "126", A: "10", B: "11", C: "12", D: "7", E: "8", F: "9", G: "15", H: "80", I: "146", J: "4", K: "6", L: "13", M: "14", N: "16", O: "17", P: "18", Q: "79", R: "81", S: "83", T: "84", U: "85", V: "86", W: "87", X: "88", Y: "89", Z: "90", a: "91", b: "92", c: "93", d: "94", e: "95", f: "96", g: "97", h: "98", i: "99", j: "100", k: "101", l: "102", m: "103", n: "104", o: "105", p: "106", q: "107", r: "108", s: "109", t: "110", u: "111", v: "112", w: "113", x: "114", y: "115", z: "116", AB: "127", BB: "20", CB: "21", DB: "22", EB: "23", FB: "24", GB: "25", HB: "26", IB: "27", JB: "28", KB: "29", LB: "128", MB: "129", NB: "130", OB: "131", PB: "132", QB: "133", RB: "134", SB: "135", TB: "136", UB: "137", VB: "138", WB: "139", XB: "140", YB: "141", ZB: "142", aB: "143", bB: "144", cB: "145", dB: "5", eB: "19", fB: "30", gB: "31", hB: "32", iB: "33", jB: "34", kB: "35", lB: "36", mB: "37", nB: "38", oB: "39", pB: "40", qB: "41", rB: "42", sB: "43", tB: "44", uB: "45", vB: "46", wB: "47", xB: "48", yB: "49", zB: "50", "0B": "51", "1B": "52", "2B": "53", "3B": "54", "4B": "55", "5B": "56", "6B": "57", "7B": "58", "8B": "60", "9B": "62", AC: "63", BC: "64", CC: "65", DC: "66", EC: "67", FC: "68", GC: "69", HC: "70", IC: "71", JC: "72", KC: "73", LC: "74", MC: "75", NC: "76", OC: "77", PC: "78", QC: "149", RC: "11.1", SC: "12.1", TC: "15.5", UC: "16.0", VC: "17.0", WC: "18.0", XC: "3", YC: "59", ZC: "61", aC: "82", bC: "147", cC: "148", dC: "3.2", eC: "10.1", fC: "15.2-15.3", gC: "15.4", hC: "16.1", iC: "16.2", jC: "16.3", kC: "16.4", lC: "16.5", mC: "17.1", nC: "17.2", oC: "17.3", pC: "17.4", qC: "17.5", rC: "18.1", sC: "18.2", tC: "18.3", uC: "18.4", vC: "18.5-18.7", wC: "26.0", xC: "26.1", yC: "26.2", zC: "26.3", "0C": "26.4", "1C": "26.5", "2C": "11.5", "3C": "4.2-4.3", "4C": "5.5", "5C": "2", "6C": "150", "7C": "151", "8C": "152", "9C": "3.5", AD: "3.6", BD: "3.1", CD: "5.1", DD: "6.1", ED: "7.1", FD: "9.1", GD: "13.1", HD: "14.1", ID: "15.1", JD: "15.6", KD: "16.6", LD: "17.6", MD: "TP", ND: "9.5-9.6", OD: "10.0-10.1", PD: "10.5", QD: "10.6", RD: "11.6", SD: "4.0-4.1", TD: "5.0-5.1", UD: "6.0-6.1", VD: "7.0-7.1", WD: "8.1-8.4", XD: "9.0-9.2", YD: "9.3", ZD: "10.0-10.2", aD: "10.3", bD: "11.0-11.2", cD: "11.3-11.4", dD: "12.0-12.1", eD: "12.2-12.5", fD: "13.0-13.1", gD: "13.2", hD: "13.3", iD: "13.4-13.7", jD: "14.0-14.4", kD: "14.5-14.8", lD: "15.0-15.1", mD: "15.6-15.8", nD: "16.6-16.7", oD: "17.6-17.7", pD: "all", qD: "2.1", rD: "2.2", sD: "2.3", tD: "4.1", uD: "4.4", vD: "4.4.3-4.4.4", wD: "5.0-5.4", xD: "6.2-6.4", yD: "7.2-7.4", zD: "8.2", "0D": "9.2", "1D": "11.1-11.2", "2D": "12.0", "3D": "13.0", "4D": "14.0", "5D": "15.0", "6D": "19.0", "7D": "14.9", "8D": "13.52", "9D": "2.5", AE: "3.0-3.1" };
+  }
+});
+
+// ../../node_modules/caniuse-lite/dist/unpacker/browserVersions.js
+var require_browserVersions2 = __commonJS({
+  "../../node_modules/caniuse-lite/dist/unpacker/browserVersions.js"(exports, module) {
+    module.exports.browserVersions = require_browserVersions();
+  }
+});
+
+// ../../node_modules/caniuse-lite/data/agents.js
+var require_agents = __commonJS({
+  "../../node_modules/caniuse-lite/data/agents.js"(exports, module) {
+    module.exports = { A: { A: { K: 0, D: 0, E: 0, F: 0, A: 0, B: 0.294588, "4C": 0 }, B: "ms", C: ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "4C", "K", "D", "E", "F", "A", "B", "", "", ""], E: "IE", F: { "4C": 962323200, K: 998870400, D: 1161129600, E: 1237420800, F: 1300060800, A: 1346716800, B: 1381968e3 } }, B: { A: { "0": 0, "1": 0, "2": 0, "3": 0.014028, "4": 0, "5": 4676e-6, "6": 0, "7": 0, "8": 0, "9": 4676e-6, C: 0, L: 0, M: 0, G: 0, N: 0, O: 0, P: 0, Q: 0, H: 0, R: 0, S: 0, T: 0, U: 0, V: 0, W: 0, X: 0, Y: 0, Z: 0, a: 0, b: 9352e-6, c: 0, d: 0, e: 0, f: 0, g: 0, h: 0, i: 0, j: 0, k: 0, l: 0, m: 0, n: 0, o: 0, p: 0, q: 0, r: 0, s: 0.037408, t: 0, u: 0, v: 0, w: 0, x: 4676e-6, y: 0, z: 0, AB: 4676e-6, LB: 0, MB: 0, NB: 4676e-6, OB: 0.014028, PB: 4676e-6, QB: 9352e-6, RB: 9352e-6, SB: 9352e-6, TB: 9352e-6, UB: 9352e-6, VB: 0.018704, WB: 0.014028, XB: 0.018704, YB: 0.037408, ZB: 0.042084, aB: 0.14028, bB: 2.78222, cB: 1.89378, I: 0 }, B: "webkit", C: ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "C", "L", "M", "G", "N", "O", "P", "Q", "H", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "AB", "LB", "MB", "NB", "OB", "PB", "QB", "RB", "SB", "TB", "UB", "VB", "WB", "XB", "YB", "ZB", "aB", "bB", "cB", "I", "", "", ""], E: "Edge", F: { "0": 1694649600, "1": 1697155200, "2": 1698969600, "3": 1701993600, "4": 1706227200, "5": 1708732800, "6": 1711152e3, "7": 1713398400, "8": 1715990400, "9": 1718841600, C: 1438128e3, L: 1447286400, M: 1470096e3, G: 1491868800, N: 1508198400, O: 1525046400, P: 1542067200, Q: 1579046400, H: 1581033600, R: 1586736e3, S: 1590019200, T: 1594857600, U: 1598486400, V: 1602201600, W: 1605830400, X: 161136e4, Y: 1614816e3, Z: 1618358400, a: 1622073600, b: 1626912e3, c: 1630627200, d: 1632441600, e: 1634774400, f: 1637539200, g: 1641427200, h: 1643932800, i: 1646265600, j: 1649635200, k: 1651190400, l: 1653955200, m: 1655942400, n: 1659657600, o: 1661990400, p: 1664755200, q: 1666915200, r: 1670198400, s: 1673481600, t: 1675900800, u: 1678665600, v: 1680825600, w: 1683158400, x: 1685664e3, y: 1689897600, z: 1692576e3, AB: 1721865600, LB: 1724371200, MB: 1726704e3, NB: 1729123200, OB: 1731542400, PB: 1737417600, QB: 1740614400, RB: 1741219200, SB: 1743984e3, TB: 1746316800, UB: 1748476800, VB: 1750896e3, WB: 1754611200, XB: 1756944e3, YB: 1759363200, ZB: 1761868800, aB: 1764806400, bB: 1768780800, cB: 1770854400, I: 1773446400 }, D: { C: "ms", L: "ms", M: "ms", G: "ms", N: "ms", O: "ms", P: "ms" } }, C: { A: { "0": 0, "1": 0, "2": 0, "3": 0, "4": 0, "5": 0, "6": 0, "7": 0, "8": 0, "9": 0, "5C": 0, XC: 0, J: 0, dB: 0.018704, K: 0, D: 0, E: 0, F: 0, A: 0, B: 0.014028, C: 0, L: 0, M: 0, G: 0, N: 0, O: 0, P: 0, eB: 0, BB: 0, CB: 0, DB: 0, EB: 0, FB: 0, GB: 0, HB: 0, IB: 0, JB: 0, KB: 0, fB: 0, gB: 0, hB: 0, iB: 0, jB: 0, kB: 0, lB: 0, mB: 0, nB: 0, oB: 0, pB: 0, qB: 0, rB: 0, sB: 0, tB: 0, uB: 0, vB: 0, wB: 0, xB: 0, yB: 0, zB: 0, "0B": 0, "1B": 9352e-6, "2B": 0, "3B": 0, "4B": 0, "5B": 0, "6B": 0, "7B": 0, YC: 0, "8B": 0, ZC: 0, "9B": 0, AC: 0, BC: 0, CC: 0, DC: 0, EC: 0, FC: 0, GC: 0, HC: 0, IC: 0, JC: 0, KC: 0, LC: 0, MC: 0, NC: 0, OC: 0, PC: 4676e-6, Q: 0, H: 0, R: 0, aC: 0, S: 0, T: 0, U: 0, V: 0, W: 0, X: 0, Y: 0, Z: 0, a: 0, b: 0, c: 0, d: 0, e: 0, f: 0, g: 0, h: 0, i: 0, j: 0, k: 0, l: 0, m: 0, n: 0, o: 0, p: 0, q: 0, r: 0, s: 0, t: 0, u: 0, v: 0, w: 0, x: 0, y: 0.149632, z: 0, AB: 0, LB: 9352e-6, MB: 0, NB: 0, OB: 0, PB: 0, QB: 0, RB: 0, SB: 4676e-6, TB: 9352e-6, UB: 0, VB: 4676e-6, WB: 4676e-6, XB: 0.088844, YB: 0, ZB: 4676e-6, aB: 9352e-6, bB: 9352e-6, cB: 0.014028, I: 0.032732, bC: 1.37007, cC: 0.126252, QC: 0, "6C": 0, "7C": 0, "8C": 0, "9C": 0, AD: 0 }, B: "moz", C: ["5C", "XC", "9C", "AD", "J", "dB", "K", "D", "E", "F", "A", "B", "C", "L", "M", "G", "N", "O", "P", "eB", "BB", "CB", "DB", "EB", "FB", "GB", "HB", "IB", "JB", "KB", "fB", "gB", "hB", "iB", "jB", "kB", "lB", "mB", "nB", "oB", "pB", "qB", "rB", "sB", "tB", "uB", "vB", "wB", "xB", "yB", "zB", "0B", "1B", "2B", "3B", "4B", "5B", "6B", "7B", "YC", "8B", "ZC", "9B", "AC", "BC", "CC", "DC", "EC", "FC", "GC", "HC", "IC", "JC", "KC", "LC", "MC", "NC", "OC", "PC", "Q", "H", "R", "aC", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "AB", "LB", "MB", "NB", "OB", "PB", "QB", "RB", "SB", "TB", "UB", "VB", "WB", "XB", "YB", "ZB", "aB", "bB", "cB", "I", "bC", "cC", "QC", "6C", "7C", "8C"], E: "Firefox", F: { "0": 1693267200, "1": 1695686400, "2": 1698105600, "3": 1700524800, "4": 1702944e3, "5": 1705968e3, "6": 1708387200, "7": 1710806400, "8": 1713225600, "9": 1715644800, "5C": 1161648e3, XC: 1213660800, "9C": 124632e4, AD: 1264032e3, J: 1300752e3, dB: 1308614400, K: 1313452800, D: 1317081600, E: 1317081600, F: 1320710400, A: 1324339200, B: 1327968e3, C: 1331596800, L: 1335225600, M: 1338854400, G: 1342483200, N: 1346112e3, O: 1349740800, P: 1353628800, eB: 1357603200, BB: 1361232e3, CB: 1364860800, DB: 1368489600, EB: 1372118400, FB: 1375747200, GB: 1379376e3, HB: 1386633600, IB: 1391472e3, JB: 1395100800, KB: 1398729600, fB: 1402358400, gB: 1405987200, hB: 1409616e3, iB: 1413244800, jB: 1417392e3, kB: 1421107200, lB: 1424736e3, mB: 1428278400, nB: 1431475200, oB: 1435881600, pB: 1439251200, qB: 144288e4, rB: 1446508800, sB: 1450137600, tB: 1453852800, uB: 1457395200, vB: 1461628800, wB: 1465257600, xB: 1470096e3, yB: 1474329600, zB: 1479168e3, "0B": 1485216e3, "1B": 1488844800, "2B": 149256e4, "3B": 1497312e3, "4B": 1502150400, "5B": 1506556800, "6B": 1510617600, "7B": 1516665600, YC: 1520985600, "8B": 1525824e3, ZC: 1529971200, "9B": 1536105600, AC: 1540252800, BC: 1544486400, CC: 154872e4, DC: 1552953600, EC: 1558396800, FC: 1562630400, GC: 1567468800, HC: 1571788800, IC: 1575331200, JC: 1578355200, KC: 1581379200, LC: 1583798400, MC: 1586304e3, NC: 1588636800, OC: 1591056e3, PC: 1593475200, Q: 1595894400, H: 1598313600, R: 1600732800, aC: 1603152e3, S: 1605571200, T: 1607990400, U: 1611619200, V: 1614038400, W: 1616457600, X: 1618790400, Y: 1622505600, Z: 1626134400, a: 1628553600, b: 1630972800, c: 1633392e3, d: 1635811200, e: 1638835200, f: 1641859200, g: 1644364800, h: 1646697600, i: 1649116800, j: 1651536e3, k: 1653955200, l: 1656374400, m: 1658793600, n: 1661212800, o: 1663632e3, p: 1666051200, q: 1668470400, r: 1670889600, s: 1673913600, t: 1676332800, u: 1678752e3, v: 1681171200, w: 1683590400, x: 1686009600, y: 1688428800, z: 1690848e3, AB: 1718064e3, LB: 1720483200, MB: 1722902400, NB: 1725321600, OB: 1727740800, PB: 173016e4, QB: 1732579200, RB: 1736208e3, SB: 1738627200, TB: 1741046400, UB: 1743465600, VB: 1745884800, WB: 1748304e3, XB: 1750723200, YB: 1753142400, ZB: 1755561600, aB: 1757980800, bB: 17604e5, cB: 1762819200, I: 1765238400, bC: 1768262400, cC: 1771891200, QC: 1774310400, "6C": null, "7C": null, "8C": null } }, D: { A: { "0": 0.294588, "1": 9352e-6, "2": 0.018704, "3": 0.308616, "4": 0.018704, "5": 0.037408, "6": 0.02338, "7": 0.30394, "8": 0.042084, "9": 0.042084, J: 0, dB: 0, K: 0, D: 0, E: 0, F: 0, A: 0, B: 0, C: 0, L: 0, M: 0, G: 0, N: 0, O: 0, P: 0, eB: 0, BB: 0, CB: 0, DB: 0, EB: 0, FB: 0, GB: 0, HB: 0, IB: 0, JB: 0, KB: 0, fB: 0, gB: 0, hB: 0, iB: 0, jB: 0, kB: 0, lB: 0, mB: 0, nB: 0, oB: 0, pB: 0, qB: 0, rB: 0, sB: 0, tB: 0, uB: 0, vB: 0, wB: 0, xB: 4676e-6, yB: 4676e-6, zB: 0, "0B": 0, "1B": 0, "2B": 0, "3B": 0, "4B": 0, "5B": 0, "6B": 0, "7B": 0, YC: 0, "8B": 0, ZC: 0, "9B": 0, AC: 0, BC: 0, CC: 0, DC: 4676e-6, EC: 0, FC: 0, GC: 0.018704, HC: 0, IC: 0, JC: 0, KC: 0, LC: 0, MC: 0, NC: 0, OC: 0, PC: 0, Q: 0.018704, H: 4676e-6, R: 0, S: 9352e-6, T: 0, U: 4676e-6, V: 4676e-6, W: 9352e-6, X: 0, Y: 0, Z: 0, a: 9352e-6, b: 4676e-6, c: 9352e-6, d: 0, e: 0, f: 0, g: 9352e-6, h: 0.014028, i: 0.014028, j: 0, k: 9352e-6, l: 4676e-6, m: 0.3507, n: 0.285236, o: 0.275884, p: 0.275884, q: 0.275884, r: 0.28056, s: 0.907144, t: 0.271208, u: 0.294588, v: 1.30928, w: 0, x: 0.037408, y: 0.014028, z: 0.589176, AB: 0.014028, LB: 0.060788, MB: 0.028056, NB: 0.060788, OB: 0.832328, PB: 0.060788, QB: 0.692048, RB: 0.04676, SB: 0.051436, TB: 0.060788, UB: 0.051436, VB: 0.252504, WB: 1.10354, XB: 0.084168, YB: 0.144956, ZB: 0.462924, aB: 1.06613, bB: 10.0908, cB: 5.25115, I: 0.018704, bC: 0, cC: 0, QC: 0 }, B: "webkit", C: ["", "", "", "", "", "", "", "", "J", "dB", "K", "D", "E", "F", "A", "B", "C", "L", "M", "G", "N", "O", "P", "eB", "BB", "CB", "DB", "EB", "FB", "GB", "HB", "IB", "JB", "KB", "fB", "gB", "hB", "iB", "jB", "kB", "lB", "mB", "nB", "oB", "pB", "qB", "rB", "sB", "tB", "uB", "vB", "wB", "xB", "yB", "zB", "0B", "1B", "2B", "3B", "4B", "5B", "6B", "7B", "YC", "8B", "ZC", "9B", "AC", "BC", "CC", "DC", "EC", "FC", "GC", "HC", "IC", "JC", "KC", "LC", "MC", "NC", "OC", "PC", "Q", "H", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "AB", "LB", "MB", "NB", "OB", "PB", "QB", "RB", "SB", "TB", "UB", "VB", "WB", "XB", "YB", "ZB", "aB", "bB", "cB", "I", "bC", "cC", "QC"], E: "Chrome", F: { "0": 1694476800, "1": 1696896e3, "2": 1698710400, "3": 1701993600, "4": 1705968e3, "5": 1708387200, "6": 1710806400, "7": 1713225600, "8": 1715644800, "9": 1718064e3, J: 1264377600, dB: 1274745600, K: 1283385600, D: 1287619200, E: 1291248e3, F: 1296777600, A: 1299542400, B: 1303862400, C: 1307404800, L: 1312243200, M: 1316131200, G: 1316131200, N: 1319500800, O: 1323734400, P: 1328659200, eB: 1332892800, BB: 133704e4, CB: 1340668800, DB: 1343692800, EB: 1348531200, FB: 1352246400, GB: 1357862400, HB: 1361404800, IB: 1364428800, JB: 1369094400, KB: 1374105600, fB: 1376956800, gB: 1384214400, hB: 1389657600, iB: 1392940800, jB: 1397001600, kB: 1400544e3, lB: 1405468800, mB: 1409011200, nB: 141264e4, oB: 1416268800, pB: 1421798400, qB: 1425513600, rB: 1429401600, sB: 143208e4, tB: 1437523200, uB: 1441152e3, vB: 1444780800, wB: 1449014400, xB: 1453248e3, yB: 1456963200, zB: 1460592e3, "0B": 1464134400, "1B": 1469059200, "2B": 1472601600, "3B": 1476230400, "4B": 1480550400, "5B": 1485302400, "6B": 1489017600, "7B": 149256e4, YC: 1496707200, "8B": 1500940800, ZC: 1504569600, "9B": 1508198400, AC: 1512518400, BC: 1516752e3, CC: 1520294400, DC: 1523923200, EC: 1527552e3, FC: 1532390400, GC: 1536019200, HC: 1539648e3, IC: 1543968e3, JC: 154872e4, KC: 1552348800, LC: 1555977600, MC: 1559606400, NC: 1564444800, OC: 1568073600, PC: 1571702400, Q: 1575936e3, H: 1580860800, R: 1586304e3, S: 1589846400, T: 1594684800, U: 1598313600, V: 1601942400, W: 1605571200, X: 1611014400, Y: 1614556800, Z: 1618272e3, a: 1621987200, b: 1626739200, c: 1630368e3, d: 1632268800, e: 1634601600, f: 1637020800, g: 1641340800, h: 1643673600, i: 1646092800, j: 1648512e3, k: 1650931200, l: 1653350400, m: 1655769600, n: 1659398400, o: 1661817600, p: 1664236800, q: 1666656e3, r: 166968e4, s: 1673308800, t: 1675728e3, u: 1678147200, v: 1680566400, w: 1682985600, x: 1685404800, y: 1689724800, z: 1692057600, AB: 1721174400, LB: 1724112e3, MB: 1726531200, NB: 1728950400, OB: 1731369600, PB: 1736812800, QB: 1738627200, RB: 1741046400, SB: 1743465600, TB: 1745884800, UB: 1748304e3, VB: 1750723200, WB: 1754352e3, XB: 1756771200, YB: 1759190400, ZB: 1761609600, aB: 1764633600, bB: 1768262400, cB: 1770681600, I: 1773100800, bC: null, cC: null, QC: null } }, E: { A: { J: 0, dB: 0, K: 0, D: 0, E: 0, F: 0, A: 0, B: 0, C: 0, L: 0, M: 9352e-6, G: 0, BD: 0, dC: 0, CD: 0, DD: 0, ED: 0, FD: 0, eC: 0, RC: 0, SC: 0, GD: 0.018704, HD: 0.02338, ID: 0, fC: 0, gC: 4676e-6, TC: 4676e-6, JD: 0.09352, UC: 4676e-6, hC: 0.014028, iC: 9352e-6, jC: 0.018704, kC: 9352e-6, lC: 0.014028, KD: 0.144956, VC: 9352e-6, mC: 0.107548, nC: 9352e-6, oC: 0.014028, pC: 0.028056, qC: 0.060788, LD: 0.168336, WC: 9352e-6, rC: 0.02338, sC: 9352e-6, tC: 0.042084, uC: 0.018704, vC: 0.505008, wC: 0.032732, xC: 0.056112, yC: 1.0708, zC: 0.275884, "0C": 0, "1C": 0, MD: 0 }, B: "webkit", C: ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "BD", "dC", "J", "dB", "CD", "K", "DD", "D", "ED", "E", "F", "FD", "A", "eC", "B", "RC", "C", "SC", "L", "GD", "M", "HD", "G", "ID", "fC", "gC", "TC", "JD", "UC", "hC", "iC", "jC", "kC", "lC", "KD", "VC", "mC", "nC", "oC", "pC", "qC", "LD", "WC", "rC", "sC", "tC", "uC", "vC", "wC", "xC", "yC", "zC", "0C", "1C", "MD", ""], E: "Safari", F: { BD: 1205798400, dC: 1226534400, J: 1244419200, dB: 1275868800, CD: 131112e4, K: 1343174400, DD: 13824e5, D: 13824e5, ED: 1410998400, E: 1413417600, F: 1443657600, FD: 1458518400, A: 1474329600, eC: 1490572800, B: 1505779200, RC: 1522281600, C: 1537142400, SC: 1553472e3, L: 1568851200, GD: 1585008e3, M: 1600214400, HD: 1619395200, G: 1632096e3, ID: 1635292800, fC: 1639353600, gC: 1647216e3, TC: 1652745600, JD: 1658275200, UC: 1662940800, hC: 1666569600, iC: 1670889600, jC: 1674432e3, kC: 1679875200, lC: 1684368e3, KD: 1690156800, VC: 1695686400, mC: 1698192e3, nC: 1702252800, oC: 1705881600, pC: 1709596800, qC: 1715558400, LD: 1722211200, WC: 1726444800, rC: 1730073600, sC: 1733875200, tC: 1737936e3, uC: 1743379200, vC: 1747008e3, wC: 1757894400, xC: 1762128e3, yC: 1762041600, zC: 1770854400, "0C": 1774310400, "1C": null, MD: null } }, F: { A: { "0": 0, "1": 0, "2": 0, "3": 0, "4": 0, "5": 0, "6": 0, "7": 0, "8": 0.014028, "9": 0.4676, F: 0, B: 0, C: 0, G: 0, N: 0, O: 0, P: 0, eB: 0, BB: 0, CB: 0, DB: 0, EB: 0, FB: 0, GB: 0, HB: 0, IB: 0, JB: 0, KB: 0, fB: 0, gB: 0, hB: 0, iB: 0, jB: 0, kB: 0, lB: 0, mB: 0, nB: 0, oB: 0, pB: 0, qB: 0, rB: 0, sB: 0, tB: 0, uB: 0, vB: 0, wB: 0, xB: 0, yB: 0, zB: 0, "0B": 0, "1B": 0, "2B": 0, "3B": 0, "4B": 0, "5B": 0, "6B": 0, "7B": 0, "8B": 0, "9B": 0, AC: 0, BC: 0, CC: 0, DC: 0, EC: 0, FC: 0, GC: 0, HC: 0, IC: 0, JC: 0, KC: 0, LC: 0, MC: 0, NC: 0, OC: 0, PC: 0, Q: 0, H: 0, R: 0, aC: 0, S: 0, T: 0, U: 0, V: 0, W: 0, X: 0, Y: 0, Z: 0, a: 0, b: 0, c: 4676e-6, d: 0.04676, e: 0.065464, f: 0, g: 0, h: 0, i: 0, j: 0, k: 0, l: 0, m: 0, n: 0, o: 0, p: 0, q: 0, r: 0, s: 0, t: 0, u: 0, v: 0, w: 0, x: 0, y: 0, z: 0, AB: 0.39746, ND: 0, OD: 0, PD: 0, QD: 0, RC: 0, "2C": 0, RD: 0, SC: 0 }, B: "webkit", C: ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "F", "ND", "OD", "PD", "QD", "B", "RC", "2C", "RD", "C", "SC", "G", "N", "O", "P", "eB", "BB", "CB", "DB", "EB", "FB", "GB", "HB", "IB", "JB", "KB", "fB", "gB", "hB", "iB", "jB", "kB", "lB", "mB", "nB", "oB", "pB", "qB", "rB", "sB", "tB", "uB", "vB", "wB", "xB", "yB", "zB", "0B", "1B", "2B", "3B", "4B", "5B", "6B", "7B", "8B", "9B", "AC", "BC", "CC", "DC", "EC", "FC", "GC", "HC", "IC", "JC", "KC", "LC", "MC", "NC", "OC", "PC", "Q", "H", "R", "aC", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "AB", "", "", ""], E: "Opera", F: { "0": 1739404800, "1": 1744675200, "2": 1747094400, "3": 1751414400, "4": 1756339200, "5": 1757548800, "6": 1761609600, "7": 1762992e3, "8": 1764806400, "9": 1769990400, F: 1150761600, ND: 1223424e3, OD: 1251763200, PD: 1267488e3, QD: 1277942400, B: 1292457600, RC: 1302566400, "2C": 1309219200, RD: 1323129600, C: 1323129600, SC: 1352073600, G: 1372723200, N: 1377561600, O: 1381104e3, P: 1386288e3, eB: 1390867200, BB: 1393891200, CB: 1399334400, DB: 1401753600, EB: 1405987200, FB: 1409616e3, GB: 1413331200, HB: 1417132800, IB: 1422316800, JB: 1425945600, KB: 1430179200, fB: 1433808e3, gB: 1438646400, hB: 1442448e3, iB: 1445904e3, jB: 1449100800, kB: 1454371200, lB: 1457308800, mB: 146232e4, nB: 1465344e3, oB: 1470096e3, pB: 1474329600, qB: 1477267200, rB: 1481587200, sB: 1486425600, tB: 1490054400, uB: 1494374400, vB: 1498003200, wB: 1502236800, xB: 1506470400, yB: 1510099200, zB: 1515024e3, "0B": 1517961600, "1B": 1521676800, "2B": 1525910400, "3B": 1530144e3, "4B": 1534982400, "5B": 1537833600, "6B": 1543363200, "7B": 1548201600, "8B": 1554768e3, "9B": 1561593600, AC: 1566259200, BC: 1570406400, CC: 1573689600, DC: 1578441600, EC: 1583971200, FC: 1587513600, GC: 1592956800, HC: 1595894400, IC: 1600128e3, JC: 1603238400, KC: 161352e4, LC: 1612224e3, MC: 1616544e3, NC: 1619568e3, OC: 1623715200, PC: 1627948800, Q: 1631577600, H: 1633392e3, R: 1635984e3, aC: 1638403200, S: 1642550400, T: 1644969600, U: 1647993600, V: 1650412800, W: 1652745600, X: 1654646400, Y: 1657152e3, Z: 1660780800, a: 1663113600, b: 1668816e3, c: 1668643200, d: 1671062400, e: 1675209600, f: 1677024e3, g: 1679529600, h: 1681948800, i: 1684195200, j: 1687219200, k: 1690329600, l: 1692748800, m: 1696204800, n: 169992e4, o: 169992e4, p: 1702944e3, q: 1707264e3, r: 1710115200, s: 1711497600, t: 1716336e3, u: 1719273600, v: 1721088e3, w: 1724284800, x: 1727222400, y: 1732665600, z: 1736294400, AB: 1772064e3 }, D: { F: "o", B: "o", C: "o", ND: "o", OD: "o", PD: "o", QD: "o", RC: "o", "2C": "o", RD: "o", SC: "o" } }, G: { A: { E: 0, dC: 0, SD: 0, "3C": 0, TD: 0, UD: 134804e-8, VD: 134804e-8, WD: 0, XD: 0, YD: 134804e-8, ZD: 0, aD: 0.0121323, bD: 0.117279, cD: 404411e-8, dD: 0, eD: 0.0633577, fD: 0, gD: 0.0188725, hD: 269607e-8, iD: 674018e-8, jD: 0.0134804, kD: 0.0175245, lD: 0.0161764, fC: 0.0121323, gC: 0.0148284, TC: 0.0175245, mD: 0.273651, UC: 0.0283088, hC: 0.0539215, iC: 0.0296568, jC: 0.0539215, kC: 0.0121323, lC: 0.0215686, nD: 0.362622, VC: 0.0175245, mC: 0.0269607, nC: 0.0215686, oC: 0.0337009, pC: 0.0512254, qC: 0.101103, oD: 0.256127, WC: 0.0566175, rC: 0.115931, sC: 0.0620097, tC: 0.195465, uC: 0.0970586, vC: 3.06409, wC: 0.215686, xC: 0.423284, yC: 6.4571, zC: 1.08921, "0C": 0.0188725, "1C": 0 }, B: "webkit", C: ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "dC", "SD", "3C", "TD", "UD", "VD", "E", "WD", "XD", "YD", "ZD", "aD", "bD", "cD", "dD", "eD", "fD", "gD", "hD", "iD", "jD", "kD", "lD", "fC", "gC", "TC", "mD", "UC", "hC", "iC", "jC", "kC", "lC", "nD", "VC", "mC", "nC", "oC", "pC", "qC", "oD", "WC", "rC", "sC", "tC", "uC", "vC", "wC", "xC", "yC", "zC", "0C", "1C", "", ""], E: "Safari on iOS", F: { dC: 1270252800, SD: 1283904e3, "3C": 1299628800, TD: 1331078400, UD: 1359331200, VD: 1394409600, E: 1410912e3, WD: 1413763200, XD: 1442361600, YD: 1458518400, ZD: 1473724800, aD: 1490572800, bD: 1505779200, cD: 1522281600, dD: 1537142400, eD: 1553472e3, fD: 1568851200, gD: 1572220800, hD: 1580169600, iD: 1585008e3, jD: 1600214400, kD: 1619395200, lD: 1632096e3, fC: 1639353600, gC: 1647216e3, TC: 1652659200, mD: 1658275200, UC: 1662940800, hC: 1666569600, iC: 1670889600, jC: 1674432e3, kC: 1679875200, lC: 1684368e3, nD: 1690156800, VC: 1694995200, mC: 1698192e3, nC: 1702252800, oC: 1705881600, pC: 1709596800, qC: 1715558400, oD: 1722211200, WC: 1726444800, rC: 1730073600, sC: 1733875200, tC: 1737936e3, uC: 1743379200, vC: 1747008e3, wC: 1757894400, xC: 1762128e3, yC: 1765497600, zC: 1770854400, "0C": 1774310400, "1C": null } }, H: { A: { pD: 0 }, B: "o", C: ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "pD", "", "", ""], E: "Opera Mini", F: { pD: 1426464e3 } }, I: { A: { XC: 0, J: 0, I: 0.148893, qD: 0, rD: 0, sD: 0, tD: 0, "3C": 0, uD: 0, vD: 894432e-10 }, B: "webkit", C: ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "qD", "rD", "sD", "XC", "J", "tD", "3C", "uD", "vD", "I", "", "", ""], E: "Android Browser", F: { qD: 1256515200, rD: 1274313600, sD: 1291593600, XC: 1298332800, J: 1318896e3, tD: 1341792e3, "3C": 1374624e3, uD: 1386547200, vD: 1401667200, I: 1773100800 } }, J: { A: { D: 0, A: 0 }, B: "webkit", C: ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "D", "A", "", "", ""], E: "Blackberry Browser", F: { D: 1325376e3, A: 1359504e3 } }, K: { A: { A: 0, B: 0, C: 0, H: 0.761332, RC: 0, "2C": 0, SC: 0 }, B: "o", C: ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "A", "B", "RC", "2C", "C", "SC", "H", "", "", ""], E: "Opera Mobile", F: { A: 1287100800, B: 1300752e3, RC: 1314835200, "2C": 1318291200, C: 1330300800, SC: 1349740800, H: 1709769600 }, D: { H: "webkit" } }, L: { A: { I: 42.1379 }, B: "webkit", C: ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "I", "", "", ""], E: "Chrome for Android", F: { I: 1773100800 } }, M: { A: { QC: 0.335412 }, B: "moz", C: ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "QC", "", "", ""], E: "Firefox for Android", F: { QC: 1774310400 } }, N: { A: { A: 0, B: 0 }, B: "ms", C: ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "A", "B", "", "", ""], E: "IE Mobile", F: { A: 1340150400, B: 1353456e3 } }, O: { A: { TC: 0.553696 }, B: "webkit", C: ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "TC", "", "", ""], E: "UC Browser for Android", F: { TC: 1710115200 }, D: { TC: "webkit" } }, P: { A: { J: 0, BB: 0, CB: 0.0107303, DB: 0.0107303, EB: 0.0107303, FB: 0.0107303, GB: 0.0214607, HB: 0.0429213, IB: 0.0429213, JB: 0.096573, KB: 1.83489, wD: 0, xD: 0, yD: 0, zD: 0, "0D": 0, eC: 0, "1D": 0, "2D": 0, "3D": 0, "4D": 0, "5D": 0, UC: 0, VC: 0, WC: 0, "6D": 0 }, B: "webkit", C: ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "J", "wD", "xD", "yD", "zD", "0D", "eC", "1D", "2D", "3D", "4D", "5D", "UC", "VC", "WC", "6D", "BB", "CB", "DB", "EB", "FB", "GB", "HB", "IB", "JB", "KB", "", "", ""], E: "Samsung Internet", F: { J: 1461024e3, wD: 1481846400, xD: 1509408e3, yD: 1528329600, zD: 1546128e3, "0D": 1554163200, eC: 1567900800, "1D": 1582588800, "2D": 1593475200, "3D": 1605657600, "4D": 1618531200, "5D": 1629072e3, UC: 1640736e3, VC: 1651708800, WC: 1659657600, "6D": 1667260800, BB: 1677369600, CB: 1684454400, DB: 1689292800, EB: 1697587200, FB: 1711497600, GB: 1715126400, HB: 1717718400, IB: 1725667200, JB: 1746057600, KB: 1761264e3 } }, Q: { A: { "7D": 0.122452 }, B: "webkit", C: ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "7D", "", "", ""], E: "QQ Browser", F: { "7D": 1710288e3 } }, R: { A: { "8D": 0 }, B: "webkit", C: ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "8D", "", "", ""], E: "Baidu Browser", F: { "8D": 1710201600 } }, S: { A: { "9D": 0, AE: 0 }, B: "moz", C: ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "9D", "AE", "", "", ""], E: "KaiOS Browser", F: { "9D": 1527811200, AE: 1631664e3 } } };
+  }
+});
+
+// ../../node_modules/caniuse-lite/dist/unpacker/agents.js
+var require_agents2 = __commonJS({
+  "../../node_modules/caniuse-lite/dist/unpacker/agents.js"(exports, module) {
+    "use strict";
+    var browsers = require_browsers2().browsers;
+    var versions = require_browserVersions2().browserVersions;
+    var agentsData = require_agents();
+    function unpackBrowserVersions(versionsData) {
+      return Object.keys(versionsData).reduce((usage, version) => {
+        usage[versions[version]] = versionsData[version];
+        return usage;
+      }, {});
+    }
+    module.exports.agents = Object.keys(agentsData).reduce((map, key) => {
+      let versionsData = agentsData[key];
+      map[browsers[key]] = Object.keys(versionsData).reduce((data, entry) => {
+        if (entry === "A") {
+          data.usage_global = unpackBrowserVersions(versionsData[entry]);
+        } else if (entry === "C") {
+          data.versions = versionsData[entry].reduce((list, version) => {
+            if (version === "") {
+              list.push(null);
+            } else {
+              list.push(versions[version]);
+            }
+            return list;
+          }, []);
+        } else if (entry === "D") {
+          data.prefix_exceptions = unpackBrowserVersions(versionsData[entry]);
+        } else if (entry === "E") {
+          data.browser = versionsData[entry];
+        } else if (entry === "F") {
+          data.release_date = Object.keys(versionsData[entry]).reduce(
+            (map2, key2) => {
+              map2[versions[key2]] = versionsData[entry][key2];
+              return map2;
+            },
+            {}
+          );
+        } else {
+          data.prefix = versionsData[entry];
+        }
+        return data;
+      }, {});
+      return map;
+    }, {});
+  }
+});
+
+// ../../node_modules/electron-to-chromium/versions.js
+var require_versions = __commonJS({
+  "../../node_modules/electron-to-chromium/versions.js"(exports, module) {
+    module.exports = {
+      "0.20": "39",
+      "0.21": "41",
+      "0.22": "41",
+      "0.23": "41",
+      "0.24": "41",
+      "0.25": "42",
+      "0.26": "42",
+      "0.27": "43",
+      "0.28": "43",
+      "0.29": "43",
+      "0.30": "44",
+      "0.31": "45",
+      "0.32": "45",
+      "0.33": "45",
+      "0.34": "45",
+      "0.35": "45",
+      "0.36": "47",
+      "0.37": "49",
+      "1.0": "49",
+      "1.1": "50",
+      "1.2": "51",
+      "1.3": "52",
+      "1.4": "53",
+      "1.5": "54",
+      "1.6": "56",
+      "1.7": "58",
+      "1.8": "59",
+      "2.0": "61",
+      "2.1": "61",
+      "3.0": "66",
+      "3.1": "66",
+      "4.0": "69",
+      "4.1": "69",
+      "4.2": "69",
+      "5.0": "73",
+      "6.0": "76",
+      "6.1": "76",
+      "7.0": "78",
+      "7.1": "78",
+      "7.2": "78",
+      "7.3": "78",
+      "8.0": "80",
+      "8.1": "80",
+      "8.2": "80",
+      "8.3": "80",
+      "8.4": "80",
+      "8.5": "80",
+      "9.0": "83",
+      "9.1": "83",
+      "9.2": "83",
+      "9.3": "83",
+      "9.4": "83",
+      "10.0": "85",
+      "10.1": "85",
+      "10.2": "85",
+      "10.3": "85",
+      "10.4": "85",
+      "11.0": "87",
+      "11.1": "87",
+      "11.2": "87",
+      "11.3": "87",
+      "11.4": "87",
+      "11.5": "87",
+      "12.0": "89",
+      "12.1": "89",
+      "12.2": "89",
+      "13.0": "91",
+      "13.1": "91",
+      "13.2": "91",
+      "13.3": "91",
+      "13.4": "91",
+      "13.5": "91",
+      "13.6": "91",
+      "14.0": "93",
+      "14.1": "93",
+      "14.2": "93",
+      "15.0": "94",
+      "15.1": "94",
+      "15.2": "94",
+      "15.3": "94",
+      "15.4": "94",
+      "15.5": "94",
+      "16.0": "96",
+      "16.1": "96",
+      "16.2": "96",
+      "17.0": "98",
+      "17.1": "98",
+      "17.2": "98",
+      "17.3": "98",
+      "17.4": "98",
+      "18.0": "100",
+      "18.1": "100",
+      "18.2": "100",
+      "18.3": "100",
+      "19.0": "102",
+      "19.1": "102",
+      "20.0": "104",
+      "20.1": "104",
+      "20.2": "104",
+      "20.3": "104",
+      "21.0": "106",
+      "21.1": "106",
+      "21.2": "106",
+      "21.3": "106",
+      "21.4": "106",
+      "22.0": "108",
+      "22.1": "108",
+      "22.2": "108",
+      "22.3": "108",
+      "23.0": "110",
+      "23.1": "110",
+      "23.2": "110",
+      "23.3": "110",
+      "24.0": "112",
+      "24.1": "112",
+      "24.2": "112",
+      "24.3": "112",
+      "24.4": "112",
+      "24.5": "112",
+      "24.6": "112",
+      "24.7": "112",
+      "24.8": "112",
+      "25.0": "114",
+      "25.1": "114",
+      "25.2": "114",
+      "25.3": "114",
+      "25.4": "114",
+      "25.5": "114",
+      "25.6": "114",
+      "25.7": "114",
+      "25.8": "114",
+      "25.9": "114",
+      "26.0": "116",
+      "26.1": "116",
+      "26.2": "116",
+      "26.3": "116",
+      "26.4": "116",
+      "26.5": "116",
+      "26.6": "116",
+      "27.0": "118",
+      "27.1": "118",
+      "27.2": "118",
+      "27.3": "118",
+      "28.0": "120",
+      "28.1": "120",
+      "28.2": "120",
+      "28.3": "120",
+      "29.0": "122",
+      "29.1": "122",
+      "29.2": "122",
+      "29.3": "122",
+      "29.4": "122",
+      "30.0": "124",
+      "30.1": "124",
+      "30.2": "124",
+      "30.3": "124",
+      "30.4": "124",
+      "30.5": "124",
+      "31.0": "126",
+      "31.1": "126",
+      "31.2": "126",
+      "31.3": "126",
+      "31.4": "126",
+      "31.5": "126",
+      "31.6": "126",
+      "31.7": "126",
+      "32.0": "128",
+      "32.1": "128",
+      "32.2": "128",
+      "32.3": "128",
+      "33.0": "130",
+      "33.1": "130",
+      "33.2": "130",
+      "33.3": "130",
+      "33.4": "130",
+      "34.0": "132",
+      "34.1": "132",
+      "34.2": "132",
+      "34.3": "132",
+      "34.4": "132",
+      "34.5": "132",
+      "35.0": "134",
+      "35.1": "134",
+      "35.2": "134",
+      "35.3": "134",
+      "35.4": "134",
+      "35.5": "134",
+      "35.6": "134",
+      "35.7": "134",
+      "36.0": "136",
+      "36.1": "136",
+      "36.2": "136",
+      "36.3": "136",
+      "36.4": "136",
+      "36.5": "136",
+      "36.6": "136",
+      "36.7": "136",
+      "36.8": "136",
+      "36.9": "136",
+      "37.0": "138",
+      "37.1": "138",
+      "37.2": "138",
+      "37.3": "138",
+      "37.4": "138",
+      "37.5": "138",
+      "37.6": "138",
+      "37.7": "138",
+      "37.8": "138",
+      "37.9": "138",
+      "37.10": "138",
+      "38.0": "140",
+      "38.1": "140",
+      "38.2": "140",
+      "38.3": "140",
+      "38.4": "140",
+      "38.5": "140",
+      "38.6": "140",
+      "38.7": "140",
+      "38.8": "140",
+      "39.0": "142",
+      "39.1": "142",
+      "39.2": "142",
+      "39.3": "142",
+      "39.4": "142",
+      "39.5": "142",
+      "39.6": "142",
+      "39.7": "142",
+      "39.8": "142",
+      "40.0": "144",
+      "40.1": "144",
+      "40.2": "144",
+      "40.3": "144",
+      "40.4": "144",
+      "40.5": "144",
+      "40.6": "144",
+      "40.7": "144",
+      "40.8": "144",
+      "41.0": "146",
+      "41.1": "146",
+      "42.0": "148"
+    };
+  }
+});
+
+// ../../node_modules/node-releases/data/release-schedule/release-schedule.json
+var require_release_schedule = __commonJS({
+  "../../node_modules/node-releases/data/release-schedule/release-schedule.json"(exports, module) {
+    module.exports = { "v0.8": { start: "2012-06-25", end: "2014-07-31" }, "v0.10": { start: "2013-03-11", end: "2016-10-31" }, "v0.12": { start: "2015-02-06", end: "2016-12-31" }, v4: { start: "2015-09-08", lts: "2015-10-12", maintenance: "2017-04-01", end: "2018-04-30", codename: "Argon" }, v5: { start: "2015-10-29", maintenance: "2016-04-30", end: "2016-06-30" }, v6: { start: "2016-04-26", lts: "2016-10-18", maintenance: "2018-04-30", end: "2019-04-30", codename: "Boron" }, v7: { start: "2016-10-25", maintenance: "2017-04-30", end: "2017-06-30" }, v8: { start: "2017-05-30", lts: "2017-10-31", maintenance: "2019-01-01", end: "2019-12-31", codename: "Carbon" }, v9: { start: "2017-10-01", maintenance: "2018-04-01", end: "2018-06-30" }, v10: { start: "2018-04-24", lts: "2018-10-30", maintenance: "2020-05-19", end: "2021-04-30", codename: "Dubnium" }, v11: { start: "2018-10-23", maintenance: "2019-04-22", end: "2019-06-01" }, v12: { start: "2019-04-23", lts: "2019-10-21", maintenance: "2020-11-30", end: "2022-04-30", codename: "Erbium" }, v13: { start: "2019-10-22", maintenance: "2020-04-01", end: "2020-06-01" }, v14: { start: "2020-04-21", lts: "2020-10-27", maintenance: "2021-10-19", end: "2023-04-30", codename: "Fermium" }, v15: { start: "2020-10-20", maintenance: "2021-04-01", end: "2021-06-01" }, v16: { start: "2021-04-20", lts: "2021-10-26", maintenance: "2022-10-18", end: "2023-09-11", codename: "Gallium" }, v17: { start: "2021-10-19", maintenance: "2022-04-01", end: "2022-06-01" }, v18: { start: "2022-04-19", lts: "2022-10-25", maintenance: "2023-10-18", end: "2025-04-30", codename: "Hydrogen" }, v19: { start: "2022-10-18", maintenance: "2023-04-01", end: "2023-06-01" }, v20: { start: "2023-04-18", lts: "2023-10-24", maintenance: "2024-10-22", end: "2026-04-30", codename: "Iron" }, v21: { start: "2023-10-17", maintenance: "2024-04-01", end: "2024-06-01" }, v22: { start: "2024-04-24", lts: "2024-10-29", maintenance: "2025-10-21", end: "2027-04-30", codename: "Jod" }, v23: { start: "2024-10-16", maintenance: "2025-04-01", end: "2025-06-01" }, v24: { start: "2025-05-06", lts: "2025-10-28", maintenance: "2026-10-20", end: "2028-04-30", codename: "Krypton" }, v25: { start: "2025-10-15", maintenance: "2026-04-01", end: "2026-06-01" }, v26: { start: "2026-04-22", lts: "2026-10-28", maintenance: "2027-10-20", end: "2029-04-30", codename: "" } };
+  }
+});
+
+// ../../node_modules/browserslist/error.js
+var require_error = __commonJS({
+  "../../node_modules/browserslist/error.js"(exports, module) {
+    function BrowserslistError(message) {
+      this.name = "BrowserslistError";
+      this.message = message;
+      this.browserslist = true;
+      if (Error.captureStackTrace) {
+        Error.captureStackTrace(this, BrowserslistError);
+      }
+    }
+    BrowserslistError.prototype = Error.prototype;
+    module.exports = BrowserslistError;
+  }
+});
+
+// ../../node_modules/caniuse-lite/dist/lib/statuses.js
+var require_statuses = __commonJS({
+  "../../node_modules/caniuse-lite/dist/lib/statuses.js"(exports, module) {
+    module.exports = {
+      1: "ls",
+      // WHATWG Living Standard
+      2: "rec",
+      // W3C Recommendation
+      3: "pr",
+      // W3C Proposed Recommendation
+      4: "cr",
+      // W3C Candidate Recommendation
+      5: "wd",
+      // W3C Working Draft
+      6: "other",
+      // Non-W3C, but reputable
+      7: "unoff"
+      // Unofficial, Editor's Draft or W3C "Note"
+    };
+  }
+});
+
+// ../../node_modules/caniuse-lite/dist/lib/supported.js
+var require_supported = __commonJS({
+  "../../node_modules/caniuse-lite/dist/lib/supported.js"(exports, module) {
+    module.exports = {
+      y: 1 << 0,
+      n: 1 << 1,
+      a: 1 << 2,
+      p: 1 << 3,
+      u: 1 << 4,
+      x: 1 << 5,
+      d: 1 << 6
+    };
+  }
+});
+
+// ../../node_modules/caniuse-lite/dist/unpacker/feature.js
+var require_feature = __commonJS({
+  "../../node_modules/caniuse-lite/dist/unpacker/feature.js"(exports, module) {
+    "use strict";
+    var statuses = require_statuses();
+    var supported = require_supported();
+    var browsers = require_browsers2().browsers;
+    var versions = require_browserVersions2().browserVersions;
+    var MATH2LOG = Math.log(2);
+    function unpackSupport(cipher) {
+      let stats = Object.keys(supported).reduce((list, support) => {
+        if (cipher & supported[support])
+          list.push(support);
+        return list;
+      }, []);
+      let notes = cipher >> 7;
+      let notesArray = [];
+      while (notes) {
+        let note = Math.floor(Math.log(notes) / MATH2LOG) + 1;
+        notesArray.unshift(`#${note}`);
+        notes -= Math.pow(2, note - 1);
+      }
+      return stats.concat(notesArray).join(" ");
+    }
+    function unpackFeature(packed) {
+      let unpacked = {
+        status: statuses[packed.B],
+        title: packed.C,
+        shown: packed.D
+      };
+      unpacked.stats = Object.keys(packed.A).reduce((browserStats, key) => {
+        let browser = packed.A[key];
+        browserStats[browsers[key]] = Object.keys(browser).reduce(
+          (stats, support) => {
+            let packedVersions = browser[support].split(" ");
+            let unpacked2 = unpackSupport(support);
+            packedVersions.forEach((v) => stats[versions[v]] = unpacked2);
+            return stats;
+          },
+          {}
+        );
+        return browserStats;
+      }, {});
+      return unpacked;
+    }
+    module.exports = unpackFeature;
+    module.exports.default = unpackFeature;
+  }
+});
+
+// ../../node_modules/caniuse-lite/dist/unpacker/region.js
+var require_region = __commonJS({
+  "../../node_modules/caniuse-lite/dist/unpacker/region.js"(exports, module) {
+    "use strict";
+    var browsers = require_browsers2().browsers;
+    function unpackRegion(packed) {
+      return Object.keys(packed).reduce((list, browser) => {
+        let data = packed[browser];
+        list[browsers[browser]] = Object.keys(data).reduce((memo, key) => {
+          let stats = data[key];
+          if (key === "_") {
+            stats.split(" ").forEach((version) => memo[version] = null);
+          } else {
+            memo[key] = stats;
+          }
+          return memo;
+        }, {});
+        return list;
+      }, {});
+    }
+    module.exports = unpackRegion;
+    module.exports.default = unpackRegion;
+  }
+});
+
+// ../../node_modules/browserslist/node.js
+var require_node = __commonJS({
+  "../../node_modules/browserslist/node.js"(exports, module) {
+    var feature = require_feature().default;
+    var region = require_region().default;
+    var fs5 = __require("fs");
+    var path7 = __require("path");
+    var BrowserslistError = require_error();
+    var IS_SECTION = /^\s*\[(.+)]\s*$/;
+    var CONFIG_PATTERN = /^browserslist-config-/;
+    var SCOPED_CONFIG__PATTERN = /@[^/]+(?:\/[^/]+)?\/browserslist-config(?:-|$|\/)/;
+    var FORMAT = "Browserslist config should be a string or an array of strings with browser queries";
+    var PATHTYPE_UNKNOWN = "unknown";
+    var PATHTYPE_DIR = "directory";
+    var PATHTYPE_FILE = "file";
+    var dataTimeChecked = false;
+    var statCache = {};
+    var configPathCache = {};
+    var parseConfigCache = {};
+    function checkExtend(name) {
+      var use = " Use `dangerousExtend` option to disable.";
+      if (!CONFIG_PATTERN.test(name) && !SCOPED_CONFIG__PATTERN.test(name)) {
+        throw new BrowserslistError(
+          "Browserslist config needs `browserslist-config-` prefix. " + use
+        );
+      }
+      if (name.replace(/^@[^/]+\//, "").indexOf(".") !== -1) {
+        throw new BrowserslistError(
+          "`.` not allowed in Browserslist config name. " + use
+        );
+      }
+      if (name.indexOf("node_modules") !== -1) {
+        throw new BrowserslistError(
+          "`node_modules` not allowed in Browserslist config." + use
+        );
+      }
+    }
+    function getPathType(filepath) {
+      var stats;
+      try {
+        stats = fs5.existsSync(filepath) && fs5.statSync(filepath);
+      } catch (err) {
+        if (err.code !== "ENOENT" && err.code !== "EACCES" && err.code !== "ERR_ACCESS_DENIED") {
+          throw err;
+        }
+      }
+      if (stats && stats.isDirectory())
+        return PATHTYPE_DIR;
+      if (stats && stats.isFile())
+        return PATHTYPE_FILE;
+      return PATHTYPE_UNKNOWN;
+    }
+    function isFile(file) {
+      return getPathType(file) === PATHTYPE_FILE;
+    }
+    function isDirectory(dir) {
+      return getPathType(dir) === PATHTYPE_DIR;
+    }
+    function eachParent(file, callback, cache) {
+      var loc = path7.resolve(file);
+      var pathsForCacheResult = [];
+      var result;
+      do {
+        if (!pathInRoot(loc)) {
+          break;
+        }
+        if (cache && loc in cache) {
+          result = cache[loc];
+          break;
+        }
+        pathsForCacheResult.push(loc);
+        if (!isDirectory(loc)) {
+          continue;
+        }
+        var locResult = callback(loc);
+        if (typeof locResult !== "undefined") {
+          result = locResult;
+          break;
+        }
+      } while (loc !== (loc = path7.dirname(loc)));
+      if (cache && !process.env.BROWSERSLIST_DISABLE_CACHE) {
+        pathsForCacheResult.forEach(function(cachePath) {
+          cache[cachePath] = result;
+        });
+      }
+      return result;
+    }
+    function pathInRoot(p) {
+      if (!process.env.BROWSERSLIST_ROOT_PATH)
+        return true;
+      var rootPath = path7.resolve(process.env.BROWSERSLIST_ROOT_PATH);
+      if (path7.relative(rootPath, p).substring(0, 2) === "..") {
+        return false;
+      }
+      return true;
+    }
+    function check(section) {
+      if (Array.isArray(section)) {
+        for (var i = 0; i < section.length; i++) {
+          if (typeof section[i] !== "string") {
+            throw new BrowserslistError(FORMAT);
+          }
+        }
+      } else if (typeof section !== "string") {
+        throw new BrowserslistError(FORMAT);
+      }
+    }
+    function pickEnv(config, opts) {
+      if (typeof config !== "object")
+        return config;
+      var name;
+      if (typeof opts.env === "string") {
+        name = opts.env;
+      } else if (process.env.BROWSERSLIST_ENV) {
+        name = process.env.BROWSERSLIST_ENV;
+      } else if (process.env.NODE_ENV) {
+        name = process.env.NODE_ENV;
+      } else {
+        name = "production";
+      }
+      if (opts.throwOnMissing) {
+        if (name && name !== "defaults" && !config[name]) {
+          throw new BrowserslistError(
+            "Missing config for Browserslist environment `" + name + "`"
+          );
+        }
+      }
+      return config[name] || config.defaults;
+    }
+    function parsePackage(file) {
+      var text = fs5.readFileSync(file).toString().replace(/^\uFEFF/m, "");
+      var list;
+      if (text.indexOf('"browserslist"') >= 0) {
+        list = JSON.parse(text).browserslist;
+      } else if (text.indexOf('"browserlist"') >= 0) {
+        var config = JSON.parse(text);
+        if (config.browserlist && !config.browserslist) {
+          throw new BrowserslistError(
+            "`browserlist` key instead of `browserslist` in " + file
+          );
+        }
+      }
+      if (Array.isArray(list) || typeof list === "string") {
+        list = { defaults: list };
+      }
+      for (var i in list) {
+        check(list[i]);
+      }
+      return list;
+    }
+    function parsePackageOrReadConfig(file) {
+      if (file in parseConfigCache) {
+        return parseConfigCache[file];
+      }
+      var isPackage = path7.basename(file) === "package.json";
+      var result = isPackage ? parsePackage(file) : module.exports.readConfig(file);
+      if (!process.env.BROWSERSLIST_DISABLE_CACHE) {
+        parseConfigCache[file] = result;
+      }
+      return result;
+    }
+    function latestReleaseTime(agents) {
+      var latest = 0;
+      for (var name in agents) {
+        var dates = agents[name].releaseDate || {};
+        for (var key in dates) {
+          if (latest < dates[key]) {
+            latest = dates[key];
+          }
+        }
+      }
+      return latest * 1e3;
+    }
+    function getMonthsPassed(date) {
+      var now = /* @__PURE__ */ new Date();
+      var past = new Date(date);
+      var years = now.getFullYear() - past.getFullYear();
+      var months = now.getMonth() - past.getMonth();
+      return years * 12 + months;
+    }
+    function normalizeStats(data, stats) {
+      if (!data) {
+        data = {};
+      }
+      if (stats && "dataByBrowser" in stats) {
+        stats = stats.dataByBrowser;
+      }
+      if (typeof stats !== "object")
+        return void 0;
+      var normalized = {};
+      for (var i in stats) {
+        var versions = Object.keys(stats[i]);
+        if (versions.length === 1 && data[i] && data[i].versions.length === 1) {
+          var normal = data[i].versions[0];
+          normalized[i] = {};
+          normalized[i][normal] = stats[i][versions[0]];
+        } else {
+          normalized[i] = stats[i];
+        }
+      }
+      return normalized;
+    }
+    function normalizeUsageData(usageData, data) {
+      for (var browser in usageData) {
+        var browserUsage = usageData[browser];
+        if ("0" in browserUsage) {
+          var versions = data[browser].versions;
+          browserUsage[versions[versions.length - 1]] = browserUsage[0];
+          delete browserUsage[0];
+        }
+      }
+    }
+    module.exports = {
+      loadQueries: function loadQueries(ctx, name) {
+        if (!ctx.dangerousExtend && !process.env.BROWSERSLIST_DANGEROUS_EXTEND) {
+          checkExtend(name);
+        }
+        var queries = __require(__require.resolve(name, { paths: [".", ctx.path] }));
+        if (typeof queries === "object" && queries !== null && queries.__esModule) {
+          queries = queries.default;
+        }
+        if (queries) {
+          if (Array.isArray(queries)) {
+            return queries;
+          } else if (typeof queries === "object") {
+            if (!queries.defaults)
+              queries.defaults = [];
+            return pickEnv(queries, ctx, name);
+          }
+        }
+        throw new BrowserslistError(
+          "`" + name + "` config exports not an array of queries or an object of envs"
+        );
+      },
+      loadStat: function loadStat(ctx, name, data) {
+        if (!ctx.dangerousExtend && !process.env.BROWSERSLIST_DANGEROUS_EXTEND) {
+          checkExtend(name);
+        }
+        var stats = __require(
+          // Use forward slashes for module paths, also on Windows.
+          __require.resolve(path7.posix.join(name, "browserslist-stats.json"), {
+            paths: ["."]
+          })
+        );
+        return normalizeStats(data, stats);
+      },
+      getStat: function getStat(opts, data) {
+        var stats;
+        if (opts.stats) {
+          stats = opts.stats;
+        } else if (process.env.BROWSERSLIST_STATS) {
+          stats = process.env.BROWSERSLIST_STATS;
+        } else if (opts.path && path7.resolve && fs5.existsSync) {
+          stats = eachParent(
+            opts.path,
+            function(dir) {
+              var file = path7.join(dir, "browserslist-stats.json");
+              return isFile(file) ? file : void 0;
+            },
+            statCache
+          );
+        }
+        if (typeof stats === "string") {
+          try {
+            stats = JSON.parse(fs5.readFileSync(stats));
+          } catch (e) {
+            throw new BrowserslistError("Can't read " + stats);
+          }
+        }
+        return normalizeStats(data, stats);
+      },
+      loadConfig: function loadConfig2(opts) {
+        if (process.env.BROWSERSLIST) {
+          return process.env.BROWSERSLIST;
+        } else if (opts.config || process.env.BROWSERSLIST_CONFIG) {
+          var file = opts.config || process.env.BROWSERSLIST_CONFIG;
+          return pickEnv(parsePackageOrReadConfig(file), opts);
+        } else if (opts.path) {
+          return pickEnv(module.exports.findConfig(opts.path), opts);
+        } else {
+          return void 0;
+        }
+      },
+      loadCountry: function loadCountry(usage, country, data) {
+        var code = country.replace(/[^\w-]/g, "");
+        if (!usage[code]) {
+          var compressed;
+          try {
+            compressed = __require("caniuse-lite/data/regions/" + code + ".js");
+          } catch (e) {
+            throw new BrowserslistError("Unknown region name `" + code + "`.");
+          }
+          var usageData = region(compressed);
+          normalizeUsageData(usageData, data);
+          usage[country] = {};
+          for (var i in usageData) {
+            for (var j in usageData[i]) {
+              usage[country][i + " " + j] = usageData[i][j];
+            }
+          }
+        }
+      },
+      loadFeature: function loadFeature(features, name) {
+        name = name.replace(/[^\w-]/g, "");
+        if (features[name])
+          return;
+        var compressed;
+        try {
+          compressed = __require("caniuse-lite/data/features/" + name + ".js");
+        } catch (e) {
+          throw new BrowserslistError("Unknown feature name `" + name + "`.");
+        }
+        var stats = feature(compressed).stats;
+        features[name] = {};
+        for (var i in stats) {
+          features[name][i] = {};
+          for (var j in stats[i]) {
+            features[name][i][j] = stats[i][j];
+          }
+        }
+      },
+      parseConfig: function parseConfig(string) {
+        var result = { defaults: [] };
+        var sections = ["defaults"];
+        string.toString().replace(/#[^\n]*/g, "").split(/\n|,/).map(function(line) {
+          return line.trim();
+        }).filter(function(line) {
+          return line !== "";
+        }).forEach(function(line) {
+          if (IS_SECTION.test(line)) {
+            sections = line.match(IS_SECTION)[1].trim().split(" ");
+            sections.forEach(function(section) {
+              if (result[section]) {
+                throw new BrowserslistError(
+                  "Duplicate section " + section + " in Browserslist config"
+                );
+              }
+              result[section] = [];
+            });
+          } else {
+            sections.forEach(function(section) {
+              result[section].push(line);
+            });
+          }
+        });
+        return result;
+      },
+      readConfig: function readConfig(file) {
+        if (!isFile(file)) {
+          throw new BrowserslistError("Can't read " + file + " config");
+        }
+        return module.exports.parseConfig(fs5.readFileSync(file));
+      },
+      findConfigFile: function findConfigFile(from) {
+        return eachParent(
+          from,
+          function(dir) {
+            var config = path7.join(dir, "browserslist");
+            var pkg = path7.join(dir, "package.json");
+            var rc = path7.join(dir, ".browserslistrc");
+            var pkgBrowserslist;
+            if (isFile(pkg)) {
+              try {
+                pkgBrowserslist = parsePackage(pkg);
+              } catch (e) {
+                if (e.name === "BrowserslistError")
+                  throw e;
+                console.warn(
+                  "[Browserslist] Could not parse " + pkg + ". Ignoring it."
+                );
+              }
+            }
+            if (isFile(config) && pkgBrowserslist) {
+              throw new BrowserslistError(
+                dir + " contains both browserslist and package.json with browsers"
+              );
+            } else if (isFile(rc) && pkgBrowserslist) {
+              throw new BrowserslistError(
+                dir + " contains both .browserslistrc and package.json with browsers"
+              );
+            } else if (isFile(config) && isFile(rc)) {
+              throw new BrowserslistError(
+                dir + " contains both .browserslistrc and browserslist"
+              );
+            } else if (isFile(config)) {
+              return config;
+            } else if (isFile(rc)) {
+              return rc;
+            } else if (pkgBrowserslist) {
+              return pkg;
+            }
+          },
+          configPathCache
+        );
+      },
+      findConfig: function findConfig(from) {
+        var configFile = this.findConfigFile(from);
+        return configFile ? parsePackageOrReadConfig(configFile) : void 0;
+      },
+      clearCaches: function clearCaches() {
+        dataTimeChecked = false;
+        statCache = {};
+        configPathCache = {};
+        parseConfigCache = {};
+        this.cache = {};
+      },
+      oldDataWarning: function oldDataWarning(agentsObj) {
+        if (dataTimeChecked)
+          return;
+        dataTimeChecked = true;
+        if (process.env.BROWSERSLIST_IGNORE_OLD_DATA)
+          return;
+        var latest = latestReleaseTime(agentsObj);
+        var monthsPassed = getMonthsPassed(latest);
+        if (latest !== 0 && monthsPassed >= 6) {
+          if (process.env.BROWSERSLIST_TRACE_WARNING) {
+            console.info("Last browser release in DB: " + String(new Date(latest)));
+            console.trace();
+          }
+          var months = monthsPassed + " " + (monthsPassed > 1 ? "months" : "month");
+          console.warn(
+            "Browserslist: browsers data (caniuse-lite) is " + months + " old. Please run:\n  npx update-browserslist-db@latest\n  Why you should do it regularly: https://github.com/browserslist/update-db#readme"
+          );
+        }
+      },
+      currentNode: function currentNode() {
+        return "node " + process.versions.node;
+      },
+      env: process.env
+    };
+  }
+});
+
+// ../../node_modules/browserslist/parse.js
+var require_parse = __commonJS({
+  "../../node_modules/browserslist/parse.js"(exports, module) {
+    var AND_REGEXP = /^\s+and\s+(.*)/i;
+    var OR_REGEXP = /^(?:,\s*|\s+or\s+)(.*)/i;
+    function flatten(array) {
+      if (!Array.isArray(array))
+        return [array];
+      return array.reduce(function(a, b) {
+        return a.concat(flatten(b));
+      }, []);
+    }
+    function find(string, predicate) {
+      for (var max2 = string.length, n = 1; n <= max2; n++) {
+        var parsed = string.substr(-n, n);
+        if (predicate(parsed, n, max2)) {
+          return string.slice(0, -n);
+        }
+      }
+      return "";
+    }
+    function matchQuery(all, query) {
+      var node = { query };
+      if (query.indexOf("not ") === 0) {
+        node.not = true;
+        query = query.slice(4);
+      }
+      for (var name in all) {
+        var type = all[name];
+        var match = query.match(type.regexp);
+        if (match) {
+          node.type = name;
+          for (var i = 0; i < type.matches.length; i++) {
+            node[type.matches[i]] = match[i + 1];
+          }
+          return node;
+        }
+      }
+      node.type = "unknown";
+      return node;
+    }
+    function matchBlock(all, string, qs) {
+      var node;
+      return find(string, function(parsed, n, max2) {
+        if (AND_REGEXP.test(parsed)) {
+          node = matchQuery(all, parsed.match(AND_REGEXP)[1]);
+          node.compose = "and";
+          qs.unshift(node);
+          return true;
+        } else if (OR_REGEXP.test(parsed)) {
+          node = matchQuery(all, parsed.match(OR_REGEXP)[1]);
+          node.compose = "or";
+          qs.unshift(node);
+          return true;
+        } else if (n === max2) {
+          node = matchQuery(all, parsed.trim());
+          node.compose = "or";
+          qs.unshift(node);
+          return true;
+        }
+        return false;
+      });
+    }
+    module.exports = function parse(all, queries) {
+      if (!Array.isArray(queries))
+        queries = [queries];
+      return flatten(
+        queries.map(function(block) {
+          var qs = [];
+          do {
+            block = matchBlock(all, block, qs);
+          } while (block);
+          return qs;
+        })
+      );
+    };
+  }
+});
+
+// ../../node_modules/browserslist/index.js
+var require_browserslist = __commonJS({
+  "../../node_modules/browserslist/index.js"(exports, module) {
+    var bbm = require_dist();
+    var jsReleases = require_envs();
+    var agents = require_agents2().agents;
+    var e2c = require_versions();
+    var jsEOL = require_release_schedule();
+    var path7 = __require("path");
+    var BrowserslistError = require_error();
+    var env = require_node();
+    var parseWithoutCache = require_parse();
+    var YEAR = 365.259641 * 24 * 60 * 60 * 1e3;
+    var ANDROID_EVERGREEN_FIRST = "37";
+    var OP_MOB_BLINK_FIRST = 14;
+    var FIREFOX_ESR_VERSION = "140";
+    function isVersionsMatch(versionA, versionB) {
+      return (versionA + ".").indexOf(versionB + ".") === 0;
+    }
+    function isEolReleased(name) {
+      var version = name.slice(1);
+      return browserslist2.nodeVersions.some(function(i) {
+        return isVersionsMatch(i, version);
+      });
+    }
+    function normalize(versions) {
+      return versions.filter(function(version) {
+        return typeof version === "string";
+      });
+    }
+    function normalizeElectron(version) {
+      var versionToUse = version;
+      if (version.split(".").length === 3) {
+        versionToUse = version.split(".").slice(0, -1).join(".");
+      }
+      return versionToUse;
+    }
+    function nameMapper(name) {
+      return function mapName(version) {
+        return name + " " + version;
+      };
+    }
+    function getMajor(version) {
+      return parseInt(version.split(".")[0]);
+    }
+    function getMajorVersions(released, number) {
+      if (released.length === 0)
+        return [];
+      var majorVersions = uniq(released.map(getMajor));
+      var minimum = majorVersions[majorVersions.length - number];
+      if (!minimum) {
+        return released;
+      }
+      var selected = [];
+      for (var i = released.length - 1; i >= 0; i--) {
+        if (minimum > getMajor(released[i]))
+          break;
+        selected.unshift(released[i]);
+      }
+      return selected;
+    }
+    function uniq(array) {
+      var filtered = [];
+      for (var i = 0; i < array.length; i++) {
+        if (filtered.indexOf(array[i]) === -1)
+          filtered.push(array[i]);
+      }
+      return filtered;
+    }
+    function fillUsage(result, name, data) {
+      for (var i in data) {
+        result[name + " " + i] = data[i];
+      }
+    }
+    function generateFilter(sign, version) {
+      version = parseFloat(version);
+      if (sign === ">") {
+        return function(v) {
+          return parseLatestFloat(v) > version;
+        };
+      } else if (sign === ">=") {
+        return function(v) {
+          return parseLatestFloat(v) >= version;
+        };
+      } else if (sign === "<") {
+        return function(v) {
+          return parseFloat(v) < version;
+        };
+      } else {
+        return function(v) {
+          return parseFloat(v) <= version;
+        };
+      }
+      function parseLatestFloat(v) {
+        return parseFloat(v.split("-")[1] || v);
+      }
+    }
+    function generateSemverFilter(sign, version) {
+      version = version.split(".").map(parseSimpleInt);
+      version[1] = version[1] || 0;
+      version[2] = version[2] || 0;
+      if (sign === ">") {
+        return function(v) {
+          v = v.split(".").map(parseSimpleInt);
+          return compareSemver(v, version) > 0;
+        };
+      } else if (sign === ">=") {
+        return function(v) {
+          v = v.split(".").map(parseSimpleInt);
+          return compareSemver(v, version) >= 0;
+        };
+      } else if (sign === "<") {
+        return function(v) {
+          v = v.split(".").map(parseSimpleInt);
+          return compareSemver(version, v) > 0;
+        };
+      } else {
+        return function(v) {
+          v = v.split(".").map(parseSimpleInt);
+          return compareSemver(version, v) >= 0;
+        };
+      }
+    }
+    function parseSimpleInt(x) {
+      return parseInt(x);
+    }
+    function compare(a, b) {
+      if (a < b)
+        return -1;
+      if (a > b)
+        return 1;
+      return 0;
+    }
+    function compareSemver(a, b) {
+      return compare(parseInt(a[0]), parseInt(b[0])) || compare(parseInt(a[1] || "0"), parseInt(b[1] || "0")) || compare(parseInt(a[2] || "0"), parseInt(b[2] || "0"));
+    }
+    function semverFilterLoose(operator, range) {
+      range = range.split(".").map(parseSimpleInt);
+      if (typeof range[1] === "undefined") {
+        range[1] = "x";
+      }
+      switch (operator) {
+        case "<=":
+          return function(version) {
+            version = version.split(".").map(parseSimpleInt);
+            return compareSemverLoose(version, range) <= 0;
+          };
+        case ">=":
+        default:
+          return function(version) {
+            version = version.split(".").map(parseSimpleInt);
+            return compareSemverLoose(version, range) >= 0;
+          };
+      }
+    }
+    function compareSemverLoose(version, range) {
+      if (version[0] !== range[0]) {
+        return version[0] < range[0] ? -1 : 1;
+      }
+      if (range[1] === "x") {
+        return 0;
+      }
+      if (version[1] !== range[1]) {
+        return version[1] < range[1] ? -1 : 1;
+      }
+      return 0;
+    }
+    function resolveVersion(data, version) {
+      if (data.versions.indexOf(version) !== -1) {
+        return version;
+      } else if (browserslist2.versionAliases[data.name][version]) {
+        return browserslist2.versionAliases[data.name][version];
+      } else {
+        return false;
+      }
+    }
+    function normalizeVersion(data, version) {
+      var resolved = resolveVersion(data, version);
+      if (resolved) {
+        return resolved;
+      } else if (data.versions.length === 1) {
+        return data.versions[0];
+      } else {
+        return false;
+      }
+    }
+    function filterByYear(since, context) {
+      since = since / 1e3;
+      return Object.keys(agents).reduce(function(selected, name) {
+        var data = byName(name, context);
+        if (!data)
+          return selected;
+        var versions = Object.keys(data.releaseDate).filter(function(v) {
+          var date = data.releaseDate[v];
+          return date !== null && date >= since;
+        });
+        return selected.concat(versions.map(nameMapper(data.name)));
+      }, []);
+    }
+    function cloneData(data) {
+      return {
+        name: data.name,
+        versions: data.versions,
+        released: data.released,
+        releaseDate: data.releaseDate
+      };
+    }
+    function byName(name, context) {
+      name = name.toLowerCase();
+      name = browserslist2.aliases[name] || name;
+      if (context.mobileToDesktop && browserslist2.desktopNames[name]) {
+        var desktop = browserslist2.data[browserslist2.desktopNames[name]];
+        if (name === "android") {
+          return normalizeAndroidData(cloneData(browserslist2.data[name]), desktop);
+        } else {
+          var cloned = cloneData(desktop);
+          cloned.name = name;
+          return cloned;
+        }
+      }
+      return browserslist2.data[name];
+    }
+    function normalizeAndroidVersions(androidVersions, chromeVersions) {
+      var iFirstEvergreen = chromeVersions.indexOf(ANDROID_EVERGREEN_FIRST);
+      return androidVersions.filter(function(version) {
+        return /^(?:[2-4]\.|[34]$)/.test(version);
+      }).concat(chromeVersions.slice(iFirstEvergreen));
+    }
+    var DANGEROUS_KEYS = ["__proto__", "constructor", "prototype"];
+    function copyObject(obj) {
+      var copy = {};
+      for (var key in obj) {
+        if (DANGEROUS_KEYS.indexOf(key) === -1) {
+          copy[key] = obj[key];
+        }
+      }
+      return copy;
+    }
+    function normalizeAndroidData(android, chrome) {
+      android.released = normalizeAndroidVersions(android.released, chrome.released);
+      android.versions = normalizeAndroidVersions(android.versions, chrome.versions);
+      android.releaseDate = copyObject(android.releaseDate);
+      android.released.forEach(function(v) {
+        if (android.releaseDate[v] === void 0) {
+          android.releaseDate[v] = chrome.releaseDate[v];
+        }
+      });
+      return android;
+    }
+    function checkName(name, context) {
+      var data = byName(name, context);
+      if (!data)
+        throw new BrowserslistError("Unknown browser " + name);
+      return data;
+    }
+    function unknownQuery(query) {
+      return new BrowserslistError(
+        "Unknown browser query `" + query + "`. Maybe you are using old Browserslist or made typo in query."
+      );
+    }
+    function filterJumps(list, name, nVersions, context) {
+      var jump = 1;
+      switch (name) {
+        case "android":
+          if (context.mobileToDesktop)
+            return list;
+          var released = browserslist2.data.chrome.released;
+          jump = released.length - released.indexOf(ANDROID_EVERGREEN_FIRST);
+          break;
+        case "op_mob":
+          var latest = browserslist2.data.op_mob.released.slice(-1)[0];
+          jump = getMajor(latest) - OP_MOB_BLINK_FIRST + 1;
+          break;
+        default:
+          return list;
+      }
+      if (nVersions <= jump) {
+        return list.slice(-1);
+      }
+      return list.slice(jump - 1 - nVersions);
+    }
+    function isSupported(flags, withPartial) {
+      return typeof flags === "string" && (flags.indexOf("y") >= 0 || withPartial && flags.indexOf("a") >= 0);
+    }
+    function resolve(queries, context) {
+      return parseQueries(queries).reduce(function(result, node, index) {
+        if (node.not && index === 0) {
+          throw new BrowserslistError(
+            "Write any browsers query (for instance, `defaults`) before `" + node.query + "`"
+          );
+        }
+        var type = QUERIES[node.type];
+        var array = type.select.call(browserslist2, context, node).map(function(j) {
+          var parts = j.split(" ");
+          if (parts[1] === "0") {
+            return parts[0] + " " + byName(parts[0], context).versions[0];
+          } else {
+            return j;
+          }
+        });
+        if (node.compose === "and") {
+          if (node.not) {
+            return result.filter(function(j) {
+              return array.indexOf(j) === -1;
+            });
+          } else {
+            return result.filter(function(j) {
+              return array.indexOf(j) !== -1;
+            });
+          }
+        } else {
+          if (node.not) {
+            var filter = {};
+            array.forEach(function(j) {
+              filter[j] = true;
+            });
+            return result.filter(function(j) {
+              return !filter[j];
+            });
+          }
+          return result.concat(array);
+        }
+      }, []);
+    }
+    function prepareOpts(opts) {
+      if (typeof opts === "undefined")
+        opts = {};
+      if (typeof opts.path === "undefined") {
+        opts.path = path7.resolve ? path7.resolve(".") : ".";
+      }
+      return opts;
+    }
+    function prepareQueries(queries, opts) {
+      if (typeof queries === "undefined" || queries === null) {
+        var config = browserslist2.loadConfig(opts);
+        if (config) {
+          queries = config;
+        } else {
+          queries = browserslist2.defaults;
+        }
+      }
+      return queries;
+    }
+    function checkQueries(queries) {
+      if (!(typeof queries === "string" || Array.isArray(queries))) {
+        throw new BrowserslistError(
+          "Browser queries must be an array or string. Got " + typeof queries + "."
+        );
+      }
+    }
+    var cache = {};
+    var parseCache = {};
+    function browserslist2(queries, opts) {
+      opts = prepareOpts(opts);
+      queries = prepareQueries(queries, opts);
+      checkQueries(queries);
+      var needsPath = parseQueries(queries).some(function(node) {
+        return QUERIES[node.type].needsPath;
+      });
+      var context = {
+        ignoreUnknownVersions: opts.ignoreUnknownVersions,
+        dangerousExtend: opts.dangerousExtend,
+        throwOnMissing: opts.throwOnMissing,
+        mobileToDesktop: opts.mobileToDesktop,
+        env: opts.env
+      };
+      if (needsPath) {
+        context.path = opts.path;
+      }
+      env.oldDataWarning(browserslist2.data);
+      var stats = env.getStat(opts, browserslist2.data);
+      if (stats) {
+        context.customUsage = {};
+        for (var browser in stats) {
+          fillUsage(context.customUsage, browser, stats[browser]);
+        }
+      }
+      var cacheKey = JSON.stringify([queries, context]);
+      if (cache[cacheKey])
+        return cache[cacheKey];
+      var result = uniq(resolve(queries, context)).sort(function(name1, name2) {
+        name1 = name1.split(" ");
+        name2 = name2.split(" ");
+        if (name1[0] === name2[0]) {
+          var version1 = name1[1].split("-")[0];
+          var version2 = name2[1].split("-")[0];
+          return compareSemver(version2.split("."), version1.split("."));
+        } else {
+          return compare(name1[0], name2[0]);
+        }
+      });
+      if (!env.env.BROWSERSLIST_DISABLE_CACHE) {
+        cache[cacheKey] = result;
+      }
+      return result;
+    }
+    function parseQueries(queries) {
+      var cacheKey = JSON.stringify(queries);
+      if (cacheKey in parseCache)
+        return parseCache[cacheKey];
+      var result = parseWithoutCache(QUERIES, queries);
+      if (!env.env.BROWSERSLIST_DISABLE_CACHE) {
+        parseCache[cacheKey] = result;
+      }
+      return result;
+    }
+    function loadCustomUsage(context, config) {
+      var stats = env.loadStat(context, config, browserslist2.data);
+      if (stats) {
+        context.customUsage = {};
+        for (var browser in stats) {
+          fillUsage(context.customUsage, browser, stats[browser]);
+        }
+      }
+      if (!context.customUsage) {
+        throw new BrowserslistError("Custom usage statistics was not provided");
+      }
+      return context.customUsage;
+    }
+    browserslist2.parse = function(queries, opts) {
+      opts = prepareOpts(opts);
+      queries = prepareQueries(queries, opts);
+      checkQueries(queries);
+      return parseQueries(queries);
+    };
+    browserslist2.cache = {};
+    browserslist2.data = {};
+    browserslist2.usage = {
+      global: {},
+      custom: null
+    };
+    browserslist2.defaults = ["> 0.5%", "last 2 versions", "Firefox ESR", "not dead"];
+    browserslist2.aliases = {
+      fx: "firefox",
+      ff: "firefox",
+      ios: "ios_saf",
+      explorer: "ie",
+      blackberry: "bb",
+      explorermobile: "ie_mob",
+      operamini: "op_mini",
+      operamobile: "op_mob",
+      chromeandroid: "and_chr",
+      firefoxandroid: "and_ff",
+      ucandroid: "and_uc",
+      qqandroid: "and_qq"
+    };
+    browserslist2.desktopNames = {
+      and_chr: "chrome",
+      and_ff: "firefox",
+      ie_mob: "ie",
+      android: "chrome"
+      // has extra processing logic
+    };
+    browserslist2.versionAliases = {};
+    browserslist2.clearCaches = env.clearCaches;
+    browserslist2.parseConfig = env.parseConfig;
+    browserslist2.readConfig = env.readConfig;
+    browserslist2.findConfigFile = env.findConfigFile;
+    browserslist2.findConfig = env.findConfig;
+    browserslist2.loadConfig = env.loadConfig;
+    browserslist2.coverage = function(browsers, stats) {
+      var data;
+      if (typeof stats === "undefined") {
+        data = browserslist2.usage.global;
+      } else if (stats === "my stats") {
+        var opts = {};
+        opts.path = path7.resolve ? path7.resolve(".") : ".";
+        var customStats = env.getStat(opts);
+        if (!customStats) {
+          throw new BrowserslistError("Custom usage statistics was not provided");
+        }
+        data = {};
+        for (var browser in customStats) {
+          fillUsage(data, browser, customStats[browser]);
+        }
+      } else if (typeof stats === "string") {
+        if (stats.length > 2) {
+          stats = stats.toLowerCase();
+        } else {
+          stats = stats.toUpperCase();
+        }
+        env.loadCountry(browserslist2.usage, stats, browserslist2.data);
+        data = browserslist2.usage[stats];
+      } else {
+        if ("dataByBrowser" in stats) {
+          stats = stats.dataByBrowser;
+        }
+        data = {};
+        for (var name in stats) {
+          for (var version in stats[name]) {
+            data[name + " " + version] = stats[name][version];
+          }
+        }
+      }
+      return browsers.reduce(function(all, i) {
+        var usage = data[i];
+        if (usage === void 0) {
+          usage = data[i.replace(/ \S+$/, " 0")];
+        }
+        return all + (usage || 0);
+      }, 0);
+    };
+    function nodeQuery(context, node) {
+      var matched = browserslist2.nodeVersions.filter(function(i) {
+        return isVersionsMatch(i, node.version);
+      });
+      if (matched.length === 0) {
+        if (context.ignoreUnknownVersions) {
+          return [];
+        } else {
+          throw new BrowserslistError(
+            "Unknown version " + node.version + " of Node.js"
+          );
+        }
+      }
+      return ["node " + matched[matched.length - 1]];
+    }
+    function sinceQuery(context, node) {
+      var year = parseInt(node.year);
+      var month = parseInt(node.month || "01") - 1;
+      var day = parseInt(node.day || "01");
+      return filterByYear(Date.UTC(year, month, day, 0, 0, 0), context);
+    }
+    function bbmTransform(bbmVersions) {
+      var browsers = {
+        chrome: "chrome",
+        chrome_android: "and_chr",
+        edge: "edge",
+        firefox: "firefox",
+        firefox_android: "and_ff",
+        safari: "safari",
+        safari_ios: "ios_saf",
+        webview_android: "android",
+        samsunginternet_android: "samsung",
+        opera_android: "op_mob",
+        opera: "opera",
+        qq_android: "and_qq",
+        uc_android: "and_uc",
+        kai_os: "kaios"
+      };
+      return bbmVersions.filter(function(version) {
+        return Object.keys(browsers).indexOf(version.browser) !== -1;
+      }).map(function(version) {
+        return browsers[version.browser] + " >= " + version.version;
+      });
+    }
+    function coverQuery(context, node) {
+      var coverage = parseFloat(node.coverage);
+      var usage = browserslist2.usage.global;
+      if (node.place) {
+        if (node.place.match(/^my\s+stats$/i)) {
+          if (!context.customUsage) {
+            throw new BrowserslistError("Custom usage statistics was not provided");
+          }
+          usage = context.customUsage;
+        } else {
+          var place;
+          if (node.place.length === 2) {
+            place = node.place.toUpperCase();
+          } else {
+            place = node.place.toLowerCase();
+          }
+          env.loadCountry(browserslist2.usage, place, browserslist2.data);
+          usage = browserslist2.usage[place];
+        }
+      } else if (node.config) {
+        usage = loadCustomUsage(context, node.config);
+      }
+      var versions = Object.keys(usage).sort(function(a, b) {
+        return usage[b] - usage[a];
+      });
+      var covered = 0;
+      var result = [];
+      var version;
+      for (var i = 0; i < versions.length; i++) {
+        version = versions[i];
+        if (usage[version] === 0)
+          break;
+        covered += usage[version];
+        result.push(version);
+        if (covered >= coverage)
+          break;
+      }
+      return result;
+    }
+    var QUERIES = {
+      last_major_versions: {
+        matches: ["versions"],
+        regexp: /^last\s+(\d+)\s+major\s+versions?$/i,
+        select: function(context, node) {
+          return Object.keys(agents).reduce(function(selected, name) {
+            var data = byName(name, context);
+            if (!data)
+              return selected;
+            var list = getMajorVersions(data.released, node.versions);
+            list = list.map(nameMapper(data.name));
+            list = filterJumps(list, data.name, node.versions, context);
+            return selected.concat(list);
+          }, []);
+        }
+      },
+      last_versions: {
+        matches: ["versions"],
+        regexp: /^last\s+(\d+)\s+versions?$/i,
+        select: function(context, node) {
+          return Object.keys(agents).reduce(function(selected, name) {
+            var data = byName(name, context);
+            if (!data)
+              return selected;
+            var list = data.released.slice(-node.versions);
+            list = list.map(nameMapper(data.name));
+            list = filterJumps(list, data.name, node.versions, context);
+            return selected.concat(list);
+          }, []);
+        }
+      },
+      last_electron_major_versions: {
+        matches: ["versions"],
+        regexp: /^last\s+(\d+)\s+electron\s+major\s+versions?$/i,
+        select: function(context, node) {
+          var validVersions = getMajorVersions(Object.keys(e2c), node.versions);
+          return validVersions.map(function(i) {
+            return "chrome " + e2c[i];
+          });
+        }
+      },
+      last_node_major_versions: {
+        matches: ["versions"],
+        regexp: /^last\s+(\d+)\s+node\s+major\s+versions?$/i,
+        select: function(context, node) {
+          return getMajorVersions(browserslist2.nodeVersions, node.versions).map(
+            function(version) {
+              return "node " + version;
+            }
+          );
+        }
+      },
+      last_browser_major_versions: {
+        matches: ["versions", "browser"],
+        regexp: /^last\s+(\d+)\s+(\w+)\s+major\s+versions?$/i,
+        select: function(context, node) {
+          var data = checkName(node.browser, context);
+          var validVersions = getMajorVersions(data.released, node.versions);
+          var list = validVersions.map(nameMapper(data.name));
+          list = filterJumps(list, data.name, node.versions, context);
+          return list;
+        }
+      },
+      last_electron_versions: {
+        matches: ["versions"],
+        regexp: /^last\s+(\d+)\s+electron\s+versions?$/i,
+        select: function(context, node) {
+          return Object.keys(e2c).slice(-node.versions).map(function(i) {
+            return "chrome " + e2c[i];
+          });
+        }
+      },
+      last_node_versions: {
+        matches: ["versions"],
+        regexp: /^last\s+(\d+)\s+node\s+versions?$/i,
+        select: function(context, node) {
+          return browserslist2.nodeVersions.slice(-node.versions).map(function(version) {
+            return "node " + version;
+          });
+        }
+      },
+      last_browser_versions: {
+        matches: ["versions", "browser"],
+        regexp: /^last\s+(\d+)\s+(\w+)\s+versions?$/i,
+        select: function(context, node) {
+          var data = checkName(node.browser, context);
+          var list = data.released.slice(-node.versions).map(nameMapper(data.name));
+          list = filterJumps(list, data.name, node.versions, context);
+          return list;
+        }
+      },
+      unreleased_versions: {
+        matches: [],
+        regexp: /^unreleased\s+versions$/i,
+        select: function(context) {
+          return Object.keys(agents).reduce(function(selected, name) {
+            var data = byName(name, context);
+            if (!data)
+              return selected;
+            var list = data.versions.filter(function(v) {
+              return data.released.indexOf(v) === -1;
+            });
+            list = list.map(nameMapper(data.name));
+            return selected.concat(list);
+          }, []);
+        }
+      },
+      unreleased_electron_versions: {
+        matches: [],
+        regexp: /^unreleased\s+electron\s+versions?$/i,
+        select: function() {
+          return [];
+        }
+      },
+      unreleased_browser_versions: {
+        matches: ["browser"],
+        regexp: /^unreleased\s+(\w+)\s+versions?$/i,
+        select: function(context, node) {
+          var data = checkName(node.browser, context);
+          return data.versions.filter(function(v) {
+            return data.released.indexOf(v) === -1;
+          }).map(nameMapper(data.name));
+        }
+      },
+      last_years: {
+        matches: ["years"],
+        regexp: /^last\s+((\d+\.)?\d+)\s+years?$/i,
+        select: function(context, node) {
+          return filterByYear(Date.now() - YEAR * node.years, context);
+        }
+      },
+      since_y: {
+        matches: ["year"],
+        regexp: /^since (\d+)$/i,
+        select: sinceQuery
+      },
+      since_y_m: {
+        matches: ["year", "month"],
+        regexp: /^since (\d+)-(\d+)$/i,
+        select: sinceQuery
+      },
+      since_y_m_d: {
+        matches: ["year", "month", "day"],
+        regexp: /^since (\d+)-(\d+)-(\d+)$/i,
+        select: sinceQuery
+      },
+      baseline: {
+        matches: ["year", "availability", "date", "downstream", "kaios"],
+        // Matches:
+        //   baseline 2024
+        //   baseline newly available
+        //   baseline widely available
+        //   baseline widely available on 2024-06-01
+        //   ...with downstream
+        //   ...including kaios
+        regexp: /^baseline\s+(?:(\d+)|(newly|widely)\s+available(?:\s+on\s+(\d{4}-\d{2}-\d{2}))?)?(\s+with\s+downstream)?(\s+including\s+kaios)?$/i,
+        select: function(context, node) {
+          var baselineVersions;
+          var includeDownstream = !!node.downstream;
+          var includeKaiOS = !!node.kaios;
+          if (node.availability === "newly" && node.date) {
+            throw new BrowserslistError(
+              'Using newly available with a date is not supported, please use "widely available on YYYY-MM-DD" and add 30 months to the date you specified.'
+            );
+          }
+          if (node.year) {
+            baselineVersions = bbm.getCompatibleVersions({
+              targetYear: node.year,
+              includeDownstreamBrowsers: includeDownstream,
+              includeKaiOS,
+              suppressWarnings: true
+            });
+          } else if (node.date) {
+            baselineVersions = bbm.getCompatibleVersions({
+              widelyAvailableOnDate: node.date,
+              includeDownstreamBrowsers: includeDownstream,
+              includeKaiOS,
+              suppressWarnings: true
+            });
+          } else if (node.availability === "newly") {
+            var future30months = (/* @__PURE__ */ new Date()).setMonth((/* @__PURE__ */ new Date()).getMonth() + 30);
+            baselineVersions = bbm.getCompatibleVersions({
+              widelyAvailableOnDate: future30months,
+              includeDownstreamBrowsers: includeDownstream,
+              includeKaiOS,
+              suppressWarnings: true
+            });
+          } else {
+            baselineVersions = bbm.getCompatibleVersions({
+              includeDownstreamBrowsers: includeDownstream,
+              includeKaiOS,
+              suppressWarnings: true
+            });
+          }
+          return resolve(bbmTransform(baselineVersions), context);
+        }
+      },
+      popularity: {
+        matches: ["sign", "popularity"],
+        regexp: /^(>=?|<=?)\s*(\d+|\d+\.\d+|\.\d+)%$/,
+        select: function(context, node) {
+          var popularity = parseFloat(node.popularity);
+          var usage = browserslist2.usage.global;
+          return Object.keys(usage).reduce(function(result, version) {
+            if (node.sign === ">") {
+              if (usage[version] > popularity) {
+                result.push(version);
+              }
+            } else if (node.sign === "<") {
+              if (usage[version] < popularity) {
+                result.push(version);
+              }
+            } else if (node.sign === "<=") {
+              if (usage[version] <= popularity) {
+                result.push(version);
+              }
+            } else if (usage[version] >= popularity) {
+              result.push(version);
+            }
+            return result;
+          }, []);
+        }
+      },
+      popularity_in_my_stats: {
+        matches: ["sign", "popularity"],
+        regexp: /^(>=?|<=?)\s*(\d+|\d+\.\d+|\.\d+)%\s+in\s+my\s+stats$/,
+        select: function(context, node) {
+          var popularity = parseFloat(node.popularity);
+          if (!context.customUsage) {
+            throw new BrowserslistError("Custom usage statistics was not provided");
+          }
+          var usage = context.customUsage;
+          return Object.keys(usage).reduce(function(result, version) {
+            var percentage = usage[version];
+            if (percentage == null) {
+              return result;
+            }
+            if (node.sign === ">") {
+              if (percentage > popularity) {
+                result.push(version);
+              }
+            } else if (node.sign === "<") {
+              if (percentage < popularity) {
+                result.push(version);
+              }
+            } else if (node.sign === "<=") {
+              if (percentage <= popularity) {
+                result.push(version);
+              }
+            } else if (percentage >= popularity) {
+              result.push(version);
+            }
+            return result;
+          }, []);
+        }
+      },
+      popularity_in_config_stats: {
+        matches: ["sign", "popularity", "config"],
+        regexp: /^(>=?|<=?)\s*(\d+|\d+\.\d+|\.\d+)%\s+in\s+(\S+)\s+stats$/,
+        select: function(context, node) {
+          var popularity = parseFloat(node.popularity);
+          var usage = loadCustomUsage(context, node.config);
+          return Object.keys(usage).reduce(function(result, version) {
+            var percentage = usage[version];
+            if (percentage == null) {
+              return result;
+            }
+            if (node.sign === ">") {
+              if (percentage > popularity) {
+                result.push(version);
+              }
+            } else if (node.sign === "<") {
+              if (percentage < popularity) {
+                result.push(version);
+              }
+            } else if (node.sign === "<=") {
+              if (percentage <= popularity) {
+                result.push(version);
+              }
+            } else if (percentage >= popularity) {
+              result.push(version);
+            }
+            return result;
+          }, []);
+        }
+      },
+      popularity_in_place: {
+        matches: ["sign", "popularity", "place"],
+        regexp: /^(>=?|<=?)\s*(\d+|\d+\.\d+|\.\d+)%\s+in\s+((alt-)?\w\w)$/,
+        select: function(context, node) {
+          var popularity = parseFloat(node.popularity);
+          var place = node.place;
+          if (place.length === 2) {
+            place = place.toUpperCase();
+          } else {
+            place = place.toLowerCase();
+          }
+          env.loadCountry(browserslist2.usage, place, browserslist2.data);
+          var usage = browserslist2.usage[place];
+          return Object.keys(usage).reduce(function(result, version) {
+            var percentage = usage[version];
+            if (percentage == null) {
+              return result;
+            }
+            if (node.sign === ">") {
+              if (percentage > popularity) {
+                result.push(version);
+              }
+            } else if (node.sign === "<") {
+              if (percentage < popularity) {
+                result.push(version);
+              }
+            } else if (node.sign === "<=") {
+              if (percentage <= popularity) {
+                result.push(version);
+              }
+            } else if (percentage >= popularity) {
+              result.push(version);
+            }
+            return result;
+          }, []);
+        }
+      },
+      cover: {
+        matches: ["coverage"],
+        regexp: /^cover\s+(\d+|\d+\.\d+|\.\d+)%$/i,
+        select: coverQuery
+      },
+      cover_in: {
+        matches: ["coverage", "place"],
+        regexp: /^cover\s+(\d+|\d+\.\d+|\.\d+)%\s+in\s+(my\s+stats|(alt-)?\w\w)$/i,
+        select: coverQuery
+      },
+      cover_config: {
+        matches: ["coverage", "config"],
+        regexp: /^cover\s+(\d+|\d+\.\d+|\.\d+)%\s+in\s+(\S+)\s+stats$/i,
+        select: coverQuery
+      },
+      supports: {
+        matches: ["supportType", "feature"],
+        regexp: /^(?:(fully|partially)\s+)?supports\s+([\w-]+)$/,
+        select: function(context, node) {
+          env.loadFeature(browserslist2.cache, node.feature);
+          var withPartial = node.supportType !== "fully";
+          var features = browserslist2.cache[node.feature];
+          var result = [];
+          for (var name in features) {
+            var data = byName(name, context);
+            var iMax = data.released.length - 1;
+            while (iMax >= 0) {
+              if (data.released[iMax] in features[name])
+                break;
+              iMax--;
+            }
+            var checkDesktop = context.mobileToDesktop && name in browserslist2.desktopNames && isSupported(features[name][data.released[iMax]], withPartial);
+            data.versions.forEach(function(version) {
+              var flags = features[name][version];
+              if (flags === void 0 && checkDesktop) {
+                flags = features[browserslist2.desktopNames[name]][version];
+              }
+              if (isSupported(flags, withPartial)) {
+                result.push(name + " " + version);
+              }
+            });
+          }
+          return result;
+        }
+      },
+      electron_range: {
+        matches: ["from", "to"],
+        regexp: /^electron\s+([\d.]+)\s*-\s*([\d.]+)$/i,
+        select: function(context, node) {
+          var fromToUse = normalizeElectron(node.from);
+          var toToUse = normalizeElectron(node.to);
+          var from = parseFloat(node.from);
+          var to = parseFloat(node.to);
+          if (!e2c[fromToUse]) {
+            throw new BrowserslistError("Unknown version " + from + " of electron");
+          }
+          if (!e2c[toToUse]) {
+            throw new BrowserslistError("Unknown version " + to + " of electron");
+          }
+          return Object.keys(e2c).filter(function(i) {
+            var parsed = parseFloat(i);
+            return parsed >= from && parsed <= to;
+          }).map(function(i) {
+            return "chrome " + e2c[i];
+          });
+        }
+      },
+      node_range: {
+        matches: ["from", "to"],
+        regexp: /^node\s+([\d.]+)\s*-\s*([\d.]+)$/i,
+        select: function(context, node) {
+          return browserslist2.nodeVersions.filter(semverFilterLoose(">=", node.from)).filter(semverFilterLoose("<=", node.to)).map(function(v) {
+            return "node " + v;
+          });
+        }
+      },
+      browser_range: {
+        matches: ["browser", "from", "to"],
+        regexp: /^(\w+)\s+([\d.]+)\s*-\s*([\d.]+)$/i,
+        select: function(context, node) {
+          var data = checkName(node.browser, context);
+          var from = parseFloat(normalizeVersion(data, node.from) || node.from);
+          var to = parseFloat(normalizeVersion(data, node.to) || node.to);
+          function filter(v) {
+            var parsed = parseFloat(v);
+            return parsed >= from && parsed <= to;
+          }
+          return data.released.filter(filter).map(nameMapper(data.name));
+        }
+      },
+      electron_ray: {
+        matches: ["sign", "version"],
+        regexp: /^electron\s*(>=?|<=?)\s*([\d.]+)$/i,
+        select: function(context, node) {
+          var versionToUse = normalizeElectron(node.version);
+          return Object.keys(e2c).filter(generateFilter(node.sign, versionToUse)).map(function(i) {
+            return "chrome " + e2c[i];
+          });
+        }
+      },
+      node_ray: {
+        matches: ["sign", "version"],
+        regexp: /^node\s*(>=?|<=?)\s*([\d.]+)$/i,
+        select: function(context, node) {
+          return browserslist2.nodeVersions.filter(generateSemverFilter(node.sign, node.version)).map(function(v) {
+            return "node " + v;
+          });
+        }
+      },
+      browser_ray: {
+        matches: ["browser", "sign", "version"],
+        regexp: /^(\w+)\s*(>=?|<=?)\s*([\d.]+|esr)$/i,
+        select: function(context, node) {
+          var version = node.version;
+          var data = checkName(node.browser, context);
+          var alias = browserslist2.versionAliases[data.name][version.toLowerCase()];
+          if (alias)
+            version = alias;
+          if (!/[\d.]+/.test(version)) {
+            throw new BrowserslistError(
+              "Unknown version " + version + " of " + node.browser
+            );
+          }
+          return data.released.filter(generateFilter(node.sign, version)).map(function(v) {
+            return data.name + " " + v;
+          });
+        }
+      },
+      firefox_esr: {
+        matches: [],
+        regexp: /^(firefox|ff|fx)\s+esr$/i,
+        select: function() {
+          return ["firefox " + FIREFOX_ESR_VERSION];
+        }
+      },
+      opera_mini_all: {
+        matches: [],
+        regexp: /(operamini|op_mini)\s+all/i,
+        select: function() {
+          return ["op_mini all"];
+        }
+      },
+      electron_version: {
+        matches: ["version"],
+        regexp: /^electron\s+([\d.]+)$/i,
+        select: function(context, node) {
+          var versionToUse = normalizeElectron(node.version);
+          var chrome = e2c[versionToUse];
+          if (!chrome) {
+            throw new BrowserslistError(
+              "Unknown version " + node.version + " of electron"
+            );
+          }
+          return ["chrome " + chrome];
+        }
+      },
+      node_major_version: {
+        matches: ["version"],
+        regexp: /^node\s+(\d+)$/i,
+        select: nodeQuery
+      },
+      node_minor_version: {
+        matches: ["version"],
+        regexp: /^node\s+(\d+\.\d+)$/i,
+        select: nodeQuery
+      },
+      node_patch_version: {
+        matches: ["version"],
+        regexp: /^node\s+(\d+\.\d+\.\d+)$/i,
+        select: nodeQuery
+      },
+      current_node: {
+        matches: [],
+        regexp: /^current\s+node$/i,
+        select: function(context) {
+          return [env.currentNode(resolve, context)];
+        }
+      },
+      maintained_node: {
+        matches: [],
+        regexp: /^maintained\s+node\s+versions$/i,
+        select: function(context) {
+          var now = Date.now();
+          var queries = Object.keys(jsEOL).filter(function(key) {
+            return now < Date.parse(jsEOL[key].end) && now > Date.parse(jsEOL[key].start) && isEolReleased(key);
+          }).map(function(key) {
+            return "node " + key.slice(1);
+          });
+          return resolve(queries, context);
+        }
+      },
+      phantomjs_1_9: {
+        matches: [],
+        regexp: /^phantomjs\s+1.9$/i,
+        select: function() {
+          return ["safari 5"];
+        }
+      },
+      phantomjs_2_1: {
+        matches: [],
+        regexp: /^phantomjs\s+2.1$/i,
+        select: function() {
+          return ["safari 6"];
+        }
+      },
+      browser_version: {
+        matches: ["browser", "version"],
+        regexp: /^(\w+)\s+(tp|[\d.]+)$/i,
+        select: function(context, node) {
+          var version = node.version;
+          if (/^tp$/i.test(version))
+            version = "TP";
+          var data = checkName(node.browser, context);
+          var alias = normalizeVersion(data, version);
+          if (alias) {
+            version = alias;
+          } else {
+            if (version.indexOf(".") === -1) {
+              alias = version + ".0";
+            } else {
+              alias = version.replace(/\.0$/, "");
+            }
+            alias = normalizeVersion(data, alias);
+            if (alias) {
+              version = alias;
+            } else if (context.ignoreUnknownVersions) {
+              return [];
+            } else {
+              throw new BrowserslistError(
+                "Unknown version " + version + " of " + node.browser
+              );
+            }
+          }
+          return [data.name + " " + version];
+        }
+      },
+      browserslist_config: {
+        matches: [],
+        regexp: /^browserslist config$/i,
+        needsPath: true,
+        select: function(context) {
+          return browserslist2(void 0, context);
+        }
+      },
+      extends: {
+        matches: ["config"],
+        regexp: /^extends (.+)$/i,
+        needsPath: true,
+        select: function(context, node) {
+          return resolve(env.loadQueries(context, node.config), context);
+        }
+      },
+      defaults: {
+        matches: [],
+        regexp: /^defaults$/i,
+        select: function(context) {
+          return resolve(browserslist2.defaults, context);
+        }
+      },
+      dead: {
+        matches: [],
+        regexp: /^dead$/i,
+        select: function(context) {
+          var dead = [
+            "Baidu >= 0",
+            "ie <= 11",
+            "ie_mob <= 11",
+            "bb <= 10",
+            "op_mob <= 12.1",
+            "samsung 4"
+          ];
+          return resolve(dead, context);
+        }
+      },
+      unknown: {
+        matches: [],
+        regexp: /^(\w+)$/i,
+        select: function(context, node) {
+          if (byName(node.query, context)) {
+            throw new BrowserslistError(
+              "Specify versions in Browserslist query for browser " + node.query
+            );
+          } else {
+            throw unknownQuery(node.query);
+          }
+        }
+      }
+    };
+    (function() {
+      for (var name in agents) {
+        var browser = agents[name];
+        browserslist2.data[name] = {
+          name,
+          versions: normalize(agents[name].versions),
+          released: normalize(agents[name].versions.slice(0, -3)),
+          releaseDate: agents[name].release_date
+        };
+        fillUsage(browserslist2.usage.global, name, browser.usage_global);
+        browserslist2.versionAliases[name] = {};
+        for (var i = 0; i < browser.versions.length; i++) {
+          var full = browser.versions[i];
+          if (!full)
+            continue;
+          if (full.indexOf("-") !== -1) {
+            var interval = full.split("-");
+            for (var j = 0; j < interval.length; j++) {
+              browserslist2.versionAliases[name][interval[j]] = full;
+            }
+          }
+        }
+      }
+      browserslist2.nodeVersions = jsReleases.map(function(release) {
+        return release.version;
+      });
+    })();
+    browserslist2.versionAliases.firefox.esr = FIREFOX_ESR_VERSION;
+    module.exports = browserslist2;
+  }
+});
+
+// src/compiler/prefixer.ts
+async function loadPostcss() {
+  if (!postcssLoaded) {
+    try {
+      postcss = await import("postcss").then((m) => m.default);
+    } catch (err) {
+    }
+    postcssLoaded = true;
+  }
+  return postcss;
+}
+async function loadBrowserslist() {
+  if (!browserslistLoaded) {
+    try {
+      browserslist = await Promise.resolve().then(() => __toESM(require_browserslist(), 1)).then((m) => m.default);
+    } catch (err) {
+    }
+    browserslistLoaded = true;
+  }
+  return browserslist;
+}
+async function loadCaniuse() {
+  if (!caniuseLoaded) {
+    try {
+      const caniuseModule = await import("caniuse-db/fulldata-json/data-2.0.json");
+      caniuse = caniuseModule.default || caniuseModule;
+    } catch (err) {
+      console.warn("caniuse-db not installed, lightweight prefixing will be limited");
+    }
+    caniuseLoaded = true;
+  }
+  return caniuse;
+}
+async function loadAutoprefixer() {
+  if (!autoprefixerLoaded) {
+    try {
+      autoprefixer = await import("autoprefixer").then((m) => m.default);
+    } catch (err) {
+    }
+    autoprefixerLoaded = true;
+  }
+  return autoprefixer;
+}
+var postcss, browserslist, caniuse, autoprefixer, postcssLoaded, browserslistLoaded, caniuseLoaded, autoprefixerLoaded, ChainCSSPrefixer;
+var init_prefixer = __esm({
+  "src/compiler/prefixer.ts"() {
+    "use strict";
+    postcss = null;
+    browserslist = null;
+    caniuse = null;
+    autoprefixer = null;
+    postcssLoaded = false;
+    browserslistLoaded = false;
+    caniuseLoaded = false;
+    autoprefixerLoaded = false;
+    ChainCSSPrefixer = class {
+      config;
+      hasBuiltInDeps;
+      hasAutoprefixer;
+      prefixerMode;
+      caniuseData;
+      commonProperties;
+      specialValues;
+      browserPrefixMap;
+      targetBrowsers;
+      constructor(config = {}) {
+        this.config = {
+          browsers: config.browsers || ["> 0.5%", "last 2 versions", "not dead"],
+          enabled: config.enabled !== false,
+          mode: config.mode || "auto",
+          sourceMap: config.sourceMap !== false,
+          sourceMapInline: config.sourceMapInline || false
+        };
+        this.hasBuiltInDeps = false;
+        this.hasAutoprefixer = false;
+        this.prefixerMode = config.mode || "auto";
+        this.caniuseData = null;
+        this.commonProperties = this.getCommonProperties();
+        this.specialValues = {
+          "display": ["flex", "inline-flex", "grid", "inline-grid"],
+          "background-clip": ["text"],
+          "position": ["sticky"]
+        };
+        this.browserPrefixMap = {
+          "chrome": "webkit",
+          "safari": "webkit",
+          "firefox": "moz",
+          "ie": "ms",
+          "edge": "webkit",
+          "ios_saf": "webkit",
+          "and_chr": "webkit",
+          "android": "webkit",
+          "opera": "webkit",
+          "op_mob": "webkit",
+          "samsung": "webkit",
+          "and_ff": "moz"
+        };
+        this.targetBrowsers = null;
+      }
+      async determineMode() {
+        if (this.config.mode === "full") {
+          const hasAutoprefixer = !!await loadAutoprefixer();
+          if (!hasAutoprefixer) {
+            console.warn("Full mode requested but autoprefixer not installed. Falling back to lightweight mode.");
+            console.warn("   To use full mode: npm install autoprefixer postcss caniuse-db browserslist\n");
+            return "lightweight";
+          }
+          return "full";
+        }
+        if (this.config.mode === "lightweight") {
+          return "lightweight";
+        }
+        if (this.config.mode === "auto") {
+          const hasAutoprefixer = !!await loadAutoprefixer();
+          return hasAutoprefixer ? "full" : "lightweight";
+        }
+        return "lightweight";
+      }
+      async process(cssString, options = {}) {
+        if (!this.config.enabled) {
+          return { css: cssString, map: null };
+        }
+        try {
+          const mapOptions = {
+            inline: this.config.sourceMapInline,
+            annotation: false,
+            sourcesContent: true
+          };
+          const mode = await this.determineMode();
+          if (mode === "full") {
+            return await this.processWithAutoprefixer(cssString, options, mapOptions);
+          }
+          return await this.processWithBuiltIn(cssString, options, mapOptions);
+        } catch (err) {
+          console.error("Prefixer error:", err.message);
+          return { css: cssString, map: null };
+        }
+      }
+      async processWithAutoprefixer(cssString, options, mapOptions) {
+        const autoprefixerModule = await loadAutoprefixer();
+        const postcssModule = await loadPostcss();
+        if (!autoprefixerModule || !postcssModule) {
+          console.warn("Autoprefixer or PostCSS not available, falling back to lightweight mode");
+          return await this.processWithBuiltIn(cssString, options, mapOptions);
+        }
+        const from = options.from || "input.css";
+        const to = options.to || "output.css";
+        const result = await postcssModule([
+          autoprefixerModule({ overrideBrowserslist: this.config.browsers })
+        ]).process(cssString, {
+          from,
+          to,
+          map: this.config.sourceMap ? mapOptions : false
+        });
+        return {
+          css: result.css,
+          map: result.map ? result.map.toString() : null
+        };
+      }
+      async processWithBuiltIn(cssString, options, mapOptions) {
+        const postcssModule = await loadPostcss();
+        const browserslistModule = await loadBrowserslist();
+        const caniuseData = await loadCaniuse();
+        if (!postcssModule || !browserslistModule || !caniuseData) {
+          return { css: cssString, map: null };
+        }
+        this.targetBrowsers = browserslistModule(this.config.browsers);
+        this.caniuseData = caniuseData.data || caniuseData;
+        this.hasBuiltInDeps = true;
+        const from = options.from || "input.css";
+        const to = options.to || "output.css";
+        const result = await postcssModule([
+          this.createBuiltInPlugin()
+        ]).process(cssString, {
+          from,
+          to,
+          map: this.config.sourceMap ? mapOptions : false
+        });
+        return {
+          css: result.css,
+          map: result.map ? result.map.toString() : null
+        };
+      }
+      createBuiltInPlugin() {
+        return (root) => {
+          root.walkDecls((decl) => {
+            this.processBuiltInDeclaration(decl);
+          });
+        };
+      }
+      processBuiltInDeclaration(decl) {
+        const { prop, value } = decl;
+        if (this.commonProperties.includes(prop)) {
+          this.addPrefixesFromCaniuse(decl);
+        }
+        if (this.specialValues[prop]?.includes(value)) {
+          this.addSpecialValuePrefixes(decl);
+        }
+      }
+      addPrefixesFromCaniuse(decl) {
+        if (!this.caniuseData)
+          return;
+        const feature = this.findFeature(decl.prop);
+        if (!feature)
+          return;
+        const prefixes = /* @__PURE__ */ new Set();
+        this.targetBrowsers?.forEach((browser) => {
+          const [id, versionStr] = browser.split(" ");
+          const version = parseFloat(versionStr.split("-")[0]);
+          const stats = feature.stats[id];
+          if (stats) {
+            const versions = Object.keys(stats).map((v) => parseFloat(v.split("-")[0])).filter((v) => !isNaN(v)).sort((a, b) => a - b);
+            const closestVersion = versions.find((v) => v <= version) || versions[0];
+            if (closestVersion) {
+              const support = stats[closestVersion.toString()];
+              if (support && support.includes("x")) {
+                const prefix = this.browserPrefixMap[id.split("-")[0]];
+                if (prefix)
+                  prefixes.add(prefix);
+              }
+            }
+          }
+        });
+        prefixes.forEach((prefix) => {
+          decl.cloneBefore({
+            prop: `-${prefix}-${decl.prop}`,
+            value: decl.value
+          });
+        });
+      }
+      addSpecialValuePrefixes(decl) {
+        const { prop, value } = decl;
+        if (prop === "display") {
+          if (value === "flex" || value === "inline-flex") {
+            decl.cloneBefore({ prop: "display", value: `-webkit-${value}` });
+            decl.cloneBefore({
+              prop: "display",
+              value: value === "flex" ? "-ms-flexbox" : "-ms-inline-flexbox"
+            });
+          }
+          if (value === "grid" || value === "inline-grid") {
+            decl.cloneBefore({
+              prop: "display",
+              value: value === "grid" ? "-ms-grid" : "-ms-inline-grid"
+            });
+          }
+        }
+        if (prop === "background-clip" && value === "text") {
+          decl.cloneBefore({ prop: "-webkit-background-clip", value: "text" });
+        }
+        if (prop === "position" && value === "sticky") {
+          decl.cloneBefore({ prop: "position", value: "-webkit-sticky" });
+        }
+      }
+      findFeature(property) {
+        if (!this.caniuseData)
+          return null;
+        const featureMap = {
+          "transform": "transforms2d",
+          "transform-origin": "transforms2d",
+          "transform-style": "transforms3d",
+          "perspective": "transforms3d",
+          "backface-visibility": "transforms3d",
+          "transition": "css-transitions",
+          "animation": "css-animation",
+          "backdrop-filter": "backdrop-filter",
+          "filter": "css-filters",
+          "user-select": "user-select-none",
+          "appearance": "css-appearance",
+          "mask-image": "css-masks",
+          "box-shadow": "css-boxshadow",
+          "border-radius": "border-radius",
+          "text-fill-color": "text-stroke",
+          "text-stroke": "text-stroke",
+          "background-clip": "background-img-opts",
+          "flex": "flexbox",
+          "flex-grow": "flexbox",
+          "flex-shrink": "flexbox",
+          "flex-basis": "flexbox",
+          "justify-content": "flexbox",
+          "align-items": "flexbox",
+          "grid": "css-grid",
+          "grid-template": "css-grid",
+          "grid-column": "css-grid",
+          "grid-row": "css-grid"
+        };
+        const featureId = featureMap[property];
+        return featureId ? this.caniuseData[featureId] : null;
+      }
+      getCommonProperties() {
+        return [
+          "transform",
+          "transform-origin",
+          "transform-style",
+          "transition",
+          "transition-property",
+          "transition-duration",
+          "transition-timing-function",
+          "animation",
+          "animation-name",
+          "animation-duration",
+          "animation-timing-function",
+          "animation-delay",
+          "animation-iteration-count",
+          "animation-direction",
+          "animation-fill-mode",
+          "animation-play-state",
+          "backdrop-filter",
+          "filter",
+          "user-select",
+          "appearance",
+          "text-fill-color",
+          "text-stroke",
+          "text-stroke-color",
+          "text-stroke-width",
+          "background-clip",
+          "mask-image",
+          "mask-clip",
+          "mask-composite",
+          "mask-origin",
+          "mask-position",
+          "mask-repeat",
+          "mask-size",
+          "box-shadow",
+          "border-radius",
+          "box-sizing",
+          "display",
+          "flex",
+          "flex-grow",
+          "flex-shrink",
+          "flex-basis",
+          "justify-content",
+          "align-items",
+          "align-self",
+          "align-content",
+          "grid",
+          "grid-template",
+          "grid-column",
+          "grid-row"
+        ];
+      }
+    };
+  }
+});
+
+// src/core/compiler.ts
+var compiler_exports = {};
+__export(compiler_exports, {
+  ChainCSSCompiler: () => ChainCSSCompiler,
+  compileChainCSS: () => compileChainCSS
+});
+import fs3 from "fs";
+import path4 from "path";
+import { fileURLToPath as fileURLToPath2 } from "url";
+async function compileChainCSS(inputFile, outputDir, config) {
+  const compiler = new ChainCSSCompiler(config);
+  return compiler.compile(inputFile, outputDir);
+}
+var __filename2, __dirname2, ChainCSSCompiler;
+var init_compiler = __esm({
+  "src/core/compiler.ts"() {
+    "use strict";
+    init_constants();
+    init_utils();
+    init_btt();
+    init_atomic_optimizer();
+    init_prefixer();
+    __filename2 = fileURLToPath2(import.meta.url);
+    __dirname2 = path4.dirname(__filename2);
+    ChainCSSCompiler = class {
+      config;
+      atomicOptimizer = null;
+      prefixer = null;
+      styleCache = /* @__PURE__ */ new Map();
+      classMap = /* @__PURE__ */ new Map();
+      constructor(config = {}) {
+        this.config = {
+          ...DEFAULT_CONFIG2,
+          ...config,
+          atomic: {
+            ...DEFAULT_CONFIG2.atomic,
+            ...config.atomic,
+            neverAtomic: [...NEVER_ATOMIC_PROPERTIES, ...config.atomic?.neverAtomic || []],
+            alwaysAtomic: [...ALWAYS_ATOMIC_PROPERTIES, ...config.atomic?.alwaysAtomic || []]
+          }
+        };
+        setSourceComments(this.config.sourceComments !== false);
+        if (this.config.breakpoints) {
+          setBreakpoints(this.config.breakpoints);
+        }
+        this.initOptimizer();
+        this.initPrefixer();
+      }
+      initOptimizer() {
+        if (this.config.atomic.enabled) {
+          this.atomicOptimizer = new AtomicOptimizer(this.config.atomic);
+          setAtomicOptimizer(this.atomicOptimizer);
+        }
+      }
+      initPrefixer() {
+        if (this.config.prefixer.enabled) {
+          this.prefixer = new ChainCSSPrefixer(this.config.prefixer);
+        }
+      }
+      generateCSS(styleId, styleDef) {
+        chain.cssOutput = "";
+        const compiled = {};
+        compiled[styleId] = styleDef;
+        compile(compiled);
+        let css = chain.cssOutput;
+        if (this.atomicOptimizer && this.config.atomic.enabled) {
+          const result = this.atomicOptimizer.optimize({ [styleId]: styleDef });
+          if (result.css)
+            css = result.css;
+        }
+        return css;
+      }
+      compileStyle(styleId, styleDef) {
+        const cacheKey = `${styleId}:${JSON.stringify(styleDef)}`;
+        if (this.styleCache.has(cacheKey)) {
+          return this.styleCache.get(cacheKey);
+        }
+        const className = generateClassName(styleId, this.config.atomic.naming);
+        this.classMap.set(styleId, className);
+        let css = this.generateCSS(styleId, styleDef);
+        css = formatCSS(css, this.config.output.minify);
+        const result = {
+          css,
+          classMap: { [styleId]: className },
+          atomicClasses: [],
+          stats: { totalStyles: 1, atomicStyles: 0, uniqueProperties: 0, savings: "0%" }
+        };
+        if (this.atomicOptimizer) {
+          const stats = this.atomicOptimizer.getStats();
+          result.stats = {
+            totalStyles: stats.totalStyles,
+            atomicStyles: stats.atomicStyles,
+            uniqueProperties: stats.uniqueProperties,
+            savings: stats.savings
+          };
+        }
+        this.styleCache.set(cacheKey, result);
+        return result;
+      }
+      compileRecipe(recipeId, recipeFn) {
+        let allCSS = "";
+        const classMap = {};
+        const atomicClasses = [];
+        const variants = recipeFn.getAllVariants?.() || [];
+        for (const variant of variants) {
+          const variantKey = Object.entries(variant).map(([k, v]) => `${k}-${v}`).join("_");
+          const styleId = `${recipeId}_${variantKey}`;
+          const styleDef = recipeFn(variant);
+          const result = this.compileStyle(styleId, styleDef);
+          allCSS += result.css;
+          classMap[variantKey] = Object.values(result.classMap)[0];
+          atomicClasses.push(...result.atomicClasses);
+        }
+        if (recipeFn.base) {
+          const baseResult = this.compileStyle(`${recipeId}_base`, recipeFn.base);
+          allCSS += baseResult.css;
+          classMap["base"] = Object.values(baseResult.classMap)[0];
+        }
+        return {
+          css: allCSS,
+          classMap,
+          atomicClasses,
+          stats: {
+            totalStyles: variants.length + (recipeFn.base ? 1 : 0),
+            atomicStyles: atomicClasses.length,
+            uniqueProperties: 0,
+            savings: "0%"
+          }
+        };
+      }
+      compileFile(filePath) {
+        const results = {};
+        const source = fs3.readFileSync(filePath, "utf8");
+        const fileDir = path4.dirname(filePath);
+        const moduleExports = {};
+        const module = { exports: moduleExports };
+        const evalContext = {
+          exports: moduleExports,
+          module,
+          require: (id) => {
+            if (id.startsWith(".")) {
+              const resolvedPath = path4.resolve(fileDir, id);
+              return __require(resolvedPath);
+            }
+            return __require(id);
+          },
+          __dirname: fileDir,
+          __filename: filePath,
+          $,
+          recipe,
+          createTokens,
+          compile: (style) => style
+        };
+        const evalFn = new Function(...Object.keys(evalContext), source);
+        evalFn(...Object.values(evalContext));
+        for (const [exportName, exportValue] of Object.entries(moduleExports)) {
+          if (typeof exportValue === "function" && exportValue.variants) {
+            results[exportName] = this.compileRecipe(exportName, exportValue);
+          } else if (exportValue && typeof exportValue === "object" && exportValue.selectors) {
+            results[exportName] = this.compileStyle(exportName, exportValue);
+          }
+        }
+        return results;
+      }
+      generateTypeScriptTypes(results, outputPath) {
+        let types = `/**
+ * ChainCSS Generated Types
+ * Do not edit - generated by ChainCSS compiler v${VERSION}
+ * @generated
+ */
+
+`;
+        for (const [name, result] of Object.entries(results)) {
+          for (const className of Object.keys(result.classMap)) {
+            types += `export declare const ${className}: string;
+`;
+          }
+        }
+        writeFile(outputPath, types);
+      }
+      generateJavaScriptModule(results, outputPath) {
+        let jsCode = `/**
+ * ChainCSS Generated Class Map
+ * Do not edit - generated by ChainCSS compiler v${VERSION}
+ * @generated
+ */
+
+`;
+        for (const [name, result] of Object.entries(results)) {
+          for (const [className, classValue] of Object.entries(result.classMap)) {
+            jsCode += `export const ${className} = '${classValue}';
+`;
+          }
+        }
+        jsCode += `
+export const classMap = {
+`;
+        for (const [name, result] of Object.entries(results)) {
+          for (const [className, classValue] of Object.entries(result.classMap)) {
+            jsCode += `  ${className}: '${classValue}',
+`;
+          }
+        }
+        jsCode += `};
+`;
+        writeFile(outputPath, jsCode);
+      }
+      generateCSSFile(results, outputPath) {
+        let allCSS = "";
+        for (const result of Object.values(results)) {
+          allCSS += result.css + "\n";
+        }
+        writeFile(outputPath, formatCSS(allCSS, this.config.output.minify));
+      }
+      async compile(inputFile, outputDir) {
+        if (this.config.verbose)
+          console.log(`[chaincss] Compiling ${inputFile}...`);
+        if (!fs3.existsSync(outputDir))
+          fs3.mkdirSync(outputDir, { recursive: true });
+        const results = this.compileFile(inputFile);
+        const baseName = getBaseName(inputFile);
+        const cssFile = path4.join(outputDir, `${baseName}.css`);
+        const jsFile = path4.join(outputDir, `${baseName}.js`);
+        const typesFile = path4.join(outputDir, `${baseName}.d.ts`);
+        this.generateCSSFile(results, cssFile);
+        this.generateJavaScriptModule(results, jsFile);
+        this.generateTypeScriptTypes(results, typesFile);
+        return { cssFile, jsFile, typesFile, results };
+      }
+      // ============================================================================
+      // Compile components with output to source directories
+      // ============================================================================
+      async compileComponents(components) {
+        if (this.config.verbose) {
+          console.log(`[chaincss] Compiling ${components.length} component(s)...`);
+        }
+        const componentExports = /* @__PURE__ */ new Map();
+        const componentCSS = /* @__PURE__ */ new Map();
+        let allCSS = "";
+        for (const file of components) {
+          const sourceDir = path4.dirname(file);
+          const baseName = path4.basename(file, ".chain.js");
+          const stylesDir = sourceDir;
+          const classOutputPath = path4.join(stylesDir, `${baseName}.class.js`);
+          const cssOutputPath = path4.join(stylesDir, `${baseName}.css`);
+          const exports = await this.importModule(file);
+          let code = "";
+          let componentCSSContent = "";
+          for (const [name, style] of Object.entries(exports)) {
+            const styleDef = style;
+            if (styleDef) {
+              const processedStyle = { ...styleDef };
+              let className;
+              if (styleDef.selectors && styleDef.selectors.length > 0) {
+                const selector = styleDef.selectors[0];
+                className = selector.startsWith(".") ? selector.slice(1) : selector;
+                processedStyle.selectors = [selector];
+              } else {
+                className = `c_${this.hash(name)}`;
+                processedStyle.selectors = [`.${className}`];
+              }
+              code += `export const ${name} = '${className}';
+`;
+              chain.cssOutput = "";
+              const compiledObj = {};
+              compiledObj[`${baseName}_${name}`] = processedStyle;
+              compile(compiledObj);
+              componentCSSContent += chain.cssOutput + "\n";
+            }
+          }
+          if (code && componentCSSContent) {
+            if (!fs3.existsSync(stylesDir)) {
+              fs3.mkdirSync(stylesDir, { recursive: true });
+            }
+            fs3.writeFileSync(classOutputPath, code);
+            componentExports.set(classOutputPath, code);
+            const unminifiedCSS = formatCSS(componentCSSContent, false);
+            fs3.writeFileSync(cssOutputPath, unminifiedCSS);
+            componentCSS.set(cssOutputPath, componentCSSContent);
+            allCSS += componentCSSContent + "\n";
+            if (this.config.verbose) {
+              console.log(`  \u2713 Generated: ${classOutputPath}`);
+              console.log(`  \u2713 Generated: ${cssOutputPath}`);
+            }
+          }
+        }
+        const globalStylesDir = path4.join(process.cwd(), "src/global-style");
+        if (!fs3.existsSync(globalStylesDir)) {
+          fs3.mkdirSync(globalStylesDir, { recursive: true });
+        }
+        const globalStylesPath = path4.join(globalStylesDir, "global.css");
+        fs3.writeFileSync(globalStylesPath, formatCSS(allCSS, true));
+        console.log(`\u2713 Generated ${componentCSS.size} component CSS file(s)`);
+        console.log(`\u2713 Generated global.css (minified)`);
+        console.log(`\u2713 Generated ${componentExports.size} component class file(s)`);
+      }
+      async importModule(filePath) {
+        const absolutePath = path4.resolve(filePath);
+        try {
+          const fileUrl = `file://${absolutePath}`;
+          const freshUrl = `${fileUrl}?t=${Date.now()}`;
+          const imported = await import(freshUrl);
+          return imported;
+        } catch (error) {
+          console.error(`Failed to import ${filePath}:`, error);
+          return {};
+        }
+      }
+      hash(str) {
+        let h = 0;
+        for (let i = 0; i < str.length; i++) {
+          h = (h << 5) - h + str.charCodeAt(i);
+          h |= 0;
+        }
+        return Math.abs(h).toString(36).slice(0, 6);
+      }
+      async watch(inputFile, outputDir) {
+        const chokidar = await import("chokidar");
+        console.log(`[chaincss] Watching ${inputFile} for changes...`);
+        await this.compile(inputFile, outputDir);
+        const watcher = chokidar.watch(inputFile);
+        watcher.on("change", async () => {
+          console.log(`[chaincss] File changed: ${inputFile}`);
+          try {
+            await this.compile(inputFile, outputDir);
+            console.log(`[chaincss] Recompiled successfully`);
+          } catch (error) {
+            console.error(`[chaincss] Recompilation failed:`, error);
+          }
+        });
+      }
+      getStats() {
+        if (this.atomicOptimizer)
+          return this.atomicOptimizer.getStats();
+        return { totalStyles: this.styleCache.size, atomicStyles: 0, uniqueProperties: 0, savings: "0%" };
+      }
+      clearCache() {
+        this.styleCache.clear();
+        this.classMap.clear();
+        if (this.atomicOptimizer)
+          this.atomicOptimizer.clearCache();
+      }
+    };
+  }
+});
+
+// src/cli/commands/timeline.ts
+var timeline_exports = {};
+__export(timeline_exports, {
+  timelineCommand: () => timelineCommand
+});
+import chalk2 from "chalk";
+import fs4 from "fs";
+import path5 from "path";
+async function timelineCommand(action, options) {
+  const timelineFile = path5.join(process.cwd(), ".chaincss-timeline.json");
+  if (!fs4.existsSync(timelineFile)) {
+    console.log(chalk2.yellow("No timeline data found. Run build with --timeline first."));
+    return;
+  }
+  const data = JSON.parse(fs4.readFileSync(timelineFile, "utf8"));
+  switch (action) {
+    case "list":
+      console.log(chalk2.cyan("\n\u{1F4CA} Style Timeline History\n"));
+      data.history.forEach((snapshot, index) => {
+        const date = new Date(snapshot.timestamp).toLocaleString();
+        console.log(`${chalk2.green(`[${index}]`)} ${chalk2.white(snapshot.selector)} - ${chalk2.gray(date)}`);
+        console.log(`    ${chalk2.dim(Object.keys(snapshot.styles).length)} properties`);
+      });
+      break;
+    case "diff":
+      const id1 = options.snapshot1;
+      const id2 = options.snapshot2;
+      const snapshot1 = data.history.find((s) => s.id === id1 || s.selector === id1);
+      const snapshot2 = data.history.find((s) => s.id === id2 || s.selector === id2);
+      if (!snapshot1 || !snapshot2) {
+        console.log(chalk2.red("Snapshot not found"));
+        return;
+      }
+      console.log(chalk2.cyan(`
+\u{1F50D} Diff: ${snapshot1.selector} \u2192 ${snapshot2.selector}
+`));
+      const allProps = /* @__PURE__ */ new Set([...Object.keys(snapshot1.styles), ...Object.keys(snapshot2.styles)]);
+      for (const prop of allProps) {
+        const oldVal = snapshot1.styles[prop];
+        const newVal = snapshot2.styles[prop];
+        if (oldVal && !newVal) {
+          console.log(`${chalk2.red("\u2212")} ${prop}: ${oldVal}`);
+        } else if (!oldVal && newVal) {
+          console.log(`${chalk2.green("+")} ${prop}: ${newVal}`);
+        } else if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
+          console.log(`${chalk2.yellow("~")} ${prop}: ${oldVal} \u2192 ${newVal}`);
+        }
+      }
+      break;
+    case "export":
+      const exportPath = options.output || "chaincss-timeline.json";
+      fs4.writeFileSync(exportPath, JSON.stringify(data, null, 2));
+      console.log(chalk2.green(`\u2713 Timeline exported to ${exportPath}`));
+      break;
+    case "clear":
+      fs4.unlinkSync(timelineFile);
+      console.log(chalk2.green("\u2713 Timeline cleared"));
+      break;
+    default:
+      console.log(chalk2.yellow("Unknown action. Available: list, diff, export, clear"));
+  }
+}
+var init_timeline = __esm({
+  "src/cli/commands/timeline.ts"() {
+    "use strict";
+  }
+});
+
+// src/cli/index.ts
+import { Command } from "commander";
+import { readFileSync, existsSync, writeFileSync, mkdirSync } from "fs";
+import { fileURLToPath as fileURLToPath3 } from "url";
+import path6 from "path";
+import { glob } from "glob";
+import chalk3 from "chalk";
+
+// src/cli/utils/config-loader.ts
+import fs from "fs";
+import path from "path";
+
+// src/cli/utils/logger.ts
+import chalk from "chalk";
+var Logger = class {
+  verbose;
+  constructor(verbose = false) {
+    this.verbose = verbose;
+  }
+  info(message, ...args) {
+    console.log(chalk.blue("\u2139"), message, ...args);
+  }
+  success(message, ...args) {
+    console.log(chalk.green("\u2713"), message, ...args);
+  }
+  warn(message, ...args) {
+    console.log(chalk.yellow("\u26A0"), message, ...args);
+  }
+  error(message, ...args) {
+    console.log(chalk.red("\u2717"), message, ...args);
+  }
+  debug(message, ...args) {
+    if (this.verbose) {
+      console.log(chalk.gray("\u{1F50D}"), message, ...args);
+    }
+  }
+  step(message, ...args) {
+    console.log(chalk.cyan("\u2192"), message, ...args);
+  }
+  header(message) {
+    console.log();
+    console.log(chalk.bold.cyan(message));
+    console.log(chalk.gray("\u2500".repeat(message.length)));
+  }
+  divider() {
+    console.log(chalk.gray("\u2500".repeat(50)));
+  }
+  table(data) {
+    const maxKeyLength = Math.max(...Object.keys(data).map((k) => k.length));
+    for (const [key, value] of Object.entries(data)) {
+      const paddedKey = key.padEnd(maxKeyLength);
+      console.log(`  ${chalk.cyan(paddedKey)}: ${value}`);
+    }
+  }
+  progress(current, total, message) {
+    const percent2 = Math.round(current / total * 100);
+    const barLength = 30;
+    const filledLength = Math.round(barLength * current / total);
+    const bar = "\u2588".repeat(filledLength) + "\u2591".repeat(barLength - filledLength);
+    process.stdout.write(`\r  ${bar} ${percent2}% ${message}`);
+    if (current === total) {
+      process.stdout.write("\n");
+    }
+  }
+};
+function createLogger(verbose = false) {
+  return new Logger(verbose);
+}
+
+// src/cli/utils/config-loader.ts
+var DEFAULT_CONFIG = {
+  inputs: ["src/**/*.chain.js", "src/**/*.chain.ts"],
+  tokens: {
+    enabled: true,
+    prefix: "chain"
+  },
+  atomic: {
+    enabled: false,
+    threshold: 3,
+    naming: process.env.NODE_ENV === "production" ? "hash" : "readable",
+    minify: true,
+    mode: "hybrid",
+    outputStrategy: "component-first",
+    verbose: false
+  },
+  prefixer: {
+    enabled: true,
+    mode: "auto",
+    browsers: ["> 0.5%", "last 2 versions", "not dead"],
+    sourceMap: true
+  },
+  output: {
+    cssFile: "styles.css",
+    classMapFile: "class-map.json",
+    typesFile: "classes.d.ts",
+    minify: true,
+    generateGlobalCSS: true
+  },
+  breakpoints: {
+    sm: "(max-width: 640px)",
+    md: "(min-width: 641px) and (max-width: 768px)",
+    lg: "(min-width: 769px) and (max-width: 1024px)",
+    xl: "(min-width: 1025px)",
+    "2xl": "(min-width: 1280px)",
+    mobile: "(max-width: 768px)",
+    tablet: "(min-width: 769px) and (max-width: 1024px)",
+    desktop: "(min-width: 1025px)"
+  },
+  debug: false,
+  sourceComments: true,
+  timeline: false,
+  framework: "auto",
+  namespace: "chain",
+  watch: false,
+  verbose: false
+};
+async function loadConfig(configPath) {
+  const logger = createLogger(false);
+  const possiblePaths = configPath ? [configPath] : [
+    path.join(process.cwd(), "chaincss.config.js"),
+    path.join(process.cwd(), "chaincss.config.ts"),
+    path.join(process.cwd(), ".chaincssrc.js"),
+    path.join(process.cwd(), "chaincss.json")
+  ];
+  for (const configFile of possiblePaths) {
+    if (fs.existsSync(configFile)) {
+      try {
+        logger.debug(`Loading config from ${configFile}`);
+        if (configFile.endsWith(".json")) {
+          const content = fs.readFileSync(configFile, "utf8");
+          const userConfig = JSON.parse(content);
+          return mergeConfig(DEFAULT_CONFIG, userConfig);
+        } else {
+          const configModule = await import(`file://${configFile}`);
+          const userConfig = configModule.default || configModule;
+          return mergeConfig(DEFAULT_CONFIG, userConfig);
+        }
+      } catch (error) {
+        logger.warn(`Failed to load config from ${configFile}:`, error);
+      }
+    }
+  }
+  logger.debug("No config file found, using defaults");
+  return DEFAULT_CONFIG;
+}
+function mergeConfig(defaults, user) {
+  return {
+    ...defaults,
+    ...user,
+    tokens: {
+      ...defaults.tokens,
+      ...user.tokens
+    },
+    atomic: {
+      ...defaults.atomic,
+      ...user.atomic
+    },
+    prefixer: {
+      ...defaults.prefixer,
+      ...user.prefixer
+    },
+    output: {
+      ...defaults.output,
+      ...user.output
+    },
+    breakpoints: {
+      ...defaults.breakpoints,
+      ...user.breakpoints
+    }
+  };
+}
+
+// src/cli/index.ts
+var __filename3 = fileURLToPath3(import.meta.url);
+var __dirname3 = path6.dirname(__filename3);
+var findPackageJson = (startDir) => {
+  let currentDir = startDir;
+  while (currentDir !== path6.parse(currentDir).root) {
+    const pkgPath = path6.join(currentDir, "package.json");
+    if (existsSync(pkgPath))
+      return pkgPath;
+    currentDir = path6.dirname(currentDir);
+  }
+  throw new Error("Could not find package.json");
+};
+var packageJsonPath = findPackageJson(__dirname3);
+var packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
+var program = new Command();
+program.name("chaincss").description("ChainCSS - Zero-runtime CSS-in-JS Compiler").version(packageJson.version, "-V, --version").usage("[command] [options]").helpOption("-h, --help", "Display help for command");
+var getCompiler = async (config) => {
+  const { ChainCSSCompiler: ChainCSSCompiler2 } = await Promise.resolve().then(() => (init_compiler(), compiler_exports));
+  return new ChainCSSCompiler2(config);
+};
+var handleError = (error, command) => {
+  console.error(chalk3.red(`
+\u274C Error running "${command}":`));
+  if (error instanceof Error) {
+    console.error(chalk3.red(`   ${error.message}`));
+    if (process.env.DEBUG)
+      console.error(error.stack);
+  } else {
+    console.error(chalk3.red(`   ${String(error)}`));
+  }
+  process.exit(1);
+};
+program.command("init").description("Initialize ChainCSS configuration file").option("-f, --force", "Overwrite existing config file").option("-v, --verbose", "Verbose output").action(async (options) => {
+  try {
+    if (!existsSync("src"))
+      mkdirSync("src", { recursive: true });
+    if (!existsSync("src/styles"))
+      mkdirSync("src/styles", { recursive: true });
+    const configPath = "chaincss.config.js";
+    if (existsSync(configPath) && !options.force) {
+      console.log(chalk3.yellow("Config file already exists. Use --force to overwrite."));
+      return;
+    }
+    const config = `export default {
+  components: 'src/**/*.chain.js'
+};`;
+    writeFileSync(configPath, config);
+    const exampleStyle = `import { $ } from 'chaincssv2';
+
+export const button = $
+  .display('inline-block')
+  .padding('8px 16px')
+  .backgroundColor('#667eea')
+  .color('white')
+  .borderRadius('8px')
+  .cursor('pointer')
+  .$el('.btn');
+`;
+    writeFileSync("src/styles/example.chain.js", exampleStyle);
+    console.log(chalk3.green("\u2713 Created chaincss.config.js"));
+    console.log(chalk3.green("\u2713 Created src/styles/example.chain.js"));
+  } catch (error) {
+    handleError(error, "init");
+  }
+});
+program.command("build").description("Build all styles from configuration").option("-c, --components <pattern>", "Components pattern (glob)").option("-v, --verbose", "Verbose output").option("-t, --timeline", "Enable style timeline tracking").action(async (opts) => {
+  try {
+    const config = await loadConfig();
+    const { ChainCSSCompiler: ChainCSSCompiler2 } = await Promise.resolve().then(() => (init_compiler(), compiler_exports));
+    const compiler = new ChainCSSCompiler2({
+      tokens: config.tokens,
+      atomic: config.atomic,
+      prefixer: config.prefixer,
+      breakpoints: config.breakpoints,
+      // ← Add 'as any' here
+      verbose: opts.verbose || config.verbose
+    });
+    let components = [];
+    if (opts.components) {
+      components = await glob(opts.components, {
+        ignore: ["**/node_modules/**", "**/dist/**"]
+      });
+      console.log(chalk3.blue(`Found ${components.length} component(s):`));
+      components.forEach((c) => console.log(`  - ${c}`));
+    } else if (config.inputs) {
+      for (const pattern of config.inputs) {
+        const matches = await glob(pattern, {
+          ignore: ["**/node_modules/**", "**/dist/**"]
+        });
+        components.push(...matches);
+      }
+      console.log(chalk3.blue(`Found ${components.length} component(s) from config:`));
+      components.forEach((c) => console.log(`  - ${c}`));
+    }
+    await compiler.compileComponents(components);
+    console.log(chalk3.green("\u2705 Build complete"));
+  } catch (error) {
+    handleError(error, "build");
+  }
+});
+program.command("watch").description("Watch and automatically recompile styles on changes").option("-c, --components <pattern>", "Components pattern (glob)").option("-v, --verbose", "Verbose output").action(async (opts) => {
+  try {
+    console.log(chalk3.blue("\u{1F440} ChainCSS Watch Mode\n"));
+    const config = await loadConfig();
+    const chokidar = await import("chokidar");
+    const compiler = await getCompiler({
+      tokens: config.tokens,
+      atomic: config.atomic,
+      prefixer: config.prefixer,
+      breakpoints: config.breakpoints,
+      verbose: opts.verbose || config.verbose
+    });
+    let components = [];
+    if (opts.components) {
+      components = await glob(opts.components, {
+        ignore: ["**/node_modules/**", "**/dist/**"]
+      });
+      console.log(`Found ${components.length} component(s):`);
+      components.forEach((c) => console.log(`  - ${c}`));
+    } else if (config.inputs) {
+      for (const pattern of config.inputs) {
+        const matches = await glob(pattern, {
+          ignore: ["**/node_modules/**", "**/dist/**"]
+        });
+        components.push(...matches);
+      }
+      console.log(`Found ${components.length} component(s) from config:`);
+      components.forEach((c) => console.log(`  - ${c}`));
+    }
+    await compiler.compileComponents(components);
+    console.log(chalk3.green("\n\u2713 Initial build complete"));
+    console.log(chalk3.blue("\n\u{1F4E1} Watching for changes...\n"));
+    const watcher = chokidar.watch(opts.components || config.inputs || "src/**/*.chain.js", {
+      ignored: ["**/node_modules/**", "**/dist/**"],
+      persistent: true
+    });
+    let debounceTimer;
+    watcher.on("change", async (filePath) => {
+      console.log(chalk3.yellow(`\u{1F4DD} Changed: ${filePath}`));
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(async () => {
+        console.log(chalk3.blue("\u{1F504} Rebuilding..."));
+        await compiler.compileComponents(components);
+        console.log(chalk3.green("\u2705 Rebuild complete\n"));
+      }, 100);
+    });
+    process.on("SIGINT", () => {
+      console.log(chalk3.blue("\n\u{1F44B} Stopping watch mode..."));
+      watcher.close();
+      process.exit(0);
+    });
+  } catch (error) {
+    handleError(error, "watch");
+  }
+});
+program.command("timeline").description("Manage style timeline").argument("<action>", "Action: list, diff, export, clear").option("-s, --snapshot1 <id>", "First snapshot ID or selector for diff").option("-s2, --snapshot2 <id>", "Second snapshot ID or selector for diff").option("-o, --output <path>", "Output file for export").action(async (action, options) => {
+  const { timelineCommand: timelineCommand2 } = await Promise.resolve().then(() => (init_timeline(), timeline_exports));
+  await timelineCommand2(action, options);
+});
+program.on("--help", () => {
+  console.log("");
+  console.log(chalk3.cyan("Examples:"));
+  console.log(chalk3.gray("  # Initialize a new project"));
+  console.log("  $ chaincss init");
+  console.log("");
+  console.log(chalk3.gray("  # Build all styles"));
+  console.log('  $ chaincss build -c "src/**/*.chain.js"');
+  console.log("");
+  console.log(chalk3.gray("  # Watch for changes"));
+  console.log('  $ chaincss watch -c "src/**/*.chain.js"');
+  console.log("");
+  console.log(chalk3.cyan("Documentation:"));
+  console.log("  https://github.com/melcanz08/chaincss");
+  console.log("");
+});
+if (process.argv.length === 2) {
+  program.outputHelp();
+  process.exit(0);
+}
+program.parse(process.argv);

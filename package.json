@@ -1,7 +1,91 @@
 {
   "name": "chaincss",
-  "version": "1.13.3",
-  "description": "Chainable CSS-in-JS with build-time compilation, atomic CSS, and zero-runtime options",
+  "version": "2.0.0",
+  "description": "The JavaScript-native styling engine for the modern web",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "bin": {
+    "chaincss": "./dist/cli/index.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./compiler": {
+      "import": "./dist/compiler/index.js",
+      "types": "./dist/compiler/index.d.ts"
+    },
+    "./runtime": {
+      "import": "./dist/runtime/index.js",
+      "types": "./dist/runtime/index.d.ts",
+      "development": "./dist/runtime/index.js"
+    },
+    "./plugin/vite": {
+      "import": "./dist/plugins/vite.js",
+      "types": "./dist/plugins/vite.d.ts"
+    },
+    "./plugin/webpack": {
+      "import": "./dist/plugins/webpack.js",
+      "types": "./dist/plugins/webpack.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "npm run build:clean && npm run build:types && npm run build:core && npm run build:cli && npm run build:plugins && npm run build:runtime && npm run build:compiler",
+    "build:clean": "rm -rf dist",
+    "build:types": "tsc --emitDeclarationOnly --outDir dist",
+    "build:core": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js --external:chokidar --external:glob --external:commander --external:chalk --external:autoprefixer --external:postcss --external:clean-css",
+    "build:cli": "esbuild src/cli/index.ts --bundle --platform=node --format=esm --outfile=dist/cli/index.js --external:chokidar --external:glob --external:commander --external:chalk --external:autoprefixer --external:postcss --external:clean-css && chmod +x dist/cli/index.js",
+    "build:plugins": "esbuild src/plugins/vite.ts --bundle --platform=node --format=esm --outfile=dist/plugins/vite.js --external:vite && esbuild src/plugins/webpack.ts --bundle --platform=node --format=esm --outfile=dist/plugins/webpack.js --external:webpack",
+    "build:runtime": "esbuild src/runtime/index.ts --bundle --platform=browser --format=esm --outfile=dist/runtime/index.js --external:react --external:vue && esbuild src/runtime/react.tsx --bundle --platform=browser --format=esm --outfile=dist/runtime/react.js --external:react --external:vue && esbuild src/runtime/vue.ts --bundle --platform=browser --format=esm --outfile=dist/runtime/vue.js --external:vue --external:react",
+    "build:compiler": "esbuild src/compiler/index.ts --bundle --platform=node --format=esm --outfile=dist/compiler/index.js --external:chokidar --external:glob --external:commander --external:chalk --external:autoprefixer --external:postcss --external:clean-css",
+    "dev": "npm run build:clean && npm run build:types && npm run build:core -- --watch",
+    "prepublishOnly": "npm run build",
+    "test": "vitest",
+    "lint": "eslint src --ext .ts,.tsx",
+    "preversion": "npm run test && npm run build",
+    "version": "git add -A",
+    "postversion": "git push && git push --tags"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "chokidar": "^3.5.3",
+    "clean-css": "^5.3.2",
+    "commander": "^11.1.0",
+    "postcss": "^8.4.31"
+  },
+  "devDependencies": {
+    "@types/clean-css": "^4.2.10",
+    "@types/node": "^20.8.10",
+    "@types/react": "^18.2.0",
+    "autoprefixer": "^10.4.16",
+    "browserslist": "^4.22.1",
+    "esbuild": "^0.19.12",
+    "glob": "^10.3.10",
+    "react": "^18.2.0",
+    "typescript": "^5.2.2",
+    "vite": "^5.0.0",
+    "vue": "^3.3.4"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0",
+    "vue": "^3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "vue": {
+      "optional": true
+    }
+  },
   "keywords": [
     "css",
     "css-in-js",
@@ -34,127 +118,14 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/melcanz08/chaincss.git"
+    "url": "https://github.com/melcanz08/chaincss"
   },
   "homepage": "https://chaincss.dev",
   "bugs": {
     "url": "https://github.com/melcanz08/chaincss/issues"
   },
-  "exports": {
-    ".": {
-      "types": "./types.d.ts",
-      "browser": {
-        "import": "./browser/index.js",
-        "require": "./browser/index.js"
-      },
-      "node": {
-        "import": "./node/btt.js",
-        "require": "./node/btt.js"
-      },
-      "default": "./browser/index.js"
-    },
-    "./react": {
-      "types": "./types.d.ts",
-      "browser": {
-        "import": "./browser/react-hooks.js",
-        "require": "./browser/react-hooks.js"
-      },
-      "default": "./browser/react-hooks.js"
-    },
-    "./vue": {
-      "types": "./types.d.ts",
-      "browser": {
-        "import": "./browser/vue-composables.js",
-        "require": "./browser/vue-composables.js"
-      },
-      "default": "./browser/vue-composables.js"
-    },
-    "./browser": {
-      "browser": {
-        "import": "./browser/*",
-        "require": "./browser/*"
-      },
-      "default": "./browser/index.js"
-    },
-    "./node/*": {
-      "node": {
-        "import": "./node/*",
-        "require": "./node/*"
-      }
-    },
-    "./vite-plugin": {
-      "types": "./types.d.ts",
-      "import": "./node/plugins/vite-plugin.js",
-      "require": "./node/plugins/vite-plugin.js",
-      "default": "./node/plugins/vite-plugin.js"
-    },
-    "./webpack-plugin": {
-      "types": "./types.d.ts",
-      "import": "./node/plugins/webpack-plugin.js",
-      "require": "./node/plugins/webpack-plugin.js",
-      "default": "./node/plugins/webpack-plugin.js"
-    },
-    "./next-plugin": {
-      "types": "./types.d.ts",
-      "import": "./node/plugins/next-plugin.js",
-      "require": "./node/plugins/next-plugin.js",
-      "default": "./node/plugins/next-plugin.js"
-    },
-    "./loader": {
-      "types": "./types.d.ts",
-      "import": "./node/loaders/chaincss-loader.js",
-      "require": "./node/loaders/chaincss-loader.js",
-      "default": "./node/loaders/chaincss-loader.js"
-    }
-  },
-  "types": "types.d.ts",
-  "files": [
-    "browser/",
-    "node/",
-    "shared/",
-    "types.d.ts",
-    "README.md",
-    "LICENSE"
-  ],
-  "publishConfig": {
-    "access": "public",
-    "registry": "https://registry.npmjs.org/",
-    "provenance": false
-  },
-  "bin": {
-    "chaincss": "./node/chaincss.js"
-  },
-  "dependencies": {
-    "chokidar": "^3.5.3",
-    "clean-css": "^5.3.3"
-  },
-  "peerDependencies": {
-    "vue": "^3.0.0",
-    "react": ">=16.8.0",
-    "autoprefixer": "^10.0.0",
-    "postcss": "^8.5.6",
-    "browserslist": "^4.28.1",
-    "caniuse-db": "^1.0.30001770"
-  },
-  "peerDependenciesMeta": {
-    "react": {
-      "optional": true
-    },
-    "autoprefixer": {
-      "optional": true
-    },
-    "postcss": {
-      "optional": true
-    },
-    "browserslist": {
-      "optional": true
-    },
-    "caniuse-db": {
-      "optional": true
-    }
-  },
+  "sideEffects": false,
   "engines": {
-    "node": ">=14.0.0"
-  },
-  "sideEffects": false
+    "node": ">=18.0.0"
+  }
 }

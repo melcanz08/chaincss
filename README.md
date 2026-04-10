@@ -4,138 +4,271 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Live Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://chaincss.dev)
 
-> ChainCSS is the JavaScript-native styling engine for the modern web
+> **ChainCSS** The JavaScript-native styling engine for the modern web.
 
 > **Note:** The previous package `@melcanz85/chaincss` is no longer supported.  
-> **Please install `chaincss` instead:** `npm install chaincss`
+> **Please install this updated `chaincss` instead:** `npm install chaincss`
 
-##  Features
+## ✨ Features
 
-### Core Styling Features
+### Core Styling
 
-| Feature | Description |
-|---------|-------------|
-| **Chainable API** | `$().color('red').padding('10px').block()` |
-| **CSS Properties** | All standard CSS properties (camelCase) |
-| **Multiple Selectors** | `.block('.btn', '.button', '[type="button"]')` |
-| **Hover States** | `.hover().backgroundColor('blue').end()` |
-| **Hover Exit** | `.end()` method to exit hover mode |
-| **Nested Selectors** | `.select('.parent .child')` |
-| **Token Resolution** | `:colors.primary` → actual color value |
-| **CSS Property Validation** | Warns on invalid CSS properties |
+| Feature | Description | Example |
+|---------|-------------|---------|
+| **Chainable API** | Intuitive method chaining | `$.color('red').padding('10px')` |
+| **Shorthand Properties** | Write less, do more | `$.bg('blue').c('white').p('20px')` |
+| **CSS Properties** | All standard CSS properties | `$.display('flex').gap('1rem')` |
+| **Multiple Selectors** | Style multiple elements | `.$el('.btn', '.button')` |
+| **Hover States** | Interactive styles | `.hover().bg('darkblue').end()` |
+| **Responsive Breakpoints** | Built-in breakpoint methods | `.mobile(css => css.p('1rem'))` |
+| **Media Queries** | Custom media queries | `.media('(max-width: 768px)', ...)` |
 
-### At-Rules (CSS Rules)
+### 🚀 Advanced Features
 
-| At-Rule | Method | Example |
-|---------|--------|---------|
-| **Media Queries** | `.media()` | `.media('(max-width: 768px)', (css) => {...})` |
-| **Keyframes** | `.keyframes()` | `.keyframes('slide', (kf) => {...})` |
-| **Font Face** | `.fontFace()` | `.fontFace((css) => {...})` |
-| **Supports** | `.supports()` | `.supports('display: grid', (css) => {...})` |
-| **Container Queries** | `.container()` | `.container('(min-width: 400px)', (css) => {...})` |
-| **CSS Layers** | `.layer()` | `.layer('components', (css) => {...})` |
-| **Counter Styles** | `.counterStyle()` | `.counterStyle('circled', (css) => {...})` |
-| **Custom Properties** | `.property()` | `.property('--my-color', (css) => {...})` |
+| Feature | Description | Example |
+|---------|-------------|---------|
+| **Animation Presets** | Pre-built animations | `.fadeIn().duration('0.3s')` |
+| **Math Helpers** | CSS calc() helpers | `$.width($.calc('100% - 20px'))` |
+| **Design Tokens** | Centralized design values | `tokens.get('colors.primary')` |
+| **Debug Mode** | Console debugging for styles | `$.debug().bg('red')` |
+| **Source Comments** | Track style origins | `/* Generated from: nav.chain.js:15 */` |
+| **Style Timeline** | Track style changes | `chaincss build --timeline` |
 
-### Design System
-
-| Feature | Description |
-|---------|-------------|
-| **Design Tokens** | `createTokens()` with colors, spacing, typography |
-| **Token Getter** | `tokens.get('colors.primary')` |
-| **Token Resolution in Styles** | `$colors.primary` syntax |
-| **Theme Switching** | Dynamic token updates at runtime |
-| **CSS Variables Output** | `tokens.toCSSVariables()` |
-
-### Component System
-
-| Feature | Description |
-|---------|-------------|
-| **Framework Agnostic** | React, Next.js, Vite, Webpack |
-| **Recipe System** | `recipe()` for variant-based components |
-| **Base Styles** | `recipe({ base: $().padding('8px').block() })` |
-| **Variants** | `variants: { color: { primary: $().bg('blue').block() } }` |
-| **Default Variants** | `defaultVariants: { color: 'primary' }` |
-| **Compound Variants** | `compoundVariants: [{ variants: { color: 'primary', size: 'lg' }, style: ... }]` |
-| **Variant Combination** | `button({ color: 'primary', size: 'lg' })` |
-| **Compile All Variants** | `button.compileAll()` |
-
-### Build-Time Features (CLI)
+### 🏗️ Build System
 
 | Feature | Command/Flag |
 |---------|--------------|
-| **CSS Compilation** | `chaincss input.jcss output/dir` |
-| **Watch Mode** | `--watch` flag |
-| **Atomic CSS Optimization** | `--atomic` flag |
-| **Source Maps** | `--source-map` flag |
-| **Minification** | Via CleanCSS (built-in) |
-| **Autoprefixer** | `--prefixer-mode auto` |
-| **Class Map Generation** | `.map.json` output |
-| **JS Module Export** | `.classes.js` output |
-| **TypeScript Definitions** | `.classes.d.ts` output |
-| **Build Manifest** | `chaincss-manifest.json` |
-| **CSS Property Cache** | Local cache for faster builds |
+| **CSS Compilation** | `chaincss build` |
+| **Watch Mode** | `chaincss watch` |
+| **Config File** | `chaincss.config.js` |
+| **Auto-prefixer** | Built-in via `--prefixer` |
+| **Minification** | Global.css minified, components unminified |
+| **TypeScript Support** | Full type definitions |
+| **Source Maps** | For debugging |
 
-### React Runtime Features
+### ⚛️ Framework Support
 
-| Feature | Description |
-|---------|-------------|
-| **useChainStyles** | Main React hook for styles |
-| **useDynamicChainStyles** | For dynamic styles with dependencies |
-| **useThemeChainStyles** | For theme-aware styles |
-| **ChainCSSGlobal** | Global style injection component |
-| **withChainStyles** | HOC for class components |
-| **cx** | Class name utility (like clsx) |
+| Framework | Support |
+|-----------|---------|
+| **React** | ✅ `useChainStyles` hook, `createStyledComponent` |
+| **Vue** | ✅ `useAtomicClasses` composable |
+| **Solid** | ✅ Coming soon |
+| **Svelte** | ✅ Coming soon |
+| **Vanilla** | ✅ Runtime mode |
 
-### Plugin Ecosystem
+### 🔌 Plugins
 
 | Plugin | Description |
 |--------|-------------|
-| **Vite Plugin** | `.jcss` support with HMR |
-| **Webpack Plugin** | Build-time compilation |
-| **Next.js Plugin** | SSR support |
-| **Webpack Loader** | ChainCSS loader for webpack |
+| **Vite** | Automatic `.chain.js` compilation |
+| **Webpack** | Build-time integration |
+| **Next.js** | SSR support |
 
-### Development Tools
+### 📁 File Structure
 
-| Feature | Description |
+```
+src/
+├── components/
+│   └── Button/
+│       ├── Button.tsx
+│       └── styles/
+│           ├── button.chain.js    # Source styles
+│           ├── button.class.js    # Generated class names
+│           └── button.css         # Generated CSS
+├── global-style/
+│   ├── global.chain.js             # Global styles
+│   └── global.css                  # Combined CSS
+└── chaincss.config.js              # Configuration
+```
+
+## 📦 Installation
+
+```bash
+npm install chaincss
+```
+
+## 🚀 Quick Start
+
+### 1. Initialize configuration
+
+```bash
+npx chaincss init
+# or for full configuration
+npx chaincss init --full
+```
+
+### 2. Create your first style
+
+```javascript
+// src/components/Button/styles/button.chain.js
+import { $ } from 'chaincss';
+
+export const button = $
+  .bg('#667eea')
+  .c('white')
+  .p('12px 24px')
+  .rounded('8px')
+  .cursor('pointer')
+  .hover()
+    .bg('#5a67d8')
+  .end()
+  .$el('.btn');
+```
+
+### 3. Build styles
+
+```bash
+npx chaincss build
+```
+
+### 4. Use in React
+
+```jsx
+import { button } from './styles/button.class.js';
+import './styles/button.css';
+
+function Button() {
+  return <button className={button}>Click me</button>;
+}
+```
+
+## 📝 Examples
+
+### Responsive Design
+
+```javascript
+export const title = $
+  .fontSize('3rem')
+  .mobile(css => css.fontSize('1.5rem'))
+  .tablet(css => css.fontSize('2rem'))
+  .desktop(css => css.fontSize('2.5rem'))
+  .$el('.title');
+```
+
+### Animations
+
+```javascript
+export const card = $
+  .fadeInUp({ duration: '0.5s' })
+  .pulse({ duration: '2s', iteration: 'infinite' })
+  .bg('white')
+  .rounded('12px')
+  .$el('.card');
+```
+
+### Math Helpers
+
+```javascript
+export const container = $
+  .width($.calc('100% - 40px'))
+  .padding($.add($.rem(2), $.px(10)))
+  .margin($.subtract('100vw', '20px'))
+  .$el('.container');
+```
+
+### Shorthand Properties
+
+```javascript
+export const card = $
+  .bg('white')
+  .c('gray-800')
+  .p('20px')
+  .m('10px')
+  .rounded('8px')
+  .shadow('lg')
+  .$el('.card');
+```
+
+## ⚙️ Configuration
+
+Create `chaincss.config.js`:
+
+```javascript
+export default {
+  inputs: ['src/**/*.chain.js'],
+  output: 'dist/styles',
+  atomic: {
+    enabled: false,  // Enable atomic CSS optimization
+    naming: 'readable'  // or 'hash' for production
+  },
+  prefixer: {
+    enabled: true  // Auto-prefixer for cross-browser support
+  },
+  breakpoints: {
+    mobile: '(max-width: 768px)',
+    tablet: '(min-width: 769px) and (max-width: 1024px)',
+    desktop: '(min-width: 1025px)'
+  },
+  debug: false,
+  verbose: false
+};
+```
+
+## 🎯 Runtime Mode (Optional)
+
+For dynamic styles without build step:
+
+```jsx
+import { useChainStyles } from 'chaincss/runtime';
+
+function DynamicButton() {
+  const styles = useChainStyles({
+    button: {
+      backgroundColor: '#667eea',
+      color: 'white',
+      padding: '12px 24px'
+    }
+  });
+  
+  return <button className={styles.button}>Click me</button>;
+}
+```
+
+## 📊 CLI Commands
+
+| Command | Description |
 |---------|-------------|
-| **TypeScript Support** | Full type definitions (`types.d.ts`) |
-| **Configuration File** | `chaincss.config.cjs` for customization |
-| **Cache Management** | Atomic optimizer cache |
-| **Cache Cleanup** | Auto cleanup of old cache files |
-| **Atomic Optimizer Stats** | `atomicOptimizer.getStats()` |
-| **configureAtomic** | Programmatic atomic config |
+| `chaincss init` | Create config file |
+| `chaincss init --full` | Create full config with all options |
+| `chaincss build` | Build all styles |
+| `chaincss build --timeline` | Build with timeline tracking |
+| `chaincss watch` | Watch for changes |
+| `chaincss clean` | Remove generated files |
 
-### CSS Output Features
+## 🔧 Package.json Scripts
 
-| Feature | Description |
-|---------|-------------|
-| **Pure CSS Output** | `global.css` generation |
-| **Atomic CSS Output** | Reusable atomic classes |
-| **Source Maps** | `.map` files for debugging |
-| **Class Mapping** | Selector → atomic class map |
-| **Minified Output** | Via CleanCSS |
-| **Vendor Prefixing** | Via Autoprefixer |
+```json
+{
+  "scripts": {
+    "dev": "concurrently \"npm:css:watch\" \"vite\"",
+    "build": "npm run css:build && vite build",
+    "css:build": "chaincss build",
+    "css:watch": "chaincss watch",
+    "css:clean": "chaincss clean"
+  }
+}
+```
 
-### Performance Features
+## 📚 Documentation
 
-| Feature | Description |
-|---------|-------------|
-| **Zero Runtime Option** | Build mode = 0KB runtime |
-| **Small Runtime** | Runtime mode = ~3.2KB |
-| **Tree Shaking** | `sideEffects: false` |
-| **Atomic CSS Optimization** | Eliminates duplicate styles |
-| **Cache Strategy** | File + compiled function cache |
+For complete guide, API reference, and examples:
 
+### [Documentation](https://chaincss.dev/docs)
 
-For complete guide, documentation, examples, and API reference see:
+- [Getting Started](https://chaincss.dev/docs)
+- [Chainable API](https://chaincss.dev/docs/chainable-api)
+- [Responsive Design](https://chaincss.dev/docs/responsive)
+- [Animations](https://chaincss.dev/docs/animations)
+- [Configuration](https://chaincss.dev/docs/configuration)
 
-## [Documentation](https://www.chaincss.dev/docs)
+## 🤝 Contributing
 
- 
+Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md).
 
-
-## License
+## 📄 License
 
 MIT © [Rommel Caneos](https://github.com/melcanz08)
+
+## 🌟 Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=melcanz08/chaincss&type=Date)](https://star-history.com/#melcanz08/chaincss&Date)
