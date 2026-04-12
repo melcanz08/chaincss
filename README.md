@@ -255,12 +255,6 @@ For complete guide, API reference, and examples:
 
 ### [Documentation](https://chaincss.dev/docs)
 
-- [Getting Started](https://chaincss.dev/docs)
-- [Chainable API](https://chaincss.dev/docs/chainable-api)
-- [Responsive Design](https://chaincss.dev/docs/responsive)
-- [Animations](https://chaincss.dev/docs/animations)
-- [Configuration](https://chaincss.dev/docs/configuration)
-
 ## 🤝 Contributing
 
 Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md).
