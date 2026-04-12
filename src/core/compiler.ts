@@ -274,6 +274,19 @@ export class ChainCSSCompiler {
     
     // Collect all CSS for global.css
     let allCSS = '';
+    
+    // Define the type locally
+    type FrameworkType = 'react' | 'vue' | 'svelte' | 'solid' | 'auto';
+
+    // Store component info for framework generation
+    const allComponentInfo: Array<{
+      name: string;
+      selector: string;
+      styles: any;
+      propsDefinition?: Record<string, any>;
+      framework: FrameworkType;
+      outputDir: string;
+    }> = [];
 
     for (const file of components) {
       const sourceDir = path.dirname(file);
@@ -311,6 +324,21 @@ export class ChainCSSCompiler {
           compiledObj[`${baseName}_${name}`] = processedStyle;
           bttCompile(compiledObj as any);
           componentCSSContent += chain.cssOutput + '\n';
+          
+          // Check if this style should generate a framework component
+          if (styleDef._generateComponent) {
+            const componentName = styleDef._componentName || name;
+            const selector = styleDef.selectors?.[0] || `.${componentName.toLowerCase()}`;
+            
+            allComponentInfo.push({
+              name: componentName,
+              selector: selector,
+              styles: styleDef,
+              propsDefinition: styleDef._propsDefinition,
+              framework: (styleDef._framework || 'auto') as FrameworkType,
+              outputDir: stylesDir
+            });
+          }
         }
       }
       
@@ -339,7 +367,47 @@ export class ChainCSSCompiler {
       }
     }
     
-    // Generate combined global.css - ALWAYS minified for production
+    // ============================================================================
+    // Generate Framework Components (React, Vue, Svelte, Solid)
+    // ============================================================================
+    
+    if (allComponentInfo.length > 0) {
+      // Dynamically import the component generator
+      const { generateComponentCode } = await import('../compiler/btt.js');
+      
+      for (const componentInfo of allComponentInfo) {
+        try {
+          const componentCode = generateComponentCode({
+            name: componentInfo.name,
+            selector: componentInfo.selector,
+            styles: componentInfo.styles,
+            propsDefinition: componentInfo.propsDefinition,
+            framework: componentInfo.framework
+          });
+          
+          // Determine file extension based on framework
+          let ext = '.tsx';
+          if (componentInfo.framework === 'vue') ext = '.vue';
+          if (componentInfo.framework === 'svelte') ext = '.svelte';
+          
+          const componentPath = path.join(componentInfo.outputDir, `${componentInfo.name}${ext}`);
+          fs.writeFileSync(componentPath, componentCode);
+          
+          if (this.config.verbose) {
+            console.log(`  ✓ Generated component: ${componentPath}`);
+          }
+        } catch (error) {
+          console.warn(`  ⚠ Failed to generate component for ${componentInfo.name}:`, error);
+        }
+      }
+      
+      console.log(`✓ Generated ${allComponentInfo.length} framework component(s)`);
+    }
+    
+    // ============================================================================
+    // Generate Combined global.css
+    // ============================================================================
+    
     const globalStylesDir = path.join(process.cwd(), 'src/global-style');
     if (!fs.existsSync(globalStylesDir)) {
       fs.mkdirSync(globalStylesDir, { recursive: true });

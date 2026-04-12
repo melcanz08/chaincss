@@ -28,6 +28,7 @@ declare class StyleInjector {
 }
 export declare const styleInjector: StyleInjector;
 export declare function chainRuntime(useTokens?: boolean): {};
+export declare const $: {};
 export declare function compileRuntime(styles: Record<string, StyleDefinition>): Record<string, string>;
 export declare function runRuntime(...styles: StyleDefinition[]): string;
 /**

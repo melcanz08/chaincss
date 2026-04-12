@@ -38,6 +38,2110 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
+// src/compiler/tokens.ts
+var DesignTokens, defaultTokens, tokens;
+var init_tokens = __esm({
+  "src/compiler/tokens.ts"() {
+    "use strict";
+    DesignTokens = class _DesignTokens {
+      tokens;
+      flattened;
+      constructor(tokens3 = {}) {
+        this.tokens = this.deepFreeze({
+          colors: {},
+          spacing: {},
+          typography: {
+            fontFamily: {},
+            fontSize: {},
+            fontWeight: {},
+            lineHeight: {}
+          },
+          breakpoints: {},
+          zIndex: {},
+          shadows: {},
+          borderRadius: {},
+          ...tokens3
+        });
+        this.flattened = this.flattenTokens(this.tokens);
+      }
+      // Deep freeze to prevent accidental modifications
+      deepFreeze(obj) {
+        Object.keys(obj).forEach((key) => {
+          const value = obj[key];
+          if (typeof value === "object" && value !== null) {
+            this.deepFreeze(value);
+          }
+        });
+        return Object.freeze(obj);
+      }
+      // Flatten nested tokens for easy access
+      flattenTokens(obj, prefix = "") {
+        return Object.keys(obj).reduce((acc, key) => {
+          const prefixed = prefix ? `${prefix}.${key}` : key;
+          const value = obj[key];
+          if (typeof value === "object" && value !== null) {
+            Object.assign(acc, this.flattenTokens(value, prefixed));
+          } else {
+            acc[prefixed] = value;
+          }
+          return acc;
+        }, {});
+      }
+      // Get token value by path (e.g., 'colors.primary')
+      get(path5, defaultValue = "") {
+        return this.flattened[path5] || defaultValue;
+      }
+      // Generate CSS variables from tokens
+      toCSSVariables(prefix = "chain") {
+        let css = ":root {\n";
+        Object.entries(this.flattened).forEach(([key, value]) => {
+          const varName = `--${prefix}-${key.replace(/\./g, "-")}`;
+          css += `  ${varName}: ${value};
+`;
+        });
+        css += "}\n";
+        return css;
+      }
+      // Create a theme variant
+      createTheme(name, overrides) {
+        const themeTokens = { ...this.flattened };
+        Object.entries(overrides).forEach(([key, value]) => {
+          if (themeTokens[key]) {
+            themeTokens[key] = value;
+          }
+        });
+        return new _DesignTokens(this.expandTokens(themeTokens));
+      }
+      // Expand flattened tokens back to nested structure
+      expandTokens(flattened) {
+        const result = {};
+        Object.entries(flattened).forEach(([key, value]) => {
+          const parts = key.split(".");
+          let current = result;
+          for (let i = 0; i < parts.length - 1; i++) {
+            if (!current[parts[i]]) {
+              current[parts[i]] = {};
+            }
+            current = current[parts[i]];
+          }
+          current[parts[parts.length - 1]] = value;
+        });
+        return result;
+      }
+    };
+    defaultTokens = {
+      colors: {
+        primary: "#667eea",
+        secondary: "#764ba2",
+        success: "#48bb78",
+        danger: "#f56565",
+        warning: "#ed8936",
+        info: "#4299e1",
+        light: "#f7fafc",
+        dark: "#1a202c",
+        white: "#ffffff",
+        black: "#000000",
+        gray: {
+          100: "#f7fafc",
+          200: "#edf2f7",
+          300: "#e2e8f0",
+          400: "#cbd5e0",
+          500: "#a0aec0",
+          600: "#718096",
+          700: "#4a5568",
+          800: "#2d3748",
+          900: "#1a202c"
+        }
+      },
+      spacing: {
+        0: "0",
+        1: "0.25rem",
+        2: "0.5rem",
+        3: "0.75rem",
+        4: "1rem",
+        5: "1.25rem",
+        6: "1.5rem",
+        8: "2rem",
+        10: "2.5rem",
+        12: "3rem",
+        16: "4rem",
+        20: "5rem",
+        24: "6rem",
+        32: "8rem",
+        40: "10rem",
+        48: "12rem",
+        56: "14rem",
+        64: "16rem",
+        xs: "0.5rem",
+        sm: "1rem",
+        md: "1.5rem",
+        lg: "2rem",
+        xl: "3rem",
+        "2xl": "4rem",
+        "3xl": "6rem"
+      },
+      typography: {
+        fontFamily: {
+          sans: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+          serif: 'Georgia, Cambria, "Times New Roman", Times, serif',
+          mono: 'SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace'
+        },
+        fontSize: {
+          xs: "0.75rem",
+          sm: "0.875rem",
+          base: "1rem",
+          lg: "1.125rem",
+          xl: "1.25rem",
+          "2xl": "1.5rem",
+          "3xl": "1.875rem",
+          "4xl": "2.25rem",
+          "5xl": "3rem"
+        },
+        fontWeight: {
+          hairline: "100",
+          thin: "200",
+          light: "300",
+          normal: "400",
+          medium: "500",
+          semibold: "600",
+          bold: "700",
+          extrabold: "800",
+          black: "900"
+        },
+        lineHeight: {
+          none: "1",
+          tight: "1.25",
+          snug: "1.375",
+          normal: "1.5",
+          relaxed: "1.625",
+          loose: "2"
+        }
+      },
+      breakpoints: {
+        sm: "640px",
+        md: "768px",
+        lg: "1024px",
+        xl: "1280px",
+        "2xl": "1536px"
+      },
+      zIndex: {
+        0: "0",
+        10: "10",
+        20: "20",
+        30: "30",
+        40: "40",
+        50: "50",
+        auto: "auto",
+        dropdown: "1000",
+        sticky: "1020",
+        fixed: "1030",
+        modal: "1040",
+        popover: "1050",
+        tooltip: "1060"
+      },
+      shadows: {
+        sm: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
+        base: "0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)",
+        md: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+        lg: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+        xl: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+        "2xl": "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+        inner: "inset 0 2px 4px 0 rgba(0, 0, 0, 0.06)",
+        none: "none"
+      },
+      borderRadius: {
+        none: "0",
+        sm: "0.125rem",
+        base: "0.25rem",
+        md: "0.375rem",
+        lg: "0.5rem",
+        xl: "0.75rem",
+        "2xl": "1rem",
+        "3xl": "1.5rem",
+        full: "9999px"
+      }
+    };
+    tokens = new DesignTokens(defaultTokens);
+  }
+});
+
+// src/compiler/commonProps.ts
+var COMMON_CSS_PROPERTIES;
+var init_commonProps = __esm({
+  "src/compiler/commonProps.ts"() {
+    "use strict";
+    COMMON_CSS_PROPERTIES = [
+      "align-content",
+      "align-items",
+      "align-self",
+      "animation",
+      "background",
+      "background-clip",
+      "background-color",
+      "background-image",
+      "background-position",
+      "background-repeat",
+      "background-size",
+      "border",
+      "border-bottom",
+      "border-color",
+      "border-left",
+      "border-radius",
+      "border-right",
+      "border-style",
+      "border-top",
+      "border-width",
+      "bottom",
+      "box-shadow",
+      "box-sizing",
+      "color",
+      "content",
+      "cursor",
+      "display",
+      "flex",
+      "flex-direction",
+      "flex-grow",
+      "flex-shrink",
+      "flex-wrap",
+      "float",
+      "font",
+      "font-family",
+      "font-size",
+      "font-weight",
+      "gap",
+      "grid",
+      "grid-template-columns",
+      "grid-template-rows",
+      "height",
+      "justify-content",
+      "left",
+      "letter-spacing",
+      "line-height",
+      "margin",
+      "margin-bottom",
+      "margin-left",
+      "margin-right",
+      "margin-top",
+      "max-height",
+      "max-width",
+      "min-height",
+      "min-width",
+      "opacity",
+      "outline",
+      "overflow",
+      "padding",
+      "padding-bottom",
+      "padding-left",
+      "padding-right",
+      "padding-top",
+      "position",
+      "right",
+      "text-align",
+      "text-decoration",
+      "text-transform",
+      "top",
+      "transform",
+      "transition",
+      "transition-delay",
+      "transition-duration",
+      "transition-property",
+      "transition-timing-function",
+      "width",
+      "z-index"
+    ];
+  }
+});
+
+// src/compiler/btt.ts
+var btt_exports = {};
+__export(btt_exports, {
+  $: () => $,
+  atomicOptimizer: () => atomicOptimizer,
+  chain: () => chain,
+  chainObject: () => chain,
+  clearTimeline: () => clearTimeline,
+  compile: () => compile,
+  configureAtomic: () => configureAtomic,
+  createTokens: () => createTokens,
+  enableDebug: () => enableDebug,
+  enableTimeline: () => enableTimeline,
+  exportTimeline: () => exportTimeline,
+  generateComponentCode: () => generateComponentCode,
+  getStyleChanges: () => getStyleChanges,
+  getStyleDiff: () => getStyleDiff,
+  getStyleHistory: () => getStyleHistory,
+  helpers: () => helpers,
+  recipe: () => recipe,
+  run: () => run,
+  setAtomicOptimizer: () => setAtomicOptimizer,
+  setBreakpoints: () => setBreakpoints,
+  setSourceComments: () => setSourceComments,
+  tokens: () => tokens2
+});
+import path from "path";
+import https from "https";
+import { fileURLToPath } from "url";
+function enableTimeline(enable = true) {
+  timelineEnabled = enable;
+  if (!enable) {
+    styleHistory = [];
+    styleChanges = [];
+  }
+}
+function getStyleHistory() {
+  return styleHistory;
+}
+function getStyleChanges() {
+  return styleChanges;
+}
+function getStyleDiff(snapshotId1, snapshotId2) {
+  const snapshot1 = styleHistory.find((s) => s.id === snapshotId1);
+  const snapshot2 = styleHistory.find((s) => s.id === snapshotId2);
+  if (!snapshot1 || !snapshot2) {
+    return { error: "Snapshot not found" };
+  }
+  const diff = {
+    added: {},
+    removed: {},
+    modified: {}
+  };
+  for (const [key, value] of Object.entries(snapshot2.styles)) {
+    if (!(key in snapshot1.styles)) {
+      diff.added[key] = value;
+    } else if (JSON.stringify(snapshot1.styles[key]) !== JSON.stringify(value)) {
+      diff.modified[key] = {
+        old: snapshot1.styles[key],
+        new: value
+      };
+    }
+  }
+  for (const [key, value] of Object.entries(snapshot1.styles)) {
+    if (!(key in snapshot2.styles)) {
+      diff.removed[key] = value;
+    }
+  }
+  return diff;
+}
+function takeSnapshot(selector, styles, source) {
+  if (!timelineEnabled)
+    return "";
+  const hash = JSON.stringify(styles);
+  const existing = styleHistory.find((s) => s.selector === selector && s.hash === hash);
+  if (existing)
+    return existing.id;
+  const id = `snapshot_${currentSnapshotId++}`;
+  const snapshot = {
+    id,
+    timestamp: Date.now(),
+    selector,
+    styles: { ...styles },
+    source,
+    hash
+  };
+  styleHistory.push(snapshot);
+  const previousSnapshot = styleHistory.slice(-2)[0];
+  if (previousSnapshot && previousSnapshot.selector === selector) {
+    for (const [key, value] of Object.entries(styles)) {
+      const oldValue = previousSnapshot.styles[key];
+      if (!(key in previousSnapshot.styles)) {
+        styleChanges.push({
+          id: `change_${Date.now()}_${Math.random()}`,
+          timestamp: Date.now(),
+          selector,
+          property: key,
+          oldValue: void 0,
+          newValue: value,
+          type: "add"
+        });
+      } else if (JSON.stringify(oldValue) !== JSON.stringify(value)) {
+        styleChanges.push({
+          id: `change_${Date.now()}_${Math.random()}`,
+          timestamp: Date.now(),
+          selector,
+          property: key,
+          oldValue,
+          newValue: value,
+          type: "modify"
+        });
+      }
+    }
+    for (const [key] of Object.entries(previousSnapshot.styles)) {
+      if (!(key in styles)) {
+        styleChanges.push({
+          id: `change_${Date.now()}_${Math.random()}`,
+          timestamp: Date.now(),
+          selector,
+          property: key,
+          oldValue: previousSnapshot.styles[key],
+          newValue: void 0,
+          type: "remove"
+        });
+      }
+    }
+  }
+  return id;
+}
+function exportTimeline() {
+  return JSON.stringify({
+    history: styleHistory,
+    changes: styleChanges,
+    exportedAt: Date.now()
+  }, null, 2);
+}
+function clearTimeline() {
+  styleHistory = [];
+  styleChanges = [];
+  currentSnapshotId = 0;
+}
+function levenshteinDistance(a, b) {
+  const matrix = [];
+  for (let i = 0; i <= b.length; i++) {
+    matrix[i] = [i];
+  }
+  for (let j = 0; j <= a.length; j++) {
+    matrix[0][j] = j;
+  }
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      const cost = a[j - 1] === b[i - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+    }
+  }
+  return matrix[b.length][a.length];
+}
+function getSuggestion(prop, validProperties = []) {
+  const knownShorthands = Object.keys(shorthandMap);
+  const commonCSS = [
+    "display",
+    "position",
+    "margin",
+    "padding",
+    "color",
+    "background",
+    "background-color",
+    "border",
+    "border-radius",
+    "width",
+    "height",
+    "font-size",
+    "font-weight",
+    "text-align",
+    "cursor",
+    "opacity",
+    "z-index",
+    "overflow",
+    "flex",
+    "grid",
+    "gap",
+    "justify-content",
+    "align-items",
+    "transition",
+    "transform",
+    "animation"
+  ];
+  const allKnown = [...knownShorthands, ...commonCSS, ...validProperties];
+  const uniqueKnown = [...new Set(allKnown)];
+  let bestMatch = "";
+  let bestDistance = 4;
+  for (const known of uniqueKnown) {
+    const distance = levenshteinDistance(prop.toLowerCase(), known.toLowerCase());
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestMatch = known;
+    }
+  }
+  if (bestMatch && bestDistance <= 3) {
+    return bestMatch;
+  }
+  return "";
+}
+function detectFrameworkFromProject() {
+  try {
+    __require.resolve("react/package.json");
+    return "react";
+  } catch (e) {
+  }
+  try {
+    __require.resolve("vue/package.json");
+    return "vue";
+  } catch (e) {
+  }
+  try {
+    __require.resolve("svelte/package.json");
+    return "svelte";
+  } catch (e) {
+  }
+  try {
+    __require.resolve("solid-js/package.json");
+    return "solid";
+  } catch (e) {
+  }
+  return "react";
+}
+function generateReactComponent(info) {
+  const propsInterface = info.propsDefinition ? Object.entries(info.propsDefinition).map(([key, type]) => `  ${key}?: ${type};`).join("\n") : "  [key: string]: any;";
+  return `// Auto-generated by ChainCSS
+import React from 'react';
+import styles from './${info.name}.class.js';
+import './${info.name}.css';
+
+export interface ${info.name}Props {
+  className?: string;
+  children?: React.ReactNode;
+${propsInterface}
+}
+
+export const ${info.name}: React.FC<${info.name}Props> = ({ 
+  className, 
+  children, 
+  ...props 
+}) => {
+  const combinedClassName = [styles.${info.selector.replace(/^\./, "")}, className]
+    .filter(Boolean)
+    .join(' ');
+    
+  return (
+    <div className={combinedClassName} {...props}>
+      {children}
+    </div>
+  );
+};
+
+${info.name}.displayName = 'ChainCSS${info.name}';
+
+export default ${info.name};
+`;
+}
+function generateVueComponent(info) {
+  const propsDefinition = info.propsDefinition ? Object.entries(info.propsDefinition).map(([key, type]) => `    ${key}: { type: ${type}, default: null },`).join("\n") : "";
+  return `<!-- Auto-generated by ChainCSS -->
+<template>
+  <component 
+    :is="tag" 
+    :class="combinedClass"
+    v-bind="$attrs"
+  >
+    <slot />
+  </component>
+</template>
+
+<script>
+import styles from './${info.name}.class.js';
+import './${info.name}.css';
+
+export default {
+  name: 'ChainCSS${info.name}',
+  props: {
+    tag: {
+      type: String,
+      default: 'div'
+    },
+    className: {
+      type: String,
+      default: ''
+    },
+${propsDefinition}
+  },
+  computed: {
+    combinedClass() {
+      return [styles.${info.selector.replace(/^\./, "")}, this.className]
+        .filter(Boolean)
+        .join(' ');
+    }
+  }
+};
+</script>
+`;
+}
+function generateSvelteComponent(info) {
+  return `<!-- Auto-generated by ChainCSS -->
+<script>
+  import styles from './${info.name}.class.js';
+  import './${info.name}.css';
+  
+  export let className = '';
+  export let tag = 'div';
+  
+  $: combinedClass = [styles.${info.selector.replace(/^\./, "")}, className]
+    .filter(Boolean)
+    .join(' ');
+</script>
+
+<svelte:element this={tag} class={combinedClass}>
+  <slot />
+</svelte:element>
+`;
+}
+function generateSolidComponent(info) {
+  return `// Auto-generated by ChainCSS
+import { splitProps } from 'solid-js';
+import styles from './${info.name}.class.js';
+import './${info.name}.css';
+
+export function ${info.name}(props) {
+  const [local, others] = splitProps(props, ['class', 'children']);
+  const combinedClass = () => [styles.${info.selector.replace(/^\./, "")}, local.class]
+    .filter(Boolean)
+    .join(' ');
+    
+  return (
+    <div class={combinedClass()} {...others}>
+      {local.children}
+    </div>
+  );
+}
+`;
+}
+function generateComponentCode(info) {
+  let framework = info.framework;
+  if (framework === "auto") {
+    framework = detectFrameworkFromProject();
+  }
+  switch (framework) {
+    case "react":
+      return generateReactComponent(info);
+    case "vue":
+      return generateVueComponent(info);
+    case "svelte":
+      return generateSvelteComponent(info);
+    case "solid":
+      return generateSolidComponent(info);
+    default:
+      return generateReactComponent(info);
+  }
+}
+function getSourceLocation() {
+  if (!enableSourceComments)
+    return null;
+  const stack = new Error().stack;
+  if (!stack)
+    return null;
+  const stackLines = stack.split("\n");
+  for (let i = 0; i < stackLines.length; i++) {
+    const line = stackLines[i];
+    const match = line.match(/([^/]+\.chain\.js):(\d+):\d+/);
+    if (match) {
+      const fileName = match[1];
+      const lineNumber = match[2];
+      return `${fileName}:${lineNumber}`;
+    }
+  }
+  return null;
+}
+function setSourceComments(enabled) {
+  enableSourceComments = enabled;
+}
+function addSourceComment(css, sourceLocation) {
+  if (!enableSourceComments || !sourceLocation)
+    return css;
+  return `/* Generated from: ${sourceLocation} */
+${css}`;
+}
+function createAnimation(animationName, config = {}) {
+  const duration = config.duration || "0.3s";
+  const delay = config.delay || "0s";
+  const timing = config.timing || "ease";
+  const iteration = config.iteration || 1;
+  const direction = config.direction || "normal";
+  const fillMode = config.fillMode || "both";
+  return {
+    animation: `${animationName} ${duration} ${timing} ${delay} ${iteration} ${direction}`,
+    animationFillMode: fillMode
+  };
+}
+function calc(expression) {
+  return `calc(${expression})`;
+}
+function add(a, b) {
+  return `calc(${a} + ${b})`;
+}
+function subtract(a, b) {
+  return `calc(${a} - ${b})`;
+}
+function multiply(a, b) {
+  return `calc(${a} * ${b})`;
+}
+function divide(a, b) {
+  return `calc(${a} / ${b})`;
+}
+function percent(value) {
+  return `${value}%`;
+}
+function vw(value) {
+  return `${value}vw`;
+}
+function vh(value) {
+  return `${value}vh`;
+}
+function rem(value) {
+  return `${value}rem`;
+}
+function em(value) {
+  return `${value}em`;
+}
+function px(value) {
+  return `${value}px`;
+}
+function min(...values) {
+  return `min(${values.join(", ")})`;
+}
+function max(...values) {
+  return `max(${values.join(", ")})`;
+}
+function clamp(min2, preferred, max2) {
+  return `clamp(${min2}, ${preferred}, ${max2})`;
+}
+function enableDebug(enable = true) {
+  debugMode = enable;
+  if (debugMode) {
+    console.log("\u{1F50D} ChainCSS Debug Mode Enabled");
+  }
+}
+function setBreakpoints(breakpoints) {
+  currentBreakpoints = { ...DEFAULT_BREAKPOINTS, ...breakpoints };
+}
+function setAtomicOptimizer(optimizer) {
+  atomicOptimizer = optimizer;
+}
+function configureAtomic(opts) {
+  if (atomicOptimizer) {
+    Object.assign(atomicOptimizer.options, opts);
+  }
+}
+function createTokens(tokenValues) {
+  const tokenObj = new DesignTokens(tokenValues);
+  currentTokenContext = tokenObj;
+  return tokenObj;
+}
+function resolveToken(value, useTokens, tokenContext) {
+  if (!useTokens || typeof value !== "string")
+    return value;
+  if (value.includes("$")) {
+    return value.replace(/\$([a-zA-Z0-9.-]+)/g, (match, path5) => {
+      if (tokenContext) {
+        const resolved = tokenContext.get(path5);
+        if (resolved !== void 0) {
+          return resolved;
+        }
+      }
+      const globalResolved = tokens2.get(path5);
+      if (globalResolved !== void 0) {
+        return globalResolved;
+      }
+      return match;
+    });
+  }
+  return value;
+}
+function chaincssv2(useTokens = true) {
+  const catcher = {};
+  let validProperties = chain.cachedValidProperties;
+  const tokenContext = currentTokenContext || null;
+  const createResponsiveMethod = (breakpointName, query) => {
+    return function(callback) {
+      const subChain = chaincssv2(useTokens);
+      let result = callback(subChain);
+      if (result && typeof result.$el === "function") {
+        result = result.$el();
+      }
+      const { selectors, ...pureStyles } = result || {};
+      if (!catcher.atRules)
+        catcher.atRules = [];
+      catcher.atRules.push({
+        type: "media",
+        query,
+        styles: pureStyles
+      });
+      return proxy;
+    };
+  };
+  const handler = {
+    get: (target, prop) => {
+      if (prop === "componentName") {
+        return (name) => {
+          catcher._componentName = name;
+          return proxy;
+        };
+      }
+      if (prop === "component") {
+        return (framework) => {
+          catcher._generateComponent = true;
+          catcher._framework = framework || "auto";
+          return proxy;
+        };
+      }
+      if (prop === "props") {
+        return (propsDefinition) => {
+          catcher._propsDefinition = propsDefinition;
+          return proxy;
+        };
+      }
+      if (prop === "debug") {
+        return () => {
+          debugMode = true;
+          currentDebugSelector = "";
+          return proxy;
+        };
+      }
+      if (prop === "debugWith") {
+        return (selector) => {
+          debugMode = true;
+          currentDebugSelector = selector;
+          return proxy;
+        };
+      }
+      if (prop === "$el") {
+        return function(...args) {
+          if (args.length === 0) {
+            const result2 = { ...catcher };
+            Object.keys(catcher).forEach((key) => delete catcher[key]);
+            return result2;
+          }
+          const selector = args[0];
+          const result = {
+            selectors: args,
+            ...catcher
+          };
+          if (debugMode) {
+            const debugSelector = currentDebugSelector || selector;
+            console.group(`\u{1F50D} ChainCSS Debug: ${debugSelector}`);
+            console.log("\u{1F4E6} Selector:", selector);
+            console.log("\u{1F3A8} Styles:", catcher);
+            const stack = new Error().stack;
+            if (stack) {
+              const stackLines = stack.split("\n");
+              for (let i = 3; i < Math.min(stackLines.length, 8); i++) {
+                if (stackLines[i] && !stackLines[i].includes("btt.ts")) {
+                  console.log("\u{1F4CD} Source:", stackLines[i].trim());
+                  break;
+                }
+              }
+            }
+            console.groupEnd();
+            debugMode = false;
+            currentDebugSelector = "";
+          }
+          Object.keys(catcher).forEach((key) => delete catcher[key]);
+          return result;
+        };
+      }
+      if (animationPresets[prop]) {
+        return (config) => {
+          if (!catcher.atRules)
+            catcher.atRules = [];
+          const hasKeyframes = catcher.atRules.some(
+            (rule2) => rule2.type === "keyframes" && rule2.name === prop
+          );
+          if (!hasKeyframes) {
+            catcher.atRules.push({
+              type: "keyframes",
+              name: prop,
+              steps: animationPresets[prop]
+            });
+          }
+          const animationStyles = createAnimation(prop, config);
+          Object.assign(catcher, animationStyles);
+          return proxy;
+        };
+      }
+      if (prop === "duration") {
+        return (value) => {
+          if (catcher.animation) {
+            catcher.animation = catcher.animation.replace(/(\d+(?:\.\d+)?(?:ms|s))/, value);
+          } else {
+            catcher.animationDuration = value;
+          }
+          return proxy;
+        };
+      }
+      if (prop === "delay") {
+        return (value) => {
+          if (catcher.animation) {
+            const parts = catcher.animation.split(" ");
+            parts.splice(3, 0, value);
+            catcher.animation = parts.join(" ");
+          } else {
+            catcher.animationDelay = value;
+          }
+          return proxy;
+        };
+      }
+      if (prop === "timing") {
+        return (value) => {
+          if (catcher.animation) {
+            catcher.animation = catcher.animation.replace(/(ease|linear|ease-in|ease-out|ease-in-out|cubic-bezier\([^)]+\))/, value);
+          } else {
+            catcher.animationTimingFunction = value;
+          }
+          return proxy;
+        };
+      }
+      if (prop === "iteration") {
+        return (value) => {
+          if (catcher.animation) {
+            catcher.animation = catcher.animation.replace(/\d+|infinite/, String(value));
+          } else {
+            catcher.animationIterationCount = value;
+          }
+          return proxy;
+        };
+      }
+      if (prop === "infinite") {
+        return () => {
+          if (catcher.animation) {
+            catcher.animation = catcher.animation.replace(/\d+/, "infinite");
+          } else {
+            catcher.animationIterationCount = "infinite";
+          }
+          return proxy;
+        };
+      }
+      if (prop === "animate") {
+        return (name, keyframes, config) => {
+          if (!catcher.atRules)
+            catcher.atRules = [];
+          catcher.atRules.push({
+            type: "keyframes",
+            name,
+            steps: keyframes
+          });
+          const animationStyles = createAnimation(name, config);
+          Object.assign(catcher, animationStyles);
+          return proxy;
+        };
+      }
+      if (prop === "calc")
+        return helpers.calc;
+      if (prop === "add")
+        return helpers.add;
+      if (prop === "subtract" || prop === "sub")
+        return helpers.subtract;
+      if (prop === "multiply" || prop === "mul")
+        return helpers.multiply;
+      if (prop === "divide" || prop === "div")
+        return helpers.divide;
+      if (prop === "percent")
+        return helpers.percent;
+      if (prop === "vw")
+        return helpers.vw;
+      if (prop === "vh")
+        return helpers.vh;
+      if (prop === "rem")
+        return helpers.rem;
+      if (prop === "em")
+        return helpers.em;
+      if (prop === "px")
+        return helpers.px;
+      if (prop === "min")
+        return helpers.min;
+      if (prop === "max")
+        return helpers.max;
+      if (prop === "clamp")
+        return helpers.clamp;
+      if (currentBreakpoints && currentBreakpoints[prop]) {
+        return createResponsiveMethod(prop, currentBreakpoints[prop]);
+      }
+      if (prop === "hover") {
+        return () => {
+          if (debugMode) {
+            console.log(`  \u{1F5B1}\uFE0F Hover styles added`);
+          }
+          const hoverCatcher = {};
+          const hoverHandler = {
+            get: (hoverTarget, hoverProp) => {
+              if (hoverProp === "end") {
+                return () => {
+                  catcher.hover = { ...hoverCatcher };
+                  Object.keys(hoverCatcher).forEach((key) => delete hoverCatcher[key]);
+                  return proxy;
+                };
+              }
+              const mappedProp2 = shorthandMap[hoverProp] || hoverProp;
+              const cssProperty2 = mappedProp2.replace(/([A-Z])/g, "-$1").toLowerCase();
+              if (validProperties && validProperties.length > 0 && !validProperties.includes(cssProperty2)) {
+                console.warn(`Warning: '${cssProperty2}' may not be a valid CSS property`);
+              }
+              return (value) => {
+                hoverCatcher[mappedProp2] = resolveToken(value, useTokens, tokenContext);
+                return hoverProxy;
+              };
+            }
+          };
+          const hoverProxy = new Proxy({}, hoverHandler);
+          return hoverProxy;
+        };
+      }
+      if (handleShorthand(prop, null, catcher)) {
+        return (value) => {
+          handleShorthand(prop, resolveToken(value, useTokens, tokenContext), catcher);
+          return proxy;
+        };
+      }
+      const mappedProp = shorthandMap[prop] || prop;
+      const cssProperty = mappedProp.replace(/([A-Z])/g, "-$1").toLowerCase();
+      if (!shorthandMap[prop] && prop !== mappedProp) {
+        const suggestion = getSuggestion(prop, validProperties);
+        if (suggestion) {
+          console.warn(`\u26A0\uFE0F ChainCSS: '${prop}' is not a recognized shorthand or CSS property. Did you mean '${suggestion}'?`);
+        } else {
+          console.warn(`\u26A0\uFE0F ChainCSS: '${prop}' is not a recognized shorthand or CSS property. It will be used as-is.`);
+        }
+      }
+      if (debugMode && mappedProp !== prop) {
+        console.log(`  \u{1F504} Shortcut: .${prop}() \u2192 ${mappedProp}`);
+      }
+      if (prop === "select") {
+        return function(selector) {
+          const nestedStyles = {};
+          const nestedHandler = {
+            get: (nestedTarget, nestedProp) => {
+              if (nestedProp === "block") {
+                return () => {
+                  if (!catcher.nestedRules)
+                    catcher.nestedRules = [];
+                  catcher.nestedRules.push({
+                    selector,
+                    styles: { ...nestedStyles }
+                  });
+                  return proxy;
+                };
+              }
+              return (value) => {
+                nestedStyles[nestedProp] = resolveToken(value, useTokens, tokenContext);
+                return nestedProxy;
+              };
+            }
+          };
+          const nestedProxy = new Proxy({}, nestedHandler);
+          return nestedProxy;
+        };
+      }
+      if (prop === "media") {
+        return function(query, callback) {
+          if (debugMode) {
+            console.log(`  \u{1F4F1} Media Query: ${query}`);
+          }
+          const subChain = chaincssv2(useTokens);
+          let result = callback(subChain);
+          if (result && typeof result.$el === "function") {
+            result = result.$el();
+          }
+          if (!catcher.atRules)
+            catcher.atRules = [];
+          const { selectors, ...pureStyles } = result || {};
+          catcher.atRules.push({
+            type: "media",
+            query,
+            styles: pureStyles
+          });
+          return proxy;
+        };
+      }
+      if (prop === "keyframes") {
+        return function(name, callback) {
+          const keyframeContext = { _keyframeSteps: {} };
+          const keyframeProxy = new Proxy(keyframeContext, {
+            get: (target2, stepProp) => {
+              if (stepProp === "from" || stepProp === "to") {
+                return function(stepCallback) {
+                  const subChain = chaincssv2(useTokens);
+                  const properties = stepCallback(subChain).$el();
+                  target2._keyframeSteps[stepProp] = properties;
+                  return keyframeProxy;
+                };
+              }
+              if (stepProp === "percent") {
+                return function(value, stepCallback) {
+                  const subChain = chaincssv2(useTokens);
+                  const properties = stepCallback(subChain).$el();
+                  target2._keyframeSteps[`${value}%`] = properties;
+                  return keyframeProxy;
+                };
+              }
+              return void 0;
+            }
+          });
+          callback(keyframeProxy);
+          if (!catcher.atRules)
+            catcher.atRules = [];
+          catcher.atRules.push({
+            type: "keyframes",
+            name,
+            steps: keyframeContext._keyframeSteps
+          });
+          return proxy;
+        };
+      }
+      if (prop === "fontFace") {
+        return function(callback) {
+          const fontProps = {};
+          const fontHandler = {
+            get: (target2, fontProp) => {
+              return (value) => {
+                fontProps[fontProp] = resolveToken(value, useTokens, tokenContext);
+                return fontProxy;
+              };
+            }
+          };
+          const fontProxy = new Proxy({}, fontHandler);
+          callback(fontProxy);
+          if (!catcher.atRules)
+            catcher.atRules = [];
+          catcher.atRules.push({
+            type: "font-face",
+            properties: fontProps
+          });
+          return proxy;
+        };
+      }
+      if (prop === "supports") {
+        return function(condition, callback) {
+          const subChain = chaincssv2(useTokens);
+          const result = callback(subChain);
+          if (!catcher.atRules)
+            catcher.atRules = [];
+          catcher.atRules.push({
+            type: "supports",
+            condition,
+            styles: result
+          });
+          return proxy;
+        };
+      }
+      if (prop === "container") {
+        return function(condition, callback) {
+          const subChain = chaincssv2(useTokens);
+          const result = callback(subChain);
+          if (!catcher.atRules)
+            catcher.atRules = [];
+          catcher.atRules.push({
+            type: "container",
+            condition,
+            styles: result
+          });
+          return proxy;
+        };
+      }
+      if (prop === "layer") {
+        return function(name, callback) {
+          const subChain = chaincssv2(useTokens);
+          const result = callback(subChain);
+          if (!catcher.atRules)
+            catcher.atRules = [];
+          catcher.atRules.push({
+            type: "layer",
+            name,
+            styles: result
+          });
+          return proxy;
+        };
+      }
+      if (prop === "counterStyle") {
+        return function(name, callback) {
+          const counterProps = {};
+          const counterHandler = {
+            get: (target2, counterProp) => {
+              return (value) => {
+                counterProps[counterProp] = resolveToken(value, useTokens, tokenContext);
+                return counterProxy;
+              };
+            }
+          };
+          const counterProxy = new Proxy({}, counterHandler);
+          callback(counterProxy);
+          if (!catcher.atRules)
+            catcher.atRules = [];
+          catcher.atRules.push({
+            type: "counter-style",
+            name,
+            properties: counterProps
+          });
+          return proxy;
+        };
+      }
+      if (prop === "property") {
+        return function(name, callback) {
+          const propertyDescs = {};
+          const propertyHandler = {
+            get: (target2, descProp) => {
+              return (value) => {
+                propertyDescs[descProp] = resolveToken(value, useTokens, tokenContext);
+                return propertyProxy;
+              };
+            }
+          };
+          const propertyProxy = new Proxy({}, propertyHandler);
+          callback(propertyProxy);
+          if (!catcher.atRules)
+            catcher.atRules = [];
+          catcher.atRules.push({
+            type: "property",
+            name,
+            descriptors: propertyDescs
+          });
+          return proxy;
+        };
+      }
+      if (prop === "theme") {
+        return function(themeTokens, callback) {
+          const originalTokens = tokens2;
+          const themeTokenStore = {
+            get: (path5) => {
+              const themeValue = themeTokens.get ? themeTokens.get(path5) : null;
+              if (themeValue !== null && themeValue !== void 0) {
+                return themeValue;
+              }
+              return originalTokens.get(path5);
+            },
+            ...themeTokens
+          };
+          const tempTokens = themeTokenStore;
+          const themed$ = (useTokensFlag = true) => {
+            const result2 = $(useTokensFlag);
+            return result2;
+          };
+          const result = callback(themed$);
+          if (!catcher.themes)
+            catcher.themes = [];
+          catcher.themes.push({
+            name: `theme-${Date.now()}`,
+            styles: result,
+            tokens: themeTokens,
+            fallback: originalTokens
+          });
+          return proxy;
+        };
+      }
+      return function(value) {
+        if (typeof value === "function") {
+          value = value(helpers);
+        }
+        if (debugMode) {
+          const cssProp = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+          console.log(`  \u{1F3A8} ${cssProp}: ${value}`);
+        }
+        catcher[mappedProp] = resolveToken(value, useTokens, tokenContext);
+        return proxy;
+      };
+    }
+  };
+  const proxy = new Proxy({}, handler);
+  return proxy;
+}
+function processAtRule(rule2, parentSelectors = null) {
+  let output = "";
+  switch (rule2.type) {
+    case "media":
+      output = `@media ${rule2.query} {
+`;
+      if (rule2.styles && typeof rule2.styles === "object") {
+        let ruleBody = "";
+        for (const prop in rule2.styles) {
+          const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+          ruleBody += `    ${kebabKey}: ${rule2.styles[prop]};
+`;
+        }
+        if (ruleBody.trim()) {
+          const selector = parentSelectors && parentSelectors.length > 0 ? parentSelectors.join(", ") : ".unknown-selector";
+          const sourceLocation = getSourceLocation();
+          if (enableSourceComments && sourceLocation) {
+            output += `  /* Generated from: ${sourceLocation} */
+`;
+          }
+          output += `  ${selector} {
+${ruleBody}  }
+`;
+        }
+      }
+      output += "}\n";
+      break;
+    case "keyframes":
+      output = `@keyframes ${rule2.name} {
+`;
+      for (const step in rule2.steps) {
+        output += `  ${step} {
+`;
+        for (const prop in rule2.steps[step]) {
+          if (prop !== "selectors") {
+            const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+            output += `    ${kebabKey}: ${rule2.steps[step][prop]};
+`;
+          }
+        }
+        output += "  }\n";
+      }
+      output += "}\n";
+      break;
+    case "font-face":
+      output = "@font-face {\n";
+      for (const prop in rule2.properties) {
+        if (prop !== "selectors") {
+          const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+          output += `  ${kebabKey}: ${rule2.properties[prop]};
+`;
+        }
+      }
+      output += "}\n";
+      break;
+    case "supports":
+      output = `@supports ${rule2.condition} {
+`;
+      if (rule2.styles && rule2.styles.selectors) {
+        let ruleBody = "";
+        for (const prop in rule2.styles) {
+          if (prop !== "selectors" && rule2.styles.hasOwnProperty(prop)) {
+            const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+            ruleBody += `    ${kebabKey}: ${rule2.styles[prop]};
+`;
+          }
+        }
+        if (ruleBody.trim()) {
+          output += `  ${rule2.styles.selectors.join(", ")} {
+${ruleBody}  }
+`;
+        }
+      }
+      output += "}\n";
+      break;
+    case "container":
+      output = `@container ${rule2.condition} {
+`;
+      if (rule2.styles && rule2.styles.selectors) {
+        let ruleBody = "";
+        for (const prop in rule2.styles) {
+          if (prop !== "selectors" && rule2.styles.hasOwnProperty(prop)) {
+            const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+            ruleBody += `    ${kebabKey}: ${rule2.styles[prop]};
+`;
+          }
+        }
+        if (ruleBody.trim()) {
+          output += `  ${rule2.styles.selectors.join(", ")} {
+${ruleBody}  }
+`;
+        }
+      }
+      output += "}\n";
+      break;
+    case "layer":
+      output = `@layer ${rule2.name} {
+`;
+      if (rule2.styles && rule2.styles.selectors) {
+        let ruleBody = "";
+        for (const prop in rule2.styles) {
+          if (prop !== "selectors" && rule2.styles.hasOwnProperty(prop)) {
+            const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+            ruleBody += `    ${kebabKey}: ${rule2.styles[prop]};
+`;
+          }
+        }
+        if (ruleBody.trim()) {
+          output += `  ${rule2.styles.selectors.join(", ")} {
+${ruleBody}  }
+`;
+        }
+      }
+      output += "}\n";
+      break;
+    case "counter-style":
+      output = `@counter-style ${rule2.name} {
+`;
+      for (const prop in rule2.properties) {
+        if (prop !== "selectors") {
+          const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+          output += `  ${kebabKey}: ${rule2.properties[prop]};
+`;
+        }
+      }
+      output += "}\n";
+      break;
+    case "property":
+      output = `@property ${rule2.name} {
+`;
+      for (const desc in rule2.descriptors) {
+        if (desc !== "selectors") {
+          const kebabKey = desc.replace(/([A-Z])/g, "-$1").toLowerCase();
+          output += `  ${kebabKey}: ${rule2.descriptors[desc]};
+`;
+        }
+      }
+      output += "}\n";
+      break;
+  }
+  return output;
+}
+function processStandaloneAtRule(rule2) {
+  let output = "";
+  switch (rule2.type) {
+    case "font-face":
+      output = "@font-face {\n";
+      for (const prop in rule2.properties) {
+        if (prop !== "selectors") {
+          const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+          output += `  ${kebabKey}: ${rule2.properties[prop]};
+`;
+        }
+      }
+      output += "}\n";
+      break;
+    case "keyframes":
+      output = `@keyframes ${rule2.name} {
+`;
+      for (const step in rule2.steps) {
+        output += `  ${step} {
+`;
+        for (const prop in rule2.steps[step]) {
+          if (prop !== "selectors") {
+            const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+            output += `    ${kebabKey}: ${rule2.steps[step][prop]};
+`;
+          }
+        }
+        output += "  }\n";
+      }
+      output += "}\n";
+      break;
+    case "counter-style":
+      output = `@counter-style ${rule2.name} {
+`;
+      for (const prop in rule2.properties) {
+        if (prop !== "selectors") {
+          const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+          output += `  ${kebabKey}: ${rule2.properties[prop]};
+`;
+        }
+      }
+      output += "}\n";
+      break;
+    case "property":
+      output = `@property ${rule2.name} {
+`;
+      for (const desc in rule2.descriptors) {
+        if (desc !== "selectors") {
+          const kebabKey = desc.replace(/([A-Z])/g, "-$1").toLowerCase();
+          output += `  ${kebabKey}: ${rule2.descriptors[desc]};
+`;
+        }
+      }
+      output += "}\n";
+      break;
+  }
+  return output;
+}
+function recipe(options) {
+  const {
+    base,
+    variants = {},
+    defaultVariants = {},
+    compoundVariants = []
+  } = options;
+  const baseStyle = typeof base === "function" ? base() : base;
+  const variantStyles = {};
+  for (const [variantName, variantMap] of Object.entries(variants)) {
+    variantStyles[variantName] = {};
+    for (const [variantKey, variantStyle] of Object.entries(variantMap)) {
+      variantStyles[variantName][variantKey] = typeof variantStyle === "function" ? variantStyle() : variantStyle;
+    }
+  }
+  const compoundStyles = compoundVariants.map((cv) => ({
+    condition: cv.variants || cv,
+    style: typeof cv.style === "function" ? cv.style() : cv.style
+  }));
+  function mergeStyles(...styles) {
+    const merged = {};
+    for (const style of styles) {
+      if (!style)
+        continue;
+      for (const [key, value] of Object.entries(style)) {
+        if (key === "selectors") {
+          merged.selectors = merged.selectors || [];
+          merged.selectors.push(...Array.isArray(value) ? value : [value]);
+        } else if (key === "hover" && typeof value === "object") {
+          if (!merged.hover)
+            merged.hover = {};
+          Object.assign(merged.hover, value);
+        } else if (key !== "selectors") {
+          merged[key] = value;
+        }
+      }
+    }
+    return merged;
+  }
+  function pick(variantSelection = {}) {
+    const selected = { ...defaultVariants, ...variantSelection };
+    const stylesToMerge = [];
+    if (baseStyle)
+      stylesToMerge.push(baseStyle);
+    for (const [variantName, variantValue] of Object.entries(selected)) {
+      const variantStyle = variantStyles[variantName]?.[variantValue];
+      if (variantStyle)
+        stylesToMerge.push(variantStyle);
+    }
+    for (const cv of compoundStyles) {
+      const matches = Object.entries(cv.condition).every(
+        ([key, value]) => selected[key] === value
+      );
+      if (matches && cv.style)
+        stylesToMerge.push(cv.style);
+    }
+    const merged = mergeStyles(...stylesToMerge);
+    const styleBuilder = $(true);
+    for (const [prop, value] of Object.entries(merged)) {
+      if (prop === "selectors" || prop === "hover")
+        continue;
+      if (styleBuilder[prop])
+        styleBuilder[prop](value);
+    }
+    if (merged.hover) {
+      styleBuilder.hover();
+      for (const [hoverProp, hoverValue] of Object.entries(merged.hover)) {
+        if (styleBuilder[hoverProp])
+          styleBuilder[hoverProp](hoverValue);
+      }
+      styleBuilder.end();
+    }
+    const selectors = merged.selectors || [];
+    return styleBuilder.$el(...selectors);
+  }
+  pick.variants = variants;
+  pick.defaultVariants = defaultVariants;
+  pick.base = baseStyle;
+  pick.getAllVariants = () => {
+    const result = [];
+    const variantKeys = Object.keys(variants);
+    function generate(current, index) {
+      if (index === variantKeys.length) {
+        result.push({ ...current });
+        return;
+      }
+      const variantName = variantKeys[index];
+      for (const variantValue of Object.keys(variants[variantName])) {
+        current[variantName] = variantValue;
+        generate(current, index + 1);
+      }
+    }
+    generate({}, 0);
+    return result;
+  };
+  pick.compileAll = () => {
+    const allVariants = pick.getAllVariants();
+    const styles = [];
+    if (baseStyle)
+      styles.push(baseStyle);
+    for (const variantMap of Object.values(variants)) {
+      for (const variantStyle of Object.values(variantMap)) {
+        if (variantStyle)
+          styles.push(variantStyle);
+      }
+    }
+    for (const cv of compoundStyles) {
+      if (cv.style)
+        styles.push(cv.style);
+    }
+    if (atomicOptimizer && atomicOptimizer.options.enabled) {
+      const styleObj = {};
+      styles.forEach((style, i) => {
+        const selectors = style.selectors || [`variant-${i}`];
+        styleObj[selectors[0].replace(/^\./, "")] = style;
+      });
+      const result = atomicOptimizer.optimize(styleObj);
+      chain.cssOutput = (chain.cssOutput || "") + result.css;
+      chain.classMap = { ...chain.classMap, ...result.map };
+      return result.css;
+    }
+    return run(...styles);
+  };
+  return pick;
+}
+var styleHistory, styleChanges, timelineEnabled, currentSnapshotId, enableSourceComments, animationPresets, helpers, debugMode, currentDebugSelector, DEFAULT_BREAKPOINTS, currentBreakpoints, __filename, __dirname, chain, atomicOptimizer, fetchWithHttps, loadCSSProperties, tokens2, currentTokenContext, shorthandMap, handleShorthand, $, run, compile;
+var init_btt = __esm({
+  "src/compiler/btt.ts"() {
+    "use strict";
+    init_tokens();
+    init_commonProps();
+    styleHistory = [];
+    styleChanges = [];
+    timelineEnabled = false;
+    currentSnapshotId = 0;
+    enableSourceComments = true;
+    animationPresets = {
+      fadeIn: {
+        "0%": { opacity: 0 },
+        "100%": { opacity: 1 }
+      },
+      fadeOut: {
+        "0%": { opacity: 1 },
+        "100%": { opacity: 0 }
+      },
+      fadeInUp: {
+        "0%": { opacity: 0, transform: "translateY(20px)" },
+        "100%": { opacity: 1, transform: "translateY(0)" }
+      },
+      fadeInDown: {
+        "0%": { opacity: 0, transform: "translateY(-20px)" },
+        "100%": { opacity: 1, transform: "translateY(0)" }
+      },
+      fadeInLeft: {
+        "0%": { opacity: 0, transform: "translateX(-20px)" },
+        "100%": { opacity: 1, transform: "translateX(0)" }
+      },
+      fadeInRight: {
+        "0%": { opacity: 0, transform: "translateX(20px)" },
+        "100%": { opacity: 1, transform: "translateX(0)" }
+      },
+      slideInUp: {
+        "0%": { transform: "translateY(100%)" },
+        "100%": { transform: "translateY(0)" }
+      },
+      slideInDown: {
+        "0%": { transform: "translateY(-100%)" },
+        "100%": { transform: "translateY(0)" }
+      },
+      slideInLeft: {
+        "0%": { transform: "translateX(-100%)" },
+        "100%": { transform: "translateX(0)" }
+      },
+      slideInRight: {
+        "0%": { transform: "translateX(100%)" },
+        "100%": { transform: "translateX(0)" }
+      },
+      zoomIn: {
+        "0%": { opacity: 0, transform: "scale(0.8)" },
+        "100%": { opacity: 1, transform: "scale(1)" }
+      },
+      zoomOut: {
+        "0%": { opacity: 1, transform: "scale(1)" },
+        "100%": { opacity: 0, transform: "scale(0.8)" }
+      },
+      bounce: {
+        "0%, 100%": { transform: "translateY(0)" },
+        "50%": { transform: "translateY(-20px)" }
+      },
+      pulse: {
+        "0%, 100%": { transform: "scale(1)" },
+        "50%": { transform: "scale(1.05)" }
+      },
+      shake: {
+        "0%, 100%": { transform: "translateX(0)" },
+        "25%": { transform: "translateX(-5px)" },
+        "75%": { transform: "translateX(5px)" }
+      },
+      rotate: {
+        "0%": { transform: "rotate(0deg)" },
+        "100%": { transform: "rotate(360deg)" }
+      },
+      spin: {
+        "0%": { transform: "rotate(0deg)" },
+        "100%": { transform: "rotate(360deg)" }
+      },
+      wiggle: {
+        "0%, 100%": { transform: "rotate(-3deg)" },
+        "50%": { transform: "rotate(3deg)" }
+      },
+      flip: {
+        "0%": { transform: "perspective(400px) rotateY(0)" },
+        "100%": { transform: "perspective(400px) rotateY(360deg)" }
+      }
+    };
+    helpers = {
+      calc,
+      add,
+      subtract,
+      sub: subtract,
+      // alias
+      multiply,
+      mul: multiply,
+      // alias
+      divide,
+      div: divide,
+      // alias
+      percent,
+      vw,
+      vh,
+      rem,
+      em,
+      px,
+      min,
+      max,
+      clamp
+    };
+    debugMode = false;
+    currentDebugSelector = "";
+    DEFAULT_BREAKPOINTS = {
+      mobile: "(max-width: 768px)",
+      tablet: "(min-width: 769px) and (max-width: 1024px)",
+      desktop: "(min-width: 1025px)",
+      sm: "(max-width: 640px)",
+      md: "(min-width: 641px) and (max-width: 768px)",
+      lg: "(min-width: 769px) and (max-width: 1024px)",
+      xl: "(min-width: 1025px)",
+      "2xl": "(min-width: 1280px)"
+    };
+    currentBreakpoints = DEFAULT_BREAKPOINTS;
+    __filename = fileURLToPath(import.meta.url);
+    __dirname = path.dirname(__filename);
+    chain = {
+      cssOutput: void 0,
+      catcher: {},
+      cachedValidProperties: [],
+      classMap: {},
+      atomicStats: null,
+      async initializeProperties() {
+        if (this.cachedValidProperties && this.cachedValidProperties.length > 0) {
+          return;
+        }
+        const properties = await loadCSSProperties();
+        this.cachedValidProperties = properties;
+      },
+      getCachedProperties() {
+        return this.cachedValidProperties;
+      }
+    };
+    atomicOptimizer = null;
+    fetchWithHttps = (url) => {
+      return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          req.destroy();
+          reject(new Error("Request timeout"));
+        }, 3e3);
+        const req = https.get(url, (response) => {
+          clearTimeout(timeout);
+          let data = "";
+          response.on("data", (chunk) => data += chunk);
+          response.on("end", () => {
+            try {
+              resolve(JSON.parse(data));
+            } catch (error) {
+              reject(error);
+            }
+          });
+        });
+        req.on("error", (error) => {
+          clearTimeout(timeout);
+          reject(error);
+        });
+      });
+    };
+    loadCSSProperties = async () => {
+      if (chain.cachedValidProperties !== null && chain.cachedValidProperties.length > 0) {
+        return chain.cachedValidProperties;
+      }
+      try {
+        const url = "https://raw.githubusercontent.com/mdn/data/main/css/properties.json";
+        let data;
+        if (typeof fetch !== "undefined") {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 3e3);
+          const response = await fetch(url, { signal: controller.signal });
+          clearTimeout(timeoutId);
+          data = await response.json();
+        } else {
+          data = await fetchWithHttps(url);
+        }
+        const allProperties = Object.keys(data);
+        const baseProperties = /* @__PURE__ */ new Set();
+        allProperties.forEach((prop) => {
+          const baseProp = prop.replace(/^-(webkit|moz|ms|o)-/, "");
+          baseProperties.add(baseProp);
+        });
+        chain.cachedValidProperties = Array.from(baseProperties).sort();
+        return chain.cachedValidProperties;
+      } catch (error) {
+        chain.cachedValidProperties = COMMON_CSS_PROPERTIES;
+        return chain.cachedValidProperties;
+      }
+    };
+    chain.initializeProperties().catch((err) => {
+      console.error("Failed to load CSS properties:", err.message);
+    });
+    tokens2 = tokens;
+    currentTokenContext = null;
+    shorthandMap = {
+      // Layout
+      "m": "margin",
+      "mt": "marginTop",
+      "mr": "marginRight",
+      "mb": "marginBottom",
+      "ml": "marginLeft",
+      "p": "padding",
+      "pt": "paddingTop",
+      "pr": "paddingRight",
+      "pb": "paddingBottom",
+      "pl": "paddingLeft",
+      // Display & Position
+      "d": "display",
+      "pos": "position",
+      // Sizing
+      "w": "width",
+      "h": "height",
+      "minW": "minWidth",
+      "maxW": "maxWidth",
+      "minH": "minHeight",
+      "maxH": "maxHeight",
+      // Colors & Background
+      "bg": "backgroundColor",
+      "c": "color",
+      // Flexbox
+      "flexDir": "flexDirection",
+      "flexWrap": "flexWrap",
+      "justify": "justifyContent",
+      "items": "alignItems",
+      "align": "alignSelf",
+      "gap": "gap",
+      "gapX": "columnGap",
+      "gapY": "rowGap",
+      // Grid
+      "gridCols": "gridTemplateColumns",
+      "gridRows": "gridTemplateRows",
+      // Borders
+      "rounded": "borderRadius",
+      "roundedT": "borderTopLeftRadius",
+      "roundedR": "borderTopRightRadius",
+      "roundedB": "borderBottomRightRadius",
+      "roundedL": "borderBottomLeftRadius",
+      "border": "border",
+      "borderW": "borderWidth",
+      "borderC": "borderColor",
+      // Typography
+      "font": "fontFamily",
+      "text": "color",
+      "textAlign": "textAlign",
+      "textSize": "fontSize",
+      "weight": "fontWeight",
+      // Spacing (margin/padding shortcuts)
+      "mx": "marginHorizontal",
+      // Need to handle this specially
+      "my": "marginVertical",
+      // Need to handle this specially
+      "px": "paddingHorizontal",
+      // Need to handle this specially
+      "py": "paddingVertical"
+      // Need to handle this specially
+    };
+    handleShorthand = (prop, value, catcher) => {
+      if (prop === "mx") {
+        catcher.marginLeft = value;
+        catcher.marginRight = value;
+        return true;
+      }
+      if (prop === "my") {
+        catcher.marginTop = value;
+        catcher.marginBottom = value;
+        return true;
+      }
+      if (prop === "px") {
+        catcher.paddingLeft = value;
+        catcher.paddingRight = value;
+        return true;
+      }
+      if (prop === "py") {
+        catcher.paddingTop = value;
+        catcher.paddingBottom = value;
+        return true;
+      }
+      return false;
+    };
+    $ = chaincssv2();
+    run = (...args) => {
+      let cssOutput = "";
+      const styleObjs = [];
+      args.forEach((value) => {
+        if (!value)
+          return;
+        styleObjs.push(value);
+        if (value.selectors) {
+          let mainRuleBody = "";
+          let atRulesOutput = "";
+          for (const key in value) {
+            if (key === "selectors" || !value.hasOwnProperty(key))
+              continue;
+            if (key === "atRules" && Array.isArray(value[key])) {
+              value[key].forEach((rule2) => {
+                atRulesOutput += processAtRule(rule2, value.selectors);
+              });
+              continue;
+            }
+            if (key === "nestedRules" && Array.isArray(value[key])) {
+              value[key].forEach((rule2) => {
+                let nestedBody = "";
+                for (const prop in rule2.styles) {
+                  const kebabKey2 = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+                  nestedBody += `    ${kebabKey2}: ${rule2.styles[prop]};
+`;
+                }
+                if (nestedBody) {
+                  atRulesOutput += `${value.selectors.join(", ")} ${rule2.selector} {
+${nestedBody}  }
+`;
+                }
+              });
+              continue;
+            }
+            if (key === "hover" && typeof value[key] === "object") {
+              let hoverBody = "";
+              for (const hoverKey in value[key]) {
+                const kebabKey2 = hoverKey.replace(/([A-Z])/g, "-$1").toLowerCase();
+                hoverBody += `  ${kebabKey2}: ${value[key][hoverKey]};
+`;
+              }
+              if (hoverBody) {
+                cssOutput += `${value.selectors.join(", ")}:hover {
+${hoverBody}}
+`;
+              }
+              continue;
+            }
+            const kebabKey = key.replace(/([A-Z])/g, "-$1").toLowerCase();
+            mainRuleBody += `  ${kebabKey}: ${value[key]};
+`;
+          }
+          if (mainRuleBody.trim()) {
+            cssOutput += `${value.selectors.join(", ")} {
+${mainRuleBody}}
+`;
+          }
+          cssOutput += atRulesOutput;
+        } else if (value.type) {
+          cssOutput += processStandaloneAtRule(value);
+        }
+      });
+      cssOutput = cssOutput.replace(/\n{3,}/g, "\n\n").trim();
+      chain.cssOutput = cssOutput;
+      if (atomicOptimizer && atomicOptimizer.options.enabled) {
+        const result = atomicOptimizer.optimize(styleObjs);
+        if (atomicOptimizer.options.outputStrategy === "component-first") {
+          chain.cssOutput = result.css;
+        } else {
+          chain.cssOutput = result.css;
+        }
+        chain.classMap = result.map;
+        chain.atomicStats = result.stats;
+        return chain.cssOutput;
+      }
+      return cssOutput;
+    };
+    compile = (obj) => {
+      let cssString = "";
+      const collected = [];
+      for (const key in obj) {
+        if (!obj.hasOwnProperty(key))
+          continue;
+        const element = obj[key];
+        const sourceLocation = getSourceLocation();
+        if (timelineEnabled && element.selectors) {
+          const styles = {};
+          for (const prop in element) {
+            if (prop !== "selectors" && prop !== "atRules" && prop !== "hover" && prop !== "nestedRules") {
+              styles[prop] = element[prop];
+            }
+          }
+          takeSnapshot(element.selectors[0], styles, sourceLocation || "unknown");
+        }
+        if (element.themes && Array.isArray(element.themes)) {
+          element.themes.forEach((theme) => {
+            if (theme.styles && theme.styles.selectors) {
+              let themeCSS = "";
+              const themeSelectors = theme.styles.selectors || [];
+              for (const prop in theme.styles) {
+                if (prop !== "selectors" && theme.styles.hasOwnProperty(prop)) {
+                  const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+                  themeCSS += `  ${kebabKey}: ${theme.styles[prop]};
+`;
+                }
+              }
+              if (themeCSS) {
+                let block = `${themeSelectors.join(", ")} {
+${themeCSS}}
+`;
+                block = addSourceComment(block, sourceLocation);
+                cssString += block;
+              }
+            }
+          });
+          continue;
+        }
+        if (element.atRules && Array.isArray(element.atRules)) {
+          let elementCSS = "";
+          for (const prop in element) {
+            if (prop === "selectors" || prop === "atRules" || prop === "hover" || !element.hasOwnProperty(prop))
+              continue;
+            const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+            elementCSS += `  ${kebabKey}: ${element[prop]};
+`;
+          }
+          if (elementCSS.trim()) {
+            let block = `${element.selectors.join(", ")} {
+${elementCSS}}
+`;
+            block = addSourceComment(block, sourceLocation);
+            cssString += block;
+          }
+          element.atRules.forEach((rule2) => {
+            cssString += processAtRule(rule2, element.selectors);
+          });
+          continue;
+        }
+        if (element.selectors) {
+          collected.push(element);
+          let elementCSS = "";
+          let atRulesCSS = "";
+          for (const prop in element) {
+            if (prop === "selectors" || !element.hasOwnProperty(prop))
+              continue;
+            if (prop === "atRules" && Array.isArray(element[prop])) {
+              element[prop].forEach((rule2) => {
+                atRulesCSS += processAtRule(rule2, element.selectors);
+              });
+            } else if (prop === "themes" && Array.isArray(element[prop])) {
+              continue;
+            } else if (prop === "hover" && typeof element[prop] === "object") {
+              let hoverBody = "";
+              for (const hoverKey in element[prop]) {
+                const kebabKey = hoverKey.replace(/([A-Z])/g, "-$1").toLowerCase();
+                hoverBody += `  ${kebabKey}: ${element[prop][hoverKey]};
+`;
+              }
+              if (hoverBody) {
+                let block = `${element.selectors.join(", ")}:hover {
+${hoverBody}}
+`;
+                block = addSourceComment(block, sourceLocation);
+                cssString += block;
+              }
+            } else {
+              const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+              elementCSS += `  ${kebabKey}: ${element[prop]};
+`;
+            }
+          }
+          if (elementCSS.trim()) {
+            let block = `${element.selectors.join(", ")} {
+${elementCSS}}
+`;
+            block = addSourceComment(block, sourceLocation);
+            cssString += block;
+          }
+          cssString += atRulesCSS;
+        }
+      }
+      chain.cssOutput = cssString.trim();
+      if (atomicOptimizer && atomicOptimizer.options.enabled) {
+        const result = atomicOptimizer.optimize(collected);
+        chain.cssOutput = result.css;
+        chain.classMap = result.map;
+        chain.atomicStats = result.stats;
+        chain.componentMap = result.componentMap;
+        return result.css;
+      }
+      return chain.cssOutput;
+    };
+  }
+});
+
 // ../../node_modules/picocolors/picocolors.js
 var require_picocolors = __commonJS({
   "../../node_modules/picocolors/picocolors.js"(exports, module) {
@@ -22827,1751 +24931,8 @@ function getBaseName(filePath) {
   return path5.basename(filePath, path5.extname(filePath));
 }
 
-// src/compiler/btt.ts
-import path from "path";
-import https from "https";
-import { fileURLToPath } from "url";
-
-// src/compiler/tokens.ts
-var DesignTokens = class _DesignTokens {
-  tokens;
-  flattened;
-  constructor(tokens3 = {}) {
-    this.tokens = this.deepFreeze({
-      colors: {},
-      spacing: {},
-      typography: {
-        fontFamily: {},
-        fontSize: {},
-        fontWeight: {},
-        lineHeight: {}
-      },
-      breakpoints: {},
-      zIndex: {},
-      shadows: {},
-      borderRadius: {},
-      ...tokens3
-    });
-    this.flattened = this.flattenTokens(this.tokens);
-  }
-  // Deep freeze to prevent accidental modifications
-  deepFreeze(obj) {
-    Object.keys(obj).forEach((key) => {
-      const value = obj[key];
-      if (typeof value === "object" && value !== null) {
-        this.deepFreeze(value);
-      }
-    });
-    return Object.freeze(obj);
-  }
-  // Flatten nested tokens for easy access
-  flattenTokens(obj, prefix = "") {
-    return Object.keys(obj).reduce((acc, key) => {
-      const prefixed = prefix ? `${prefix}.${key}` : key;
-      const value = obj[key];
-      if (typeof value === "object" && value !== null) {
-        Object.assign(acc, this.flattenTokens(value, prefixed));
-      } else {
-        acc[prefixed] = value;
-      }
-      return acc;
-    }, {});
-  }
-  // Get token value by path (e.g., 'colors.primary')
-  get(path5, defaultValue = "") {
-    return this.flattened[path5] || defaultValue;
-  }
-  // Generate CSS variables from tokens
-  toCSSVariables(prefix = "chain") {
-    let css = ":root {\n";
-    Object.entries(this.flattened).forEach(([key, value]) => {
-      const varName = `--${prefix}-${key.replace(/\./g, "-")}`;
-      css += `  ${varName}: ${value};
-`;
-    });
-    css += "}\n";
-    return css;
-  }
-  // Create a theme variant
-  createTheme(name, overrides) {
-    const themeTokens = { ...this.flattened };
-    Object.entries(overrides).forEach(([key, value]) => {
-      if (themeTokens[key]) {
-        themeTokens[key] = value;
-      }
-    });
-    return new _DesignTokens(this.expandTokens(themeTokens));
-  }
-  // Expand flattened tokens back to nested structure
-  expandTokens(flattened) {
-    const result = {};
-    Object.entries(flattened).forEach(([key, value]) => {
-      const parts = key.split(".");
-      let current = result;
-      for (let i = 0; i < parts.length - 1; i++) {
-        if (!current[parts[i]]) {
-          current[parts[i]] = {};
-        }
-        current = current[parts[i]];
-      }
-      current[parts[parts.length - 1]] = value;
-    });
-    return result;
-  }
-};
-var defaultTokens = {
-  colors: {
-    primary: "#667eea",
-    secondary: "#764ba2",
-    success: "#48bb78",
-    danger: "#f56565",
-    warning: "#ed8936",
-    info: "#4299e1",
-    light: "#f7fafc",
-    dark: "#1a202c",
-    white: "#ffffff",
-    black: "#000000",
-    gray: {
-      100: "#f7fafc",
-      200: "#edf2f7",
-      300: "#e2e8f0",
-      400: "#cbd5e0",
-      500: "#a0aec0",
-      600: "#718096",
-      700: "#4a5568",
-      800: "#2d3748",
-      900: "#1a202c"
-    }
-  },
-  spacing: {
-    0: "0",
-    1: "0.25rem",
-    2: "0.5rem",
-    3: "0.75rem",
-    4: "1rem",
-    5: "1.25rem",
-    6: "1.5rem",
-    8: "2rem",
-    10: "2.5rem",
-    12: "3rem",
-    16: "4rem",
-    20: "5rem",
-    24: "6rem",
-    32: "8rem",
-    40: "10rem",
-    48: "12rem",
-    56: "14rem",
-    64: "16rem",
-    xs: "0.5rem",
-    sm: "1rem",
-    md: "1.5rem",
-    lg: "2rem",
-    xl: "3rem",
-    "2xl": "4rem",
-    "3xl": "6rem"
-  },
-  typography: {
-    fontFamily: {
-      sans: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-      serif: 'Georgia, Cambria, "Times New Roman", Times, serif',
-      mono: 'SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace'
-    },
-    fontSize: {
-      xs: "0.75rem",
-      sm: "0.875rem",
-      base: "1rem",
-      lg: "1.125rem",
-      xl: "1.25rem",
-      "2xl": "1.5rem",
-      "3xl": "1.875rem",
-      "4xl": "2.25rem",
-      "5xl": "3rem"
-    },
-    fontWeight: {
-      hairline: "100",
-      thin: "200",
-      light: "300",
-      normal: "400",
-      medium: "500",
-      semibold: "600",
-      bold: "700",
-      extrabold: "800",
-      black: "900"
-    },
-    lineHeight: {
-      none: "1",
-      tight: "1.25",
-      snug: "1.375",
-      normal: "1.5",
-      relaxed: "1.625",
-      loose: "2"
-    }
-  },
-  breakpoints: {
-    sm: "640px",
-    md: "768px",
-    lg: "1024px",
-    xl: "1280px",
-    "2xl": "1536px"
-  },
-  zIndex: {
-    0: "0",
-    10: "10",
-    20: "20",
-    30: "30",
-    40: "40",
-    50: "50",
-    auto: "auto",
-    dropdown: "1000",
-    sticky: "1020",
-    fixed: "1030",
-    modal: "1040",
-    popover: "1050",
-    tooltip: "1060"
-  },
-  shadows: {
-    sm: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
-    base: "0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)",
-    md: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
-    lg: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
-    xl: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
-    "2xl": "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
-    inner: "inset 0 2px 4px 0 rgba(0, 0, 0, 0.06)",
-    none: "none"
-  },
-  borderRadius: {
-    none: "0",
-    sm: "0.125rem",
-    base: "0.25rem",
-    md: "0.375rem",
-    lg: "0.5rem",
-    xl: "0.75rem",
-    "2xl": "1rem",
-    "3xl": "1.5rem",
-    full: "9999px"
-  }
-};
-var tokens = new DesignTokens(defaultTokens);
-
-// src/compiler/commonProps.ts
-var COMMON_CSS_PROPERTIES = [
-  "align-content",
-  "align-items",
-  "align-self",
-  "animation",
-  "background",
-  "background-clip",
-  "background-color",
-  "background-image",
-  "background-position",
-  "background-repeat",
-  "background-size",
-  "border",
-  "border-bottom",
-  "border-color",
-  "border-left",
-  "border-radius",
-  "border-right",
-  "border-style",
-  "border-top",
-  "border-width",
-  "bottom",
-  "box-shadow",
-  "box-sizing",
-  "color",
-  "content",
-  "cursor",
-  "display",
-  "flex",
-  "flex-direction",
-  "flex-grow",
-  "flex-shrink",
-  "flex-wrap",
-  "float",
-  "font",
-  "font-family",
-  "font-size",
-  "font-weight",
-  "gap",
-  "grid",
-  "grid-template-columns",
-  "grid-template-rows",
-  "height",
-  "justify-content",
-  "left",
-  "letter-spacing",
-  "line-height",
-  "margin",
-  "margin-bottom",
-  "margin-left",
-  "margin-right",
-  "margin-top",
-  "max-height",
-  "max-width",
-  "min-height",
-  "min-width",
-  "opacity",
-  "outline",
-  "overflow",
-  "padding",
-  "padding-bottom",
-  "padding-left",
-  "padding-right",
-  "padding-top",
-  "position",
-  "right",
-  "text-align",
-  "text-decoration",
-  "text-transform",
-  "top",
-  "transform",
-  "transition",
-  "transition-delay",
-  "transition-duration",
-  "transition-property",
-  "transition-timing-function",
-  "width",
-  "z-index"
-];
-
-// src/compiler/btt.ts
-var styleHistory = [];
-var styleChanges = [];
-var timelineEnabled = false;
-var currentSnapshotId = 0;
-function takeSnapshot(selector, styles, source) {
-  if (!timelineEnabled)
-    return "";
-  const hash = JSON.stringify(styles);
-  const existing = styleHistory.find((s) => s.selector === selector && s.hash === hash);
-  if (existing)
-    return existing.id;
-  const id = `snapshot_${currentSnapshotId++}`;
-  const snapshot = {
-    id,
-    timestamp: Date.now(),
-    selector,
-    styles: { ...styles },
-    source,
-    hash
-  };
-  styleHistory.push(snapshot);
-  const previousSnapshot = styleHistory.slice(-2)[0];
-  if (previousSnapshot && previousSnapshot.selector === selector) {
-    for (const [key, value] of Object.entries(styles)) {
-      const oldValue = previousSnapshot.styles[key];
-      if (!(key in previousSnapshot.styles)) {
-        styleChanges.push({
-          id: `change_${Date.now()}_${Math.random()}`,
-          timestamp: Date.now(),
-          selector,
-          property: key,
-          oldValue: void 0,
-          newValue: value,
-          type: "add"
-        });
-      } else if (JSON.stringify(oldValue) !== JSON.stringify(value)) {
-        styleChanges.push({
-          id: `change_${Date.now()}_${Math.random()}`,
-          timestamp: Date.now(),
-          selector,
-          property: key,
-          oldValue,
-          newValue: value,
-          type: "modify"
-        });
-      }
-    }
-    for (const [key] of Object.entries(previousSnapshot.styles)) {
-      if (!(key in styles)) {
-        styleChanges.push({
-          id: `change_${Date.now()}_${Math.random()}`,
-          timestamp: Date.now(),
-          selector,
-          property: key,
-          oldValue: previousSnapshot.styles[key],
-          newValue: void 0,
-          type: "remove"
-        });
-      }
-    }
-  }
-  return id;
-}
-var enableSourceComments = true;
-function getSourceLocation() {
-  if (!enableSourceComments)
-    return null;
-  const stack = new Error().stack;
-  if (!stack)
-    return null;
-  const stackLines = stack.split("\n");
-  for (let i = 0; i < stackLines.length; i++) {
-    const line = stackLines[i];
-    const match = line.match(/([^/]+\.chain\.js):(\d+):\d+/);
-    if (match) {
-      const fileName = match[1];
-      const lineNumber = match[2];
-      return `${fileName}:${lineNumber}`;
-    }
-  }
-  return null;
-}
-function setSourceComments(enabled) {
-  enableSourceComments = enabled;
-}
-function addSourceComment(css, sourceLocation) {
-  if (!enableSourceComments || !sourceLocation)
-    return css;
-  return `/* Generated from: ${sourceLocation} */
-${css}`;
-}
-var animationPresets = {
-  fadeIn: {
-    "0%": { opacity: 0 },
-    "100%": { opacity: 1 }
-  },
-  fadeOut: {
-    "0%": { opacity: 1 },
-    "100%": { opacity: 0 }
-  },
-  fadeInUp: {
-    "0%": { opacity: 0, transform: "translateY(20px)" },
-    "100%": { opacity: 1, transform: "translateY(0)" }
-  },
-  fadeInDown: {
-    "0%": { opacity: 0, transform: "translateY(-20px)" },
-    "100%": { opacity: 1, transform: "translateY(0)" }
-  },
-  fadeInLeft: {
-    "0%": { opacity: 0, transform: "translateX(-20px)" },
-    "100%": { opacity: 1, transform: "translateX(0)" }
-  },
-  fadeInRight: {
-    "0%": { opacity: 0, transform: "translateX(20px)" },
-    "100%": { opacity: 1, transform: "translateX(0)" }
-  },
-  slideInUp: {
-    "0%": { transform: "translateY(100%)" },
-    "100%": { transform: "translateY(0)" }
-  },
-  slideInDown: {
-    "0%": { transform: "translateY(-100%)" },
-    "100%": { transform: "translateY(0)" }
-  },
-  slideInLeft: {
-    "0%": { transform: "translateX(-100%)" },
-    "100%": { transform: "translateX(0)" }
-  },
-  slideInRight: {
-    "0%": { transform: "translateX(100%)" },
-    "100%": { transform: "translateX(0)" }
-  },
-  zoomIn: {
-    "0%": { opacity: 0, transform: "scale(0.8)" },
-    "100%": { opacity: 1, transform: "scale(1)" }
-  },
-  zoomOut: {
-    "0%": { opacity: 1, transform: "scale(1)" },
-    "100%": { opacity: 0, transform: "scale(0.8)" }
-  },
-  bounce: {
-    "0%, 100%": { transform: "translateY(0)" },
-    "50%": { transform: "translateY(-20px)" }
-  },
-  pulse: {
-    "0%, 100%": { transform: "scale(1)" },
-    "50%": { transform: "scale(1.05)" }
-  },
-  shake: {
-    "0%, 100%": { transform: "translateX(0)" },
-    "25%": { transform: "translateX(-5px)" },
-    "75%": { transform: "translateX(5px)" }
-  },
-  rotate: {
-    "0%": { transform: "rotate(0deg)" },
-    "100%": { transform: "rotate(360deg)" }
-  },
-  spin: {
-    "0%": { transform: "rotate(0deg)" },
-    "100%": { transform: "rotate(360deg)" }
-  },
-  wiggle: {
-    "0%, 100%": { transform: "rotate(-3deg)" },
-    "50%": { transform: "rotate(3deg)" }
-  },
-  flip: {
-    "0%": { transform: "perspective(400px) rotateY(0)" },
-    "100%": { transform: "perspective(400px) rotateY(360deg)" }
-  }
-};
-function createAnimation(animationName, config = {}) {
-  const duration = config.duration || "0.3s";
-  const delay = config.delay || "0s";
-  const timing = config.timing || "ease";
-  const iteration = config.iteration || 1;
-  const direction = config.direction || "normal";
-  const fillMode = config.fillMode || "both";
-  return {
-    animation: `${animationName} ${duration} ${timing} ${delay} ${iteration} ${direction}`,
-    animationFillMode: fillMode
-  };
-}
-function calc(expression) {
-  return `calc(${expression})`;
-}
-function add(a, b) {
-  return `calc(${a} + ${b})`;
-}
-function subtract(a, b) {
-  return `calc(${a} - ${b})`;
-}
-function multiply(a, b) {
-  return `calc(${a} * ${b})`;
-}
-function divide(a, b) {
-  return `calc(${a} / ${b})`;
-}
-function percent(value) {
-  return `${value}%`;
-}
-function vw(value) {
-  return `${value}vw`;
-}
-function vh(value) {
-  return `${value}vh`;
-}
-function rem(value) {
-  return `${value}rem`;
-}
-function em(value) {
-  return `${value}em`;
-}
-function px(value) {
-  return `${value}px`;
-}
-function min(...values) {
-  return `min(${values.join(", ")})`;
-}
-function max(...values) {
-  return `max(${values.join(", ")})`;
-}
-function clamp(min2, preferred, max2) {
-  return `clamp(${min2}, ${preferred}, ${max2})`;
-}
-var helpers = {
-  calc,
-  add,
-  subtract,
-  sub: subtract,
-  // alias
-  multiply,
-  mul: multiply,
-  // alias
-  divide,
-  div: divide,
-  // alias
-  percent,
-  vw,
-  vh,
-  rem,
-  em,
-  px,
-  min,
-  max,
-  clamp
-};
-var debugMode = false;
-var currentDebugSelector = "";
-var DEFAULT_BREAKPOINTS = {
-  mobile: "(max-width: 768px)",
-  tablet: "(min-width: 769px) and (max-width: 1024px)",
-  desktop: "(min-width: 1025px)",
-  sm: "(max-width: 640px)",
-  md: "(min-width: 641px) and (max-width: 768px)",
-  lg: "(min-width: 769px) and (max-width: 1024px)",
-  xl: "(min-width: 1025px)",
-  "2xl": "(min-width: 1280px)"
-};
-var currentBreakpoints = DEFAULT_BREAKPOINTS;
-function setBreakpoints(breakpoints) {
-  currentBreakpoints = { ...DEFAULT_BREAKPOINTS, ...breakpoints };
-}
-var __filename = fileURLToPath(import.meta.url);
-var __dirname = path.dirname(__filename);
-var chain = {
-  cssOutput: void 0,
-  catcher: {},
-  cachedValidProperties: [],
-  classMap: {},
-  atomicStats: null,
-  async initializeProperties() {
-    if (this.cachedValidProperties && this.cachedValidProperties.length > 0) {
-      return;
-    }
-    const properties = await loadCSSProperties();
-    this.cachedValidProperties = properties;
-  },
-  getCachedProperties() {
-    return this.cachedValidProperties;
-  }
-};
-var atomicOptimizer = null;
-function setAtomicOptimizer(optimizer) {
-  atomicOptimizer = optimizer;
-}
-var fetchWithHttps = (url) => {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      req.destroy();
-      reject(new Error("Request timeout"));
-    }, 3e3);
-    const req = https.get(url, (response) => {
-      clearTimeout(timeout);
-      let data = "";
-      response.on("data", (chunk) => data += chunk);
-      response.on("end", () => {
-        try {
-          resolve(JSON.parse(data));
-        } catch (error) {
-          reject(error);
-        }
-      });
-    });
-    req.on("error", (error) => {
-      clearTimeout(timeout);
-      reject(error);
-    });
-  });
-};
-var loadCSSProperties = async () => {
-  if (chain.cachedValidProperties !== null && chain.cachedValidProperties.length > 0) {
-    return chain.cachedValidProperties;
-  }
-  try {
-    const url = "https://raw.githubusercontent.com/mdn/data/main/css/properties.json";
-    let data;
-    if (typeof fetch !== "undefined") {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3e3);
-      const response = await fetch(url, { signal: controller.signal });
-      clearTimeout(timeoutId);
-      data = await response.json();
-    } else {
-      data = await fetchWithHttps(url);
-    }
-    const allProperties = Object.keys(data);
-    const baseProperties = /* @__PURE__ */ new Set();
-    allProperties.forEach((prop) => {
-      const baseProp = prop.replace(/^-(webkit|moz|ms|o)-/, "");
-      baseProperties.add(baseProp);
-    });
-    chain.cachedValidProperties = Array.from(baseProperties).sort();
-    return chain.cachedValidProperties;
-  } catch (error) {
-    chain.cachedValidProperties = COMMON_CSS_PROPERTIES;
-    return chain.cachedValidProperties;
-  }
-};
-chain.initializeProperties().catch((err) => {
-  console.error("Failed to load CSS properties:", err.message);
-});
-var tokens2 = tokens;
-var currentTokenContext = null;
-function createTokens(tokenValues) {
-  const tokenObj = new DesignTokens(tokenValues);
-  currentTokenContext = tokenObj;
-  return tokenObj;
-}
-function resolveToken(value, useTokens, tokenContext) {
-  if (!useTokens || typeof value !== "string")
-    return value;
-  if (value.includes("$")) {
-    return value.replace(/\$([a-zA-Z0-9.-]+)/g, (match, path5) => {
-      if (tokenContext) {
-        const resolved = tokenContext.get(path5);
-        if (resolved !== void 0) {
-          return resolved;
-        }
-      }
-      const globalResolved = tokens2.get(path5);
-      if (globalResolved !== void 0) {
-        return globalResolved;
-      }
-      return match;
-    });
-  }
-  return value;
-}
-var shorthandMap = {
-  // Layout
-  "m": "margin",
-  "mt": "marginTop",
-  "mr": "marginRight",
-  "mb": "marginBottom",
-  "ml": "marginLeft",
-  "p": "padding",
-  "pt": "paddingTop",
-  "pr": "paddingRight",
-  "pb": "paddingBottom",
-  "pl": "paddingLeft",
-  // Display & Position
-  "d": "display",
-  "pos": "position",
-  // Sizing
-  "w": "width",
-  "h": "height",
-  "minW": "minWidth",
-  "maxW": "maxWidth",
-  "minH": "minHeight",
-  "maxH": "maxHeight",
-  // Colors & Background
-  "bg": "backgroundColor",
-  "c": "color",
-  // Flexbox
-  "flexDir": "flexDirection",
-  "flexWrap": "flexWrap",
-  "justify": "justifyContent",
-  "items": "alignItems",
-  "align": "alignSelf",
-  "gap": "gap",
-  "gapX": "columnGap",
-  "gapY": "rowGap",
-  // Grid
-  "gridCols": "gridTemplateColumns",
-  "gridRows": "gridTemplateRows",
-  // Borders
-  "rounded": "borderRadius",
-  "roundedT": "borderTopLeftRadius",
-  "roundedR": "borderTopRightRadius",
-  "roundedB": "borderBottomRightRadius",
-  "roundedL": "borderBottomLeftRadius",
-  "border": "border",
-  "borderW": "borderWidth",
-  "borderC": "borderColor",
-  // Typography
-  "font": "fontFamily",
-  "text": "color",
-  "textAlign": "textAlign",
-  "textSize": "fontSize",
-  "weight": "fontWeight",
-  // Spacing (margin/padding shortcuts)
-  "mx": "marginHorizontal",
-  // Need to handle this specially
-  "my": "marginVertical",
-  // Need to handle this specially
-  "px": "paddingHorizontal",
-  // Need to handle this specially
-  "py": "paddingVertical"
-  // Need to handle this specially
-};
-var handleShorthand = (prop, value, catcher) => {
-  if (prop === "mx") {
-    catcher.marginLeft = value;
-    catcher.marginRight = value;
-    return true;
-  }
-  if (prop === "my") {
-    catcher.marginTop = value;
-    catcher.marginBottom = value;
-    return true;
-  }
-  if (prop === "px") {
-    catcher.paddingLeft = value;
-    catcher.paddingRight = value;
-    return true;
-  }
-  if (prop === "py") {
-    catcher.paddingTop = value;
-    catcher.paddingBottom = value;
-    return true;
-  }
-  return false;
-};
-function chaincssv2(useTokens = true) {
-  const catcher = {};
-  let validProperties = chain.cachedValidProperties;
-  const tokenContext = currentTokenContext || null;
-  const createResponsiveMethod = (breakpointName, query) => {
-    return function(callback) {
-      const subChain = chaincssv2(useTokens);
-      let result = callback(subChain);
-      if (result && typeof result.$el === "function") {
-        result = result.$el();
-      }
-      const { selectors, ...pureStyles } = result || {};
-      if (!catcher.atRules)
-        catcher.atRules = [];
-      catcher.atRules.push({
-        type: "media",
-        query,
-        styles: pureStyles
-      });
-      return proxy;
-    };
-  };
-  const handler = {
-    get: (target, prop) => {
-      if (prop === "debug") {
-        return () => {
-          debugMode = true;
-          currentDebugSelector = "";
-          return proxy;
-        };
-      }
-      if (prop === "debugWith") {
-        return (selector) => {
-          debugMode = true;
-          currentDebugSelector = selector;
-          return proxy;
-        };
-      }
-      if (prop === "$el") {
-        return function(...args) {
-          if (args.length === 0) {
-            const result2 = { ...catcher };
-            Object.keys(catcher).forEach((key) => delete catcher[key]);
-            return result2;
-          }
-          const selector = args[0];
-          const result = {
-            selectors: args,
-            ...catcher
-          };
-          if (debugMode) {
-            const debugSelector = currentDebugSelector || selector;
-            console.group(`\u{1F50D} ChainCSS Debug: ${debugSelector}`);
-            console.log("\u{1F4E6} Selector:", selector);
-            console.log("\u{1F3A8} Styles:", catcher);
-            const stack = new Error().stack;
-            if (stack) {
-              const stackLines = stack.split("\n");
-              for (let i = 3; i < Math.min(stackLines.length, 8); i++) {
-                if (stackLines[i] && !stackLines[i].includes("btt.ts")) {
-                  console.log("\u{1F4CD} Source:", stackLines[i].trim());
-                  break;
-                }
-              }
-            }
-            console.groupEnd();
-            debugMode = false;
-            currentDebugSelector = "";
-          }
-          Object.keys(catcher).forEach((key) => delete catcher[key]);
-          return result;
-        };
-      }
-      if (animationPresets[prop]) {
-        return (config) => {
-          if (!catcher.atRules)
-            catcher.atRules = [];
-          const hasKeyframes = catcher.atRules.some(
-            (rule2) => rule2.type === "keyframes" && rule2.name === prop
-          );
-          if (!hasKeyframes) {
-            catcher.atRules.push({
-              type: "keyframes",
-              name: prop,
-              steps: animationPresets[prop]
-            });
-          }
-          const animationStyles = createAnimation(prop, config);
-          Object.assign(catcher, animationStyles);
-          return proxy;
-        };
-      }
-      if (prop === "duration") {
-        return (value) => {
-          if (catcher.animation) {
-            catcher.animation = catcher.animation.replace(/(\d+(?:\.\d+)?(?:ms|s))/, value);
-          } else {
-            catcher.animationDuration = value;
-          }
-          return proxy;
-        };
-      }
-      if (prop === "delay") {
-        return (value) => {
-          if (catcher.animation) {
-            const parts = catcher.animation.split(" ");
-            parts.splice(3, 0, value);
-            catcher.animation = parts.join(" ");
-          } else {
-            catcher.animationDelay = value;
-          }
-          return proxy;
-        };
-      }
-      if (prop === "timing") {
-        return (value) => {
-          if (catcher.animation) {
-            catcher.animation = catcher.animation.replace(/(ease|linear|ease-in|ease-out|ease-in-out|cubic-bezier\([^)]+\))/, value);
-          } else {
-            catcher.animationTimingFunction = value;
-          }
-          return proxy;
-        };
-      }
-      if (prop === "iteration") {
-        return (value) => {
-          if (catcher.animation) {
-            catcher.animation = catcher.animation.replace(/\d+|infinite/, String(value));
-          } else {
-            catcher.animationIterationCount = value;
-          }
-          return proxy;
-        };
-      }
-      if (prop === "infinite") {
-        return () => {
-          if (catcher.animation) {
-            catcher.animation = catcher.animation.replace(/\d+/, "infinite");
-          } else {
-            catcher.animationIterationCount = "infinite";
-          }
-          return proxy;
-        };
-      }
-      if (prop === "animate") {
-        return (name, keyframes, config) => {
-          if (!catcher.atRules)
-            catcher.atRules = [];
-          catcher.atRules.push({
-            type: "keyframes",
-            name,
-            steps: keyframes
-          });
-          const animationStyles = createAnimation(name, config);
-          Object.assign(catcher, animationStyles);
-          return proxy;
-        };
-      }
-      if (prop === "calc")
-        return helpers.calc;
-      if (prop === "add")
-        return helpers.add;
-      if (prop === "subtract" || prop === "sub")
-        return helpers.subtract;
-      if (prop === "multiply" || prop === "mul")
-        return helpers.multiply;
-      if (prop === "divide" || prop === "div")
-        return helpers.divide;
-      if (prop === "percent")
-        return helpers.percent;
-      if (prop === "vw")
-        return helpers.vw;
-      if (prop === "vh")
-        return helpers.vh;
-      if (prop === "rem")
-        return helpers.rem;
-      if (prop === "em")
-        return helpers.em;
-      if (prop === "px")
-        return helpers.px;
-      if (prop === "min")
-        return helpers.min;
-      if (prop === "max")
-        return helpers.max;
-      if (prop === "clamp")
-        return helpers.clamp;
-      if (currentBreakpoints && currentBreakpoints[prop]) {
-        return createResponsiveMethod(prop, currentBreakpoints[prop]);
-      }
-      if (prop === "hover") {
-        return () => {
-          if (debugMode) {
-            console.log(`  \u{1F5B1}\uFE0F Hover styles added`);
-          }
-          const hoverCatcher = {};
-          const hoverHandler = {
-            get: (hoverTarget, hoverProp) => {
-              if (hoverProp === "end") {
-                return () => {
-                  catcher.hover = { ...hoverCatcher };
-                  Object.keys(hoverCatcher).forEach((key) => delete hoverCatcher[key]);
-                  return proxy;
-                };
-              }
-              const mappedProp2 = shorthandMap[hoverProp] || hoverProp;
-              const cssProperty2 = mappedProp2.replace(/([A-Z])/g, "-$1").toLowerCase();
-              if (validProperties && validProperties.length > 0 && !validProperties.includes(cssProperty2)) {
-                console.warn(`Warning: '${cssProperty2}' may not be a valid CSS property`);
-              }
-              return (value) => {
-                hoverCatcher[mappedProp2] = resolveToken(value, useTokens, tokenContext);
-                return hoverProxy;
-              };
-            }
-          };
-          const hoverProxy = new Proxy({}, hoverHandler);
-          return hoverProxy;
-        };
-      }
-      if (handleShorthand(prop, null, catcher)) {
-        return (value) => {
-          handleShorthand(prop, resolveToken(value, useTokens, tokenContext), catcher);
-          return proxy;
-        };
-      }
-      const mappedProp = shorthandMap[prop] || prop;
-      const cssProperty = mappedProp.replace(/([A-Z])/g, "-$1").toLowerCase();
-      if (prop === "select") {
-        return function(selector) {
-          const nestedStyles = {};
-          const nestedHandler = {
-            get: (nestedTarget, nestedProp) => {
-              if (nestedProp === "block") {
-                return () => {
-                  if (!catcher.nestedRules)
-                    catcher.nestedRules = [];
-                  catcher.nestedRules.push({
-                    selector,
-                    styles: { ...nestedStyles }
-                  });
-                  return proxy;
-                };
-              }
-              return (value) => {
-                nestedStyles[nestedProp] = resolveToken(value, useTokens, tokenContext);
-                return nestedProxy;
-              };
-            }
-          };
-          const nestedProxy = new Proxy({}, nestedHandler);
-          return nestedProxy;
-        };
-      }
-      if (prop === "media") {
-        return function(query, callback) {
-          if (debugMode) {
-            console.log(`  \u{1F4F1} Media Query: ${query}`);
-          }
-          const subChain = chaincssv2(useTokens);
-          let result = callback(subChain);
-          if (result && typeof result.$el === "function") {
-            result = result.$el();
-          }
-          if (!catcher.atRules)
-            catcher.atRules = [];
-          const { selectors, ...pureStyles } = result || {};
-          catcher.atRules.push({
-            type: "media",
-            query,
-            styles: pureStyles
-          });
-          return proxy;
-        };
-      }
-      if (prop === "keyframes") {
-        return function(name, callback) {
-          const keyframeContext = { _keyframeSteps: {} };
-          const keyframeProxy = new Proxy(keyframeContext, {
-            get: (target2, stepProp) => {
-              if (stepProp === "from" || stepProp === "to") {
-                return function(stepCallback) {
-                  const subChain = chaincssv2(useTokens);
-                  const properties = stepCallback(subChain).$el();
-                  target2._keyframeSteps[stepProp] = properties;
-                  return keyframeProxy;
-                };
-              }
-              if (stepProp === "percent") {
-                return function(value, stepCallback) {
-                  const subChain = chaincssv2(useTokens);
-                  const properties = stepCallback(subChain).$el();
-                  target2._keyframeSteps[`${value}%`] = properties;
-                  return keyframeProxy;
-                };
-              }
-              return void 0;
-            }
-          });
-          callback(keyframeProxy);
-          if (!catcher.atRules)
-            catcher.atRules = [];
-          catcher.atRules.push({
-            type: "keyframes",
-            name,
-            steps: keyframeContext._keyframeSteps
-          });
-          return proxy;
-        };
-      }
-      if (prop === "fontFace") {
-        return function(callback) {
-          const fontProps = {};
-          const fontHandler = {
-            get: (target2, fontProp) => {
-              return (value) => {
-                fontProps[fontProp] = resolveToken(value, useTokens, tokenContext);
-                return fontProxy;
-              };
-            }
-          };
-          const fontProxy = new Proxy({}, fontHandler);
-          callback(fontProxy);
-          if (!catcher.atRules)
-            catcher.atRules = [];
-          catcher.atRules.push({
-            type: "font-face",
-            properties: fontProps
-          });
-          return proxy;
-        };
-      }
-      if (prop === "supports") {
-        return function(condition, callback) {
-          const subChain = chaincssv2(useTokens);
-          const result = callback(subChain);
-          if (!catcher.atRules)
-            catcher.atRules = [];
-          catcher.atRules.push({
-            type: "supports",
-            condition,
-            styles: result
-          });
-          return proxy;
-        };
-      }
-      if (prop === "container") {
-        return function(condition, callback) {
-          const subChain = chaincssv2(useTokens);
-          const result = callback(subChain);
-          if (!catcher.atRules)
-            catcher.atRules = [];
-          catcher.atRules.push({
-            type: "container",
-            condition,
-            styles: result
-          });
-          return proxy;
-        };
-      }
-      if (prop === "layer") {
-        return function(name, callback) {
-          const subChain = chaincssv2(useTokens);
-          const result = callback(subChain);
-          if (!catcher.atRules)
-            catcher.atRules = [];
-          catcher.atRules.push({
-            type: "layer",
-            name,
-            styles: result
-          });
-          return proxy;
-        };
-      }
-      if (prop === "counterStyle") {
-        return function(name, callback) {
-          const counterProps = {};
-          const counterHandler = {
-            get: (target2, counterProp) => {
-              return (value) => {
-                counterProps[counterProp] = resolveToken(value, useTokens, tokenContext);
-                return counterProxy;
-              };
-            }
-          };
-          const counterProxy = new Proxy({}, counterHandler);
-          callback(counterProxy);
-          if (!catcher.atRules)
-            catcher.atRules = [];
-          catcher.atRules.push({
-            type: "counter-style",
-            name,
-            properties: counterProps
-          });
-          return proxy;
-        };
-      }
-      if (prop === "property") {
-        return function(name, callback) {
-          const propertyDescs = {};
-          const propertyHandler = {
-            get: (target2, descProp) => {
-              return (value) => {
-                propertyDescs[descProp] = resolveToken(value, useTokens, tokenContext);
-                return propertyProxy;
-              };
-            }
-          };
-          const propertyProxy = new Proxy({}, propertyHandler);
-          callback(propertyProxy);
-          if (!catcher.atRules)
-            catcher.atRules = [];
-          catcher.atRules.push({
-            type: "property",
-            name,
-            descriptors: propertyDescs
-          });
-          return proxy;
-        };
-      }
-      if (prop === "theme") {
-        return function(themeTokens, callback) {
-          const originalTokens = tokens2;
-          const themeTokenStore = {
-            get: (path5) => {
-              const themeValue = themeTokens.get ? themeTokens.get(path5) : null;
-              if (themeValue !== null && themeValue !== void 0) {
-                return themeValue;
-              }
-              return originalTokens.get(path5);
-            },
-            ...themeTokens
-          };
-          const tempTokens = themeTokenStore;
-          const themed$ = (useTokensFlag = true) => {
-            const result2 = $(useTokensFlag);
-            return result2;
-          };
-          const result = callback(themed$);
-          if (!catcher.themes)
-            catcher.themes = [];
-          catcher.themes.push({
-            name: `theme-${Date.now()}`,
-            styles: result,
-            tokens: themeTokens,
-            fallback: originalTokens
-          });
-          return proxy;
-        };
-      }
-      return function(value) {
-        if (typeof value === "function") {
-          value = value(helpers);
-        }
-        if (debugMode) {
-          const cssProp = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
-          console.log(`  \u{1F3A8} ${cssProp}: ${value}`);
-        }
-        catcher[prop] = resolveToken(value, useTokens, tokenContext);
-        return proxy;
-      };
-    }
-  };
-  const proxy = new Proxy({}, handler);
-  return proxy;
-}
-var $ = chaincssv2();
-function processAtRule(rule2, parentSelectors = null) {
-  let output = "";
-  switch (rule2.type) {
-    case "media":
-      output = `@media ${rule2.query} {
-`;
-      if (rule2.styles && typeof rule2.styles === "object") {
-        let ruleBody = "";
-        for (const prop in rule2.styles) {
-          const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
-          ruleBody += `    ${kebabKey}: ${rule2.styles[prop]};
-`;
-        }
-        if (ruleBody.trim()) {
-          const selector = parentSelectors && parentSelectors.length > 0 ? parentSelectors.join(", ") : ".unknown-selector";
-          const sourceLocation = getSourceLocation();
-          if (enableSourceComments && sourceLocation) {
-            output += `  /* Generated from: ${sourceLocation} */
-`;
-          }
-          output += `  ${selector} {
-${ruleBody}  }
-`;
-        }
-      }
-      output += "}\n";
-      break;
-    case "keyframes":
-      output = `@keyframes ${rule2.name} {
-`;
-      for (const step in rule2.steps) {
-        output += `  ${step} {
-`;
-        for (const prop in rule2.steps[step]) {
-          if (prop !== "selectors") {
-            const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
-            output += `    ${kebabKey}: ${rule2.steps[step][prop]};
-`;
-          }
-        }
-        output += "  }\n";
-      }
-      output += "}\n";
-      break;
-    case "font-face":
-      output = "@font-face {\n";
-      for (const prop in rule2.properties) {
-        if (prop !== "selectors") {
-          const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
-          output += `  ${kebabKey}: ${rule2.properties[prop]};
-`;
-        }
-      }
-      output += "}\n";
-      break;
-    case "supports":
-      output = `@supports ${rule2.condition} {
-`;
-      if (rule2.styles && rule2.styles.selectors) {
-        let ruleBody = "";
-        for (const prop in rule2.styles) {
-          if (prop !== "selectors" && rule2.styles.hasOwnProperty(prop)) {
-            const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
-            ruleBody += `    ${kebabKey}: ${rule2.styles[prop]};
-`;
-          }
-        }
-        if (ruleBody.trim()) {
-          output += `  ${rule2.styles.selectors.join(", ")} {
-${ruleBody}  }
-`;
-        }
-      }
-      output += "}\n";
-      break;
-    case "container":
-      output = `@container ${rule2.condition} {
-`;
-      if (rule2.styles && rule2.styles.selectors) {
-        let ruleBody = "";
-        for (const prop in rule2.styles) {
-          if (prop !== "selectors" && rule2.styles.hasOwnProperty(prop)) {
-            const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
-            ruleBody += `    ${kebabKey}: ${rule2.styles[prop]};
-`;
-          }
-        }
-        if (ruleBody.trim()) {
-          output += `  ${rule2.styles.selectors.join(", ")} {
-${ruleBody}  }
-`;
-        }
-      }
-      output += "}\n";
-      break;
-    case "layer":
-      output = `@layer ${rule2.name} {
-`;
-      if (rule2.styles && rule2.styles.selectors) {
-        let ruleBody = "";
-        for (const prop in rule2.styles) {
-          if (prop !== "selectors" && rule2.styles.hasOwnProperty(prop)) {
-            const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
-            ruleBody += `    ${kebabKey}: ${rule2.styles[prop]};
-`;
-          }
-        }
-        if (ruleBody.trim()) {
-          output += `  ${rule2.styles.selectors.join(", ")} {
-${ruleBody}  }
-`;
-        }
-      }
-      output += "}\n";
-      break;
-    case "counter-style":
-      output = `@counter-style ${rule2.name} {
-`;
-      for (const prop in rule2.properties) {
-        if (prop !== "selectors") {
-          const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
-          output += `  ${kebabKey}: ${rule2.properties[prop]};
-`;
-        }
-      }
-      output += "}\n";
-      break;
-    case "property":
-      output = `@property ${rule2.name} {
-`;
-      for (const desc in rule2.descriptors) {
-        if (desc !== "selectors") {
-          const kebabKey = desc.replace(/([A-Z])/g, "-$1").toLowerCase();
-          output += `  ${kebabKey}: ${rule2.descriptors[desc]};
-`;
-        }
-      }
-      output += "}\n";
-      break;
-  }
-  return output;
-}
-function processStandaloneAtRule(rule2) {
-  let output = "";
-  switch (rule2.type) {
-    case "font-face":
-      output = "@font-face {\n";
-      for (const prop in rule2.properties) {
-        if (prop !== "selectors") {
-          const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
-          output += `  ${kebabKey}: ${rule2.properties[prop]};
-`;
-        }
-      }
-      output += "}\n";
-      break;
-    case "keyframes":
-      output = `@keyframes ${rule2.name} {
-`;
-      for (const step in rule2.steps) {
-        output += `  ${step} {
-`;
-        for (const prop in rule2.steps[step]) {
-          if (prop !== "selectors") {
-            const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
-            output += `    ${kebabKey}: ${rule2.steps[step][prop]};
-`;
-          }
-        }
-        output += "  }\n";
-      }
-      output += "}\n";
-      break;
-    case "counter-style":
-      output = `@counter-style ${rule2.name} {
-`;
-      for (const prop in rule2.properties) {
-        if (prop !== "selectors") {
-          const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
-          output += `  ${kebabKey}: ${rule2.properties[prop]};
-`;
-        }
-      }
-      output += "}\n";
-      break;
-    case "property":
-      output = `@property ${rule2.name} {
-`;
-      for (const desc in rule2.descriptors) {
-        if (desc !== "selectors") {
-          const kebabKey = desc.replace(/([A-Z])/g, "-$1").toLowerCase();
-          output += `  ${kebabKey}: ${rule2.descriptors[desc]};
-`;
-        }
-      }
-      output += "}\n";
-      break;
-  }
-  return output;
-}
-var run = (...args) => {
-  let cssOutput = "";
-  const styleObjs = [];
-  args.forEach((value) => {
-    if (!value)
-      return;
-    styleObjs.push(value);
-    if (value.selectors) {
-      let mainRuleBody = "";
-      let atRulesOutput = "";
-      for (const key in value) {
-        if (key === "selectors" || !value.hasOwnProperty(key))
-          continue;
-        if (key === "atRules" && Array.isArray(value[key])) {
-          value[key].forEach((rule2) => {
-            atRulesOutput += processAtRule(rule2, value.selectors);
-          });
-          continue;
-        }
-        if (key === "nestedRules" && Array.isArray(value[key])) {
-          value[key].forEach((rule2) => {
-            let nestedBody = "";
-            for (const prop in rule2.styles) {
-              const kebabKey2 = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
-              nestedBody += `    ${kebabKey2}: ${rule2.styles[prop]};
-`;
-            }
-            if (nestedBody) {
-              atRulesOutput += `${value.selectors.join(", ")} ${rule2.selector} {
-${nestedBody}  }
-`;
-            }
-          });
-          continue;
-        }
-        if (key === "hover" && typeof value[key] === "object") {
-          let hoverBody = "";
-          for (const hoverKey in value[key]) {
-            const kebabKey2 = hoverKey.replace(/([A-Z])/g, "-$1").toLowerCase();
-            hoverBody += `  ${kebabKey2}: ${value[key][hoverKey]};
-`;
-          }
-          if (hoverBody) {
-            cssOutput += `${value.selectors.join(", ")}:hover {
-${hoverBody}}
-`;
-          }
-          continue;
-        }
-        const kebabKey = key.replace(/([A-Z])/g, "-$1").toLowerCase();
-        mainRuleBody += `  ${kebabKey}: ${value[key]};
-`;
-      }
-      if (mainRuleBody.trim()) {
-        cssOutput += `${value.selectors.join(", ")} {
-${mainRuleBody}}
-`;
-      }
-      cssOutput += atRulesOutput;
-    } else if (value.type) {
-      cssOutput += processStandaloneAtRule(value);
-    }
-  });
-  cssOutput = cssOutput.replace(/\n{3,}/g, "\n\n").trim();
-  chain.cssOutput = cssOutput;
-  if (atomicOptimizer && atomicOptimizer.options.enabled) {
-    const result = atomicOptimizer.optimize(styleObjs);
-    if (atomicOptimizer.options.outputStrategy === "component-first") {
-      chain.cssOutput = result.css;
-    } else {
-      chain.cssOutput = result.css;
-    }
-    chain.classMap = result.map;
-    chain.atomicStats = result.stats;
-    return chain.cssOutput;
-  }
-  return cssOutput;
-};
-var compile = (obj) => {
-  let cssString = "";
-  const collected = [];
-  for (const key in obj) {
-    if (!obj.hasOwnProperty(key))
-      continue;
-    const element = obj[key];
-    const sourceLocation = getSourceLocation();
-    if (timelineEnabled && element.selectors) {
-      const styles = {};
-      for (const prop in element) {
-        if (prop !== "selectors" && prop !== "atRules" && prop !== "hover" && prop !== "nestedRules") {
-          styles[prop] = element[prop];
-        }
-      }
-      takeSnapshot(element.selectors[0], styles, sourceLocation || "unknown");
-    }
-    if (element.themes && Array.isArray(element.themes)) {
-      element.themes.forEach((theme) => {
-        if (theme.styles && theme.styles.selectors) {
-          let themeCSS = "";
-          const themeSelectors = theme.styles.selectors || [];
-          for (const prop in theme.styles) {
-            if (prop !== "selectors" && theme.styles.hasOwnProperty(prop)) {
-              const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
-              themeCSS += `  ${kebabKey}: ${theme.styles[prop]};
-`;
-            }
-          }
-          if (themeCSS) {
-            let block = `${themeSelectors.join(", ")} {
-${themeCSS}}
-`;
-            block = addSourceComment(block, sourceLocation);
-            cssString += block;
-          }
-        }
-      });
-      continue;
-    }
-    if (element.atRules && Array.isArray(element.atRules)) {
-      let elementCSS = "";
-      for (const prop in element) {
-        if (prop === "selectors" || prop === "atRules" || prop === "hover" || !element.hasOwnProperty(prop))
-          continue;
-        const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
-        elementCSS += `  ${kebabKey}: ${element[prop]};
-`;
-      }
-      if (elementCSS.trim()) {
-        let block = `${element.selectors.join(", ")} {
-${elementCSS}}
-`;
-        block = addSourceComment(block, sourceLocation);
-        cssString += block;
-      }
-      element.atRules.forEach((rule2) => {
-        cssString += processAtRule(rule2, element.selectors);
-      });
-      continue;
-    }
-    if (element.selectors) {
-      collected.push(element);
-      let elementCSS = "";
-      let atRulesCSS = "";
-      for (const prop in element) {
-        if (prop === "selectors" || !element.hasOwnProperty(prop))
-          continue;
-        if (prop === "atRules" && Array.isArray(element[prop])) {
-          element[prop].forEach((rule2) => {
-            atRulesCSS += processAtRule(rule2, element.selectors);
-          });
-        } else if (prop === "themes" && Array.isArray(element[prop])) {
-          continue;
-        } else if (prop === "hover" && typeof element[prop] === "object") {
-          let hoverBody = "";
-          for (const hoverKey in element[prop]) {
-            const kebabKey = hoverKey.replace(/([A-Z])/g, "-$1").toLowerCase();
-            hoverBody += `  ${kebabKey}: ${element[prop][hoverKey]};
-`;
-          }
-          if (hoverBody) {
-            let block = `${element.selectors.join(", ")}:hover {
-${hoverBody}}
-`;
-            block = addSourceComment(block, sourceLocation);
-            cssString += block;
-          }
-        } else {
-          const kebabKey = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
-          elementCSS += `  ${kebabKey}: ${element[prop]};
-`;
-        }
-      }
-      if (elementCSS.trim()) {
-        let block = `${element.selectors.join(", ")} {
-${elementCSS}}
-`;
-        block = addSourceComment(block, sourceLocation);
-        cssString += block;
-      }
-      cssString += atRulesCSS;
-    }
-  }
-  chain.cssOutput = cssString.trim();
-  if (atomicOptimizer && atomicOptimizer.options.enabled) {
-    const result = atomicOptimizer.optimize(collected);
-    chain.cssOutput = result.css;
-    chain.classMap = result.map;
-    chain.atomicStats = result.stats;
-    chain.componentMap = result.componentMap;
-    return result.css;
-  }
-  return chain.cssOutput;
-};
-function recipe(options) {
-  const {
-    base,
-    variants = {},
-    defaultVariants = {},
-    compoundVariants = []
-  } = options;
-  const baseStyle = typeof base === "function" ? base() : base;
-  const variantStyles = {};
-  for (const [variantName, variantMap] of Object.entries(variants)) {
-    variantStyles[variantName] = {};
-    for (const [variantKey, variantStyle] of Object.entries(variantMap)) {
-      variantStyles[variantName][variantKey] = typeof variantStyle === "function" ? variantStyle() : variantStyle;
-    }
-  }
-  const compoundStyles = compoundVariants.map((cv) => ({
-    condition: cv.variants || cv,
-    style: typeof cv.style === "function" ? cv.style() : cv.style
-  }));
-  function mergeStyles(...styles) {
-    const merged = {};
-    for (const style of styles) {
-      if (!style)
-        continue;
-      for (const [key, value] of Object.entries(style)) {
-        if (key === "selectors") {
-          merged.selectors = merged.selectors || [];
-          merged.selectors.push(...Array.isArray(value) ? value : [value]);
-        } else if (key === "hover" && typeof value === "object") {
-          if (!merged.hover)
-            merged.hover = {};
-          Object.assign(merged.hover, value);
-        } else if (key !== "selectors") {
-          merged[key] = value;
-        }
-      }
-    }
-    return merged;
-  }
-  function pick(variantSelection = {}) {
-    const selected = { ...defaultVariants, ...variantSelection };
-    const stylesToMerge = [];
-    if (baseStyle)
-      stylesToMerge.push(baseStyle);
-    for (const [variantName, variantValue] of Object.entries(selected)) {
-      const variantStyle = variantStyles[variantName]?.[variantValue];
-      if (variantStyle)
-        stylesToMerge.push(variantStyle);
-    }
-    for (const cv of compoundStyles) {
-      const matches = Object.entries(cv.condition).every(
-        ([key, value]) => selected[key] === value
-      );
-      if (matches && cv.style)
-        stylesToMerge.push(cv.style);
-    }
-    const merged = mergeStyles(...stylesToMerge);
-    const styleBuilder = $(true);
-    for (const [prop, value] of Object.entries(merged)) {
-      if (prop === "selectors" || prop === "hover")
-        continue;
-      if (styleBuilder[prop])
-        styleBuilder[prop](value);
-    }
-    if (merged.hover) {
-      styleBuilder.hover();
-      for (const [hoverProp, hoverValue] of Object.entries(merged.hover)) {
-        if (styleBuilder[hoverProp])
-          styleBuilder[hoverProp](hoverValue);
-      }
-      styleBuilder.end();
-    }
-    const selectors = merged.selectors || [];
-    return styleBuilder.$el(...selectors);
-  }
-  pick.variants = variants;
-  pick.defaultVariants = defaultVariants;
-  pick.base = baseStyle;
-  pick.getAllVariants = () => {
-    const result = [];
-    const variantKeys = Object.keys(variants);
-    function generate(current, index) {
-      if (index === variantKeys.length) {
-        result.push({ ...current });
-        return;
-      }
-      const variantName = variantKeys[index];
-      for (const variantValue of Object.keys(variants[variantName])) {
-        current[variantName] = variantValue;
-        generate(current, index + 1);
-      }
-    }
-    generate({}, 0);
-    return result;
-  };
-  pick.compileAll = () => {
-    const allVariants = pick.getAllVariants();
-    const styles = [];
-    if (baseStyle)
-      styles.push(baseStyle);
-    for (const variantMap of Object.values(variants)) {
-      for (const variantStyle of Object.values(variantMap)) {
-        if (variantStyle)
-          styles.push(variantStyle);
-      }
-    }
-    for (const cv of compoundStyles) {
-      if (cv.style)
-        styles.push(cv.style);
-    }
-    if (atomicOptimizer && atomicOptimizer.options.enabled) {
-      const styleObj = {};
-      styles.forEach((style, i) => {
-        const selectors = style.selectors || [`variant-${i}`];
-        styleObj[selectors[0].replace(/^\./, "")] = style;
-      });
-      const result = atomicOptimizer.optimize(styleObj);
-      chain.cssOutput = (chain.cssOutput || "") + result.css;
-      chain.classMap = { ...chain.classMap, ...result.map };
-      return result.css;
-    }
-    return run(...styles);
-  };
-  return pick;
-}
+// src/core/compiler.ts
+init_btt();
 
 // src/compiler/atomic-optimizer.ts
 import crypto2 from "crypto";
@@ -25580,6 +25941,7 @@ export const classMap = {
     const componentExports = /* @__PURE__ */ new Map();
     const componentCSS = /* @__PURE__ */ new Map();
     let allCSS = "";
+    const allComponentInfo = [];
     for (const file of components) {
       const sourceDir = path3.dirname(file);
       const baseName = path3.basename(file, ".chain.js");
@@ -25609,6 +25971,18 @@ export const classMap = {
           compiledObj[`${baseName}_${name}`] = processedStyle;
           compile(compiledObj);
           componentCSSContent += chain.cssOutput + "\n";
+          if (styleDef._generateComponent) {
+            const componentName = styleDef._componentName || name;
+            const selector = styleDef.selectors?.[0] || `.${componentName.toLowerCase()}`;
+            allComponentInfo.push({
+              name: componentName,
+              selector,
+              styles: styleDef,
+              propsDefinition: styleDef._propsDefinition,
+              framework: styleDef._framework || "auto",
+              outputDir: stylesDir
+            });
+          }
         }
       }
       if (code && componentCSSContent) {
@@ -25626,6 +26000,33 @@ export const classMap = {
           console.log(`  \u2713 Generated: ${cssOutputPath}`);
         }
       }
+    }
+    if (allComponentInfo.length > 0) {
+      const { generateComponentCode: generateComponentCode2 } = await Promise.resolve().then(() => (init_btt(), btt_exports));
+      for (const componentInfo of allComponentInfo) {
+        try {
+          const componentCode = generateComponentCode2({
+            name: componentInfo.name,
+            selector: componentInfo.selector,
+            styles: componentInfo.styles,
+            propsDefinition: componentInfo.propsDefinition,
+            framework: componentInfo.framework
+          });
+          let ext = ".tsx";
+          if (componentInfo.framework === "vue")
+            ext = ".vue";
+          if (componentInfo.framework === "svelte")
+            ext = ".svelte";
+          const componentPath = path3.join(componentInfo.outputDir, `${componentInfo.name}${ext}`);
+          fs2.writeFileSync(componentPath, componentCode);
+          if (this.config.verbose) {
+            console.log(`  \u2713 Generated component: ${componentPath}`);
+          }
+        } catch (error) {
+          console.warn(`  \u26A0 Failed to generate component for ${componentInfo.name}:`, error);
+        }
+      }
+      console.log(`\u2713 Generated ${allComponentInfo.length} framework component(s)`);
     }
     const globalStylesDir = path3.join(process.cwd(), "src/global-style");
     if (!fs2.existsSync(globalStylesDir)) {

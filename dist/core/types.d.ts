@@ -8,6 +8,10 @@ export interface StyleDefinition {
     atRules?: AtRule[];
     nestedRules?: NestedRule[];
     themes?: ThemeBlock[];
+    _componentName?: string;
+    _generateComponent?: boolean;
+    _framework?: 'react' | 'vue' | 'svelte' | 'solid' | 'auto';
+    _propsDefinition?: Record<string, any>;
     [cssProperty: string]: any;
 }
 export interface AtRule {

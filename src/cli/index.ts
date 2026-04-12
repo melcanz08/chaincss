@@ -85,25 +85,21 @@ program
       }
       
       const config = `export default {
+  // Look for .chain.js files in src/styles folders
+  inputs: ['src/**/*.chain.js', 'src/**/styles/*.chain.js'],
+  
+  // Output class files next to source files (in the same folder)
+  output: 'src',
+  
+  // Where to put the combined global.css
+  globalOutput: 'src/global.css',
+  
+  verbose: true
   components: 'src/**/*.chain.js'
 };`;
-      writeFileSync(configPath, config);
-      
-      const exampleStyle = `import { $ } from 'chaincssv2';
-
-export const button = $
-  .display('inline-block')
-  .padding('8px 16px')
-  .backgroundColor('#667eea')
-  .color('white')
-  .borderRadius('8px')
-  .cursor('pointer')
-  .$el('.btn');
-`;
-      writeFileSync('src/styles/example.chain.js', exampleStyle);
+      writeFileSync(configPath, config); 
       
       console.log(chalk.green('✓ Created chaincss.config.js'));
-      console.log(chalk.green('✓ Created src/styles/example.chain.js'));
     } catch (error) {
       handleError(error, 'init');
     }

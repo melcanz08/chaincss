@@ -8,7 +8,7 @@
  */
 
 // Core runtime
-export { chainRuntime as $, compileRuntime as compile, runRuntime as run, styleInjector } from './injector.js';
+export { $, compileRuntime as compile, runRuntime as run, styleInjector } from './injector.js';
 
 // React hooks
 export {

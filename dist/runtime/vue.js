@@ -130,6 +130,60 @@ ${hoverStyles}}
   }
 };
 var styleInjector = new StyleInjector();
+function chainRuntime(useTokens = false) {
+  const catcher = {};
+  const handler = {
+    get: (target, prop) => {
+      if (prop === "$el") {
+        return (...selectors) => {
+          if (selectors.length === 0) {
+            const result2 = { ...catcher };
+            Object.keys(catcher).forEach((key) => delete catcher[key]);
+            return result2;
+          }
+          const result = {
+            selectors,
+            ...catcher
+          };
+          Object.keys(catcher).forEach((key) => delete catcher[key]);
+          return result;
+        };
+      }
+      if (prop === "hover") {
+        return () => {
+          const hoverCatcher = {};
+          const hoverHandler = {
+            get: (_, hoverProp) => {
+              if (hoverProp === "end") {
+                return () => {
+                  catcher.hover = { ...hoverCatcher };
+                  Object.keys(hoverCatcher).forEach((key) => delete hoverCatcher[key]);
+                  return proxy;
+                };
+              }
+              return (value) => {
+                hoverCatcher[hoverProp] = value;
+                return hoverProxy;
+              };
+            }
+          };
+          const hoverProxy = new Proxy({}, hoverHandler);
+          return hoverProxy;
+        };
+      }
+      if (prop === "end") {
+        return () => proxy;
+      }
+      return (value) => {
+        catcher[prop] = value;
+        return proxy;
+      };
+    }
+  };
+  const proxy = new Proxy({}, handler);
+  return proxy;
+}
+var $ = chainRuntime();
 function compileRuntime(styles) {
   return styleInjector.injectMultiple(styles);
 }

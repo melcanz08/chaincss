@@ -127,7 +127,7 @@ ${hoverStyles}}
   }
 };
 var styleInjector = new StyleInjector();
-function chainRuntime(useTokens = true) {
+function chainRuntime(useTokens = false) {
   const catcher = {};
   const handler = {
     get: (target, prop) => {
@@ -180,6 +180,7 @@ function chainRuntime(useTokens = true) {
   const proxy = new Proxy({}, handler);
   return proxy;
 }
+var $ = chainRuntime();
 function compileRuntime(styles) {
   return styleInjector.injectMultiple(styles);
 }
@@ -512,7 +513,7 @@ function createDebugger(module) {
   };
 }
 export {
-  chainRuntime as $,
+  $,
   ChainCSSGlobal,
   ChainCSSGlobal2 as ChainCSSGlobalVue,
   cn as cnUtils,

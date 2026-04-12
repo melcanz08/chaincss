@@ -23,6 +23,14 @@ export declare function getStyleChanges(): StyleChange[];
 export declare function getStyleDiff(snapshotId1: string, snapshotId2: string): Record<string, any>;
 export declare function exportTimeline(): string;
 export declare function clearTimeline(): void;
+interface ComponentInfo {
+    name: string;
+    selector: string;
+    styles: Record<string, any>;
+    propsDefinition?: Record<string, any>;
+    framework: 'react' | 'vue' | 'svelte' | 'solid' | 'auto';
+}
+export declare function generateComponentCode(info: ComponentInfo): string;
 export declare function setSourceComments(enabled: boolean): void;
 declare function calc(expression: string): string;
 declare function add(a: string | number, b: string | number): string;

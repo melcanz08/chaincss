@@ -183,7 +183,7 @@ class StyleInjector {
 export const styleInjector = new StyleInjector();
 
 // Core runtime functions
-export function chainRuntime(useTokens = true) {
+export function chainRuntime(useTokens = false) {
   const catcher: Record<string, any> = {};
   
   const handler: ProxyHandler<object> = {
@@ -242,6 +242,8 @@ export function chainRuntime(useTokens = true) {
   const proxy = new Proxy({}, handler);
   return proxy;
 }
+
+export const $ = chainRuntime();
 
 // Compile function for runtime
 export function compileRuntime(styles: Record<string, StyleDefinition>): Record<string, string> {
