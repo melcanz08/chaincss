@@ -29,12 +29,36 @@ export interface ChainCSSLoaderOptions {
      * @default false
      */
     verbose?: boolean;
+    /**
+     * Enable CSS extraction to separate file
+     * @default false
+     */
+    extractCSS?: boolean;
+    /**
+     * Enable Hot Module Replacement
+     * @default true in development
+     */
+    hmr?: boolean;
+    /**
+     * Custom cache key for compilation
+     */
+    cacheKey?: string;
+    /**
+     * Framework to generate components for
+     * @default 'auto'
+     */
+    framework?: 'react' | 'vue' | 'svelte' | 'solid' | 'auto';
 }
 interface LoaderContext {
     async: () => (err: Error | null, code?: string) => void;
     getOptions: () => ChainCSSLoaderOptions;
     resourcePath: string;
     context: string;
+    cacheable: (flag: boolean) => void;
+    addDependency: (file: string) => void;
+    emitFile: (name: string, content: string, sourceMap?: any) => void;
+    emitWarning: (warning: Error) => void;
+    emitError: (error: Error) => void;
 }
 /**
  * Webpack loader for ChainCSS
@@ -42,4 +66,3 @@ interface LoaderContext {
  */
 export default function chaincssLoader(this: LoaderContext, source: string): void;
 export {};
-//# sourceMappingURL=webpack.d.ts.map

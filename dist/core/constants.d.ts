@@ -2,6 +2,7 @@
  * ChainCSS Constants
  * Shared constants used across the codebase
  */
+import type { ChainCSSConfig } from './types.js';
 export declare const VERSION = "2.0.0";
 export declare const NEVER_ATOMIC_PROPERTIES: string[];
 export declare const ALWAYS_ATOMIC_PROPERTIES: string[];
@@ -12,7 +13,7 @@ export declare const DEFAULT_CLASS_MAP_FILENAME = "class-map.json";
 export declare const DEFAULT_TYPES_FILENAME = "classes.d.ts";
 export declare const DEFAULT_CACHE_PATH = "./.chaincss-cache";
 export declare const CACHE_VERSION = "2.0.0";
-export declare const DEFAULT_ATOMIC_THRESHOLD = 3;
+export declare const DEFAULT_ATOMIC_THRESHOLD = 2;
 export declare const MIN_ATOMIC_THRESHOLD = 2;
 export declare const MAX_ATOMIC_THRESHOLD = 10;
 export declare const NAMING_SCHEMES: readonly ["hash", "readable"];
@@ -46,6 +47,17 @@ export declare const PATTERNS: {
     TOKEN_REFERENCE: RegExp;
     HOVER_STATE: RegExp;
     PSEUDO_CLASS: RegExp;
+    CSS_VARIABLE: RegExp;
+    SHORTHAND_PROPERTY: RegExp;
+    URL_REFERENCE: RegExp;
+    IMPORT_STATEMENT: RegExp;
+    FONT_FACE: RegExp;
+    STYLE_OBJECT: RegExp;
+    CHAIN_METHOD: RegExp;
+    HEX_COLOR: RegExp;
+    RGB_COLOR: RegExp;
+    RGBA_COLOR: RegExp;
+    HSL_COLOR: RegExp;
 };
 export declare const ERROR_MESSAGES: {
     FILE_NOT_FOUND: (file: string) => string;
@@ -71,45 +83,130 @@ export declare const DEFAULT_BREAKPOINTS: {
     tablet: string;
     desktop: string;
 };
-export declare const DEFAULT_CONFIG: {
-    tokens: {
-        enabled: boolean;
-        prefix: string;
-    };
-    atomic: {
-        enabled: boolean;
-        threshold: number;
-        naming: string;
-        cache: boolean;
-        cachePath: string;
-        minify: boolean;
-        mode: string;
-        outputStrategy: string;
-        alwaysAtomic: string[];
-        neverAtomic: string[];
-        verbose: boolean;
-    };
-    prefixer: {
-        enabled: boolean;
-        mode: PrefixerMode;
-        browsers: string[];
-        sourceMap: boolean;
-        sourceMapInline: boolean;
-    };
-    output: {
-        cssFile: string;
-        classMapFile: string;
-        typesFile: string;
-        minify: boolean;
-        generateGlobalCSS: boolean;
-    };
-    debug: boolean;
-    sourceComments: boolean;
-    timeline: boolean;
-    framework: "auto";
-    namespace: string;
-    verbose: boolean;
+export declare const PERFORMANCE: {
+    readonly MAX_CONCURRENT_COMPILATIONS: 10;
+    readonly BATCH_SIZE: 20;
+    readonly CACHE_PRUNE_INTERVAL_MS: 3600000;
+    readonly CACHE_MAX_ENTRIES: 1000;
+    readonly MAX_MEMORY_USAGE_MB: 512;
+    readonly GC_THRESHOLD_MB: 400;
+    readonly COMPILE_TIMEOUT: 30000;
+    readonly FILE_WATCH_TIMEOUT: 5000;
+    readonly DEBOUNCE_WRITE_MS: 100;
+    readonly THROTTLE_COMPILE_MS: 50;
 };
+export declare const FRAMEWORK_CONFIGS: {
+    readonly react: {
+        readonly extension: ".jsx";
+        readonly componentTemplate: "React.FC";
+        readonly importReact: true;
+        readonly cssInJs: false;
+    };
+    readonly vue: {
+        readonly extension: ".vue";
+        readonly componentTemplate: "defineComponent";
+        readonly importReact: false;
+        readonly cssInJs: true;
+    };
+    readonly svelte: {
+        readonly extension: ".svelte";
+        readonly componentTemplate: "script";
+        readonly importReact: false;
+        readonly cssInJs: true;
+    };
+    readonly solid: {
+        readonly extension: ".jsx";
+        readonly componentTemplate: "Component";
+        readonly importReact: false;
+        readonly cssInJs: false;
+    };
+    readonly angular: {
+        readonly extension: ".ts";
+        readonly componentTemplate: "Component";
+        readonly importReact: false;
+        readonly cssInJs: true;
+    };
+};
+export type Framework = keyof typeof FRAMEWORK_CONFIGS;
+export declare const ENVIRONMENT_PRESETS: {
+    readonly development: {
+        readonly atomic: {
+            readonly naming: NamingScheme;
+            readonly minify: false;
+            readonly verbose: true;
+            readonly cache: true;
+        };
+        readonly output: {
+            readonly minify: false;
+            readonly sourceComments: true;
+        };
+        readonly debug: true;
+        readonly timeline: true;
+        readonly sourceComments: true;
+        readonly verbose: true;
+    };
+    readonly production: {
+        readonly atomic: {
+            readonly naming: NamingScheme;
+            readonly minify: true;
+            readonly verbose: false;
+            readonly cache: true;
+        };
+        readonly output: {
+            readonly minify: true;
+            readonly sourceComments: false;
+        };
+        readonly debug: false;
+        readonly timeline: false;
+        readonly sourceComments: false;
+        readonly verbose: false;
+    };
+    readonly test: {
+        readonly atomic: {
+            readonly naming: NamingScheme;
+            readonly minify: false;
+            readonly verbose: false;
+            readonly cache: false;
+        };
+        readonly output: {
+            readonly minify: false;
+            readonly sourceComments: true;
+        };
+        readonly debug: true;
+        readonly timeline: true;
+        readonly sourceComments: true;
+        readonly verbose: false;
+    };
+};
+export declare const VALIDATION: {
+    readonly MAX_SELECTOR_LENGTH: 100;
+    readonly MAX_STYLE_RULES: 10000;
+    readonly MAX_NESTING_DEPTH: 10;
+    readonly CLASS_NAME: {
+        readonly MIN_LENGTH: 1;
+        readonly MAX_LENGTH: 50;
+        readonly PATTERN: RegExp;
+        readonly RESERVED: readonly ["chain", "css", "style", "global", "atomic"];
+    };
+    readonly PROPERTY_VALUE: {
+        readonly MAX_LENGTH: 5000;
+        readonly ALLOWED_UNITS: readonly ["px", "rem", "em", "%", "vw", "vh", "deg", "rad", "ms", "s"];
+    };
+    readonly BREAKPOINT: {
+        readonly MIN_VALUE: 0;
+        readonly MAX_VALUE: 10000;
+        readonly ALLOWED_UNITS: readonly ["px", "rem", "em", "vw"];
+    };
+};
+export declare const MEMORY: {
+    readonly CACHE_PRUNE_SIZE: number;
+    readonly MAX_STRING_BUFFER: number;
+    readonly BATCH_SIZE: 100;
+    readonly CLEANUP_INTERVAL_MS: 300000;
+    readonly CACHE_CHECK_INTERVAL_MS: 60000;
+    readonly MEMORY_CHECK_INTERVAL_MS: 30000;
+};
+export declare const DEFAULT_CONFIG: ChainCSSConfig;
 export declare const RUNTIME: {
     STYLE_ID_PREFIX: string;
     CLASS_NAME_PREFIX: string;
@@ -126,4 +223,8 @@ export declare const PROD: {
     COMPRESSION_LEVEL: number;
     SOURCE_MAP_COMMENT: string;
 };
-//# sourceMappingURL=constants.d.ts.map
+export declare function isNamingScheme(value: unknown): value is NamingScheme;
+export declare function isAtomicMode(value: unknown): value is AtomicMode;
+export declare function isOutputStrategy(value: unknown): value is OutputStrategy;
+export declare function isPrefixerMode(value: unknown): value is PrefixerMode;
+export declare function isFramework(value: unknown): value is Framework;

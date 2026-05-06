@@ -14,4 +14,3 @@ export declare class Logger {
     progress(current: number, total: number, message: string): void;
 }
 export declare function createLogger(verbose?: boolean): Logger;
-//# sourceMappingURL=logger.d.ts.map

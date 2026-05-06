@@ -1,0 +1,18 @@
+// tsconfig.runtimes.json
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist/runtime",
+    "emitDeclarationOnly": true,
+    "noEmit": false,
+    "declaration": true,
+    "skipLibCheck": true,
+    "jsx": "preserve",
+    "types": ["vite/client", "svelte", "node"]
+  },
+  "include": [
+    "src/runtime/react.tsx",
+    "src/runtime/vue.ts", 
+    "src/runtime/svelte.ts"
+  ]
+}

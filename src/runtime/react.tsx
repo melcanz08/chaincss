@@ -1,78 +1,104 @@
-// chaincss/src/runtime/react.ts
+// src/runtime/react.tsx (fixed version)
 
-import React, { useMemo, useEffect, useRef, useState } from 'react';
-import { chainRuntime as $, compileRuntime, styleInjector } from './injector.js';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
+import { compileRuntime, setTokens as setGlobalTokens, removeRuntimeModule } from './injector.js';
+import { RuntimeChain } from './Chain.js';
 
 export interface UseChainStylesOptions {
   cache?: boolean;
   namespace?: string;
   watch?: boolean;
+  debug?: boolean;
+  ssr?: boolean;
 }
 
-const styleCache = new Map<string, Record<string, string>>();
+// Better hash function with lower collision risk
+function hashStyleObject(obj: Record<string, any>): string {
+  const str = JSON.stringify(obj);
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  return Math.abs(hash).toString(36);
+}
 
 /**
  * React hook for ChainCSS runtime styles
- * WARNING: This adds ~3.2KB to your bundle. For production, use build-time compilation.
  */
 export function useChainStyles(
-  styles: Record<string, any> | (() => Record<string, any>),
+  styles: Record<string, any>,
   deps: any[] = [],
   options: UseChainStylesOptions = {}
 ): Record<string, string> {
-  const { cache = true, namespace = 'chain', watch = false } = options;
-  const id = useRef(`chain-${Math.random().toString(36).substr(2, 9)}`);
-  const [classNames, setClassNames] = useState<Record<string, string>>({});
+  const { namespace = 'c', debug = false, ssr = false } = options;
+  const instanceId = useRef(Math.random().toString(36).substring(2, 7));
+  const moduleId = useRef(`chaincss-module-${instanceId.current}`);
+  const [forceUpdate, setForceUpdate] = useState(0);
 
-  const processed = useMemo(() => {
-    const resolvedStyles = typeof styles === 'function' ? styles() : styles;
-    
-    if (!resolvedStyles || Object.keys(resolvedStyles).length === 0) {
-      return { classNames: {}, css: '' };
-    }
-
-    const cacheKey = JSON.stringify(resolvedStyles);
-    if (cache && styleCache.has(cacheKey)) {
-      return { classNames: styleCache.get(cacheKey)!, css: '' };
-    }
-
-    const compiledStyles: Record<string, any> = {};
-    const newClassNames: Record<string, string> = {};
-
-    for (const [key, styleDef] of Object.entries(resolvedStyles)) {
-      const className = `${namespace}-${key}-${id.current}`;
-      const styleObj = typeof styleDef === 'function' ? styleDef() : styleDef;
-      
-      newClassNames[key] = className;
-      compiledStyles[`${key}_${id.current}`] = {
-        selectors: [`.${className}`],
-        ...styleObj
-      };
-    }
-
-    const result = compileRuntime(compiledStyles);
-    
-    if (cache) {
-      styleCache.set(cacheKey, result);
-    }
-    
-    return { classNames: result, css: '' };
-  }, [styles, namespace, id.current, ...deps]);
-
+  // Cleanup on unmount
   useEffect(() => {
-    setClassNames(processed.classNames);
-    
     return () => {
-      if (!watch) {
-        // Cleanup styles on unmount
-        for (const key of Object.keys(processed.classNames)) {
-          styleInjector.remove(`${namespace}-${key}-${id.current}`);
+      if (!ssr && moduleId.current) {
+        removeRuntimeModule(moduleId.current);
+        if (debug) {
+          console.log(`[ChainCSS] Cleaned up module: ${moduleId.current}`);
         }
       }
     };
-  }, [processed.classNames, watch]);
+  }, [ssr]);
 
-  return classNames;
+  return useMemo(() => {
+    const finalClassMap: Record<string, string> = {};
+    const injectionBundle: Record<string, any> = {};
+
+    for (const [key, styleDef] of Object.entries(styles)) {
+      let styleObject: Record<string, any> = {};
+      
+      if (styleDef && typeof (styleDef as any).$el === 'function') {
+        styleObject = (styleDef as any).$el();
+        if (debug) {
+          console.log(`[ChainCSS] Processing style: ${key}`, styleObject);
+        }
+      } else if (styleDef && typeof styleDef === 'object') {
+        styleObject = { ...styleDef };
+      }
+
+      // Remove internal keys
+      const staticClasses = Array.isArray(styleObject._classes) ? styleObject._classes : [];
+      const internalKeys = ['catcher', 'proxy', 'useTokens', 'componentName', '_isChain', '_classes', '_name'];
+      internalKeys.forEach(k => delete styleObject[k]);
+
+      // Generate stable hash
+      const hash = hashStyleObject(styleObject);
+      const dynamicClassName = `${namespace}-${key}-${hash}`;
+
+      // Check if there are actual styles
+      const hasStyles = Object.keys(styleObject).length > 0;
+      
+      if (!ssr && hasStyles) {
+        injectionBundle[dynamicClassName] = styleObject;
+      }
+
+      // Combine static and dynamic classes
+      const classParts = [...staticClasses];
+      if (hasStyles) {
+        classParts.push(dynamicClassName);
+      }
+      finalClassMap[key] = classParts.join(' ').trim();
+    }
+
+    // Inject all styles at once
+    if (!ssr && Object.keys(injectionBundle).length > 0) {
+      compileRuntime(injectionBundle, moduleId.current);
+      if (debug) {
+        console.log(`[ChainCSS] Injected ${Object.keys(injectionBundle).length} styles for module ${moduleId.current}`);
+      }
+    }
+
+    return finalClassMap;
+  }, [forceUpdate, ...deps]);
 }
 
 /**
@@ -99,45 +125,46 @@ export function useThemeChainStyles(
     if (typeof styles === 'function') return styles(theme);
     return styles;
   }, [styles, theme]);
-  return useChainStyles(themedStyles, [], options); // pass empty array for deps
+  return useChainStyles(themedStyles, [theme], options);
 }
 
 /**
  * Global style injection component
  */
-export function ChainCSSGlobal({ styles }: { styles: Record<string, any> }) {
-  useChainStyles(styles, [], { watch: true });
-  return null;
+export function ChainCSSGlobal({ styles, tokens, children }: { 
+  styles?: Record<string, any>; 
+  tokens?: any;
+  children?: React.ReactNode;
+}) {
+  if (tokens) {
+    setGlobalTokens(tokens);
+  }
+  
+  if (styles) {
+    useChainStyles(styles, [], { watch: true });
+  }
+  
+  return <>{children}</>;
 }
 
 /**
  * Class name utility (like clsx)
  */
-export function cx(...classes: (string | undefined | null | false)[]): string {
-  return classes.filter(Boolean).join(' ');
-}
-
-// Debug utilities
-let debugEnabled = false;
-
-export function enableChainCSSDebug(): void {
-  if (typeof window !== 'undefined') {
-    debugEnabled = true;
-    (window as any).__CHAINCSS_DEBUG__ = true;
-    console.log('🔍 ChainCSS Debug Mode Enabled');
+export function cx(...classes: (string | undefined | null | false | Record<string, boolean>)[]): string {
+  const result: string[] = [];
+  
+  for (const cls of classes) {
+    if (!cls) continue;
+    if (typeof cls === 'string') {
+      result.push(cls);
+    } else if (typeof cls === 'object') {
+      for (const [key, value] of Object.entries(cls)) {
+        if (value) result.push(key);
+      }
+    }
   }
-}
-
-export function disableChainCSSDebug(): void {
-  if (typeof window !== 'undefined') {
-    debugEnabled = false;
-    (window as any).__CHAINCSS_DEBUG__ = false;
-    console.log('🔍 ChainCSS Debug Mode Disabled');
-  }
-}
-
-export function isDebugEnabled(): boolean {
-  return debugEnabled || (typeof window !== 'undefined' && (window as any).__CHAINCSS_DEBUG__);
+  
+  return result.join(' ');
 }
 
 /**
@@ -148,11 +175,8 @@ export function withChainStyles<P extends object>(
   options?: UseChainStylesOptions
 ) {
   return function WrappedComponent(props: P & { chainStyles?: Record<string, string> }) {
-    const classNames = useChainStyles(
-      typeof styles === 'function' ? styles(props) : styles,
-      [],  // ← Add empty deps array
-      options
-    );
+    const styleProps = typeof styles === 'function' ? styles(props) : styles;
+    const classNames = useChainStyles(styleProps, [], options);
     const Component = (props as any).component || (props as any).wrappedComponent;
     return <Component {...props} chainStyles={classNames} />;
   };
@@ -160,18 +184,18 @@ export function withChainStyles<P extends object>(
 
 /**
  * Create a styled component (React)
- * Similar to .component() in build-time, but for runtime
  */
-export function createStyledComponent<T extends keyof JSX.IntrinsicElements = 'div'>(
+export function createStyledComponent<T extends keyof React.JSX.IntrinsicElements = "div">(
   elementType: T,
   styles: Record<string, any> | (() => Record<string, any>),
   options?: UseChainStylesOptions
 ): React.FC<React.ComponentProps<T> & { className?: string }> {
   const StyledComponent: React.FC<any> = (props) => {
     const { className: additionalClassName, ...rest } = props;
-    const classNames = useChainStyles(styles, [], options);
+    const styleDef = typeof styles === 'function' ? styles() : styles;
+    const classNames = useChainStyles({ root: styleDef }, [], options);
     
-    const combinedClassName = [classNames.root, additionalClassName].filter(Boolean).join(' ');
+    const combinedClassName = cx(classNames.root, additionalClassName);
     
     return React.createElement(elementType, {
       ...rest,
@@ -210,4 +234,36 @@ export function useComputedStyles<T extends Record<string, any>>(
 ): Record<string, string> {
   const computedStyles = useMemo(() => styles(props), [props, ...deps]);
   return useChainStyles(computedStyles, deps, options);
+}
+
+/**
+ * Set global tokens from React
+ */
+export function setTokens(tokens: any): void {
+  setGlobalTokens(tokens);
+}
+
+/**
+ * Debug utilities
+ */
+let debugEnabled = false;
+
+export function enableChainCSSDebug(): void {
+  debugEnabled = true;
+  if (typeof window !== 'undefined') {
+    (window as any).__CHAINCSS_DEBUG__ = true;
+    console.log('🔍 ChainCSS Debug Mode Enabled');
+  }
+}
+
+export function disableChainCSSDebug(): void {
+  debugEnabled = false;
+  if (typeof window !== 'undefined') {
+    (window as any).__CHAINCSS_DEBUG__ = false;
+    console.log('🔍 ChainCSS Debug Mode Disabled');
+  }
+}
+
+export function isDebugEnabled(): boolean {
+  return debugEnabled || (typeof window !== 'undefined' && (window as any).__CHAINCSS_DEBUG__);
 }

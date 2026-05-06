@@ -1,3 +1,4 @@
+// src/cli/utils/config-loader.ts
 /**
  * ChainCSS Configuration Loader
  * @module config-loader
@@ -7,53 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import { createLogger } from './logger.js';
 import type { ChainCSSConfig } from '../types.js';
-
-const DEFAULT_CONFIG: any = {
-  inputs: ['src/**/*.chain.js', 'src/**/*.chain.ts'],
-  tokens: {
-    enabled: true,
-    prefix: 'chain'
-  },
-  atomic: {
-    enabled: false,
-    threshold: 3,
-    naming: process.env.NODE_ENV === 'production' ? 'hash' : 'readable',
-    minify: true,
-    mode: 'hybrid',
-    outputStrategy: 'component-first',
-    verbose: false
-  },
-  prefixer: {
-    enabled: true,
-    mode: 'auto',
-    browsers: ['> 0.5%', 'last 2 versions', 'not dead'],
-    sourceMap: true
-  },
-  output: {
-    cssFile: 'styles.css',
-    classMapFile: 'class-map.json',
-    typesFile: 'classes.d.ts',
-    minify: true,
-    generateGlobalCSS: true
-  },
-  breakpoints: {
-    sm: '(max-width: 640px)',
-    md: '(min-width: 641px) and (max-width: 768px)',
-    lg: '(min-width: 769px) and (max-width: 1024px)',
-    xl: '(min-width: 1025px)',
-    '2xl': '(min-width: 1280px)',
-    mobile: '(max-width: 768px)',
-    tablet: '(min-width: 769px) and (max-width: 1024px)',
-    desktop: '(min-width: 1025px)',
-  },
-  debug: false,
-  sourceComments: true,
-  timeline: false,
-  framework: 'auto',
-  namespace: 'chain',
-  watch: false,
-  verbose: false
-};
+import { DEFAULT_CONFIG as CORE_DEFAULTS } from '../../core/constants.js';
 
 export async function loadConfig(configPath?: string): Promise<ChainCSSConfig> {
   const logger = createLogger(false);
@@ -72,23 +27,18 @@ export async function loadConfig(configPath?: string): Promise<ChainCSSConfig> {
       try {
         logger.debug(`Loading config from ${configFile}`);
         
-        if (configFile.endsWith('.json')) {
-          const content = fs.readFileSync(configFile, 'utf8');
-          const userConfig = JSON.parse(content);
-          return mergeConfig(DEFAULT_CONFIG, userConfig);
-        } else {
-          const configModule = await import(`file://${configFile}`);
-          const userConfig = configModule.default || configModule;
-          return mergeConfig(DEFAULT_CONFIG, userConfig);
-        }
+        const configModule = await import(`file://${configFile}`);
+        const userConfig = configModule.default || configModule;
+
+        // 2. MERGE WITH CORE DEFAULTS INSTEAD OF LOCAL DEFAULTS
+        return mergeConfig(CORE_DEFAULTS, userConfig);
       } catch (error) {
         logger.warn(`Failed to load config from ${configFile}:`, error);
       }
     }
   }
   
-  logger.debug('No config file found, using defaults');
-  return DEFAULT_CONFIG;
+  return CORE_DEFAULTS;
 }
 
 function mergeConfig(defaults: any, user: any): ChainCSSConfig {

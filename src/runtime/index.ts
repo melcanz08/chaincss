@@ -8,7 +8,8 @@
  */
 
 // Core runtime
-export { $, compileRuntime as compile, runRuntime as run, styleInjector } from './injector.js';
+export { compileRuntime as compile, runRuntime as run, styleInjector } from './injector.js';
+export { $, $t, chain, setManifest } from './Chain.js';
 
 // React hooks
 export {
@@ -35,6 +36,19 @@ export {
   provideStyleContext,
   injectStyleContext
 } from './vue.js';
+
+// Svelte
+export {
+  useAtomicClasses as useAtomicClassesSvelte,
+  cx as cxSvelte,
+  ChainCSSGlobal as ChainCSSGlobalSvelte,
+  createStyledComponent as createStyledSvelteComponent,
+  createStyledComponents as createStyledSvelteComponents,
+  useComputedStyles as useComputedStylesSvelte,
+  provideStyleContext as provideStyleContextSvelte,
+  injectStyleContext as injectStyleContextSvelte,
+  chainStyles
+} from './svelte.js';
 
 // HMR
 export { setupHMR, registerForHMR } from './hmr.js';

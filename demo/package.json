@@ -1,0 +1,20 @@
+{
+  "name": "chaincss-demo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "autoprefixer": "^10.5.0",
+    "browserslist": "^4.28.2",
+    "caniuse-lite": "^1.0.30001791",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.0.0",
+    "vite": "^5.0.0"
+  }
+}

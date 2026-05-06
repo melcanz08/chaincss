@@ -1,10 +1,10 @@
+// src/cli/index.ts
 import { Command } from 'commander';
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import { glob } from 'glob';
 import chalk from 'chalk';
-
 import { loadConfig } from './utils/config-loader.js';
 
 // ============================================================================
@@ -68,16 +68,15 @@ const handleError = (error: unknown, command: string): void => {
 // Init Command
 // ============================================================================
 
+// ============================================================================
+// Init Command (Generates the NEW Object-based config)
+// ============================================================================
 program
   .command('init')
   .description('Initialize ChainCSS configuration file')
   .option('-f, --force', 'Overwrite existing config file')
-  .option('-v, --verbose', 'Verbose output')
   .action(async (options) => {
     try {
-      if (!existsSync('src')) mkdirSync('src', { recursive: true });
-      if (!existsSync('src/styles')) mkdirSync('src/styles', { recursive: true });
-      
       const configPath = 'chaincss.config.js';
       if (existsSync(configPath) && !options.force) {
         console.log(chalk.yellow('Config file already exists. Use --force to overwrite.'));
@@ -85,21 +84,22 @@ program
       }
       
       const config = `export default {
-  // Look for .chain.js files in src/styles folders
-  inputs: ['src/**/*.chain.js', 'src/**/styles/*.chain.js'],
-  
-  // Output class files next to source files (in the same folder)
-  output: 'src',
-  
-  // Where to put the combined global.css
-  globalOutput: 'src/global.css',
-  
+  inputs: ['src/**/*.chain.{js,ts}', 'src/**/*.tsx'],
+  output: {
+    cssFile: 'global.css',
+    classMapFile: 'style',
+    minify: false,
+    generateGlobalCSS: true
+  },
+  atomic: {
+    enabled: true,
+    naming: 'hash',
+    mode: 'hybrid'
+  },
   verbose: true
-  components: 'src/**/*.chain.js'
 };`;
       writeFileSync(configPath, config); 
-      
-      console.log(chalk.green('✓ Created chaincss.config.js'));
+      console.log(chalk.green('✓ Created chaincss.config.js with Object-based output.'));
     } catch (error) {
       handleError(error, 'init');
     }
@@ -108,49 +108,28 @@ program
 // ============================================================================
 // Build Command
 // ============================================================================
-
 program
   .command('build')
-  .description('Build all styles from configuration')
-  .option('-c, --components <pattern>', 'Components pattern (glob)')
   .option('-v, --verbose', 'Verbose output')
-  .option('-t, --timeline', 'Enable style timeline tracking')
   .action(async (opts) => {
     try {
-      // Load config from chaincss.config.js
       const config = await loadConfig();
+      const compiler = await getCompiler(config);
       
-      const { ChainCSSCompiler } = await import('../core/compiler.js');
-      // Update this line to pass the FULL config
-      const compiler = new ChainCSSCompiler({
-        tokens: config.tokens,
-        atomic: config.atomic,
-        prefixer: config.prefixer,
-        breakpoints: (config as any).breakpoints,  // ← Add 'as any' here
-        verbose: opts.verbose || config.verbose
-      });
+      console.log(chalk.blue('🚀 Starting ChainCSS Build...'));
+
+      const patterns = config.inputs || ['src/**/*.chain.{js,ts}', 'src/**/*.tsx'];
+      const files = await glob(patterns);
       
-      let components: string[] = [];
-      if (opts.components) {
-        components = await glob(opts.components, {
-          ignore: ['**/node_modules/**', '**/dist/**']
-        });
-        console.log(chalk.blue(`Found ${components.length} component(s):`));
-        components.forEach(c => console.log(`  - ${c}`));
-      } else if (config.inputs) {
-        // Use inputs from config if no -c flag
-        for (const pattern of config.inputs) {
-          const matches = await glob(pattern, {
-            ignore: ['**/node_modules/**', '**/dist/**']
-          });
-          components.push(...matches);
-        }
-        console.log(chalk.blue(`Found ${components.length} component(s) from config:`));
-        components.forEach(c => console.log(`  - ${c}`));
-      }
-      
-      await compiler.compileComponents(components);
-      console.log(chalk.green('✅ Build complete'));
+      // The compiler handles the logic we wrote earlier:
+      // 1. Component CSS in src/components/<Name>/style/
+      // 2. Global CSS in public/
+      // 3. Manifest in src/manifest/
+      await compiler.compileComponents(files);
+
+      const stats = compiler.getStats();
+      console.log(chalk.green(`\n✅ Build Complete!`));
+      console.log(chalk.cyan(`📊 Atomic Rules: ${stats.atomicStyles}`));
     } catch (error) {
       handleError(error, 'build');
     }
@@ -159,71 +138,24 @@ program
 // ============================================================================
 // Watch Command
 // ============================================================================
-
 program
   .command('watch')
-  .description('Watch and automatically recompile styles on changes')
-  .option('-c, --components <pattern>', 'Components pattern (glob)')
-  .option('-v, --verbose', 'Verbose output')
-  .action(async (opts) => {
+  .description('Watch and automatically recompile styles')
+  .action(async () => {
     try {
-      console.log(chalk.blue('👀 ChainCSS Watch Mode\n'));
       const config = await loadConfig();
-      
+      const compiler = await getCompiler(config);
       const chokidar = await import('chokidar');
-      const compiler = await getCompiler({
-        tokens: config.tokens,
-        atomic: config.atomic,
-        prefixer: config.prefixer,
-        breakpoints: (config as any).breakpoints,
-        verbose: opts.verbose || config.verbose
-      });
       
-      let components: string[] = [];
-      if (opts.components) {
-        components = await glob(opts.components, {
-          ignore: ['**/node_modules/**', '**/dist/**']
-        });
-        console.log(`Found ${components.length} component(s):`);
-        components.forEach(c => console.log(`  - ${c}`));
-      } else if (config.inputs) {
-        for (const pattern of config.inputs) {
-          const matches = await glob(pattern, {
-            ignore: ['**/node_modules/**', '**/dist/**']
-          });
-          components.push(...matches);
-        }
-        console.log(`Found ${components.length} component(s) from config:`);
-        components.forEach(c => console.log(`  - ${c}`));
-      }
-      
-      // Initial build
-      await compiler.compileComponents(components);
-      console.log(chalk.green('\n✓ Initial build complete'));
-      console.log(chalk.blue('\n📡 Watching for changes...\n'));
-      
-      // Watch for changes
-      const watcher = chokidar.watch(opts.components || config.inputs || 'src/**/*.chain.js', {
-        ignored: ['**/node_modules/**', '**/dist/**'],
-        persistent: true
-      });
-      
-      let debounceTimer: NodeJS.Timeout;
-      
-      watcher.on('change', async (filePath: string) => {
-        console.log(chalk.yellow(`📝 Changed: ${filePath}`));
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(async () => {
-          console.log(chalk.blue('🔄 Rebuilding...'));
-          await compiler.compileComponents(components);
-          console.log(chalk.green('✅ Rebuild complete\n'));
-        }, 100);
-      });
-      
-      process.on('SIGINT', () => {
-        console.log(chalk.blue('\n👋 Stopping watch mode...'));
-        watcher.close();
-        process.exit(0);
+      const patterns = config.inputs || ['src/**/*.chain.{js,ts}', 'src/**/*.tsx'];
+      const watcher = chokidar.watch(patterns, { ignored: '**/node_modules/**' });
+
+      console.log(chalk.blue('📡 Watching for changes...'));
+
+      watcher.on('change', async (filePath) => {
+        console.log(chalk.yellow(`\r🔄 Change detected: ${path.basename(filePath)}`));
+        const files = await glob(patterns);
+        await compiler.compileComponents(files);
       });
     } catch (error) {
       handleError(error, 'watch');
@@ -239,7 +171,7 @@ program
   .description('Manage style timeline')
   .argument('<action>', 'Action: list, diff, export, clear')
   .option('-s, --snapshot1 <id>', 'First snapshot ID or selector for diff')
-  .option('-s2, --snapshot2 <id>', 'Second snapshot ID or selector for diff')
+  .option('--snapshot2 <id>', 'Second snapshot ID or selector for diff')
   .option('-o, --output <path>', 'Output file for export')
   .action(async (action, options) => {
     const { timelineCommand } = await import('./commands/timeline.js');
@@ -268,6 +200,20 @@ program.on('--help', () => {
 });
 
 // ============================================================================
+// Cache
+// ============================================================================
+
+program
+  .command('cache')
+  .description('Manage persistent cache')
+  .argument('<action>', 'Action: clear, stats, prune')
+  .option('-v, --verbose', 'Verbose output')
+  .action(async (action, options) => {
+    const { cacheCommand } = await import('./commands/cache.js');
+    await cacheCommand(action, options);
+  });
+
+// ============================================================================
 // Parse Arguments
 // ============================================================================
 
@@ -277,3 +223,4 @@ if (process.argv.length === 2) {
 }
 
 program.parse(process.argv);
+

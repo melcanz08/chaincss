@@ -1,8 +1,11 @@
 export interface AtomicClass {
     className: string;
     prop: string;
-    value: string;
+    value: any;
     usageCount: number;
+    rules?: string;
+    createdAt?: number;
+    hash?: string;
 }
 export interface AtomicOptimizerStats {
     totalStyles: number;
@@ -10,6 +13,7 @@ export interface AtomicOptimizerStats {
     standardStyles: number;
     uniqueProperties: number;
     savings: string;
+    cacheHitRate?: number;
 }
 export interface AtomicOptimizerOptions {
     enabled?: boolean;
@@ -34,6 +38,7 @@ export interface ComponentClassMapEntry {
     atomicClasses: string[];
     hoverAtomicClasses: string[];
     selectors: string[];
+    componentClassName?: string;
 }
 export interface OptimizeResult {
     css: string;
@@ -44,9 +49,11 @@ export interface OptimizeResult {
     componentMap?: Map<string, ComponentClassMapEntry>;
 }
 export declare class AtomicOptimizer {
+    private config;
     options: Required<AtomicOptimizerOptions>;
-    usageCount: Map<string, number>;
-    atomicClasses: Map<string, AtomicClass>;
+    private usageCount;
+    private atomicClasses;
+    atomicMap: Record<string, string>;
     componentClassMap: Map<string, ComponentClassMapEntry>;
     stats: {
         totalStyles: number;
@@ -54,23 +61,51 @@ export declare class AtomicOptimizer {
         standardStyles: number;
         uniqueProperties: number;
         savings: number;
+        cacheHits: number;
+        cacheMisses: number;
     };
-    constructor(options?: AtomicOptimizerOptions);
+    constructor(config: any);
+    componentMap: Map<string, ComponentClassMapEntry>;
+    /**
+     * Get usage count for a specific property-value pair
+     */
+    getUsageCount(prop: string, value: string, context?: string): number;
+    /**
+     * Increment usage count for a specific property-value pair
+     */
+    incrementUsageCount(prop: string, value: string, context?: string): void;
+    /**
+     * Get the usage count map for debugging
+     */
+    getUsageCountMap(): Map<string, number>;
     private loadCache;
     private saveCache;
-    private trackStyles;
+    trackStyles(styles: any[]): void;
+    process(styleChain: string): void;
+    private processStyleObject;
+    private generateClassName;
     private incrementUsage;
     private shouldBeAtomic;
-    private generateClassName;
     private getOrCreateAtomic;
-    private getKeyFromClassName;
-    private generateAtomicCSS;
-    private generateComponentCSS;
-    optimize(stylesInput: any[] | Record<string, any>): OptimizeResult;
+    getKeyFromClassName(className: string): string | null;
+    generateAtomicCSS(): string;
+    generateComponentCSS(style: any, selectors: string[], context?: string): {
+        css: string;
+        atomicClasses: string[];
+    };
+    /**
+     * Generate a clean component name without any prefixes
+     */
+    private getCleanComponentName;
+    private generatePseudoCSS;
+    optimize(styles: Record<string, any>): OptimizeResult;
+    private processPseudoState;
+    reset(): void;
     getStats(): AtomicOptimizerStats;
-    getAtomicClass(prop: string, value: string): string | null;
+    getAtomicClass(prop: string, value: string, context?: string): string | null;
     getAllAtomicClasses(): AtomicClass[];
     clearCache(): void;
+    getComponentMapEntry(name: string): ComponentClassMapEntry | undefined;
+    getAtomicMap(): Record<string, string>;
 }
 export { AtomicOptimizer as default };
-//# sourceMappingURL=atomic-optimizer.d.ts.map

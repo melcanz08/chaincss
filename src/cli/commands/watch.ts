@@ -1,6 +1,8 @@
-// chaincss/src/cli/commands/watch.ts
+// src/cli/commands/watch.ts (with fixes for logger)
 
 import path from 'path';
+import chalk from 'chalk';
+import fs from 'fs';
 import { ChainCSSCompiler } from '../../core/compiler.js';
 import { createLogger } from '../utils/logger.js';
 import { loadConfig } from '../utils/config-loader.js';
@@ -16,44 +18,54 @@ export async function watchCommand(options: WatchOptions): Promise<void> {
   
   logger.header('ChainCSS Watch Mode');
   
-  // Load configuration - ADD AWAIT HERE
+  // Load configuration
   const config = await loadConfig(options.config);
-  const inputs = config.inputs || [];
-  const outputDir = config.output || 'dist/styles';
+  const inputs = config.inputs || ['src/**/*.chain.{js,ts}', 'src/**/*.chain.{jsx,tsx}'];
+  
+  // Determine output directory
+  let outputDir = 'dist/styles';
+  if (typeof config.output === 'object' && config.output.cssFile) {
+    outputDir = path.dirname(config.output.cssFile);
+  } else if (typeof config.output === 'string') {
+    outputDir = config.output;
+  }
   
   if (inputs.length === 0) {
     logger.error('No input patterns found in configuration');
     process.exit(1);
   }
   
-  logger.step(`Watching files matching: ${inputs.join(', ')}`);
+  logger.info(`Watching files matching: ${inputs.join(', ')}`);
   
   // Find initial files
   const initialFiles = findInputFiles(inputs);
-  logger.info(`Found ${initialFiles.length} file(s) to watch`);
+  logger.success(`Found ${initialFiles.length} file(s) to watch`);
   
   // Ensure output directory exists
   ensureDirectory(outputDir);
   
-  // Initialize compiler - ADD TOKEN SUPPORT
+  // Initialize compiler
   const compiler = new ChainCSSCompiler({
     tokens: config.tokens,
     atomic: {
       enabled: config.atomic?.enabled !== false,
-      threshold: config.atomic?.threshold || 3,
-      naming: config.atomic?.naming || 'hash',
+      threshold: config.atomic?.threshold || 2,
+      naming: config.atomic?.naming || (process.env.NODE_ENV === 'production' ? 'hash' : 'readable'),
       minify: config.atomic?.minify !== false,
       mode: config.atomic?.mode || 'hybrid',
-      verbose: options.verbose || config.verbose
+      verbose: options.verbose || config.verbose || false
     },
     prefixer: {
       enabled: config.prefixer?.enabled !== false,
       browsers: config.prefixer?.browsers
     },
     output: {
-      minify: config.atomic?.minify !== false
+      minify: config.output?.minify !== false
     },
-    verbose: options.verbose || config.verbose
+    verbose: options.verbose || config.verbose || false,
+    breakpoints: config.breakpoints,
+    debug: config.debug || false,
+    timeline: config.timeline || false
   });
   
   // Initial compilation
@@ -66,11 +78,10 @@ export async function watchCommand(options: WatchOptions): Promise<void> {
     logger.progress(i + 1, initialFiles.length, `Compiling ${relativePath}...`);
     
     try {
-      const outputPath = getOutputPath(file, outputDir);
-      await compiler.compile(file, outputPath);
+      await compiler.compile(file, outputDir);
       compiledCount++;
     } catch (error) {
-      logger.error(`Failed to compile ${relativePath}:`, error);
+      logger.error(`Failed to compile ${relativePath}: ${(error as Error).message}`);
     }
   }
   
@@ -79,8 +90,7 @@ export async function watchCommand(options: WatchOptions): Promise<void> {
   
   // Setup file watcher
   logger.divider();
-  logger.info(`👀 Watching for changes... (press Ctrl+C to stop)`);
-  logger.info('');
+  logger.info(`👀 Watching for changes... (press Ctrl+C to stop)\n`);
   
   const chokidar = await import('chokidar');
   const debounceDelay = options.debounce || 100;
@@ -114,12 +124,11 @@ export async function watchCommand(options: WatchOptions): Promise<void> {
       for (const file of filesToCompile) {
         const relativePath = path.relative(process.cwd(), file);
         try {
-          const outputPath = getOutputPath(file, outputDir);
-          await compiler.compile(file, outputPath);
+          await compiler.compile(file, outputDir);
           logger.success(`  ✓ ${relativePath}`);
           successCount++;
         } catch (error) {
-          logger.error(`  ✗ ${relativePath}:`, error instanceof Error ? error.message : error);
+          logger.error(`  ✗ ${relativePath}: ${(error as Error).message}`);
           failCount++;
         }
       }
@@ -137,9 +146,12 @@ export async function watchCommand(options: WatchOptions): Promise<void> {
   
   // Handle file changes
   watcher.on('change', (filePath: string) => {
-    if (filePath.endsWith('.chain.js') || filePath.endsWith('.chain.ts')) {
+    const ext = path.extname(filePath);
+    if (ext === '.js' || ext === '.ts' || ext === '.jsx' || ext === '.tsx') {
       const relativePath = path.relative(process.cwd(), filePath);
-      logger.debug(`File changed: ${relativePath}`);
+      if (options.verbose) {
+        logger.info(`File changed: ${relativePath}`);
+      }
       pendingFiles.add(filePath);
       scheduleRecompile();
     }
@@ -147,7 +159,8 @@ export async function watchCommand(options: WatchOptions): Promise<void> {
   
   // Handle new files
   watcher.on('add', (filePath: string) => {
-    if (filePath.endsWith('.chain.js') || filePath.endsWith('.chain.ts')) {
+    const ext = path.extname(filePath);
+    if (ext === '.js' || ext === '.ts' || ext === '.jsx' || ext === '.tsx') {
       const relativePath = path.relative(process.cwd(), filePath);
       logger.info(`📄 New file detected: ${relativePath}`);
       pendingFiles.add(filePath);
@@ -157,34 +170,32 @@ export async function watchCommand(options: WatchOptions): Promise<void> {
   
   // Handle deleted files
   watcher.on('unlink', (filePath: string) => {
-    if (filePath.endsWith('.chain.js') || filePath.endsWith('.chain.ts')) {
+    const ext = path.extname(filePath);
+    if (ext === '.js' || ext === '.ts' || ext === '.jsx' || ext === '.tsx') {
       const relativePath = path.relative(process.cwd(), filePath);
       logger.warn(`🗑️ File deleted: ${relativePath}`);
       
       // Remove corresponding output files
-      const outputPath = getOutputPath(filePath, outputDir);
-      const fs = require('fs');
-      const cssFile = `${outputPath}.css`;
-      const jsFile = `${outputPath}.js`;
-      const dtsFile = `${outputPath}.d.ts`;
+      const baseName = path.basename(filePath, ext);
+      const outputBase = path.join(outputDir, baseName);
+      const cssFile = `${outputBase}.css`;
+      const classFile = `${outputBase}.class.js`;
       
       if (fs.existsSync(cssFile)) fs.unlinkSync(cssFile);
-      if (fs.existsSync(jsFile)) fs.unlinkSync(jsFile);
-      if (fs.existsSync(dtsFile)) fs.unlinkSync(dtsFile);
+      if (fs.existsSync(classFile)) fs.unlinkSync(classFile);
       
-      logger.debug(`  Removed output files for ${relativePath}`);
+      logger.info(`  Removed output files for ${relativePath}`);
     }
   });
   
   // Handle watcher errors
-  watcher.on('error', (error: Error) => {
-    logger.error('Watcher error:', error.message);
+  watcher.on('error', (error: unknown) => {
+    logger.error(`Watcher error: ${error instanceof Error ? error.message : String(error)}`);
   });
   
   // Handle process termination
   const cleanup = () => {
-    logger.info('');
-    logger.info('👋 Shutting down watcher...');
+    logger.info('\n👋 Shutting down watcher...');
     watcher.close();
     if (debounceTimer) {
       clearTimeout(debounceTimer);

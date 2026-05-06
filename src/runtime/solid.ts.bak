@@ -1,0 +1,381 @@
+// src/runtime/solid.ts
+
+/**
+ * ChainCSS Runtime for SolidJS
+ * 
+ * Provides hooks and utilities for using ChainCSS with SolidJS.
+ * Supports both runtime style injection and hybrid atomic CSS mode.
+ */
+
+import { createSignal, createMemo, onCleanup, useContext, createContext, useContextProvider, type Accessor, type Setter, type JSX, type Component, children as childrenHelper } from 'solid-js';
+import { compileRuntime, styleInjector, removeRuntimeModule } from './injector.js';
+import { setManifest as setGlobalManifest, setTokens as setGlobalTokens } from './Chain.js';
+
+// Context keys
+const ChainCSSContext = createContext<ChainCSSContextValue>({});
+
+interface ChainCSSContextValue {
+  manifest?: Accessor<Record<string, string>>;
+  tokens?: Accessor<Record<string, any>>;
+  setTokens?: (tokens: Record<string, any>) => void;
+}
+
+export interface UseAtomicClassesOptions {
+  debug?: boolean;
+  moduleId?: string;
+}
+
+export interface AtomicClassesReturn {
+  classes: Accessor<Record<string, string>>;
+  cx: (...names: string[]) => string;
+  inject: (styles: Record<string, any>) => void;
+}
+
+/**
+ * Generate a unique module ID
+ */
+function generateModuleId(): string {
+  return `chaincss-solid-${Math.random().toString(36).substring(2, 11)}-${Date.now()}`;
+}
+
+/**
+ * SolidJS hook for atomic classes
+ */
+export function useAtomicClasses(
+  styles: Record<string, any> | Accessor<Record<string, any>>,
+  options: UseAtomicClassesOptions = {}
+): AtomicClassesReturn {
+  const { debug = false, moduleId = generateModuleId() } = options;
+  
+  const [classMap, setClassMap] = createSignal<Record<string, string>>({});
+  
+  // Process styles and compile
+  const processStyles = (sourceStyles: Record<string, any>) => {
+    const finalClassMap: Record<string, string> = {};
+    const injectionBundle: Record<string, any> = {};
+    
+    for (const [key, styleDef] of Object.entries(sourceStyles)) {
+      // Extract static classes from the style definition
+      const staticClasses = (styleDef as any)?._classes || [];
+      const dynamicStyles = { ...styleDef };
+      delete dynamicStyles._classes;
+      delete dynamicStyles._name;
+      
+      // Check if there are dynamic styles to inject
+      if (Object.keys(dynamicStyles).length > 0) {
+        injectionBundle[key] = dynamicStyles;
+        finalClassMap[key] = staticClasses.join(' ');
+      } else {
+        finalClassMap[key] = staticClasses.join(' ');
+      }
+    }
+    
+    // Inject dynamic styles if any
+    if (Object.keys(injectionBundle).length > 0) {
+      const dynamicMap = compileRuntime(injectionBundle, moduleId);
+      
+      // Merge static and dynamic classes
+      for (const [key, dynamicClass] of Object.entries(dynamicMap)) {
+        const staticPart = finalClassMap[key] || '';
+        finalClassMap[key] = [staticPart, dynamicClass].filter(Boolean).join(' ');
+      }
+    }
+    
+    setClassMap(finalClassMap);
+    
+    if (debug) {
+      console.log('[ChainCSS Solid] Processed styles:', finalClassMap);
+    }
+    
+    return finalClassMap;
+  };
+  
+  // Create reactive computation
+  createMemo(() => {
+    const sourceStyles = typeof styles === 'function' ? styles() : styles;
+    if (sourceStyles) {
+      return processStyles(sourceStyles);
+    }
+    return {};
+  });
+  
+  // Cleanup on component unmount
+  onCleanup(() => {
+    removeRuntimeModule(moduleId);
+    if (debug) {
+      console.log(`[ChainCSS Solid] Cleaned up module: ${moduleId}`);
+    }
+  });
+  
+  return {
+    classes: classMap,
+    cx: (...names: string[]) => {
+      const currentMap = classMap();
+      return names.map(name => currentMap[name] || '').filter(Boolean).join(' ');
+    },
+    inject: (styles: Record<string, any>) => {
+      const injectedId = `injected-${Date.now()}`;
+      compileRuntime(styles, injectedId);
+      if (debug) {
+        console.log(`[ChainCSS Solid] Injected additional styles: ${injectedId}`);
+      }
+    }
+  };
+}
+
+/**
+ * Create a styled component in SolidJS
+ */
+export function styled<T extends keyof JSX.IntrinsicElements>(
+  tag: T,
+  styles: Record<string, any> | Accessor<Record<string, any>> | (() => Record<string, any>)
+): Component<JSX.IntrinsicElements[T] & { class?: string }> {
+  const StyledComponent: Component<JSX.IntrinsicElements[T] & { class?: string }> = (props) => {
+    const resolvedStyles = typeof styles === 'function' ? styles() : styles;
+    const { classes } = useAtomicClasses({ root: resolvedStyles });
+    
+    const combinedClass = () => {
+      const rootClass = classes().root || '';
+      return [rootClass, props.class].filter(Boolean).join(' ');
+    };
+    
+    // Create element using Solid's dynamic element creation
+    const Tag = tag as string;
+    const elementProps = { ...props, class: combinedClass() };
+    
+    // Use Solid's createElement directly
+    return (Fragment as any)({
+      children: (() => {
+        const el = document.createElement(Tag);
+        Object.entries(elementProps).forEach(([k, v]) => {
+          if (k === 'children') return;
+          if (k === 'class') {
+            el.className = v as string;
+          } else if (k.startsWith('on') && typeof v === 'function') {
+            const eventName = k.slice(2).toLowerCase();
+            el.addEventListener(eventName, v);
+          } else {
+            el.setAttribute(k, String(v));
+          }
+        });
+        if (props.children) {
+          const childNodes = childrenHelper(() => props.children as any)();
+          if (Array.isArray(childNodes)) {
+            childNodes.forEach(node => el.appendChild(node as Node));
+          } else if (childNodes) {
+            el.appendChild(childNodes as Node);
+          }
+        }
+        return el;
+      })()
+    });
+  };
+  
+  StyledComponent.displayName = `ChainCSS.${String(tag)}`;
+  return StyledComponent;
+}
+
+// Simple Fragment component for Solid
+const Fragment: Component<{ children?: any }> = (props) => {
+  return props.children;
+};
+
+/**
+ * Create multiple styled components at once
+ */
+export function createStyledComponents<T extends Record<string, any>>(
+  components: T
+): {
+  [K in keyof T]: Component<any>
+} {
+  const result = {} as any;
+  
+  for (const [name, config] of Object.entries(components)) {
+    const { element = 'div', styles } = config as any;
+    result[name] = styled(element, styles);
+  }
+  
+  return result;
+}
+
+/**
+ * CSS-in-JS hook with computed styles based on props
+ */
+export function useComputedStyles<T extends Record<string, any>>(
+  styleFactory: (props: T) => Record<string, any>,
+  props: Accessor<T>
+): {
+  classes: Accessor<Record<string, string>>;
+  rootClass: Accessor<string>;
+} {
+  const computedStyles = createMemo(() => ({
+    root: styleFactory(props())
+  }));
+  
+  const { classes } = useAtomicClasses(computedStyles);
+  
+  return {
+    classes,
+    rootClass: () => classes().root || ''
+  };
+}
+
+/**
+ * Dynamic styles hook - re-runs when dependencies change
+ */
+export function useDynamicStyles<T extends Record<string, any>>(
+  styleFactory: () => Record<string, any>,
+  deps: Accessor<any[]>
+): AtomicClassesReturn {
+  const computedStyles = createMemo(() => {
+    // Run the factory to generate fresh styles
+    return styleFactory();
+  }, deps());
+  
+  return useAtomicClasses(computedStyles);
+}
+
+/**
+ * Theme provider component
+ */
+export interface ChainCSSProviderProps {
+  manifest?: Record<string, string>;
+  tokens?: Record<string, any>;
+  children?: JSX.Element;
+}
+
+export const ChainCSSProvider: Component<ChainCSSProviderProps> = (props) => {
+  if (props.manifest) {
+    setGlobalManifest(props.manifest);
+  }
+  
+  if (props.tokens) {
+    setGlobalTokens(props.tokens);
+  }
+  
+  const contextValue: ChainCSSContextValue = {
+    manifest: () => (props.manifest || {}),
+    tokens: () => (props.tokens || {}),
+    setTokens: (tokens: Record<string, any>) => setGlobalTokens(tokens)
+  };
+  
+  useContextProvider(ChainCSSContext, contextValue);
+  
+  return props.children;
+};
+
+/**
+ * Hook to access ChainCSS context
+ */
+export function useChainCSSContext(): ChainCSSContextValue {
+  return useContext(ChainCSSContext);
+}
+
+/**
+ * Set global manifest (for build mode)
+ */
+export function setManifest(manifest: Record<string, string>): void {
+  setGlobalManifest(manifest);
+}
+
+/**
+ * Set global tokens
+ */
+export function setTokens(tokens: Record<string, any>): void {
+  setGlobalTokens(tokens);
+}
+
+/**
+ * Class name utility (like clsx)
+ */
+export function cx(...classes: (string | undefined | null | false | Record<string, boolean>)[]): string {
+  const result: string[] = [];
+  
+  for (const cls of classes) {
+    if (!cls) continue;
+    if (typeof cls === 'string') {
+      result.push(cls);
+    } else if (typeof cls === 'object') {
+      for (const [key, value] of Object.entries(cls)) {
+        if (value) result.push(key);
+      }
+    }
+  }
+  
+  return result.join(' ');
+}
+
+/**
+ * Higher-order component for class components
+ */
+export function withChainStyles<P extends object>(
+  styles: Record<string, any> | ((props: P) => Record<string, any>)
+): Component<P & { chainStyles?: Record<string, string> }> {
+  return (props: P & { chainStyles?: Record<string, string> }) => {
+    const styleProps = typeof styles === 'function' ? styles(props) : styles;
+    const { classes } = useAtomicClasses(styleProps);
+    return (props as any).children?.({ chainStyles: classes() });
+  };
+}
+
+/**
+ * Create a signal for reactive styles
+ */
+export function createReactiveStyles<T extends Record<string, any>>(
+  initialStyles: T
+): [Accessor<T>, (newStyles: Partial<T>) => void] {
+  const [styles, setStyles] = createSignal<T>(initialStyles);
+  
+  const updateStyles = (newStyles: Partial<T>) => {
+    setStyles((prev) => ({ ...prev, ...newStyles }));
+  };
+  
+  return [styles, updateStyles];
+}
+
+/**
+ * Debug utilities for Solid
+ */
+let debugEnabled = false;
+
+export function enableSolidDebug(): void {
+  debugEnabled = true;
+  if (typeof window !== 'undefined') {
+    (window as any).__CHAINCSS_SOLID_DEBUG__ = true;
+    console.log('🔍 ChainCSS Solid Debug Mode Enabled');
+  }
+}
+
+export function disableSolidDebug(): void {
+  debugEnabled = false;
+  if (typeof window !== 'undefined') {
+    (window as any).__CHAINCSS_SOLID_DEBUG__ = false;
+    console.log('🔍 ChainCSS Solid Debug Mode Disabled');
+  }
+}
+
+export function isSolidDebugEnabled(): boolean {
+  return debugEnabled || (typeof window !== 'undefined' && !!(window as any).__CHAINCSS_SOLID_DEBUG__);
+}
+
+// Export types
+export type { Accessor, Setter, JSX, Component };
+
+// Default export
+export default {
+  useAtomicClasses,
+  styled,
+  createStyledComponents,
+  useComputedStyles,
+  useDynamicStyles,
+  ChainCSSProvider,
+  useChainCSSContext,
+  setManifest,
+  setTokens,
+  cx,
+  withChainStyles,
+  createReactiveStyles,
+  enableSolidDebug,
+  disableSolidDebug,
+  isSolidDebugEnabled
+};

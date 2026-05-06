@@ -1,11 +1,13 @@
-import type { Plugin } from 'vite';
+import { Plugin } from 'vite';
 export interface ChainCSSPluginOptions {
     atomic?: boolean;
-    prefix?: boolean;
-    outputDir?: string;
-    generateTypes?: boolean;
     minify?: boolean;
     verbose?: boolean;
+    hmr?: boolean;
+    injectGlobal?: boolean;
+    cssOutput?: string;
+    manifestOutput?: string;
+    include?: string[];
+    exclude?: string[];
 }
 export default function chaincssPlugin(options?: ChainCSSPluginOptions): Plugin;
-//# sourceMappingURL=vite.d.ts.map

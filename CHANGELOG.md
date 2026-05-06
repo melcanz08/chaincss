@@ -5,6 +5,36 @@ All notable changes to ChainCSS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.7] - 2026-04-24
+
+### Added
+- **Multi-framework runtime adapters**: First-class support for React, Vue 3, and Svelte 4/5
+    - `chaincss/react`: `useChainStyles`, `createStyled`, `ChainProvider`
+    - `chaincss/vue`: `useAtomicClasses`, `createStyledComponent`, `provideStyleContext` 
+    - `chaincss/svelte`: `useAtomicClasses`, `createStyledComponent`, stores + actions
+- **Unified runtime API**: Identical `compileRuntime()` behavior across all frameworks
+- **HMR support**: Vite HMR integration for all runtimes. Styles hot-reload without full page refresh
+- **Subpath exports**: Granular imports to keep bundle size minimal
+- **TypeScript types**: Full `.d.ts` coverage for all framework adapters
+
+### Changed
+- Runtimes are now optional. Core `chaincss` has zero framework dependencies
+- `peerDependencies` updated: `react`, `react-dom`, `vue`, `svelte` are all optional
+- Build system split: `tsconfig.build.json` for core, `tsconfig.runtimes.json` for frameworks
+
+### Fixed
+- `import.meta.hot` TypeScript errors in runtimes. Added `vite/client` types
+- Svelte adapter: Removed non-existent `getCurrentInstance`. Uses `import.meta.url` for moduleId
+- Type narrowing issues when passing static objects vs stores to `useAtomicClasses`
+
+### Developer Experience
+- `npm run build` now produces 7 entry points: core, compiler, runtime, react, vue, svelte, plugins
+- Framework builds gracefully skip if the framework isn't installed
+- `sideEffects: false` + proper `exports` map = perfect tree-shaking
+
+### Breaking Changes
+None. 2.0.6 -> 2.0.7 is fully backward compatible. Existing `chaincss/runtime` imports still work.
+
 ## [2.0.0] - 2026-04-10
 
 ### 🎉 Major Release: Zero-Runtime Architecture

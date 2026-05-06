@@ -59,4 +59,3 @@ export declare function createDebugger(module: string): {
     warn: (...args: any[]) => void;
     error: (...args: any[]) => void;
 };
-//# sourceMappingURL=utils.d.ts.map

@@ -2,39 +2,67 @@
 
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import crypto from 'crypto';
+import chalk from 'chalk';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { 
   DEFAULT_CONFIG, 
   NEVER_ATOMIC_PROPERTIES,
   ALWAYS_ATOMIC_PROPERTIES,
-  ERROR_MESSAGES,
-  VERSION
+  VERSION,
+  PERFORMANCE,
+  MEMORY
 } from './constants.js';
-import { hashString, kebabCase, generateClassName, formatCSS, writeFile, getBaseName } from './utils.js';
-import type { ChainCSSConfig, CompileResult, StyleDefinition, AtomicClass } from './types.js';
+import { generateClassName, formatCSS, writeFile, getBaseName } from './utils.js';
+import type { ChainCSSConfig, CompileResult, StyleDefinition } from './types.js';
 
-// Import your existing compiler modules
-import { $, run, compile as bttCompile, chain, recipe, createTokens, configureAtomic, setAtomicOptimizer, setBreakpoints, setSourceComments } from '../compiler/btt.js';
+// Core Compiler Logic
+import { compile as bttCompile, setAtomicOptimizer, setBreakpoints, setSourceComments, scanFileForStyles } from '../compiler/btt.js';
 import { AtomicOptimizer } from '../compiler/atomic-optimizer.js';
 import ChainCSSPrefixer from '../compiler/prefixer.js';
-import { tokens } from '../compiler/tokens.js';
+import { CacheManager } from '../compiler/cache-manager.js';
+import { PersistentCache } from '../compiler/content-addressable-cache.js';
+import { shorthandMap, macros } from '../compiler/shorthands.js';
+import type { AtomicClass } from '../compiler/atomic-optimizer.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-type StyleDef = {
-  selectors?: string[];
-  [key: string]: any;
-};
+interface CachedStyleEntry {
+  result: {
+    css: string;
+    classMap: Record<string, string>;
+    atomicClasses: AtomicClass[];
+    stats: any;
+  };
+  accessCount: number;
+  lastAccessed: number;
+  hash: string;
+}
 
 export class ChainCSSCompiler {
   private config: Required<ChainCSSConfig>;
-  private atomicOptimizer: AtomicOptimizer | null = null;
   private prefixer: ChainCSSPrefixer | null = null;
-  private styleCache = new Map<string, CompileResult>();
-  private classMap = new Map<string, string>();
+  public atomicOptimizer: AtomicOptimizer | null = null;
 
-  constructor(config: ChainCSSConfig = {}) {
+  private sharedStyles: Map<string, number> = new Map();
+  private styleCache = new Map<string, CachedStyleEntry>();
+  private classMap = new Map<string, string>();
+  private runtimeCache: CacheManager;
+  private persistentCache: PersistentCache;
+  
+  private readonly MAX_STYLE_CACHE_SIZE = PERFORMANCE.CACHE_MAX_ENTRIES || 500;
+  private importedModules = new Map<string, { timestamp: number; hash: string }>();
+  private dependencyGraph = new Map<string, Set<string>>();
+  private generatedCSS: string = '';
+  private accumulatedCSS: string = '';
+  private compileInProgress: boolean = false;
+  private compileQueue: Array<{ resolve: () => void; reject: (error: Error) => void }> = [];
+  
+  // LRU tracking for O(1) eviction
+  private lruList: string[] = [];
+
+  constructor(config: ChainCSSConfig) {
     this.config = {
       ...DEFAULT_CONFIG,
       ...config,
@@ -46,441 +74,762 @@ export class ChainCSSCompiler {
       }
     } as Required<ChainCSSConfig>;
 
-    // Set source comments from config
-    setSourceComments(this.config.sourceComments !== false);
+    this.setupCompilerGlobals();
+    
+    this.runtimeCache = new CacheManager(this.config.cachePath || './.chaincss-cache');
+    this.persistentCache = new PersistentCache({
+      cacheDir: (this.config as any).persistentCachePath || './.chaincss/persistent-cache',
+      maxAgeDays: (this.config as any).cacheMaxAgeDays || 30,
+      maxSizeMB: (this.config as any).cacheMaxSizeMB || 500,
+      enabled: (this.config as any).cacheEnabled !== false,
+      verbose: this.config.verbose
+    });
 
-    // Set breakpoints from config
-    if (this.config.breakpoints) {
-      setBreakpoints(this.config.breakpoints);
-    }
+    this.atomicOptimizer = new AtomicOptimizer(this.config as any);
 
     this.initOptimizer();
     this.initPrefixer();
   }
 
-  private initOptimizer(): void {
-    if (this.config.atomic.enabled) {
-      this.atomicOptimizer = new AtomicOptimizer(this.config.atomic);
-      setAtomicOptimizer(this.atomicOptimizer);
-    }
+  public hasStyles(): boolean {
+    const combined = this.getCombinedCSS();
+    return !!(combined && combined.trim().length > 0);
   }
 
-  private initPrefixer(): void {
-    if (this.config.prefixer.enabled) {
-      this.prefixer = new ChainCSSPrefixer(this.config.prefixer);
-    }
-  }
+  private async processStyleObject(styleObj: Record<string, any>, componentName: string): Promise<void> {
+    if (!this.atomicOptimizer) return;
 
-  private generateCSS(styleId: string, styleDef: StyleDefinition): string {
-    chain.cssOutput = '';
-    const compiled: Record<string, StyleDefinition> = {};
-    compiled[styleId] = styleDef;
-    bttCompile(compiled);
-    let css = chain.cssOutput;
+    // Transform the style object - expand shorthands
+    const finalStyle: Record<string, any> = {};
     
-    if (this.atomicOptimizer && this.config.atomic.enabled) {
-      const result = this.atomicOptimizer.optimize({ [styleId]: styleDef });
-      if (result.css) css = result.css;
+    for (let [key, value] of Object.entries(styleObj)) {
+      // Handle hover states properly
+      if (key === 'hover' && typeof value === 'object') {
+        const expandedHover: Record<string, any> = {};
+        for (const [hk, hv] of Object.entries(value)) {
+          const realKey = shorthandMap[hk] || hk;
+          expandedHover[realKey] = hv;
+        }
+        finalStyle.hover = expandedHover;
+        continue;
+      }
+      
+      // Handle atRules
+      if (key === 'atRules') {
+        finalStyle.atRules = value;
+        continue;
+      }
+      
+      // Handle nested selectors
+      if (key.startsWith('.') || key.startsWith('&')) {
+        finalStyle[key] = value;
+        continue;
+      }
+      
+      // Transform standard properties
+      const realKey = shorthandMap[key] || key;
+      finalStyle[realKey] = value;
     }
-    return css;
+
+    const result = this.atomicOptimizer.optimize({
+      [componentName]: { 
+        selectors: [componentName], 
+        ...finalStyle
+      }
+    });
+    
+    if (result.css && result.css.trim()) {
+      this.accumulatedCSS += result.css + '\n';
+    }
+    
+    // Cache for HMR - use SHA256 for consistency
+    const cacheKey = crypto.createHash('sha256')
+      .update(`${componentName}-${JSON.stringify(styleObj)}`)
+      .digest('hex')
+      .slice(0, 16);
+    
+    this.addToCache(cacheKey, {
+      result: {
+        css: result.css || '',
+        classMap: result.map || {},
+        atomicClasses: [],
+        stats: this.getStats()
+      },
+      accessCount: 1,
+      lastAccessed: Date.now(),
+      hash: cacheKey
+    });
   }
 
-  compileStyle(styleId: string, styleDef: StyleDefinition): CompileResult {
-    const cacheKey = `${styleId}:${JSON.stringify(styleDef)}`;
+  private addToCache(key: string, entry: CachedStyleEntry): void {
+    // If key already exists, just update it
+    if (this.styleCache.has(key)) {
+      this.styleCache.set(key, entry);
+      // Move to end of LRU list (most recently used)
+      this.lruList = this.lruList.filter(k => k !== key);
+      this.lruList.push(key);
+      return;
+    }
+    
+    // Evict oldest entries if at capacity
+    while (this.styleCache.size >= this.MAX_STYLE_CACHE_SIZE && this.lruList.length > 0) {
+      const oldest = this.lruList.shift();
+      if (oldest) {
+        this.styleCache.delete(oldest);
+        if (this.config.verbose) {
+          console.log(chalk.gray(`  🧹 Cache evicted: ${oldest.slice(0, 8)}...`));
+        }
+      }
+    }
+    
+    this.styleCache.set(key, entry);
+    this.lruList.push(key);
+  }
+
+  /**
+   * Scans a raw source string (from Vite) for useChainStyles patterns 
+   * and registers them with the optimizer.
+   * Uses brace-counting parser instead of fragile regex.
+   */
+  public async compileSource(source: string, id: string): Promise<void> {
+    if (!this.atomicOptimizer || id.includes('\0')) return;
+
+    try {
+      let processedCount = 0;
+      let searchFrom = 0;
+      
+      while (true) {
+        const startIdx = source.indexOf('useChainStyles({', searchFrom);
+        if (startIdx === -1) break;
+        
+        // Find the matching closing brace using brace counting
+        const braceStart = source.indexOf('{', startIdx);
+        if (braceStart === -1) break;
+        
+        let braceCount = 0;
+        let endIdx = -1;
+        for (let i = braceStart; i < source.length; i++) {
+          if (source[i] === '{') braceCount++;
+          if (source[i] === '}') braceCount--;
+          if (braceCount === 0) {
+            endIdx = i;
+            break;
+          }
+        }
+        
+        if (endIdx === -1) break;
+        
+        const stylesBlock = source.substring(braceStart + 1, endIdx);
+        
+        try {
+          // Extract component definitions from the block
+          const componentRegex = /(\w+):\s*\{/g;
+          let componentMatch;
+          
+          while ((componentMatch = componentRegex.exec(stylesBlock)) !== null) {
+            const componentKey = componentMatch[1];
+            const componentStart = componentMatch.index + componentMatch[0].length;
+            
+            // Find matching closing brace for this component
+            let compBraceCount = 0;
+            let compEndIdx = -1;
+            for (let i = componentStart - 1; i < stylesBlock.length; i++) {
+              if (stylesBlock[i] === '{') compBraceCount++;
+              if (stylesBlock[i] === '}') compBraceCount--;
+              if (compBraceCount === 0) {
+                compEndIdx = i;
+                break;
+              }
+            }
+            
+            if (compEndIdx === -1) continue;
+            
+            const componentStyles = stylesBlock.substring(componentStart, compEndIdx);
+            const rawObj = this.safeParseStyleObject(`{${componentStyles}}`);
+            
+            if (Object.keys(rawObj).length === 0) continue;
+            
+            // Expand shorthands
+            const expandedObj: Record<string, any> = {};
+            for (const [k, v] of Object.entries(rawObj)) {
+              const realKey = shorthandMap[k] || k;
+              expandedObj[realKey] = v;
+            }
+            
+            await this.processStyleObject(expandedObj, componentKey);
+            processedCount++;
+          }
+        } catch (parseError) {
+          if (this.config.verbose) {
+            console.warn(chalk.yellow(`  ⚠️  Failed to parse styles in ${id}: ${parseError}`));
+          }
+        }
+        
+        searchFrom = endIdx + 1;
+      }
+      
+      if (this.config.verbose && processedCount > 0) {
+        console.log(chalk.gray(`  📝 Processed ${processedCount} styles from ${id}`));
+      }
+    } catch (error) {
+      console.error(chalk.red(`  ❌ Error compiling source ${id}: ${error}`));
+    }
+  }
+
+  /**
+   * Safely parse a style object string without using eval.
+   * Supports JSON-like syntax and token references.
+   */
+  private safeParseStyleObject(input: string): Record<string, any> {
+    try {
+      // Remove comments
+      let cleaned = input
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/\/\/[^\n]*/g, '');
+      
+      // Handle token references like $colors.primary -> "__TOKEN__colors.primary__"
+      const tokenPlaceholders: string[] = [];
+      cleaned = cleaned.replace(/\$([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)/g, (match) => {
+        tokenPlaceholders.push(match);
+        return `"__TOKEN_${tokenPlaceholders.length - 1}__"`;
+      });
+      
+      // Try JSON.parse first
+      if (cleaned.trim().startsWith('{')) {
+        try {
+          const result = JSON.parse(cleaned);
+          // Restore token references
+          return this.restoreTokens(result, tokenPlaceholders);
+        } catch {
+          // If JSON fails, try a limited object literal parser
+          return this.parseObjectLiteral(cleaned, tokenPlaceholders);
+        }
+      }
+    } catch (err) {
+      if (this.config.verbose) {
+        console.warn(chalk.yellow(`  ⚠️  Failed to parse style body: ${input.substring(0, 100)}...`));
+      }
+    }
+    
+    return {};
+  }
+
+  /**
+   * Parse a limited subset of JavaScript object literal syntax.
+   * Handles: strings, numbers, booleans, null, nested objects, arrays.
+   * Does NOT execute code.
+   */
+  private parseObjectLiteral(str: string, tokenPlaceholders: string[]): Record<string, any> {
+    // This is a simplified safe parser. For production, consider using a library like json5.
+    // It handles the common cases without eval.
+    try {
+      // Replace single-quoted strings with double-quoted
+      let normalized = str
+        .replace(/'([^'\\]*(\\.[^'\\]*)*)'/g, '"$1"')
+        // Handle unquoted property names
+        .replace(/(\{|\,)\s*([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:/g, '$1"$2":')
+        // Handle trailing commas
+        .replace(/,\s*([}\]])/g, '$1');
+      
+      const result = JSON.parse(normalized);
+      return this.restoreTokens(result, tokenPlaceholders);
+    } catch {
+      return {};
+    }
+  }
+
+  private restoreTokens(obj: any, tokens: string[]): any {
+    if (typeof obj === 'string') {
+      const match = obj.match(/^__TOKEN_(\d+)__$/);
+      if (match) {
+        const idx = parseInt(match[1]);
+        return tokens[idx] || obj;
+      }
+      return obj;
+    }
+    if (Array.isArray(obj)) {
+      return obj.map(item => this.restoreTokens(item, tokens));
+    }
+    if (obj && typeof obj === 'object') {
+      const result: Record<string, any> = {};
+      for (const [key, value] of Object.entries(obj)) {
+        result[key] = this.restoreTokens(value, tokens);
+      }
+      return result;
+    }
+    return obj;
+  }
+
+  /**
+   * @deprecated Use safeParseStyleObject instead.
+   * Kept for backward compatibility during migration.
+   */
+  private looseParse(styleBody: string): Record<string, any> {
+    return this.safeParseStyleObject(styleBody);
+  }
+
+  private setupCompilerGlobals(): void {
+    setSourceComments(this.config.sourceComments !== false);
+    if (this.config.breakpoints) {
+      setBreakpoints(this.config.breakpoints);
+    }
+  }
+
+  // ============================================================================
+  // Caching & Imports
+  // ============================================================================
+
+  private hashStyleDef(styleDef: StyleDefinition): string {
+    const { _componentName, _generateComponent, _framework, _propsDefinition, ...relevant } = styleDef;
+    return crypto.createHash('sha256').update(JSON.stringify(relevant)).digest('hex').slice(0, 16);
+  }
+
+  private async importModule(filePath: string): Promise<Record<string, any>> {
+    const absolutePath = path.resolve(filePath);
+    
+    // Check if file exists
+    if (!fs.existsSync(absolutePath)) {
+      throw new Error(`File not found: ${absolutePath}`);
+    }
+    
+    const fileUrl = pathToFileURL(absolutePath).href;
+    
+    try {
+      // Check for TSX/JSX files that need preprocessing
+      if (filePath.endsWith('.tsx') || filePath.endsWith('.jsx')) {
+        throw new Error(`Component file ${path.basename(filePath)} will be processed by scanner`);
+      }
+      
+      // Clear require cache for HMR
+      const moduleId = `${fileUrl}?t=${Date.now()}`;
+      const imported = await import(/* @vite-ignore */ moduleId);
+      
+      return imported.default && typeof imported.default === 'object' 
+        ? { ...imported.default, ...imported }
+        : imported;
+    } catch (error: any) {
+      error.message = `Failed to import ${path.basename(filePath)}: ${error.message}`;
+      throw error;
+    }
+  }
+
+  // ============================================================================
+  // Compilation Methods
+  // ============================================================================
+
+  public compileStyle(styleId: string, styleDef: StyleDefinition): CompileResult {
+    const hash = this.hashStyleDef(styleDef);
+    const cacheKey = `${styleId}:${hash}`;
+
     if (this.styleCache.has(cacheKey)) {
-      return this.styleCache.get(cacheKey)!;
+      const cached = this.styleCache.get(cacheKey)!;
+      cached.lastAccessed = Date.now();
+      cached.accessCount++;
+      // Update LRU position
+      this.lruList = this.lruList.filter(k => k !== cacheKey);
+      this.lruList.push(cacheKey);
+      return cached.result;
     }
 
-    const className = generateClassName(styleId, this.config.atomic.naming);
-    this.classMap.set(styleId, className);
-    let css = this.generateCSS(styleId, styleDef);
-    css = formatCSS(css, this.config.output.minify);
+    // Phase 1: Standard Compile
+    let finalCSS = bttCompile({ [styleId]: styleDef });
+    let finalClassName = generateClassName(styleId, this.config.atomic.naming);
+    let atomicClassNames: string[] = [];
+    let atomicClasses: AtomicClass[] = [];
+
+    if (this.atomicOptimizer && this.config.atomic.enabled) {
+      const optimized = this.atomicOptimizer.optimize({ [styleId]: styleDef });
+      
+      const componentMapping = this.atomicOptimizer.getComponentMapEntry(styleId);
+      atomicClassNames = componentMapping?.atomicClasses || [];
+      
+      // Get full AtomicClass data from the optimizer instead of creating empty ones
+      atomicClasses = atomicClassNames
+        .map(className => {
+          const atomicEntry = (this.atomicOptimizer as any)?.getAtomicEntry?.(className);
+          if (atomicEntry) {
+            return atomicEntry;
+          }
+          // Fallback only if entry not found
+          return {
+            className,
+            prop: '',
+            value: '',
+            usageCount: 0,
+            rules: ''
+          };
+        })
+        .filter(Boolean) as AtomicClass[];
+      
+      if (optimized.map && optimized.map[styleId]) {
+        finalClassName = [optimized.map[styleId], ...atomicClassNames].join(' ');
+      }
+      
+      // Only use atomic CSS if it produced output, otherwise keep standard CSS
+      if (optimized.css && optimized.css.trim()) {
+        finalCSS = optimized.css;
+      }
+      // else keep finalCSS from bttCompile above
+    }
 
     const result: CompileResult = {
-      css,
-      classMap: { [styleId]: className },
-      atomicClasses: [],
-      stats: { totalStyles: 1, atomicStyles: 0, uniqueProperties: 0, savings: '0%' }
+      css: formatCSS(finalCSS, this.config.output.minify),
+      classMap: { [styleId]: finalClassName },
+      atomicClasses,
+      stats: this.getStats()
     };
 
-    if (this.atomicOptimizer) {
-      const stats = this.atomicOptimizer.getStats();
-      result.stats = {
-        totalStyles: stats.totalStyles,
-        atomicStyles: stats.atomicStyles,
-        uniqueProperties: stats.uniqueProperties,
-        savings: stats.savings
-      };
-    }
+    // Cache the result
+    this.addToCache(cacheKey, {
+      result,
+      accessCount: 1,
+      lastAccessed: Date.now(),
+      hash
+    });
 
-    this.styleCache.set(cacheKey, result);
     return result;
   }
 
-  compileRecipe(recipeId: string, recipeFn: any): CompileResult {
-    let allCSS = '';
-    const classMap: Record<string, string> = {};
-    const atomicClasses: AtomicClass[] = [];
-    const variants = recipeFn.getAllVariants?.() || [];
-    
-    for (const variant of variants) {
-      const variantKey = Object.entries(variant).map(([k, v]) => `${k}-${v}`).join('_');
-      const styleId = `${recipeId}_${variantKey}`;
-      const styleDef = recipeFn(variant);
-      const result = this.compileStyle(styleId, styleDef);
-      allCSS += result.css;
-      classMap[variantKey] = Object.values(result.classMap)[0];
-      atomicClasses.push(...result.atomicClasses);
-    }
-
-    if (recipeFn.base) {
-      const baseResult = this.compileStyle(`${recipeId}_base`, recipeFn.base);
-      allCSS += baseResult.css;
-      classMap['base'] = Object.values(baseResult.classMap)[0];
-    }
-
-    return {
-      css: allCSS,
-      classMap,
-      atomicClasses,
-      stats: {
-        totalStyles: variants.length + (recipeFn.base ? 1 : 0),
-        atomicStyles: atomicClasses.length,
-        uniqueProperties: 0,
-        savings: '0%'
+  public compileRecipe(recipeId: string, recipeValue: any): CompileResult {
+    try {
+      const getAllVariants = recipeValue.getAllVariants;
+      if (typeof getAllVariants === 'function') {
+        const variants = getAllVariants();
+        let css = '';
+        const classMap: Record<string, string> = {};
+        let allAtomicClassObjects: AtomicClass[] = [];
+        
+        for (const variant of variants) {
+          const variantKey = Object.entries(variant)
+            .map(([k, v]) => `${k}-${v}`)
+            .join('_');
+          
+          const styleDef = recipeValue(variant);
+          if (styleDef && styleDef.selectors) {
+            const result = this.compileStyle(`${recipeId}_${variantKey}`, styleDef);
+            css += result.css;
+            Object.assign(classMap, result.classMap);
+            
+            if (result.atomicClasses && result.atomicClasses.length > 0) {
+              allAtomicClassObjects.push(...result.atomicClasses);
+            }
+          }
+        }
+        
+        // Deduplicate by className
+        const seen = new Set<string>();
+        allAtomicClassObjects = allAtomicClassObjects.filter(ac => {
+          if (seen.has(ac.className)) return false;
+          seen.add(ac.className);
+          return true;
+        });
+        
+        return {
+          css: formatCSS(css, this.config.output.minify),
+          classMap,
+          atomicClasses: allAtomicClassObjects,
+          stats: this.getStats()
+        };
       }
+    } catch (error) {
+      console.error(`Failed to compile recipe ${recipeId}:`, error);
+    }
+    
+    return {
+      css: '',
+      classMap: {},
+      atomicClasses: [],
+      stats: this.getStats()
     };
   }
 
-  compileFile(filePath: string): Record<string, CompileResult> {
+  public async compile(inputFile: string, outputDir: string): Promise<any> {
+    const results = await this.compileFile(inputFile);
+    const baseName = getBaseName(inputFile);
+    this.generateCSSFile(results, path.join(outputDir, `${baseName}.css`));
+    return { results };
+  }
+
+  public async compileFile(filePath: string): Promise<Record<string, CompileResult>> {
+    const moduleExports = await this.importModule(filePath);
     const results: Record<string, CompileResult> = {};
-    const source = fs.readFileSync(filePath, 'utf8');
-    const fileDir = path.dirname(filePath);
-    
-    const moduleExports: Record<string, any> = {};
-    const module = { exports: moduleExports };
-    
-    const evalContext = {
-      exports: moduleExports,
-      module,
-      require: (id: string) => {
-        if (id.startsWith('.')) {
-          const resolvedPath = path.resolve(fileDir, id);
-          return require(resolvedPath);
-        }
-        return require(id);
-      },
-      __dirname: fileDir,
-      __filename: filePath,
-      $,
-      recipe,
-      createTokens,
-      compile: (style: any) => style
-    };
-    
-    const evalFn = new Function(...Object.keys(evalContext), source);
-    evalFn(...Object.values(evalContext));
-    
-    for (const [exportName, exportValue] of Object.entries(moduleExports)) {
-      if (typeof exportValue === 'function' && exportValue.variants) {
-        results[exportName] = this.compileRecipe(exportName, exportValue);
-      } else if (exportValue && typeof exportValue === 'object' && exportValue.selectors) {
-        results[exportName] = this.compileStyle(exportName, exportValue);
+
+    for (const [name, value] of Object.entries(moduleExports)) {
+      if (typeof value === 'function' && (value as any).variants) {
+        results[name] = this.compileRecipe(name, value);
+      } else if (value && typeof value === 'object' && (value as any).selectors) {
+        results[name] = this.compileStyle(name, value as StyleDefinition);
       }
     }
     return results;
   }
 
-  generateTypeScriptTypes(results: Record<string, CompileResult>, outputPath: string): void {
-    let types = `/**
- * ChainCSS Generated Types
- * Do not edit - generated by ChainCSS compiler v${VERSION}
- * @generated
- */
+  public async compileComponents(components: string[]): Promise<void> {
+    // Ensure only one compilation at a time
+    if (this.compileInProgress) {
+      return new Promise((resolve, reject) => {
+        this.compileQueue.push({ resolve, reject });
+      });
+    }
+    
+    this.compileInProgress = true;
+    
+    try {
+      if (this.atomicOptimizer) this.atomicOptimizer.reset();
+      this.accumulatedCSS = '';
 
-`;
-    for (const [name, result] of Object.entries(results)) {
-      for (const className of Object.keys(result.classMap)) {
-        types += `export declare const ${className}: string;\n`;
+      if (!this.config.silent) {
+        console.log(chalk.blue('\n🔍 Phase 1: Scanning & Usage Analysis...'));
       }
-    }
-    writeFile(outputPath, types);
-  }
 
-  generateJavaScriptModule(results: Record<string, CompileResult>, outputPath: string): void {
-    let jsCode = `/**
- * ChainCSS Generated Class Map
- * Do not edit - generated by ChainCSS compiler v${VERSION}
- * @generated
- */
-
-`;
-    for (const [name, result] of Object.entries(results)) {
-      for (const [className, classValue] of Object.entries(result.classMap)) {
-        jsCode += `export const ${className} = '${classValue}';\n`;
-      }
-    }
-    jsCode += `\nexport const classMap = {\n`;
-    for (const [name, result] of Object.entries(results)) {
-      for (const [className, classValue] of Object.entries(result.classMap)) {
-        jsCode += `  ${className}: '${classValue}',\n`;
-      }
-    }
-    jsCode += `};\n`;
-    writeFile(outputPath, jsCode);
-  }
-
-  generateCSSFile(results: Record<string, CompileResult>, outputPath: string): void {
-    let allCSS = '';
-    for (const result of Object.values(results)) {
-      allCSS += result.css + '\n';
-    }
-    writeFile(outputPath, formatCSS(allCSS, this.config.output.minify));
-  }
-
-  async compile(inputFile: string, outputDir: string): Promise<{
-    cssFile: string;
-    jsFile: string;
-    typesFile: string;
-    results: Record<string, CompileResult>;
-  }> {
-    if (this.config.verbose) console.log(`[chaincss] Compiling ${inputFile}...`);
-    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
-    
-    const results = this.compileFile(inputFile);
-    const baseName = getBaseName(inputFile);
-    const cssFile = path.join(outputDir, `${baseName}.css`);
-    const jsFile = path.join(outputDir, `${baseName}.js`);
-    const typesFile = path.join(outputDir, `${baseName}.d.ts`);
-    
-    this.generateCSSFile(results, cssFile);
-    this.generateJavaScriptModule(results, jsFile);
-    this.generateTypeScriptTypes(results, typesFile);
-    
-    return { cssFile, jsFile, typesFile, results };
-  }
-
-  // ============================================================================
-  // Compile components with output to source directories
-  // ============================================================================
-
-  async compileComponents(components: string[]): Promise<void> {
-    if (this.config.verbose) {
-      console.log(`[chaincss] Compiling ${components.length} component(s)...`);
-    }
-
-    const componentExports = new Map<string, string>();
-    const componentCSS = new Map<string, string>();
-    
-    // Collect all CSS for global.css
-    let allCSS = '';
-    
-    // Define the type locally
-    type FrameworkType = 'react' | 'vue' | 'svelte' | 'solid' | 'auto';
-
-    // Store component info for framework generation
-    const allComponentInfo: Array<{
-      name: string;
-      selector: string;
-      styles: any;
-      propsDefinition?: Record<string, any>;
-      framework: FrameworkType;
-      outputDir: string;
-    }> = [];
-
-    for (const file of components) {
-      const sourceDir = path.dirname(file);
-      const baseName = path.basename(file, '.chain.js');
-      const stylesDir = sourceDir;
+      const BATCH_SIZE = PERFORMANCE.BATCH_SIZE || 10;
+      const errors: Error[] = [];
       
-      const classOutputPath = path.join(stylesDir, `${baseName}.class.js`);
-      const cssOutputPath = path.join(stylesDir, `${baseName}.css`);
-      
-      const exports = await this.importModule(file);
-      
-      let code = '';
-      let componentCSSContent = '';
-      
-      for (const [name, style] of Object.entries(exports)) {
-        const styleDef = style as StyleDef;
-        if (styleDef) {
-          const processedStyle = { ...styleDef };
-          let className: string;
-          
-          if (styleDef.selectors && styleDef.selectors.length > 0) {
-            const selector = styleDef.selectors[0];
-            className = selector.startsWith('.') ? selector.slice(1) : selector;
-            processedStyle.selectors = [selector];
-          } else {
-            className = `c_${this.hash(name)}`;
-            processedStyle.selectors = [`.${className}`];
+      for (let i = 0; i < components.length; i += BATCH_SIZE) {
+        const batch = components.slice(i, i + BATCH_SIZE);
+        const batchPromises = batch.map(async (file) => {
+          if (typeof file !== 'string' || file.includes('\0') || file.startsWith('virtual:')) {
+            return null;
           }
-          
-          code += `export const ${name} = '${className}';\n`;
-          
-          // Generate CSS for this style
-          chain.cssOutput = '';
-          const compiledObj: Record<string, StyleDef> = {};
-          compiledObj[`${baseName}_${name}`] = processedStyle;
-          bttCompile(compiledObj as any);
-          componentCSSContent += chain.cssOutput + '\n';
-          
-          // Check if this style should generate a framework component
-          if (styleDef._generateComponent) {
-            const componentName = styleDef._componentName || name;
-            const selector = styleDef.selectors?.[0] || `.${componentName.toLowerCase()}`;
-            
-            allComponentInfo.push({
-              name: componentName,
-              selector: selector,
-              styles: styleDef,
-              propsDefinition: styleDef._propsDefinition,
-              framework: (styleDef._framework || 'auto') as FrameworkType,
-              outputDir: stylesDir
-            });
+          if (!fs.existsSync(file)) return null;
+
+          try {
+            if (file.endsWith('.tsx') || file.endsWith('.jsx')) {
+              const result = scanFileForStyles(file, this.atomicOptimizer);
+              if (result.errors.length > 0) {
+                errors.push(...result.errors);
+              }
+            } else if (file.endsWith('.chain.js') || file.endsWith('.chain.ts')) {
+              const exports = await this.importModule(file);
+              const styles = exports.default || exports;
+              const styleArray = Object.values(styles).filter(s => s && typeof s === 'object');
+              this.atomicOptimizer?.trackStyles(styleArray as StyleDefinition[]);
+            }
+          } catch (err) {
+            if (this.config.verbose) {
+              console.warn(chalk.yellow(`  ⚠️  Scanning fallback for ${path.basename(file)}`));
+            }
+            const result = scanFileForStyles(file, this.atomicOptimizer);
+            if (result.errors.length > 0) {
+              errors.push(...result.errors);
+            }
           }
+          return null;
+        });
+        
+        await Promise.allSettled(batchPromises);
+        
+        if (this.config.verbose && i % (BATCH_SIZE * 5) === 0) {
+          console.log(chalk.gray(`  📊 Processed ${Math.min(i + BATCH_SIZE, components.length)}/${components.length} files`));
         }
       }
       
-      if (code && componentCSSContent) {
-        // Ensure styles directory exists
-        if (!fs.existsSync(stylesDir)) {
-          fs.mkdirSync(stylesDir, { recursive: true });
-        }
-        
-        // Write class file
-        fs.writeFileSync(classOutputPath, code);
-        componentExports.set(classOutputPath, code);
-        
-        // Write individual component CSS - ALWAYS unminified for debugging
-        const unminifiedCSS = formatCSS(componentCSSContent, false);
-        fs.writeFileSync(cssOutputPath, unminifiedCSS);
-        componentCSS.set(cssOutputPath, componentCSSContent);
-        
-        // Collect for combined global.css
-        allCSS += componentCSSContent + '\n';
-        
-        if (this.config.verbose) {
-          console.log(`  ✓ Generated: ${classOutputPath}`);
-          console.log(`  ✓ Generated: ${cssOutputPath}`);
-        }
+      if (errors.length > 0 && this.config.verbose) {
+        console.warn(chalk.yellow(`  ⚠️  ${errors.length} scanning errors occurred`));
       }
-    }
-    
-    // ============================================================================
-    // Generate Framework Components (React, Vue, Svelte, Solid)
-    // ============================================================================
-    
-    if (allComponentInfo.length > 0) {
-      // Dynamically import the component generator
-      const { generateComponentCode } = await import('../compiler/btt.js');
+
+      if (!this.config.silent) {
+        console.log(chalk.blue('\n🏗️  Phase 2: Generating Component Styles...'));
+      }
       
-      for (const componentInfo of allComponentInfo) {
+      const publicDir = path.resolve(process.cwd(), 'public');
+      const manifestDir = path.resolve(process.cwd(), '.chaincss', 'manifest');
+
+      if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
+      if (!fs.existsSync(manifestDir)) fs.mkdirSync(manifestDir, { recursive: true });
+
+      let processedComponents = 0;
+      const generatedClassFiles: string[] = [];
+      let totalAtomicRules = 0;
+      
+      for (const file of components) {
+        if (!file.endsWith('.chain.js') && !file.endsWith('.chain.ts')) continue;
+
+        const baseName = path.basename(file).replace(/\.chain\.(js|ts)$/, '');
+        const sourceDir = path.dirname(file);
+        let hasContent = false;
+        let jsBuffer = `/** 
+ * ChainCSS Generated Class Map 
+ * Source: ${path.relative(process.cwd(), file)}
+ * Generated: ${new Date().toISOString()}
+ * DO NOT EDIT MANUALLY
+ */\n\n`;
+        let cssBuffer = '';
+
         try {
-          const componentCode = generateComponentCode({
-            name: componentInfo.name,
-            selector: componentInfo.selector,
-            styles: componentInfo.styles,
-            propsDefinition: componentInfo.propsDefinition,
-            framework: componentInfo.framework
-          });
+          const rawExports = await this.importModule(file);
+          const styles = rawExports.default || rawExports;
           
-          // Determine file extension based on framework
-          let ext = '.tsx';
-          if (componentInfo.framework === 'vue') ext = '.vue';
-          if (componentInfo.framework === 'svelte') ext = '.svelte';
-          
-          const componentPath = path.join(componentInfo.outputDir, `${componentInfo.name}${ext}`);
-          fs.writeFileSync(componentPath, componentCode);
-          
-          if (this.config.verbose) {
-            console.log(`  ✓ Generated component: ${componentPath}`);
+          for (const [name, style] of Object.entries(styles)) {
+            if (style && typeof style === 'object' && (style as any).selectors) {
+              const result = this.compileStyle(name, style as StyleDefinition);
+              
+              if (this.config.verbose) {
+                const className = Object.values(result.classMap)[0];
+                console.log(chalk.gray(`   📝 ${name} → ${className || '(empty)'}`));
+              }
+              
+              const className = Object.values(result.classMap)[0];
+              if (className) {
+                jsBuffer += `export const ${name} = '${className}';\n`;
+                cssBuffer += result.css + '\n';
+                hasContent = true;
+                totalAtomicRules += result.atomicClasses?.length || 0;
+              }
+            }
+          }
+
+          if (hasContent) {
+            const targetDir = path.join(sourceDir, 'style');
+            
+            if (!fs.existsSync(targetDir)) {
+              fs.mkdirSync(targetDir, { recursive: true });
+            }
+            
+            const classFilePath = path.join(targetDir, `${baseName}.class.js`);
+            fs.writeFileSync(classFilePath, jsBuffer);
+            generatedClassFiles.push(classFilePath);
+            
+            if (cssBuffer.trim()) {
+              const cssFilePath = path.join(targetDir, `${baseName}.css`);
+              fs.writeFileSync(cssFilePath, formatCSS(cssBuffer, false));
+            }
+            
+            processedComponents++;
+            
+            if (this.config.verbose) {
+              console.log(chalk.green(`   ✨ ${baseName} → ${path.relative(process.cwd(), classFilePath)}`));
+            }
           }
         } catch (error) {
-          console.warn(`  ⚠ Failed to generate component for ${componentInfo.name}:`, error);
+          console.error(chalk.red(`   ❌ Failed to process ${baseName}: ${(error as Error).message}`));
+        }
+      }
+
+      if (!this.config.silent) {
+        console.log(chalk.blue('\n🌍 Phase 3: Finalizing Global Assets...'));
+      }
+
+      const finalAtomicCSS = this.atomicOptimizer ? this.atomicOptimizer.generateAtomicCSS() : '';
+      
+      const globalCssPath = path.join(publicDir, 'global.css');
+      fs.writeFileSync(globalCssPath, formatCSS(finalAtomicCSS, this.config.output.minify));
+      
+      if (this.config.verbose) {
+        console.log(chalk.blue(`   📦 Global CSS → ${path.relative(process.cwd(), globalCssPath)} (${finalAtomicCSS.length} bytes)`));
+      }
+
+      const manifestData = {
+        version: VERSION,
+        timestamp: new Date().toISOString(),
+        atomicMap: this.atomicOptimizer?.atomicMap || {},
+        stats: this.getStats(),
+        classFiles: generatedClassFiles.map(f => path.relative(process.cwd(), f))
+      };
+
+      const manifestPath = path.join(manifestDir, 'manifest.json');
+      fs.writeFileSync(manifestPath, JSON.stringify(manifestData, null, 2));
+      
+      if (this.config.verbose) {
+        console.log(chalk.blue(`   📦 Manifest → ${path.relative(process.cwd(), manifestPath)}`));
+      }
+      
+      if (!this.config.silent) {
+        console.log(chalk.green(`\n✅ Build Complete!`));
+        console.log(chalk.gray(`   📁 Components processed: ${processedComponents}`));
+        console.log(chalk.gray(`   📁 Class files generated: ${generatedClassFiles.length}`));
+        console.log(chalk.gray(`   📁 Global CSS: ${path.relative(process.cwd(), globalCssPath)}`));
+        console.log(chalk.gray(`   📁 Manifest: ${path.relative(process.cwd(), manifestPath)}`));
+
+        if (this.atomicOptimizer) {
+          const atomicCount = Object.keys(this.atomicOptimizer.atomicMap).length;
+          const stats = this.atomicOptimizer.getStats();
+          console.log(chalk.cyan(`\n📊 Optimization Stats:`));
+          console.log(chalk.gray(`   Atomic Rules: ${atomicCount}`));
+          console.log(chalk.gray(`   Total Styles: ${stats.totalStyles}`));
+          console.log(chalk.gray(`   Unique Properties: ${stats.uniqueProperties}`));
+          if (stats.savings) {
+            console.log(chalk.green(`   CSS Savings: ${stats.savings}`));
+          }
         }
       }
       
-      console.log(`✓ Generated ${allComponentInfo.length} framework component(s)`);
-    }
-    
-    // ============================================================================
-    // Generate Combined global.css
-    // ============================================================================
-    
-    const globalStylesDir = path.join(process.cwd(), 'src/global-style');
-    if (!fs.existsSync(globalStylesDir)) {
-      fs.mkdirSync(globalStylesDir, { recursive: true });
-    }
-    
-    const globalStylesPath = path.join(globalStylesDir, 'global.css');
-    // Force minify = true for global.css
-    fs.writeFileSync(globalStylesPath, formatCSS(allCSS, true));
-    
-    console.log(`✓ Generated ${componentCSS.size} component CSS file(s)`);
-    console.log(`✓ Generated global.css (minified)`);
-    console.log(`✓ Generated ${componentExports.size} component class file(s)`);
-  }
-
-  private async importModule(filePath: string): Promise<Record<string, any>> {
-    const absolutePath = path.resolve(filePath);
-    try {
-      // For .chain.js files, use dynamic import
-      const fileUrl = `file://${absolutePath}`;
+    } finally {
+      this.compileInProgress = false;
       
-      // Clear the import cache by appending a timestamp
-      const freshUrl = `${fileUrl}?t=${Date.now()}`;
-      
-      const imported = await import(freshUrl);
-      return imported;
-    } catch (error) {
-      console.error(`Failed to import ${filePath}:`, error);
-      return {};
+      // Process queued compilations safely
+      this.drainCompileQueue();
     }
   }
-
-  private hash(str: string): string {
-    let h = 0;
-    for (let i = 0; i < str.length; i++) {
-      h = ((h << 5) - h) + str.charCodeAt(i);
-      h |= 0;
-    }
-    return Math.abs(h).toString(36).slice(0, 6);
-  }
-
-  async watch(inputFile: string, outputDir: string): Promise<void> {
-    const chokidar = await import('chokidar');
-    console.log(`[chaincss] Watching ${inputFile} for changes...`);
-    await this.compile(inputFile, outputDir);
-    const watcher = chokidar.watch(inputFile);
-    watcher.on('change', async () => {
-      console.log(`[chaincss] File changed: ${inputFile}`);
-      try {
-        await this.compile(inputFile, outputDir);
-        console.log(`[chaincss] Recompiled successfully`);
-      } catch (error) {
-        console.error(`[chaincss] Recompilation failed:`, error);
+  
+  /**
+   * Drains the compile queue safely, handling items added during draining.
+   */
+  private drainCompileQueue(): void {
+    while (this.compileQueue.length > 0) {
+      const queue = [...this.compileQueue];
+      this.compileQueue = [];
+      for (const item of queue) {
+        item.resolve();
       }
-    });
+    }
+  }
+  
+  // ============================================================================
+  // Utilities & Plugin Helpers
+  // ============================================================================
+
+  public getCombinedCSS(): string {
+    return this.accumulatedCSS;
   }
 
-  getStats(): any {
-    if (this.atomicOptimizer) return this.atomicOptimizer.getStats();
-    return { totalStyles: this.styleCache.size, atomicStyles: 0, uniqueProperties: 0, savings: '0%' };
-  }
-
-  clearCache(): void {
+  public clearCSS(): void {
+    this.accumulatedCSS = '';
     this.styleCache.clear();
-    this.classMap.clear();
-    if (this.atomicOptimizer) this.atomicOptimizer.clearCache();
+    this.lruList = [];
+    if (this.atomicOptimizer) {
+      this.atomicOptimizer.reset();
+    }
+    if (this.config.verbose) {
+      console.log('[Compiler] CSS cache cleared');
+    }
+  }
+
+  public getStats() {
+    const stats = this.atomicOptimizer?.getStats();
+    return {
+        totalStyles: stats?.totalStyles || 0,
+        atomicStyles: (stats as any)?.atomicStyles || 0,
+        uniqueProperties: (stats as any)?.uniqueProperties || 0,
+        savings: stats?.savings || '0%'
+    };
+  }
+
+  private generateCSSFile(results: Record<string, CompileResult>, outputPath: string): void {
+    let css = '';
+    for (const r of Object.values(results)) css += r.css;
+    writeFile(outputPath, css);
+  }
+
+  public getAtomicMap(): Record<string, string> {
+    return (this.atomicOptimizer as any)?.classMap || {};
+  }
+
+  private initOptimizer(): void {
+    if (this.config.atomic.enabled) {
+      if (!this.atomicOptimizer) {
+        this.atomicOptimizer = new AtomicOptimizer(this.config.atomic);
+        setAtomicOptimizer(this.atomicOptimizer);
+      }
+    }
+  }
+
+  private initPrefixer(): void {
+    if (this.config.prefixer.enabled) this.prefixer = new ChainCSSPrefixer(this.config.prefixer);
   }
 }
 
-export async function compileChainCSS(
-  inputFile: string,
-  outputDir: string,
-  config?: ChainCSSConfig
-): Promise<ReturnType<ChainCSSCompiler['compile']>> {
-  const compiler = new ChainCSSCompiler(config);
-  return compiler.compile(inputFile, outputDir);
+export async function compileChainCSS(inputFile: string, outputDir: string, config?: ChainCSSConfig) {
+  const compiler = new ChainCSSCompiler(config || {});
+  return await compiler.compile(inputFile, outputDir);
 }

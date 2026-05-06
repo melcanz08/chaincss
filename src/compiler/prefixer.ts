@@ -1,7 +1,19 @@
 // chaincss/src/compiler/prefixer.ts
-
 // Dynamic imports for optional dependencies
 import type { ProcessOptions, Result } from 'postcss';
+
+// Safe import helper — returns null if module not available
+// This prevents Vite from crashing on optional dependencies
+async function safeImport(moduleName: string): Promise<any> {
+  try {
+    // Use Function constructor to hide from Vite's static analyzer
+    const importFn = new Function('path', 'return import(path)');
+    return await importFn(moduleName);
+  } catch {
+    return null;
+  }
+}
+
 
 // Types for optional dependencies
 type PostCSS = any;
@@ -20,56 +32,101 @@ let postcssLoaded = false;
 let browserslistLoaded = false;
 let caniuseLoaded = false;
 let autoprefixerLoaded = false;
+let loadingPromises: Map<string, Promise<any>> = new Map();
 
-// Lazy load functions
+// Lazy load functions with better error handling
 async function loadPostcss() {
-  if (!postcssLoaded) {
-    try {
-      postcss = await import('postcss').then(m => m.default);
-    } catch (err) {
-      // postcss not installed - will use lightweight mode
+  if (postcss) return postcss;
+  if (loadingPromises.has('postcss')) return loadingPromises.get('postcss');
+  
+  const promise = (async () => {
+    if (!postcssLoaded) {
+      try {
+        const module = await import('postcss');
+        postcss = module.default || module;
+      } catch (err) {
+        if (process.env.DEBUG) {
+          console.warn('postcss not installed, using lightweight prefixing');
+        }
+      }
+      postcssLoaded = true;
     }
-    postcssLoaded = true;
-  }
-  return postcss;
+    return postcss;
+  })();
+  
+  loadingPromises.set('postcss', promise);
+  return promise;
 }
 
 async function loadBrowserslist() {
-  if (!browserslistLoaded) {
-    try {
-      browserslist = await import('browserslist').then(m => m.default);
-    } catch (err) {
-      // browserslist not installed
+  if (browserslist) return browserslist;
+  if (loadingPromises.has('browserslist')) return loadingPromises.get('browserslist');
+  
+  const promise = (async () => {
+    if (!browserslistLoaded) {
+      try {
+        const module = await import(/* @vite-ignore */ 'browserslist');
+        browserslist = module.default || module;
+      } catch (err) {
+        if (process.env.DEBUG) {
+          console.warn('browserslist not installed');
+        }
+      }
+      browserslistLoaded = true;
     }
-    browserslistLoaded = true;
-  }
-  return browserslist;
+    return browserslist;
+  })();
+  
+  loadingPromises.set('browserslist', promise);
+  return promise;
 }
 
 async function loadCaniuse() {
-  if (!caniuseLoaded) {
-    try {
-      // @ts-ignore
-      const caniuseModule = await import('caniuse-db/fulldata-json/data-2.0.json');
-      caniuse = caniuseModule.default || caniuseModule;
-    } catch (err) {
-      console.warn('caniuse-db not installed, lightweight prefixing will be limited');
+  if (caniuse) return caniuse;
+  if (loadingPromises.has('caniuse')) return loadingPromises.get('caniuse');
+  
+  const promise = (async () => {
+    if (!caniuseLoaded) {
+      try {
+        // @ts-ignore
+        const caniuseModule = await safeImport("caniuse-db/fulldata-json/data-2.0.json");
+        caniuse = caniuseModule.default || caniuseModule;
+      } catch (err) {
+        if (process.env.DEBUG) {
+          console.warn('caniuse-db not installed, lightweight prefixing will be limited');
+        }
+      }
+      caniuseLoaded = true;
     }
-    caniuseLoaded = true;
-  }
-  return caniuse;
+    return caniuse;
+  })();
+  
+  loadingPromises.set('caniuse', promise);
+  return promise;
 }
 
 async function loadAutoprefixer() {
-  if (!autoprefixerLoaded) {
-    try {
-      autoprefixer = await import('autoprefixer').then(m => m.default);
-    } catch (err) {
-      // autoprefixer not installed
+  if (autoprefixer) return autoprefixer;
+  if (loadingPromises.has('autoprefixer')) return loadingPromises.get('autoprefixer');
+  
+  const promise = (async () => {
+    if (!autoprefixerLoaded) {
+      try {
+        // @ts-ignore - autoprefixer is optional
+        const module = await import('autoprefixer');
+        autoprefixer = module.default || module;
+      } catch (err) {
+        if (process.env.DEBUG) {
+          console.warn('autoprefixer not installed');
+        }
+      }
+      autoprefixerLoaded = true;
     }
-    autoprefixerLoaded = true;
-  }
-  return autoprefixer;
+    return autoprefixer;
+  })();
+  
+  loadingPromises.set('autoprefixer', promise);
+  return promise;
 }
 
 // Types
@@ -79,21 +136,177 @@ export interface PrefixerConfig {
   mode?: 'auto' | 'full' | 'lightweight';
   sourceMap?: boolean;
   sourceMapInline?: boolean;
+  remove?: boolean; // Remove outdated prefixes
+  add?: boolean; // Add missing prefixes
+  verbose?: boolean;
+  flexbox?: boolean | 'no-2009'; // Flexbox support
+  grid?: boolean | 'autoplace' | 'no-autoplace'; // Grid support
 }
 
 export interface PrefixerResult {
   css: string;
   map: string | null;
+  warnings?: string[];
 }
 
 export interface ProcessOptionsWithPaths {
   from?: string;
   to?: string;
+  map?: boolean | object;
 }
 
 export interface CaniuseFeature {
+  title: string;
+  description: string;
   stats: Record<string, Record<string, string>>;
+  spec?: string;
+  status?: string;
 }
+
+// Built-in prefix map for lightweight mode
+const LIGHTWEIGHT_PREFIX_MAP: Record<string, Record<string, string[]>> = {
+  // Transform properties
+  'transform': {
+    'webkit': ['-webkit-transform'],
+    'ms': ['-ms-transform']
+  },
+  'transform-origin': {
+    'webkit': ['-webkit-transform-origin'],
+    'ms': ['-ms-transform-origin']
+  },
+  'transform-style': {
+    'webkit': ['-webkit-transform-style']
+  },
+  'perspective': {
+    'webkit': ['-webkit-perspective']
+  },
+  'backface-visibility': {
+    'webkit': ['-webkit-backface-visibility']
+  },
+  
+  // Transitions & Animations
+  'transition': {
+    'webkit': ['-webkit-transition']
+  },
+  'transition-property': {
+    'webkit': ['-webkit-transition-property']
+  },
+  'transition-duration': {
+    'webkit': ['-webkit-transition-duration']
+  },
+  'transition-timing-function': {
+    'webkit': ['-webkit-transition-timing-function']
+  },
+  'animation': {
+    'webkit': ['-webkit-animation']
+  },
+  'animation-name': {
+    'webkit': ['-webkit-animation-name']
+  },
+  'animation-duration': {
+    'webkit': ['-webkit-animation-duration']
+  },
+  'animation-timing-function': {
+    'webkit': ['-webkit-animation-timing-function']
+  },
+  'animation-delay': {
+    'webkit': ['-webkit-animation-delay']
+  },
+  'animation-iteration-count': {
+    'webkit': ['-webkit-animation-iteration-count']
+  },
+  'animation-direction': {
+    'webkit': ['-webkit-animation-direction']
+  },
+  'animation-fill-mode': {
+    'webkit': ['-webkit-animation-fill-mode']
+  },
+  
+  // Filters
+  'filter': {
+    'webkit': ['-webkit-filter']
+  },
+  'backdrop-filter': {
+    'webkit': ['-webkit-backdrop-filter']
+  },
+  
+  // Box properties
+  'box-shadow': {
+    'webkit': ['-webkit-box-shadow']
+  },
+  'box-sizing': {
+    'webkit': ['-webkit-box-sizing'],
+    'moz': ['-moz-box-sizing']
+  },
+  'border-radius': {
+    'webkit': ['-webkit-border-radius'],
+    'moz': ['-moz-border-radius']
+  },
+  
+  // User interface
+  'user-select': {
+    'webkit': ['-webkit-user-select'],
+    'moz': ['-moz-user-select'],
+    'ms': ['-ms-user-select']
+  },
+  'appearance': {
+    'webkit': ['-webkit-appearance'],
+    'moz': ['-moz-appearance']
+  },
+  
+  // Text
+  'text-fill-color': {
+    'webkit': ['-webkit-text-fill-color']
+  },
+  'text-stroke': {
+    'webkit': ['-webkit-text-stroke']
+  },
+  'text-stroke-color': {
+    'webkit': ['-webkit-text-stroke-color']
+  },
+  'text-stroke-width': {
+    'webkit': ['-webkit-text-stroke-width']
+  },
+  'background-clip': {
+    'webkit': ['-webkit-background-clip']
+  },
+  
+  // Masks
+  'mask-image': {
+    'webkit': ['-webkit-mask-image']
+  },
+  'mask-clip': {
+    'webkit': ['-webkit-mask-clip']
+  },
+  'mask-composite': {
+    'webkit': ['-webkit-mask-composite']
+  },
+  'mask-origin': {
+    'webkit': ['-webkit-mask-origin']
+  },
+  'mask-position': {
+    'webkit': ['-webkit-mask-position']
+  },
+  'mask-repeat': {
+    'webkit': ['-webkit-mask-repeat']
+  },
+  'mask-size': {
+    'webkit': ['-webkit-mask-size']
+  }
+};
+
+// Special value prefixes for lightweight mode
+const LIGHTWEIGHT_VALUE_PREFIXES: Record<string, Record<string, string[]>> = {
+  'display': {
+    'flex': ['-webkit-flex', '-ms-flexbox'],
+    'inline-flex': ['-webkit-inline-flex', '-ms-inline-flexbox'],
+    'grid': ['-ms-grid'],
+    'inline-grid': ['-ms-inline-grid']
+  },
+  'position': {
+    'sticky': ['-webkit-sticky']
+  }
+};
 
 // Main class
 export class ChainCSSPrefixer {
@@ -106,6 +319,7 @@ export class ChainCSSPrefixer {
   specialValues: Record<string, string[]>;
   browserPrefixMap: Record<string, string>;
   targetBrowsers: string[] | null;
+  private warnings: string[] = [];
 
   constructor(config: PrefixerConfig = {}) {
     this.config = {
@@ -114,10 +328,15 @@ export class ChainCSSPrefixer {
       mode: config.mode || 'auto',
       sourceMap: config.sourceMap !== false,
       sourceMapInline: config.sourceMapInline || false,
+      remove: config.remove !== false,
+      add: config.add !== false,
+      verbose: config.verbose || false,
+      flexbox: config.flexbox !== false,
+      grid: config.grid || 'autoplace'
     };
     
-    this.hasBuiltInDeps = false; // Will be determined lazily
-    this.hasAutoprefixer = false; // Will be determined lazily
+    this.hasBuiltInDeps = false;
+    this.hasAutoprefixer = false;
     this.prefixerMode = config.mode || 'auto';
     this.caniuseData = null;
     this.commonProperties = this.getCommonProperties();
@@ -127,10 +346,18 @@ export class ChainCSSPrefixer {
       'position': ['sticky']
     };
     this.browserPrefixMap = {
-      'chrome': 'webkit', 'safari': 'webkit', 'firefox': 'moz',
-      'ie': 'ms', 'edge': 'webkit', 'ios_saf': 'webkit',
-      'and_chr': 'webkit', 'android': 'webkit', 'opera': 'webkit',
-      'op_mob': 'webkit', 'samsung': 'webkit', 'and_ff': 'moz'
+      'chrome': 'webkit', 
+      'safari': 'webkit', 
+      'firefox': 'moz',
+      'ie': 'ms', 
+      'edge': 'webkit', 
+      'ios_saf': 'webkit',
+      'and_chr': 'webkit', 
+      'android': 'webkit', 
+      'opera': 'webkit',
+      'op_mob': 'webkit', 
+      'samsung': 'webkit', 
+      'and_ff': 'moz'
     };
     this.targetBrowsers = null;
   }
@@ -138,110 +365,157 @@ export class ChainCSSPrefixer {
   async determineMode(): Promise<'auto' | 'full' | 'lightweight'> {
     if (this.config.mode === 'full') {
       const hasAutoprefixer = !!(await loadAutoprefixer());
-      if (!hasAutoprefixer) {
-        console.warn('Full mode requested but autoprefixer not installed. Falling back to lightweight mode.');
+      if (!hasAutoprefixer && this.config.verbose) {
+        console.warn('⚠️ Full mode requested but autoprefixer not installed. Falling back to lightweight mode.');
         console.warn('   To use full mode: npm install autoprefixer postcss caniuse-db browserslist\n');
-        return 'lightweight';
       }
-      return 'full';
+      return hasAutoprefixer ? 'full' : 'lightweight';
     }
     if (this.config.mode === 'lightweight') {
       return 'lightweight';
     }
     if (this.config.mode === 'auto') {
       const hasAutoprefixer = !!(await loadAutoprefixer());
+      if (this.config.verbose) {
+        console.log(`🔧 Prefixer mode: ${hasAutoprefixer ? 'full' : 'lightweight'}`);
+      }
       return hasAutoprefixer ? 'full' : 'lightweight';
     }
     return 'lightweight';
   }
 
   async process(cssString: string, options: ProcessOptionsWithPaths = {}): Promise<PrefixerResult> {
+    this.warnings = [];
+    
     if (!this.config.enabled) {
-      return { css: cssString, map: null };
+      return { css: cssString, map: null, warnings: [] };
     }
     
     try {
-      const mapOptions = {
-        inline: this.config.sourceMapInline,
-        annotation: false,
-        sourcesContent: true
-      };
-      
       const mode = await this.determineMode();
       
       if (mode === 'full') {
-        return await this.processWithAutoprefixer(cssString, options, mapOptions);
+        return await this.processWithAutoprefixer(cssString, options);
       }
       
-      return await this.processWithBuiltIn(cssString, options, mapOptions);
+      return await this.processWithBuiltIn(cssString, options);
     } catch (err) {
-      console.error('Prefixer error:', (err as Error).message);
-      return { css: cssString, map: null };
+      const errorMsg = (err as Error).message;
+      this.warnings.push(`Prefixer error: ${errorMsg}`);
+      if (this.config.verbose) {
+        console.error('Prefixer error:', errorMsg);
+      }
+      return { css: cssString, map: null, warnings: this.warnings };
     }
   }
 
   private async processWithAutoprefixer(
     cssString: string,
-    options: ProcessOptionsWithPaths,
-    mapOptions: any
+    options: ProcessOptionsWithPaths
   ): Promise<PrefixerResult> {
     const autoprefixerModule = await loadAutoprefixer();
     const postcssModule = await loadPostcss();
     
     if (!autoprefixerModule || !postcssModule) {
-      console.warn('Autoprefixer or PostCSS not available, falling back to lightweight mode');
-      return await this.processWithBuiltIn(cssString, options, mapOptions);
+      this.warnings.push('Autoprefixer or PostCSS not available, falling back to lightweight mode');
+      return await this.processWithBuiltIn(cssString, options);
     }
     
     const from = options.from || 'input.css';
     const to = options.to || 'output.css';
     
-    const result = await postcssModule([
-      autoprefixerModule({ overrideBrowserslist: this.config.browsers })
-    ]).process(cssString, {
-      from,
-      to,
-      map: this.config.sourceMap ? mapOptions : false
-    });
-    
-    return {
-      css: result.css,
-      map: result.map ? result.map.toString() : null
-    };
+    try {
+      const result = await postcssModule([
+        autoprefixerModule({
+          overrideBrowserslist: this.config.browsers,
+          remove: this.config.remove,
+          add: this.config.add,
+          flexbox: this.config.flexbox,
+          grid: this.config.grid
+        })
+      ]).process(cssString, {
+        from,
+        to,
+        map: this.config.sourceMap ? {
+          inline: this.config.sourceMapInline,
+          annotation: false,
+          sourcesContent: true
+        } : false
+      });
+      
+      if (result.warnings && this.config.verbose) {
+        result.warnings().forEach((warning: any) => {
+          this.warnings.push(warning.toString());
+        });
+      }
+      
+      return {
+        css: result.css,
+        map: result.map ? result.map.toString() : null,
+        warnings: this.warnings
+      };
+    } catch (err) {
+      this.warnings.push(`Autoprefixer processing error: ${(err as Error).message}`);
+      return { css: cssString, map: null, warnings: this.warnings };
+    }
   }
 
   private async processWithBuiltIn(
     cssString: string,
-    options: ProcessOptionsWithPaths,
-    mapOptions: any
+    options: ProcessOptionsWithPaths
   ): Promise<PrefixerResult> {
-    const postcssModule = await loadPostcss();
-    const browserslistModule = await loadBrowserslist();
-    const caniuseData = await loadCaniuse();
-    
-    if (!postcssModule || !browserslistModule || !caniuseData) {
-      return { css: cssString, map: null };
-    }
-    
-    this.targetBrowsers = browserslistModule(this.config.browsers);
-    this.caniuseData = caniuseData.data || caniuseData;
-    this.hasBuiltInDeps = true;
-    
-    const from = options.from || 'input.css';
-    const to = options.to || 'output.css';
-    
-    const result = await postcssModule([
-      this.createBuiltInPlugin()
-    ]).process(cssString, {
-      from,
-      to,
-      map: this.config.sourceMap ? mapOptions : false
-    });
+    // Use lightweight prefixing
+    const prefixed = this.lightweightPrefix(cssString);
     
     return {
-      css: result.css,
-      map: result.map ? result.map.toString() : null
+      css: prefixed,
+      map: null,
+      warnings: this.warnings
     };
+  }
+
+  private lightweightPrefix(cssString: string): string {
+    let result = cssString;
+    
+    // Process declarations
+    const declRegex = /([\w-]+)\s*:\s*([^;]+);/g;
+    let match;
+    
+    while ((match = declRegex.exec(cssString)) !== null) {
+      const [fullMatch, prop, value] = match;
+      const trimmedProp = prop.trim();
+      const trimmedValue = value.trim();
+      
+      // Check if property needs prefixing
+      const prefixes = LIGHTWEIGHT_PREFIX_MAP[trimmedProp];
+      if (prefixes && this.config.add) {
+        for (const [prefix, prefixedProps] of Object.entries(prefixes)) {
+          for (const prefixedProp of prefixedProps) {
+            const prefixedDecl = `${prefixedProp}: ${trimmedValue};`;
+            result = result.replace(fullMatch, `${prefixedDecl}\n${fullMatch}`);
+          }
+        }
+      }
+      
+      // Check if value needs special prefixing
+      const valuePrefixes = LIGHTWEIGHT_VALUE_PREFIXES[trimmedProp];
+      if (valuePrefixes && valuePrefixes[trimmedValue] && this.config.add) {
+        for (const prefixedValue of valuePrefixes[trimmedValue]) {
+          const prefixedDecl = `${trimmedProp}: ${prefixedValue};`;
+          result = result.replace(fullMatch, `${prefixedDecl}\n${fullMatch}`);
+        }
+      }
+    }
+    
+    // Handle keyframes with prefixes
+    const keyframesRegex = /@keyframes\s+(\w+)\s*\{([^}]+)\}/g;
+    while ((match = keyframesRegex.exec(cssString)) !== null) {
+      const [fullMatch, name, frames] = match;
+      const webkitKeyframes = `@-webkit-keyframes ${name} {${frames}}`;
+      result = result.replace(fullMatch, `${webkitKeyframes}\n${fullMatch}`);
+    }
+    
+    return result;
   }
 
   private createBuiltInPlugin(): (root: any) => void {
@@ -255,13 +529,41 @@ export class ChainCSSPrefixer {
   private processBuiltInDeclaration(decl: any): void {
     const { prop, value } = decl;
     
-    if (this.commonProperties.includes(prop)) {
+    if (this.commonProperties.includes(prop) && this.config.add) {
       this.addPrefixesFromCaniuse(decl);
     }
     
-    if (this.specialValues[prop]?.includes(value)) {
+    if (this.specialValues[prop]?.includes(value) && this.config.add) {
       this.addSpecialValuePrefixes(decl);
     }
+    
+    if (!this.config.remove) return;
+    
+    // Remove outdated prefixed versions
+    const unprefixedProp = prop.replace(/^-(webkit|moz|ms|o)-/, '');
+    if (unprefixedProp !== prop && this.commonProperties.includes(unprefixedProp)) {
+      // Check if we should keep this prefix
+      const shouldKeep = this.shouldKeepPrefix(prop, unprefixedProp);
+      if (!shouldKeep) {
+        decl.remove();
+      }
+    }
+  }
+
+  private shouldKeepPrefix(prop: string, unprefixed: string): boolean {
+    // Check if browser still needs this prefix
+    if (!this.targetBrowsers) return true;
+    
+    const prefix = prop.match(/^-(webkit|moz|ms|o)-/)?.[1];
+    if (!prefix) return true;
+    
+    // For modern browsers, many prefixes are no longer needed
+    const modernBrowsers = ['chrome >= 80', 'firefox >= 80', 'safari >= 13', 'edge >= 80'];
+    const needsPrefix = this.targetBrowsers.some(browser => {
+      return modernBrowsers.includes(browser);
+    });
+    
+    return !needsPrefix;
   }
 
   private addPrefixesFromCaniuse(decl: any): void {
@@ -384,8 +686,37 @@ export class ChainCSSPrefixer {
       'box-shadow', 'border-radius', 'box-sizing',
       'display', 'flex', 'flex-grow', 'flex-shrink', 'flex-basis',
       'justify-content', 'align-items', 'align-self', 'align-content',
-      'grid', 'grid-template', 'grid-column', 'grid-row'
+      'grid', 'grid-template', 'grid-column', 'grid-row', 'gap',
+      'column-gap', 'row-gap'
     ];
+  }
+
+  // Utility method to check if a browser needs a specific prefix
+  needsPrefix(property: string, browser: string, version: number): boolean {
+    const feature = this.findFeature(property);
+    if (!feature) return false;
+    
+    const stats = feature.stats[browser];
+    if (!stats) return false;
+    
+    const support = stats[version.toString()];
+    return support ? support.includes('x') : false;
+  }
+
+  // Get all available prefixes for a property
+  getAvailablePrefixes(property: string): string[] {
+    const prefixes = LIGHTWEIGHT_PREFIX_MAP[property];
+    if (!prefixes) return [];
+    
+    return Object.keys(prefixes);
+  }
+
+  // Reset the prefixer state
+  reset(): void {
+    this.warnings = [];
+    this.targetBrowsers = null;
+    this.hasAutoprefixer = false;
+    this.hasBuiltInDeps = false;
   }
 }
 

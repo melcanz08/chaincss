@@ -1,4 +1,4 @@
-// chaincss/src/runtime/utils.ts
+// src/runtime/utils.ts - Add missing exports
 
 /**
  * Runtime utility functions for ChainCSS

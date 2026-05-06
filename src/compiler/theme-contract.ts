@@ -1,5 +1,4 @@
-// chaincss/src/compiler/theme-contract.ts
-
+// src/compiler/theme-contract.ts
 /**
  * Theme Contract System for ChainCSS
  * Validates that themes match the expected shape
@@ -11,21 +10,6 @@ export interface ThemeContract {
 
 export interface ThemeTokens {
   [key: string]: string | ThemeTokens;
-}
-
-export interface TokensStructure {
-  colors: Record<string, string | Record<string, string>>;
-  spacing: Record<string, string>;
-  typography: {
-    fontFamily: Record<string, string>;
-    fontSize: Record<string, string>;
-    fontWeight: Record<string, string>;
-    lineHeight: Record<string, string>;
-  };
-  breakpoints: Record<string, string>;
-  zIndex: Record<string, string>;
-  shadows: Record<string, string>;
-  borderRadius: Record<string, string>;
 }
 
 /**
@@ -42,47 +26,67 @@ export class Theme {
     const parts = path.split('.');
     let current: any = this.tokens;
     for (const part of parts) {
-      if (current === undefined) return undefined;
+      if (current === undefined || current === null) return undefined;
       current = current[part];
     }
-    return current;
+    return typeof current === 'string' ? current : undefined;
+  }
+
+  set(path: string, value: string): void {
+    const parts = path.split('.');
+    let current: any = this.tokens;
+    for (let i = 0; i < parts.length - 1; i++) {
+      if (!current[parts[i]]) {
+        current[parts[i]] = {};
+      }
+      current = current[parts[i]];
+    }
+    current[parts[parts.length - 1]] = value;
   }
 
   toObject(): ThemeTokens {
     return this.tokens;
   }
+  
+  toCSSVariables(prefix: string = 'theme'): string {
+    let css = '';
+    const flatten = (obj: ThemeTokens, path: string = '') => {
+      for (const [key, value] of Object.entries(obj)) {
+        const newPath = path ? `${path}-${key}` : key;
+        if (typeof value === 'object' && value !== null) {
+          flatten(value, newPath);
+        } else {
+          css += `  --${prefix}-${newPath}: ${value};\n`;
+        }
+      }
+    };
+    flatten(this.tokens);
+    return `:root {\n${css}}\n`;
+  }
 }
 
 /**
  * Create a theme contract that defines the expected shape of themes
- * @param contractShape - The contract object defining required token paths
- * @returns Proxy contract with validation methods
  */
-export function createThemeContract(contractShape: ThemeContract): ThemeContract & {
-  __isContract: boolean;
+export function createThemeContract<T extends ThemeContract>(contractShape: T): T & {
+  __isContract: true;
   __validate: (theme: ThemeTokens) => boolean;
 } {
   const contract = contractShape;
   
-  const contractProxy = new Proxy(contract, {
-    get(target, prop: string | symbol) {
-      if (prop === '__isContract') return true;
-      if (prop === '__validate') return (theme: ThemeTokens) => validateTheme(contract, theme);
-      return target[prop as keyof typeof target];
-    }
-  }) as ThemeContract & {
-    __isContract: boolean;
+  const contractProxy = Object.assign({}, contract, {
+    __isContract: true as const,
+    __validate: (theme: ThemeTokens) => validateTheme(contract, theme)
+  });
+  
+  return contractProxy as T & {
+    __isContract: true;
     __validate: (theme: ThemeTokens) => boolean;
   };
-  
-  return contractProxy;
 }
 
 /**
  * Validate that a theme matches the contract
- * @param contract - The contract to validate against
- * @param theme - The theme to validate
- * @param path - Current path for error messages
  * @returns true if valid, throws error otherwise
  */
 export function validateTheme(
@@ -104,8 +108,8 @@ export function validateTheme(
       requiredKeys.forEach(key => {
         const newPath = currentPath ? `${currentPath}.${key}` : key;
         
-        if (!themePart || !themePart.hasOwnProperty(key)) {
-          errors.push(` Missing required token: "${newPath}"`);
+        if (!themePart || !(key in themePart)) {
+          errors.push(`  ✗ Missing required token: "${newPath}"`);
         } else {
           validate(
             contractPart[key] as ThemeContract,
@@ -116,14 +120,14 @@ export function validateTheme(
       });
       
       themeKeys.forEach(key => {
-        if (!contractPart.hasOwnProperty(key)) {
+        if (!(key in contractPart)) {
           const newPath = currentPath ? `${currentPath}.${key}` : key;
-          console.warn(` Extra token not in contract: "${newPath}"`);
+          console.warn(`⚠️ Extra token not in contract: "${newPath}"`);
         }
       });
     } else {
       if (themePart !== undefined && typeof themePart !== 'string') {
-        errors.push(` Token "${currentPath}" must be a string, got ${typeof themePart}`);
+        errors.push(`  ✗ Token "${currentPath}" must be a string, got ${typeof themePart}`);
       }
     }
   }
@@ -139,38 +143,34 @@ export function validateTheme(
 
 /**
  * Create an actual theme from a contract and values
- * @param contract - The contract defining the shape
- * @param themeValues - The actual theme values
- * @returns Theme object with getter method
  */
-export function createTheme(
-  contract: ThemeContract | (ThemeContract & { __isContract: boolean; __validate: (theme: ThemeTokens) => boolean }),
+export function createTheme<T extends ThemeContract>(
+  contract: T | (T & { __isContract: boolean }),
   themeValues: ThemeTokens
 ): Theme {
-  if ((contract as any).__isContract) {
+  // Validate if contract has validation method
+  if (typeof (contract as any).__validate === 'function') {
     (contract as any).__validate(themeValues);
   } else {
-    validateTheme(contract as ThemeContract, themeValues);
+    validateTheme(contract as T, themeValues);
   }
   
   const tokens: ThemeTokens = {};
   
   function buildTokens(
-    contractPart: ThemeContract,
+    contractPart: T,
     themePart: ThemeTokens | undefined,
     target: ThemeTokens,
-    path: string = ''
+    _path: string = ''
   ): void {
     Object.keys(contractPart).forEach(key => {
-      const newPath = path ? `${path}.${key}` : key;
-      
       if (typeof contractPart[key] === 'object' && contractPart[key] !== null) {
         target[key] = {};
         buildTokens(
-          contractPart[key] as ThemeContract,
+          contractPart[key] as T,
           (themePart?.[key] as ThemeTokens) || {},
           target[key] as ThemeTokens,
-          newPath
+          _path
         );
       } else {
         target[key] = themePart?.[key] as string;
@@ -178,7 +178,20 @@ export function createTheme(
     });
   }
   
-  buildTokens(contract as ThemeContract, themeValues, tokens);
+  buildTokens(contract as T, themeValues, tokens);
   
   return new Theme(tokens);
 }
+
+// Type guard to check if an object is a theme contract
+export function isThemeContract(obj: any): obj is ThemeContract & { __isContract: true } {
+  return obj && typeof obj === 'object' && obj.__isContract === true;
+}
+
+export default {
+  Theme,
+  createThemeContract,
+  validateTheme,
+  createTheme,
+  isThemeContract
+};
