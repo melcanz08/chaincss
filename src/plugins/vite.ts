@@ -276,7 +276,15 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
       
       if (id === resolvedCssId) {
         const css = updateCSS();
-        return css || '/* ChainCSS: No styles */';
+        // Return JS that injects the CSS into the DOM
+        if (css && css.trim()) {
+          return `const style = document.createElement('style');
+style.setAttribute('data-chaincss', 'build');
+style.textContent = ${JSON.stringify(css)};
+document.head.appendChild(style);
+export default {};`;
+        }
+        return 'export default {};';
       }
       
       return null;

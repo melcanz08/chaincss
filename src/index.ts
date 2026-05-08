@@ -165,6 +165,40 @@ export const VERSION = '3.0.0';
 // ============================================================================
 // Default Export - Keep original chain for backward compatibility
 // ============================================================================
+// ============================================================================
+// 🆕 Design System Orchestrator (v2.3)
+// ============================================================================
+export {
+  orchestrator,
+  contrastRatio,
+  checkContrast,
+  auditContrast,
+  createContextualToken,
+  resolveContextual,
+  generateContextualCSS,
+  validateTokenRelationships,
+} from './compiler/design-orchestrator.js';
+export type { ContrastResult, ContrastReport, ContextualToken, TokenContext } from './compiler/design-orchestrator.js';
+
+// ============================================================================
+// Default Export - Keep original chain for backward compatibility
+// ============================================================================
+// ============================================================================
+// 🆕 Scroll Timeline Engine (v2.3)
+// ============================================================================
+export {
+  scrollTimeline,
+  compileScrollAnimation,
+  compileScrollAnimations,
+  createScrollAnimation,
+  getScrollPresets,
+  SCROLL_PRESETS,
+} from './compiler/scroll-timeline.js';
+export type { ScrollTimelineConfig, ScrollAnimation, ScrollTimelineResult, KeyframeStep } from './compiler/scroll-timeline.js';
+
+// ============================================================================
+// Default Export - Keep original chain for backward compatibility
+// ============================================================================
 import { chain } from './compiler/Chain.js';
 export default chain;
 
@@ -208,3 +242,71 @@ export type ResponsiveValue<T> = T | {
 export type StyleWithTokens<T = any> = T | ((tokens: DesignTokens) => T);
 
 import { DesignTokens } from './compiler/tokens.js';
+
+// ============================================================================
+// 🆕 Math Engine (v3.0)
+// ============================================================================
+export { 
+  math,
+  add,
+  subtract,
+  multiply,
+  divide,
+  fluidType,
+  convert,
+  toPx,
+  scale
+} from './compiler/math-engine.js';
+export type { 
+  CSSUnit, 
+  CSSMathValue, 
+  MathContext, 
+  MathResult, 
+  FluidTypeConfig 
+} from './compiler/math-engine.js';
+
+// ============================================================================
+// 🆕 Intent Engine — Self-Healing CSS (v3.0)
+// ============================================================================
+export {
+  intent,
+  correct,
+  heal,
+  validate as validateValue,
+  getIntent
+} from './compiler/intent-engine.js';
+export type {
+  CorrectionResult,
+  HealMode,
+  HealResult,
+  IntentContext
+} from './compiler/intent-engine.js';
+
+// ============================================================================
+// 🆕 Style Graph Compiler (v3.0)
+// ============================================================================
+export {
+  StyleGraphCompiler,
+  compileGraph
+} from './compiler/style-graph.js';
+export type {
+  StyleGraph,
+  StyleGraphNode,
+  StyleGraphEdge,
+  GraphCompileOptions,
+  GraphCompileResult
+} from './compiler/style-graph.js';
+
+// ============================================================================
+// 🆕 Static Analyzer — IDE Intelligence Layer (v3.0)
+// ============================================================================
+export {
+  StyleAnalyzer,
+  analyze as analyzeStyle
+} from './compiler/analyzer.js';
+export type {
+  StyleDiagnostic,
+  StyleAnalysis,
+  BreakpointInference,
+  DiagnosticSeverity
+} from './compiler/analyzer.js';

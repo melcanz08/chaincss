@@ -25,6 +25,10 @@ import { PersistentCache } from '../compiler/content-addressable-cache.js';
 import { shorthandMap, macros } from '../compiler/shorthands.js';
 import type { AtomicClass } from '../compiler/atomic-optimizer.js';
 
+import { StyleGraphCompiler } from '../compiler/style-graph.js';
+import type { GraphCompileOptions } from '../compiler/style-graph.js';
+
+
 const __filename = typeof import.meta !== 'undefined' ? (() => { try { return fileURLToPath(import.meta.url); } catch { return ''; } })() : '';
 const __dirname = __filename ? path.dirname(__filename) : '';
 
@@ -89,6 +93,42 @@ export class ChainCSSCompiler {
 
     this.initOptimizer();
     this.initPrefixer();
+  }
+
+  /**
+ * Compile using the style graph compiler for advanced optimizations.
+ * 
+ * @example
+ * const result = compiler.compileWithGraph(styles, { 
+ *   eliminateDead: true, 
+ *   knownSelectors: ['.header', '.footer'],
+ *   mergeIdentical: true 
+ * });
+ */
+  public compileWithGraph(
+    styles: Record<string, import('./types.js').StyleDefinition>,
+    options?: GraphCompileOptions
+  ): import('./types.js').GraphCompileResult {
+    const graphCompiler = new StyleGraphCompiler({
+      ...options,
+      verbose: this.config.verbose,
+    });
+    
+    const result = graphCompiler.compile(styles);
+    
+    if (this.config.verbose) {
+      if (result.eliminatedDead > 0) {
+        console.log(`  🧹 Eliminated ${result.eliminatedDead} dead styles`);
+      }
+      if (result.mergedRules > 0) {
+        console.log(`  🔗 Merged ${result.mergedRules} identical rules`);
+      }
+      if (result.optimizationTime > 0) {
+        console.log(`  ⚡ Graph compilation: ${result.optimizationTime}ms`);
+      }
+    }
+    
+    return result;
   }
 
   public hasStyles(): boolean {
