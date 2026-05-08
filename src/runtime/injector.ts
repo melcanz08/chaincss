@@ -5,7 +5,8 @@ import { processStyleObject } from '../core/common-utils.js';
 
 const TOKEN_V2_KEY = '__CHAINCSS_V2_TOKENS__';
 
-export interface StyleDefinition {
+// Runtime-specific style def — selectors optional
+export interface RuntimeStyleDefinition {
   selectors?: string[];
   hover?: Record<string, string | number>;
   [key: string]: any;
@@ -110,7 +111,7 @@ class StyleInjector {
     });
   }
 
-  private generateCSS(style: StyleDefinition, className: string): string {
+  private generateCSS(style: RuntimeStyleDefinition, className: string): string {
     let css = '';
     const selector = `.${className}`;
 
@@ -139,7 +140,7 @@ class StyleInjector {
     return css;
   }
 
-  injectMultiple(styles: Record<string, StyleDefinition>, moduleId?: string): Record<string, string> {
+  injectMultiple(styles: Record<string, RuntimeStyleDefinition>, moduleId?: string): Record<string, string> {
     const result: Record<string, string> = {};
     let newCSS = '';
     const moduleClasses = new Set<string>();
@@ -233,13 +234,13 @@ export const styleInjector = new StyleInjector();
 
 // --- PUBLIC API ---
 export const setTokens = (t: TokenStore) => styleInjector.setTokens(t);
-export const compileRuntime = (s: Record<string, StyleDefinition>, moduleId?: string) =>
+export const compileRuntime = (s: Record<string, RuntimeStyleDefinition>, moduleId?: string) =>
   styleInjector.injectMultiple(s, moduleId);
 export const removeRuntimeModule = (moduleId: string) => styleInjector.removeModule(moduleId);
 export const clearRuntimeStyles = () => styleInjector.removeAll();
 export const enableRuntimeDebug = (enabled: boolean) => styleInjector.enableDebug(enabled);
 
-export function runRuntime(...styles: StyleDefinition[]): string {
+export function runRuntime(...styles: RuntimeStyleDefinition[]): string {
   let css = '';
   for (const style of styles) {
     if (style.selectors && style.selectors.length > 0) {

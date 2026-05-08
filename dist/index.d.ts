@@ -3,6 +3,7 @@
  * @packageDocumentation
  */
 export { smartChain, smartChain as chainV3, buildChain, runtimeChain } from './core/smart-chain.js';
+export { injectChainStyles } from './runtime/index.js';
 export { autoDetector, AutoDetector, type ValueType, type Mode } from './core/auto-detector.js';
 export { useSmartStyles, createSmartComponent, withSmartStyles } from './runtime/auto-hooks.js';
 export { ChainCSSCompiler, compileChainCSS } from './core/compiler.js';
@@ -38,7 +39,6 @@ export type { ChainCSSConfig, CompileResult, ChainCSSPlugin } from './core/types
 export type { Chain } from './compiler/Chain.js';
 export type { AnimationConfig, KeyframeDefinition } from './compiler/animations.js';
 export type { BreakpointsMap, ResponsiveStyle } from './compiler/breakpoints.js';
-export * from './runtime/index.js';
 export declare const VERSION = "3.0.0";
 import { chain } from './compiler/Chain.js';
 export default chain;

@@ -23,6 +23,12 @@ type Autoprefixer = any;
 
 // Declare variables for optional dependencies (initially null)
 let postcss: PostCSS | null = null;
+
+// Helper to load optional deps without Vite static analysis
+function __import__(name: string): Promise<any> {
+  return new Function("name", "return import(name)")(name);
+}
+
 let browserslist: Browserslist | null = null;
 let caniuse: any = null;
 let autoprefixer: Autoprefixer | null = null;
@@ -65,12 +71,10 @@ async function loadBrowserslist() {
   const promise = (async () => {
     if (!browserslistLoaded) {
       try {
-        const module = await import(/* @vite-ignore */ 'browserslist');
-        browserslist = module.default || module;
+        const module = __import__('browserslist');
+        browserslist = (module as any).default || module;
       } catch (err) {
-        if (process.env.DEBUG) {
-          console.warn('browserslist not installed');
-        }
+        browserslist = null;
       }
       browserslistLoaded = true;
     }
@@ -92,9 +96,7 @@ async function loadCaniuse() {
         const caniuseModule = await safeImport("caniuse-db/fulldata-json/data-2.0.json");
         caniuse = caniuseModule.default || caniuseModule;
       } catch (err) {
-        if (process.env.DEBUG) {
-          console.warn('caniuse-db not installed, lightweight prefixing will be limited');
-        }
+        caniuse = null;
       }
       caniuseLoaded = true;
     }
@@ -113,8 +115,8 @@ async function loadAutoprefixer() {
     if (!autoprefixerLoaded) {
       try {
         // @ts-ignore - autoprefixer is optional
-        const module = await import('autoprefixer');
-        autoprefixer = module.default || module;
+        const module = __import__('autoprefixer');
+        autoprefixer = (module as any).default || module;
       } catch (err) {
         if (process.env.DEBUG) {
           console.warn('autoprefixer not installed');

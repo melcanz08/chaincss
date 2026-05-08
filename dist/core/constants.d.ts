@@ -133,7 +133,7 @@ export declare const ENVIRONMENT_PRESETS: {
         readonly atomic: {
             readonly naming: NamingScheme;
             readonly minify: false;
-            readonly verbose: true;
+            readonly verbose: false;
             readonly cache: true;
         };
         readonly output: {
@@ -143,7 +143,7 @@ export declare const ENVIRONMENT_PRESETS: {
         readonly debug: true;
         readonly timeline: true;
         readonly sourceComments: true;
-        readonly verbose: true;
+        readonly verbose: false;
     };
     readonly production: {
         readonly atomic: {

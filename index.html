@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>ChainCSS Vanilla JS</title>
+</head>
+<body>
+  <div id="app"></div>
+  <script type="module">
+    import { chain, injectChainStyles } from 'chaincss';
+
+    const heading = chain()
+      .fs(48)
+      .fw(800)
+      .textGradient(['#6366f1', '#06b6d4'])
+      .$el('heading');
+
+    const button = chain()
+      .display('inline-flex')
+      .px(28)
+      .py(14)
+      .bg('#6366f1')
+      .color('white')
+      .rounded(12)
+      .border('none')
+      .cursor('pointer')
+      .hover().bg('#4f46e5').transform('translateY(-2px)').end()
+      .$el('btn');
+
+    // Inject styles
+    injectChainStyles({ heading, button });
+
+    // Build UI
+    document.getElementById('app').innerHTML = `
+      <h1 class="${heading.selectors[0]}">Hello ChainCSS!</h1>
+      <button class="${button.selectors[0]}" onclick="alert('Clicked!')">
+        Vanilla JS Button
+      </button>
+    `;
+  </script>
+</body>
+</html>

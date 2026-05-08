@@ -1,7 +1,7 @@
 {
   "name": "chaincss",
-  "version": "2.1.0",
-  "description": "ChainCSS v3.0 - The first CSS-in-JS library with true auto-detection mixed mode. Zero runtime by default, dynamic when you need it.",
+  "version": "2.1.37",
+  "description": "ChainCSS - The first CSS-in-JS library with true auto-detection mixed mode. Zero runtime by default, dynamic when you need it.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -33,13 +33,14 @@
     }
   },
   "scripts": {
-    "build": "npm run build:clean && npm run build:types && npm run build:core && npm run build:cli && npm run build:plugins && npm run build:runtime && npm run build:compiler",
+    "build": "npm run build:clean && npm run build:types && npm run build:core && npm run build:cli && npm run build:plugins && npm run build:runtime && npm run build:browser && npm run build:compiler",
     "build:clean": "rm -rf dist",
     "build:types": "tsc -p tsconfig.build.json",
     "build:core": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js --packages=external",
     "build:cli": "esbuild src/cli/index.ts --bundle --platform=node --format=esm --outfile=dist/cli/index.js --packages=external && chmod +x dist/cli/index.js",
     "build:plugins": "esbuild src/plugins/vite.ts --bundle --platform=node --format=esm --outfile=dist/plugins/vite.js --packages=external && esbuild src/plugins/webpack.ts --bundle --platform=node --format=esm --outfile=dist/plugins/webpack.js --packages=external",
-    "build:runtime": "esbuild src/runtime/index.ts --bundle --platform=browser --format=esm --outfile=dist/runtime/index.js --external:react --external:react-dom --external:vue --external:svelte",
+    "build:runtime": "esbuild src/runtime/index.ts --bundle --platform=browser --format=esm --outfile=dist/runtime/index.js --external:react --external:react-dom --external:vue --external:svelte --external:url",
+    "build:browser": "esbuild src/browser.ts --bundle --platform=browser --format=esm --outfile=dist/browser.js --external:react --external:react-dom --external:vue --external:svelte --external:url",
     "build:compiler": "esbuild src/compiler/index.ts --bundle --platform=node --format=esm --outfile=dist/compiler/index.js --packages=external",
     "dev": "tsc -w",
     "prepublishOnly": "npm run build",

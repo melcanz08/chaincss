@@ -172,14 +172,14 @@ export class AtomicOptimizer {
       
       if (data.version !== '2.0.0') {
         if (this.options.verbose) {
-          console.log('Cache version mismatch, rebuilding...');
+          if (this.options.verbose) console.log('Cache version mismatch, rebuilding...');
         }
         return;
       }
       
       if (data.config?.threshold !== this.options.threshold) {
         if (this.options.verbose) {
-          console.log('Threshold changed, rebuilding cache...');
+          if (this.options.verbose) console.log('Threshold changed, rebuilding cache...');
         }
         return;
       }
@@ -205,12 +205,12 @@ export class AtomicOptimizer {
       }
       
       if (this.options.verbose) {
-        console.log(`✅ Cache loaded: ${this.atomicClasses.size} atomic classes`);
+        if (this.options.verbose) console.log(`✅ Cache loaded: ${this.atomicClasses.size} atomic classes`);
       }
       
     } catch (err) {
       if (this.options.verbose) {
-        console.log('Could not load cache:', (err as Error).message);
+        if (this.options.verbose) console.log('Could not load cache:', (err as Error).message);
       }
     }
   }
@@ -246,11 +246,11 @@ export class AtomicOptimizer {
       fs.writeFileSync(this.options.cachePath, JSON.stringify(cache, null, 2), 'utf8');
       
       if (this.options.verbose) {
-        console.log(`💾 Cache saved: ${this.atomicClasses.size} atomic classes`);
+        // Cache saved (silent)
       }
     } catch (err) {
       if (this.options.verbose) {
-        console.log('Could not save cache:', (err as Error).message);
+        if (this.options.verbose) console.log('Could not save cache:', (err as Error).message);
       }
     }
   }
@@ -321,7 +321,7 @@ export class AtomicOptimizer {
     } catch (e) {
       // Silent fail for malformed chains
       if (this.options.verbose) {
-        console.log('Failed to process style chain:', e);
+        if (this.options.verbose) console.log('Failed to process style chain:', e);
       }
     }
   }
@@ -590,7 +590,7 @@ export class AtomicOptimizer {
     const selector = `.${componentClassName}`;
 
     if (this.options.verbose) {
-      console.log(`[AtomicOptimizer] Optimizing component: ${componentId} -> ${componentClassName}`);
+      // Optimizing component (silent)
     }
 
     let classList: string[] = [componentClassName];
@@ -629,7 +629,7 @@ export class AtomicOptimizer {
         this.stats.atomicStyles++;
         
         if (this.options.verbose) {
-          console.log(`  [Atomic] ${kebabProp}: ${stringValue} -> .${atomicClass}`);
+          // [Atomic] (silent)
         }
       } else {
         // It stays local to the component
@@ -637,7 +637,7 @@ export class AtomicOptimizer {
         this.stats.standardStyles++;
         
         if (this.options.verbose) {
-          console.log(`  [Standard] ${kebabProp}: ${stringValue}`);
+          // [Standard] (silent)
         }
       }
     }
@@ -724,7 +724,7 @@ export class AtomicOptimizer {
     };
     
     if (this.options.verbose) {
-      console.log('AtomicOptimizer reset');
+      if (this.options.verbose) console.log('AtomicOptimizer reset');
     }
   }
 
@@ -769,7 +769,7 @@ export class AtomicOptimizer {
     if (this.options.cache && fs.existsSync(this.options.cachePath)) {
       fs.unlinkSync(this.options.cachePath);
       if (this.options.verbose) {
-        console.log('Cache cleared');
+        if (this.options.verbose) console.log('Cache cleared');
       }
     }
   }

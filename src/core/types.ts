@@ -14,8 +14,10 @@ export interface StyleDefinition {
   _generateComponent?: boolean;
   _framework?: 'react' | 'vue' | 'svelte' | 'solid' | 'auto';
   _propsDefinition?: Record<string, any>;
-  /** Explicit bucket for custom CSS properties to avoid index signature issues */
+  /** Explicit bucket for custom CSS properties */
   customProperties?: Record<string, string | number>;
+  /** Allow arbitrary CSS properties */
+  [cssProperty: string]: any;
 }
 
 export interface AtRule {

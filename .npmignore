@@ -1,15 +1,9 @@
-# Development files (keep out of npm)
-benchmarks/
-test/
-examples/
-vscode-extension/
-
-# Source maps (optional)
-*.map
-
-# Cache
-.chaincss-cache/
-
-# IDE files
-.vscode/
-.idea/
+demo/node_modules
+demo/package-lock.json
+__tests__
+.chaincss-cache
+vitest.config.ts
+vitest.setup.ts
+fix-errors.sh
+structure.txt
+src/runtime/solid.ts.bak

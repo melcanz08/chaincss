@@ -1,293 +1,371 @@
+<h1 align="center">ChainCSS</h1>
+
 <p align="center">
-  <h1 align="center">ChainCSS</h1>
-  <p align="center">
-    <strong>The first CSS-in-JS library with true auto-detection mixed mode.</strong><br>
-    Zero runtime by default. Dynamic when you need it. No compromises.
-  </p>
+  <strong>The first CSS-in-JS library with true auto-detection mixed mode.</strong><br>
+  Zero runtime by default. Dynamic when you need it. No compromises.
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/chaincss"><img src="https://img.shields.io/npm/v/chaincss" alt="npm"></a>
-  <a href="https://github.com/melcanz08/chaincss/blob/main/LICENSE"><img src="https://img.shields.io/github/license/melcanz08/chaincss" alt="license"></a>
-  <a href="https://chaincss.dev"><img src="https://img.shields.io/badge/docs-chaincss.dev-blue" alt="docs"></a>
+  <a href="https://www.npmjs.com/package/chaincss">
+    <img src="https://img.shields.io/npm/v/chaincss" alt="npm">
+  </a>
+  <a href="https://github.com/melcanz08/chaincss/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/melcanz08/chaincss" alt="license">
+  </a>
+  <a href="https://chaincss.dev">
+    <img src="https://img.shields.io/badge/docs-chaincss.dev-blue" alt="docs">
+  </a>
+  <a href="https://github.com/melcanz08/chaincss/actions">
+    <img src="https://img.shields.io/badge/tests-258%20passed-brightgreen" alt="tests">
+  </a>
 </p>
 
----
 
-## What is ChainCSS?
+# What is ChainCSS?
 
-ChainCSS lets you write styles as **native JavaScript method chains** instead of CSS strings or object literals. It auto-detects which parts of your styles are static (compile to zero-runtime CSS) and which are dynamic (stay in JS), then splits them automatically.
+ChainCSS lets you write styles as **native JavaScript method chains** — no CSS syntax, no template literals, no object literals.
 
+It automatically detects which styles are static (compiled to zero-runtime CSS) and which are dynamic (stay in JS), then splits them automatically.
+
+```ts
 import { chain } from "chaincss";
 
 const card = chain()
-.display("flex")
-.flexDirection("column")
-.gap(16)
-.padding(24)
-.background("white")
-.borderRadius(12)
-.hover()
-.boxShadow("0 4px 12px rgba(0,0,0,0.15)")
-.transform("translateY(-2px)")
-.end()
-.$el("card");
-text
-
+  .display("flex")
+  .flexDirection("column")
+  .gap(16)
+  .padding(24)
+  .background("white")
+  .borderRadius(12)
+  .hover()
+    .boxShadow("0 4px 12px rgba(0,0,0,0.15)")
+    .transform("translateY(-2px)")
+  .end()
+  .$el("card");
+```
 
 **No CSS syntax. No template literals. No object literals. Just JavaScript.**
 
----
 
-## The Killer Feature: Auto-Detection Mixed Mode
+# Installation
 
-ChainCSS automatically detects which styles are static and which are dynamic.
-
-import { smartChain } from "chaincss";
-
-const styles = smartChain()
-.display("flex") // static -> extracted to CSS file
-.padding(20) // static -> extracted to CSS file
-.color(props.textColor) // dynamic -> stays in JS
-.fontSize(theme.sizes.lg) // dynamic -> stays in JS
-.$el("dynamic-card");
-text
-
-
-| Library | Approach | Dynamic Support | Runtime Cost |
-|---------|----------|----------------|-------------|
-| Tailwind | Utility classes | No | Zero |
-| Styled Components | Runtime CSS-in-JS | Yes | Full |
-| Panda CSS | Build-time + recipes | Limited | Near-zero |
-| Vanilla Extract | Build-time only | No | Zero |
-| **ChainCSS** | **Auto-detection + split** | **Yes** | **Minimal** |
-
----
-
-## Installation
-
+```bash
 npm install chaincss
-text
+```
+
+## Quick Start
+
+| Environment | Setup |
+|---|---|
+| **Vite** | Add `chaincss()` plugin to `vite.config.ts` |
+| **Node.js** | `import { chain } from "chaincss"` |
+| **Browser CDN** | `import { chain } from "https://cdn.jsdelivr.net/npm/chaincss/dist/browser.js"` |
+| **Browser + import map** | Map `"chaincss"` to `./node_modules/chaincss/dist/browser.js` |
 
 
-### Quick Start with Vite
+## Vite Configuration
 
+```ts
 // vite.config.ts
 import { defineConfig } from "vite";
 import chaincss from "chaincss/plugin/vite";
 
 export default defineConfig({
-plugins: [chaincss()],
+  plugins: [chaincss({ atomic: true })],
 });
-text
+```
 
 
----
+# Core API
 
-## Core API
+## The Chain
 
-### The Chain
+Every style starts with `chain()` and ends with `$el()`.
 
+```ts
 import { chain } from "chaincss";
 
 const styles = chain()
-.display("flex")
-.padding(20) // numbers auto-convert to px
-.color("red")
-.$el("my-component");
-text
+  .display("flex")
+  .padding(20)
+  .color("red")
+  .$el("my-component");
+```
+
+## Smart Chain (Auto-Detection)
+
+```ts
+import { smartChain } from "chaincss";
+
+const styles = smartChain()
+  .display("flex")
+  .padding(20)
+  .color(props.textColor)
+  .fontSize(theme.sizes.lg)
+  .$el("hybrid-card");
+```
+
+## Runtime Injection
+
+```ts
+import { chain, injectChainStyles } from "chaincss";
+
+const heading = chain()
+  .fs(48)
+  .fw(800)
+  .textGradient(["#6366f1", "#06b6d4"])
+  .$el("h1");
+
+injectChainStyles({ heading });
+```
 
 
-### Shorthands (80+)
+# Feature Reference
+
+## Shorthands (80+)
+
+```ts
+chain()
+  .bg("#fff")
+  .m(16)
+  .p(20)
+  .br(8)
+  .fs(16)
+  .fw(700)
+  .c("#333")
+  .w(200)
+  .h(100)
+  .d("flex")
+  .z(10)
+  .op(0.5)
+  .ov("hidden")
+  .pos("relative");
+```
+
+
+## Macros (57)
+
+### Layout & Display
+
+```ts
+chain().flex();
+chain().grid();
+chain().center();
+chain().flexCenter();
+chain().gridCenter();
+chain().stack(16);
+chain().cols(3);
+chain().rows(2);
+chain().bento(4);
+chain().gridTable("200px");
+```
+
+### Spacing
+
+```ts
+chain().mx(10);
+chain().my(20);
+chain().px(16);
+chain().py(24);
+chain().size(50);
+chain().gap(16);
+chain().gapX(8);
+chain().gapY(12);
+chain().inset(0);
+chain().insetX(16);
+chain().insetY(8);
+```
+
+### Borders
+
+```ts
+chain().borderX("1px solid red");
+chain().borderY("1px solid blue");
+```
+
+### Positioning
+
+```ts
+chain().absolute({ top: 0, left: 0 });
+chain().fixed({ top: 0, right: 0 });
+chain().sticky({ top: 0 });
+chain().relative();
+```
+
+### Visibility & Behavior
+
+```ts
+chain().hide();
+chain().show();
+chain().unselectable();
+chain().scrollable("y");
+chain().safeArea("top");
+```
+
+### Shapes & Typography
+
+```ts
+chain().circle(50);
+chain().square(40);
+chain().pill();
+chain().truncate();
+chain().aspect("16/9");
+chain().aspect("square");
+chain().fluidText({ min: 16, max: 24 });
+chain().lineClamp(3);
+```
+
+### Aesthetic Effects
+
+```ts
+chain().glass();
+chain().glass(5);
+chain().glow("#ff0000");
+chain().glow({ color: "#6366f1", size: 20 });
+chain().textGradient(["#667eea", "#764ba2"]);
+chain().meshGradient(["#f0f", "#0ff", "#ff0", "#0f0"]);
+chain().noise(0.05);
+chain().shimmer();
+```
+
+### State & Interactions
+
+```ts
+chain().clickScale(0.95);
+chain().pressable();
+chain().focusRing("#3b82f6");
+chain().skeleton(true);
 
 chain()
-.bg("#fff") // backgroundColor
-.m(16) // margin
-.p(20) // padding
-.br(8) // borderRadius
-.fs(16) // fontSize
-.fw(700) // fontWeight
-.c("#333") // color
-.w(200) // width
-.h(100) // height
-.d("flex") // display
-text
+  .dark(c => c.bg("#1a202c").c("white"))
+  .light(c => c.bg("white").c("#1a202c"));
+```
 
+### Utility
 
-### Macros (57 built-in)
+```ts
+chain().fullScreen();
+chain().containerMacro(1200);
+chain().outlineDebug();
+chain().parallax(2);
+chain().frostedNav(15);
+```
 
-**Layout:**
+## Conditional Styles
 
-chain().flex() // display: flex
-chain().grid() // display: grid
-chain().center() // flex + align-items + justify-content center
-chain().flexCenter() // flex centering
-chain().gridCenter() // grid centering
-chain().stack(16) // flex column with gap
-chain().cols(3) // grid-template-columns: repeat(3, 1fr)
-chain().bento(4) // bento grid layout
-text
-
-
-**Spacing:**
-
-chain().mx(10) // margin-left + margin-right
-chain().my(20) // margin-top + margin-bottom
-chain().px(16) // padding-left + padding-right
-chain().py(24) // padding-top + padding-bottom
-chain().size(50) // width + height
-chain().gap(16) // gap
-text
-
-
-**Positioning:**
-
-chain().absolute({ top: 0, left: 0 })
-chain().fixed({ top: 0, right: 0 })
-chain().sticky({ top: 0 })
-chain().relative()
-text
-
-
-**Visibility:**
-
-chain().hide() // visibility: hidden + opacity: 0
-chain().show() // visibility: visible + opacity: 1
-chain().unselectable() // user-select: none
-chain().scrollable("y") // overflow-y: auto
-text
-
-
-**Shapes:**
-
-chain().circle(50) // width + height + border-radius: 50%
-chain().square(40) // width + height
-chain().pill() // border-radius: 9999px
-chain().truncate() // text-overflow: ellipsis
-chain().aspect("16/9") // aspect-ratio
-text
-
-
-**Aesthetic Effects:**
-
-chain().glass() // backdrop-filter blur + semi-transparent bg
-chain().glow("#ff0000") // box-shadow glow
-chain().textGradient(["#667eea", "#764ba2"]) // gradient text
-chain().meshGradient(["#f0f", "#0ff", "#ff0", "#0f0"]) // mesh gradient
-chain().noise(0.05) // noise texture overlay
-chain().shimmer() // loading shimmer effect
-text
-
-
-**State & Interactions:**
-
+```ts
 chain()
-.hover()
-.background("#2563eb")
-.transform("scale(1.05)")
-.end()
+  .padding(12)
+  .when(isActive, c => c.background("#10b981").color("white"))
+  .when(isDisabled, c => c.opacity(0.5).cursor("not-allowed"))
+  .$el("stateful-btn");
+```
 
-chain().clickScale(0.95) // scale on click
-chain().pressable() // cursor pointer + hover effects
-chain().focusRing("#3b82f6") // focus-visible ring
-chain().skeleton(true) // loading skeleton animation
-chain().dark(c => c.bg("#1a202c").c("white")) // dark mode
-chain().light(c => c.bg("white").c("#1a202c")) // light mode
-chain().children(c => c.gap(8)) // direct children styles
-text
+## Nested Selectors
 
-
-**Utility:**
-
-chain().fullScreen() // fixed fullscreen overlay
-chain().containerMacro(1200) // centered container
-chain().outlineDebug() // debug outlines
-chain().parallax(2) // parallax scrolling
-chain().lineClamp(3) // text line clamp
-chain().frostedNav(15) // frosted glass navigation
-text
-
-
-### Conditional Styles
-
+```ts
 chain()
-.padding(12)
-.when(isActive, c => c
-.background("#10b981")
-.color("white")
-)
-.when(isDisabled, c => c
-.opacity(0.5)
-.cursor("not-allowed")
-)
-.$el("stateful-btn");
-text
-
-
-### Nested Selectors
-
-chain()
-.display("flex")
-.nest("& > *", c => c.flex(1))
-.nest("&:first-child", c => c.fontWeight(700))
-.nest(".child", c => c.color("red"))
-.$el("flex-container");
-text
-
+  .display("flex")
+  .nest("& > *", c => c.flex(1))
+  .nest("&:first-child", c => c.fontWeight(700))
+  .nest(".child", c => c.color("red"))
+  .$el("flex-container");
+```
 
 ### Mixins with use()
 
-const sharedStyles = { display: "flex", alignItems: "center", gap: 8 };
-chain().use(sharedStyles).padding(20).$el("reused");
-text
+```ts
+const shared = { display: "flex", alignItems: "center", gap: 8 };
+chain().use(shared).padding(20).$el("reused");
+```
 
+## Responsive Design
 
-### Responsive Design
-
+```ts
 chain()
-.display("flex")
-.flexDirection("column")
-.responsive("md", c => c.flexDirection("row"))
-.media("(min-width: 1024px)", c => c.maxWidth(1200))
-.$el("responsive");
-text
+  .display("flex")
+  .flexDirection("column")
+  .responsive("md", c => c.flexDirection("row"))
+  .media("(min-width: 1024px)", c => c.maxWidth(1200))
+  .$el("responsive");
+```
 
+**Built-in breakpoints (20):** `sm`, `md`, `lg`, `xl`, `2xl`, `mobile`, `tablet`, `desktop`, `portrait`, `landscape`, `dark`, `light`, `reducedMotion`, `highContrast`, `print`, `hover`, `no-hover`, `fine`, `coarse`
 
-Built-in breakpoints: sm, md, lg, xl, 2xl, mobile, tablet, desktop, dark, light, reducedMotion, highContrast, print, hover, portrait, landscape.
+## Transform Methods
 
-### Transform Methods
-
-chain().scale(1.1).rotate("45deg").x(10).y(20).$el("transformed");
-text
-
-
-### Math Helpers
-
+```ts
 chain()
-.width(chain().calc("100% - 20px"))
-.fontSize(chain().clamp(16, 4, 24))
-.margin(chain().add(10, 20))
+  .scale(1.1)
+  .rotate("45deg")
+  .x(10)
+  .y(20)
+  .skew("5deg")
+  .$el("transformed");
+```
+
+### Math Helpers (15)
+
+```ts
+chain()
+.width(helpers.calc("100% - 20px"))
+.fontSize(helpers.clamp(16, 4, 24))
+.margin(helpers.add(10, 20))
 .$el("calculated");
-text
 
+// helpers.add(), .sub(), .mul(), .div(), .sum(), .difference()
+// helpers.mpx(), .rem(), .em(), .percent(), .vw(), .vh()
+// helpers.min(), .max(), .clamp(), .round(), .rgba(), .hsla()
+// helpers.fluidType(min, max, minWidth, maxWidth)
+```
 
----
+## Design Tokens
+
+```ts
+import { createTokens } from "chaincss";
+
+const tokens = createTokens({
+  colors: {
+    primary: "#6366f1",
+    secondary: "#10b981",
+  },
+  spacing: {
+    sm: "8px",
+    md: "16px",
+    lg: "24px",
+  },
+});
+```
+
+### Theme Contracts
+
+```ts
+import { createThemeContract, createTheme, validateTheme } from "chaincss";
+
+const contract = createThemeContract({
+colors: { primary: "", background: "" },
+spacing: { sm: "", md: "" },
+});
+
+const light = createTheme(contract, {
+colors: { primary: "#3b82f6", background: "#fff" },
+spacing: { sm: "8px", md: "16px" },
+});
+
+const theme = new Theme(light);
+theme.toCSSVariables("my-theme"); // -> :root { --my-theme-colors-primary: #3b82f6; ... }
+```
 
 ## Recipe System (Variants)
 
+```ts
 import { recipe } from "chaincss";
 
 const button = recipe({
-base: {
-selectors: ["btn"],
-display: "inline-flex",
-borderRadius: "8px",
-fontWeight: 600,
-},
+base: { selectors: ["btn"], display: "inline-flex", borderRadius: "8px", fontWeight: 600 },
 variants: {
 size: {
 sm: { padding: "8px 16px", fontSize: "14px" },
-md: { padding: "12px 24px", fontSize: "16px" },
 lg: { padding: "16px 32px", fontSize: "18px" },
 },
 color: {
@@ -297,197 +375,196 @@ danger: { background: "#ef4444", color: "white" },
 },
 defaultVariants: { size: "md", color: "primary" },
 compoundVariants: [
-{
-variants: { size: "lg", color: "primary" },
-style: { fontWeight: 800 },
-},
+{ variants: { size: "lg", color: "primary" }, style: { fontWeight: 800 } },
 ],
 });
 
 const styles = button({ size: "lg", color: "danger" });
-text
+```
 
+### Animations (42 presets)
 
----
-
-## Animations (42 built-in presets)
-
-chain()
-.fadeIn()
-.slideInUp()
-.zoomIn()
-.bounce()
-.pulse()
-.spin()
-.shake()
-.wiggle()
-.float()
-.flash()
-.textReveal()
-.$el("animated");
+```ts
+chain().fadeIn().$el("el"); chain().slideInUp().$el("el");  chain().slideInUp().$el("el");
+chain().zoomIn().$el("el"); chain().bounce().$el("el"); chain().bounce().$el("el");
+chain().pulse().$el("el");  chain().spin().$el("el"); chain().spin().$el("el");
+chain().shake().$el("el");  chain().wiggle().$el("el"); chain().wiggle().$el("el");
+chain().float().$el("el");  chain().flash().$el("el");  chain().flash().$el("el");
+chain().textReveal().$el("el");
 
 // Custom animation
-chain()
-.animate("myKeyframes", {
-"0%": { opacity: 0, transform: "scale(0.5)" },
-"100%": { opacity: 1, transform: "scale(1)" },
-}, { duration: "0.5s", timing: "ease-out" })
-.$el("custom-anim");
-text
+chain().animate("myName", { "0%": { opacity: 0 }, "100%": { opacity: 1 } }, { duration: "0.5s" }).$el("el");
+```
+
+### Suggestions Engine
+
+```ts
+import { getSuggestion, getSuggestions } from "chaincss";
+
+getSuggestion("bakcground"); // -> "background"
+getSuggestion("felx"); // -> "flex"
+getSuggestions("bordr"); // -> ["border", "borderW", "borderC"]
+```
+
+### Style Timeline
+
+```ts
+import { enableTimeline, getStyleHistory, getStyleDiff } from "chaincss";
+
+enableTimeline(true);
+// ... compile styles ...
+const history = getStyleHistory();
+const diff = getStyleDiff(snapshotId1, snapshotId2);
+// -> { added: {...}, removed: {...}, modified: {...} }
+```
 
 
----
+# CLI
 
-## Design Tokens
-
-import { createTokens } from "chaincss";
-
-const tokens = createTokens({
-colors: { primary: "#3b82f6", secondary: "#10b981", danger: "#ef4444" },
-spacing: { sm: "8px", md: "16px", lg: "24px" },
-});
-
-chain(true)
-.color("colors.primary").padding("colors.primary").padding("spacing.md")
-.$el("themed");
-text
+```bash
+chaincss init
+chaincss build
+chaincss watch
+chaincss cache clear
+chaincss cache stats
+chaincss timeline list
+```
 
 
----
+# Configuration
 
-## Theme Contract
+```ts
+// chaincss.config.js
+export default {
+  inputs: ["src/**/*.chain.{js,ts}", "src/**/*.tsx"],
 
-import { createThemeContract, createTheme, validateTheme } from "chaincss";
+  output: {
+    cssFile: "global.css",
+    minify: true,
+  },
 
-const contract = createThemeContract({
-colors: { primary: "", background: "", text: "" },
-});
+  atomic: {
+    enabled: true,
+    mode: "hybrid",
+    threshold: 2,
+    naming: "hash",
+  },
 
-const lightTheme = createTheme(contract, {
-colors: { primary: "#3b82f6", background: "#ffffff", text: "#1a202c" },
-});
+  breakpoints: {
+    sm: "(min-width: 640px)",
+    md: "(min-width: 768px)",
+  },
 
-const darkTheme = createTheme(contract, {
-colors: { primary: "#60a5fa", background: "#1a202c", text: "#f7fafc" },
-});
-text
+  tokens: {
+    enabled: true,
+    prefix: "$",
+  },
+};
+```
 
 
----
+# Framework Integration
 
-## Framework Integration
+## React
 
-### React
-
+```tsx
 import { chain } from "chaincss";
 
 function Card() {
-const styles = chain().bg("white").p(24).rounded(12).$el("card");
-return <div className={styles.selectors[0]}>Content</div>;
+  const styles = chain()
+    .bg("white")
+    .p(24)
+    .rounded(12)
+    .$el("card");
+
+  return (
+    <div className={styles.selectors[0]}>
+      Content
+    </div>
+  );
 }
-text
+```
 
+## Vue
 
-### Vue
-
+```ts
 import { chain } from "chaincss";
-const styles = chain().display("grid").cols(3).gap(16).$el("vue-grid");
+
+const styles = chain().display("grid").cols(3).gap(16).$el("grid");
 // <div :class="styles.selectors[0]">
-text
+```
 
+## Svelte
 
-### Svelte
-
+```ts
 import { chain } from "chaincss";
+
 const styles = chain().flex().center().$el("centered");
-// <div class={styles.selectors[0]}>Content</div>
-text
+// <div class={styles.selectors[0]}>
+```
 
+### Vanilla JS
 
----
+```html
+<script type="module"> 
+  import { chain, injectChainStyles } from "https://cdn.jsdelivr.net/npm/chaincss/dist/browser.js"; 
+  const h1 = chain()
+    .fs(48)
+    .fw(800)
+    .textGradient(["#6366f1","#06b6d4"])
+    .$el("h1");
 
-## Smart Chain (Auto-Detection)
+  injectChainStyles({ h1 }); 
 
-import { smartChain, buildChain, runtimeChain } from "chaincss";
+  document.body.innerHTML = '<h1 class="' + h1.selectors[0] + '">Hello!</h1>'; 
+</script>
+```
 
-// Auto-detect
-const styles = smartChain()
-.display("flex") // static -> build
-.color(dynamicVariable) // dynamic -> runtime
-.$el("hybrid");
-
-// Force build-time only
-const static = buildChain().display("flex").$el("static");
-
-// Force runtime only
-const dynamic = runtimeChain().color(props.color).$el("runtime");
-text
-
-
----
-
-## CLI
-
-chaincss init # Create config file
-chaincss build # Build all styles
-chaincss watch # Watch for changes
-chaincss cache clear # Clear cache
-chaincss cache stats # Cache statistics
-chaincss timeline list # Style history
-text
-
-
----
-
-## Configuration
-
-// chaincss.config.js
-export default {
-inputs: ["src//*.chain.{js,ts}", "src//*.tsx"],
-output: { cssFile: "global.css", minify: true },
-atomic: { enabled: true, mode: "hybrid", threshold: 2, naming: "hash" },
-breakpoints: { sm: "(min-width: 640px)", md: "(min-width: 768px)", lg: "(min-width: 1024px)" },
-tokens: { enabled: true, prefix: "$" },
-};
-text
-
-
----
 
 ## Complete Feature List
 
-| Category | Count |
-|----------|-------|
-| Macros | 57 |
-| Shorthand Properties | 80 |
-| Animation Presets | 42 |
-| Breakpoints | 20 |
-| Chain API Methods | 30+ |
-| Math Helpers | 15 |
-| CSS Properties | 300+ |
-| CLI Commands | 5 |
-| Framework Integrations | 4 (React, Vue, Svelte, Solid) |
-| Plugins | 2 (Vite, Webpack) |
-| React Hooks | 6 |
-| Recipe System | Variants, defaultVariants, compoundVariants |
-| Theme System | Theme, createThemeContract, validateTheme |
+| Category | Count | Details |
+|----------|-------|---------|
+| Macros | 57 | Layout, spacing, borders, positioning, visibility, shapes, effects, state, utility |
+| Shorthand Properties | 80 | 1-to-1 CSS property mappings |
+| Animation Presets | 42 | Fades, slides, zooms, bounces, shakes, spins, flips, special effects |
+| Breakpoints | 20 | Mobile-first, desktop-first, device-specific, feature queries |
+| Chain API Methods | 30+ | hover, nest, when, use, responsive, media, supports, containerQuery, layer |
+| Math Helpers | 15 | calc, add, sub, mul, div, clamp, min, max, unit conversions, fluidType |
+| CSS Properties | 300+ | Every standard CSS property via type definitions |
+| CLI Commands | 5 | init, build, watch, cache, timeline |
+| Framework Integrations | 4 | React, Vue, Svelte, Solid |
+| Plugins | 2 | Vite, Webpack |
+| Bundles | 5 | Main, Runtime, Browser, Compiler, CLI |
+| React Hooks | 6 | useSmartStyles, createSmartComponent, useChainStyles, useDynamicChainStyles, useThemeChainStyles, withSmartStyles |
+| Design Systems | 3 | Tokens, Theme Contracts, Recipes |
+| Dev Tools | 3 | Suggestions Engine, Timeline, Component Generator |
+| Tests | 258 | 18 test files, 0 failures |
 
-**Total: 550+ features | 210 tests | Zero-runtime by default**
 
----
+# Performance
 
-## Contributing
+- Zero runtime for static styles
+- Atomic CSS extraction
+- Smart static/dynamic splitting
+- LRU persistent caching
+- Shared property deduplication
 
+
+# Contributing
+
+```bash
 git clone https://github.com/melcanz08/chaincss.git
+
 cd chaincss
+
 npm install
+
 npm test
-text
+```
 
 
----
-
-## License
+# License
 
 MIT © Rommel Caneos
 

@@ -255,7 +255,7 @@ export const ENVIRONMENT_PRESETS = {
     atomic: {
       naming: 'readable' as NamingScheme,
       minify: false,
-      verbose: true,
+      verbose: false,
       cache: true
     },
     output: {
@@ -265,7 +265,7 @@ export const ENVIRONMENT_PRESETS = {
     debug: true,
     timeline: true,
     sourceComments: true,
-    verbose: true
+    verbose: false
   },
   production: {
     atomic: {

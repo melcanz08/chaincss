@@ -9,6 +9,7 @@
 // 🆕 NEW: Smart Chain API (Auto-detection mixed mode)
 // ============================================================================
 export { smartChain, smartChain as chainV3, buildChain, runtimeChain } from './core/smart-chain.js';
+export { injectChainStyles } from './runtime/index.js';
 export { autoDetector, AutoDetector, type ValueType, type Mode } from './core/auto-detector.js';
 
 // ============================================================================
@@ -153,7 +154,8 @@ export type { BreakpointsMap, ResponsiveStyle } from './compiler/breakpoints.js'
 // ============================================================================
 // Runtime Exports (for runtime mode) - unchanged
 // ============================================================================
-export * from './runtime/index.js';
+// Runtime available via separate import: "chaincss/runtime"
+// export * from './runtime/index.js';
 
 // ============================================================================
 // Version - UPDATE to 3.0.0

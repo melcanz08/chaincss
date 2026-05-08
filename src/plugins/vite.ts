@@ -230,6 +230,16 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
     name: 'chaincss',
     enforce: 'pre' as const,
 
+    config(config) {
+      // Prevent Vite from trying to optimize Node.js built-ins
+      if (!config.optimizeDeps) config.optimizeDeps = {};
+      if (!config.optimizeDeps.exclude) config.optimizeDeps.exclude = [];
+      const exclude = config.optimizeDeps.exclude as string[];
+      if (!exclude.includes('url')) exclude.push('url');
+      if (!exclude.includes('fs')) exclude.push('fs');
+      if (!exclude.includes('path')) exclude.push('path');
+    },
+
     configureServer(_server: ViteDevServer) {
       server = _server;
       log('Vite plugin initialized');

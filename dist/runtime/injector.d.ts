@@ -1,4 +1,4 @@
-export interface StyleDefinition {
+export interface RuntimeStyleDefinition {
     selectors?: string[];
     hover?: Record<string, string | number>;
     [key: string]: any;
@@ -33,7 +33,7 @@ declare class StyleInjector {
      */
     resolveToken(value: any): any;
     private generateCSS;
-    injectMultiple(styles: Record<string, StyleDefinition>, moduleId?: string): Record<string, string>;
+    injectMultiple(styles: Record<string, RuntimeStyleDefinition>, moduleId?: string): Record<string, string>;
     writeToDOM(css: string): void;
     removeModule(moduleId: string): void;
     removeAll(): void;
@@ -45,9 +45,9 @@ declare class StyleInjector {
 }
 export declare const styleInjector: StyleInjector;
 export declare const setTokens: (t: TokenStore) => void;
-export declare const compileRuntime: (s: Record<string, StyleDefinition>, moduleId?: string) => Record<string, string>;
+export declare const compileRuntime: (s: Record<string, RuntimeStyleDefinition>, moduleId?: string) => Record<string, string>;
 export declare const removeRuntimeModule: (moduleId: string) => void;
 export declare const clearRuntimeStyles: () => void;
 export declare const enableRuntimeDebug: (enabled: boolean) => void;
-export declare function runRuntime(...styles: StyleDefinition[]): string;
+export declare function runRuntime(...styles: RuntimeStyleDefinition[]): string;
 export {};

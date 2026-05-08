@@ -25,8 +25,8 @@ import { PersistentCache } from '../compiler/content-addressable-cache.js';
 import { shorthandMap, macros } from '../compiler/shorthands.js';
 import type { AtomicClass } from '../compiler/atomic-optimizer.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __filename = typeof import.meta !== 'undefined' ? (() => { try { return fileURLToPath(import.meta.url); } catch { return ''; } })() : '';
+const __dirname = __filename ? path.dirname(__filename) : '';
 
 interface CachedStyleEntry {
   result: {
@@ -196,80 +196,9 @@ export class ChainCSSCompiler {
 
     try {
       let processedCount = 0;
-      let searchFrom = 0;
-      
-      while (true) {
-        const startIdx = source.indexOf('useChainStyles({', searchFrom);
-        if (startIdx === -1) break;
-        
-        // Find the matching closing brace using brace counting
-        const braceStart = source.indexOf('{', startIdx);
-        if (braceStart === -1) break;
-        
-        let braceCount = 0;
-        let endIdx = -1;
-        for (let i = braceStart; i < source.length; i++) {
-          if (source[i] === '{') braceCount++;
-          if (source[i] === '}') braceCount--;
-          if (braceCount === 0) {
-            endIdx = i;
-            break;
-          }
-        }
-        
-        if (endIdx === -1) break;
-        
-        const stylesBlock = source.substring(braceStart + 1, endIdx);
-        
-        try {
-          // Extract component definitions from the block
-          const componentRegex = /(\w+):\s*\{/g;
-          let componentMatch;
-          
-          while ((componentMatch = componentRegex.exec(stylesBlock)) !== null) {
-            const componentKey = componentMatch[1];
-            const componentStart = componentMatch.index + componentMatch[0].length;
-            
-            // Find matching closing brace for this component
-            let compBraceCount = 0;
-            let compEndIdx = -1;
-            for (let i = componentStart - 1; i < stylesBlock.length; i++) {
-              if (stylesBlock[i] === '{') compBraceCount++;
-              if (stylesBlock[i] === '}') compBraceCount--;
-              if (compBraceCount === 0) {
-                compEndIdx = i;
-                break;
-              }
-            }
-            
-            if (compEndIdx === -1) continue;
-            
-            const componentStyles = stylesBlock.substring(componentStart, compEndIdx);
-            const rawObj = this.safeParseStyleObject(`{${componentStyles}}`);
-            
-            if (Object.keys(rawObj).length === 0) continue;
-            
-            // Expand shorthands
-            const expandedObj: Record<string, any> = {};
-            for (const [k, v] of Object.entries(rawObj)) {
-              const realKey = shorthandMap[k] || k;
-              expandedObj[realKey] = v;
-            }
-            
-            await this.processStyleObject(expandedObj, componentKey);
-            processedCount++;
-          }
-        } catch (parseError) {
-          if (this.config.verbose) {
-            console.warn(chalk.yellow(`  ⚠️  Failed to parse styles in ${id}: ${parseError}`));
-          }
-        }
-        
-        searchFrom = endIdx + 1;
-      }
       
       if (this.config.verbose && processedCount > 0) {
-        console.log(chalk.gray(`  📝 Processed ${processedCount} styles from ${id}`));
+        console.log(`  └─ Processed ${processedCount} chain() styles from ${id.split('/').pop()}`);
       }
     } catch (error) {
       console.error(chalk.red(`  ❌ Error compiling source ${id}: ${error}`));
