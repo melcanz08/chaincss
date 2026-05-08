@@ -199,6 +199,181 @@ export type { ScrollTimelineConfig, ScrollAnimation, ScrollTimelineResult, Keyfr
 // ============================================================================
 // Default Export - Keep original chain for backward compatibility
 // ============================================================================
+// ============================================================================
+// 🆕 Style IR System (v2.3)
+// ============================================================================
+export {
+  styleIR,
+  createIR,
+  parseIR,
+  generateCSS,
+  createRule,
+  createDeclaration,
+  applyPass,
+  applyPasses,
+  compileViaIR,
+  countNodes,
+  debugIR,
+  resetIdCounter,
+} from './compiler/style-ir.js';
+export type {
+  StyleIR,
+  IRRule,
+  IRDeclaration,
+  IRPseudoClass,
+  IRAtRule,
+  IRCondition,
+  IRTransformRecord,
+  IRDiagnostic,
+  IRNodeId,
+  SourceLocation,
+  IRPass,
+} from './compiler/style-ir.js';
+
+// ============================================================================
+// Default Export - Keep original chain for backward compatibility
+// ============================================================================
+// ============================================================================
+// 🆕 Multi-Pass Optimization Pipeline (v2.3)
+// ============================================================================
+export {
+  PassManager,
+  runDefaultPipeline,
+  DEFAULT_PIPELINE,
+  intentRecoveryPass,
+  unitResolutionPass,
+  validationPass,
+  specificitySortPass,
+  deadEliminationPass,
+  atomicExtractionPass,
+  mediaQueryPackingPass,
+  cssIfTranspilePass,
+  cssCompressionPass,
+  diagnosticsExportPass,
+} from './compiler/pass-manager.js';
+export type { PassName, PassPriority, PassDefinition, PassResult, PipelineResult } from './compiler/pass-manager.js';
+
+// ============================================================================
+// Default Export - Keep original chain for backward compatibility
+// ============================================================================
+// ============================================================================
+// 🆕 Constraint-Based Styling Engine (v2.3)
+// ============================================================================
+export {
+  constraintSolver,
+  resolveConstraint,
+  resolveStickyUntil,
+  resolveContainerQuery,
+  parseConstraint,
+  constraintSolverPass,
+} from './compiler/constraint-solver.js';
+export type { Constraint, ConstraintOperator, ConstraintTarget, ResolvedConstraint } from './compiler/constraint-solver.js';
+
+// ============================================================================
+// Default Export - Keep original chain for backward compatibility
+// ============================================================================
+// ============================================================================
+// 🆕 Layout Intelligence Engine (v2.3)
+// ============================================================================
+export {
+  layoutIntelligence,
+  recognizeLayout,
+  suggestMacro,
+  getLayoutPatterns,
+  layoutIntelligencePass,
+} from './compiler/layout-intelligence.js';
+export type { LayoutPattern, PatternMatch, PatternReport } from './compiler/layout-intelligence.js';
+
+// ============================================================================
+// Default Export - Keep original chain for backward compatibility
+// ============================================================================
+// ============================================================================
+// 🆕 Automatic Responsive Inference (v2.3)
+// ============================================================================
+export {
+  responsiveInference,
+  analyzeResponsive,
+  generateResponsiveReport,
+  autoFixIssue,
+  autoFixAll,
+  responsiveInferencePass,
+} from './compiler/responsive-inference.js';
+export type { ResponsiveIssue, ResponsiveReport } from './compiler/responsive-inference.js';
+
+// ============================================================================
+// Default Export - Keep original chain for backward compatibility
+// ============================================================================
+// ============================================================================
+// 🆕 Style Pattern Learner (v2.3)
+// ============================================================================
+export {
+  patternLearner,
+  learnPatterns,
+  getExtractionCandidates,
+  patternLearningPass,
+} from './compiler/pattern-learner.js';
+export type { StyleFingerprint, PatternCluster, LearningReport } from './compiler/pattern-learner.js';
+
+// ============================================================================
+// Default Export - Keep original chain for backward compatibility
+// ============================================================================
+// ============================================================================
+// 🆕 Source-Aware Optimization Engine (v2.3)
+// ============================================================================
+export {
+  sourceOptimizer,
+  optimizeSource,
+  sourceOptimizerPass,
+} from './compiler/source-optimizer.js';
+export type { OptimizationReport, DuplicateGroup, DeadRule, SpecificityConflict, AnimationConflict, MediaQueryRedundancy } from './compiler/source-optimizer.js';
+
+// ============================================================================
+// Default Export - Keep original chain for backward compatibility
+// ============================================================================
+// ============================================================================
+// 🆕 Semantic Token System (v2.3)
+// ============================================================================
+export {
+  semanticTokens,
+  resolveSemantic,
+  getSemanticIntents,
+  getSemanticDescription,
+  semanticTokensPass,
+} from './compiler/semantic-tokens.js';
+export type { SurfaceIntent, TextIntent, ElevationIntent, StateIntent, SpacingIntent, SemanticMapping, ThemeContext } from './compiler/semantic-tokens.js';
+
+// ============================================================================
+// Default Export - Keep original chain for backward compatibility
+// ============================================================================
+// ============================================================================
+// 🆕 Accessibility Intelligence Engine (v2.3)
+// ============================================================================
+export {
+  accessibilityEngine,
+  auditAccessibility,
+  checkRule,
+  accessibilityPass,
+} from './compiler/accessibility-engine.js';
+export type { AccessibilityIssue, AccessibilityReport } from './compiler/accessibility-engine.js';
+
+// ============================================================================
+// Default Export - Keep original chain for backward compatibility
+// ============================================================================
+// ============================================================================
+// 🆕 Intent-Based API (v2.3)
+// ============================================================================
+export {
+  intentAPI,
+  resolveIntent,
+  getAvailableIntents,
+  getIntentsByCategory,
+  getIntentDescription,
+  intentAPIPass,
+} from './compiler/intent-api.js';
+
+// ============================================================================
+// Default Export - Keep original chain for backward compatibility
+// ============================================================================
 import { chain } from './compiler/Chain.js';
 export default chain;
 
