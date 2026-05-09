@@ -77,6 +77,7 @@ export { PersistentCache } from './compiler/content-addressable-cache.js';
 // Shorthands & Macros (unchanged)
 // ============================================================================
 export { shorthandMap, macros, handleShorthand, isShorthand, expandShorthand, getAvailableShorthands } from './compiler/shorthands.js';
+export { KNOWN_MACROS } from './compiler/suggestions.js';
 
 // ============================================================================
 // Helpers & Utilities (unchanged)

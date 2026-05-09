@@ -160,6 +160,7 @@ export interface ChainCSSConfig {
   classNameGenerator?: (name: string, options?: any) => string;
   
   plugins?: ChainCSSPlugin[];
+  macros?: Record<string, (value: any) => Record<string, any>>;
   
   minifySelectors?: boolean;
   extractCritical?: boolean;

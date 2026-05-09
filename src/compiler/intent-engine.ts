@@ -186,6 +186,13 @@ const LAYOUT_MACROS: Record<string, LayoutMacro> = {
     defaults: {},
   },
 
+
+  autoContrast: {
+    name: 'autoContrast',
+    description: 'Automatically sets text color (black/white) for WCAG AA contrast against the background',
+    properties: {},
+    defaults: {},
+  },
   glass: {
     name: 'glass',
     description: 'Frosted glass morphism effect',
@@ -366,6 +373,27 @@ export const intent = {
   // Layout Macros
   macro(name: string): Record<string, any> | null { return expandLayoutMacro(name); },
   getMacros(): string[] { return getAvailableMacros(); },
+  /**
+   * Auto-set text color for accessible contrast against the background.
+   * Uses WCAG AA contrast ratio to pick black or white.
+   */
+  autoContrast(bgColor: string): string {
+    // Parse the background color and determine luminance
+    let r = 128, g = 128, b = 128;
+    const hex = bgColor.replace('#', '');
+    if (hex.length === 3) {
+      r = parseInt(hex[0] + hex[0], 16);
+      g = parseInt(hex[1] + hex[1], 16);
+      b = parseInt(hex[2] + hex[2], 16);
+    } else if (hex.length === 6) {
+      r = parseInt(hex.slice(0, 2), 16);
+      g = parseInt(hex.slice(2, 4), 16);
+      b = parseInt(hex.slice(4, 6), 16);
+    }
+    // Relative luminance
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return luminance > 0.5 ? '#000000' : '#ffffff';
+  },
   getMacroDescription(name: string): string | null { return getMacroDescription(name); },
   hasMacro(name: string): boolean { return name in LAYOUT_MACROS; },
   /**

@@ -7,6 +7,31 @@ export interface SuggestionMatch {
 }
 
 // Known shorthands (from shorthandMap)
+
+// Known macros (from intent-engine and Chain.ts)
+export const KNOWN_MACROS: string[] = [
+  // Intent Macros
+  'stickyHeader', 'card', 'hero', 'container', 'center', 'gridList',
+  'sidebar', 'pill', 'glass', 'truncate', 'srOnly', 'autoContrast',
+  // Chain.ts special methods
+  'flex', 'grid', 'inlineFlex', 'inlineGrid', 'flexCenter', 'gridCenter',
+  'stack', 'cols', 'rows', 'bento', 'gridTable',
+  'mx', 'my', 'px', 'py', 'size', 'gap', 'gapX', 'gapY', 'inset', 'insetX', 'insetY',
+  'borderX', 'borderY',
+  'absolute', 'fixed', 'sticky', 'relative',
+  'hide', 'show', 'unselectable', 'scrollable', 'safeArea',
+  'circle', 'square', 'truncate', 'fluidText', 'aspect', 'lineClamp',
+  'glass', 'glow', 'textGradient', 'meshGradient', 'noise', 'shimmer',
+  'clickScale', 'pressable', 'focusRing', 'skeleton',
+  'fullScreen', 'containerMacro', 'outlineDebug', 'parallax', 'frostedNav',
+  'fadeIn', 'slideInUp', 'zoomIn', 'bounce', 'pulse', 'spin', 'shake', 'float',
+  // Semantic macros
+  'surface', 'text', 'elevation', 'state', 'spacing',
+  // Intent API
+  'intent',
+  // Constraint
+  'constrain',
+];
 export const KNOWN_SHORTHANDS: string[] = [
   // Spacing
   'm', 'mt', 'mr', 'mb', 'ml', 
@@ -155,6 +180,10 @@ function findBestMatches(
 
 // Get type for a candidate
 function getTypeForCandidate(candidate: string): 'shorthand' | 'css-property' | 'macro' | 'animation' | 'breakpoint' {
+  if (KNOWN_MACROS.includes(candidate)) return 'macro';
+  if (KNOWN_SHORTHANDS.includes(candidate)) return 'shorthand';
+  if (ANIMATION_PRESETS.includes(candidate)) return 'animation';
+  if (BREAKPOINTS.includes(candidate)) return 'breakpoint';
   if (KNOWN_SHORTHANDS.includes(candidate)) return 'shorthand';
   if (COMMON_CSS_PROPERTIES.includes(candidate)) return 'css-property';
   if (ANIMATION_PRESETS.includes(candidate)) return 'animation';
@@ -177,6 +206,7 @@ export function getSuggestion(
     candidates = [...COMMON_CSS_PROPERTIES, ...validProperties];
   } else {
     candidates = [
+      ...KNOWN_MACROS,
       ...KNOWN_SHORTHANDS,
       ...COMMON_CSS_PROPERTIES,
       ...validProperties,
@@ -354,6 +384,7 @@ export function getValueSuggestion(
 export function getAutocompleteSuggestions(prefix: string = '', limit: number = 10): SuggestionMatch[] {
   const allSuggestions = [
     ...KNOWN_SHORTHANDS.map(s => ({ name: s, type: 'shorthand' as const, distance: 0 })),
+    ...KNOWN_MACROS.map(s => ({ name: s, type: 'macro' as const, distance: 0 })),
     ...COMMON_CSS_PROPERTIES.map(s => ({ name: s, type: 'css-property' as const, distance: 0 })),
     ...ANIMATION_PRESETS.map(s => ({ name: s, type: 'animation' as const, distance: 0 })),
     ...BREAKPOINTS.map(s => ({ name: s, type: 'breakpoint' as const, distance: 0 }))
@@ -421,6 +452,7 @@ export function getDetailedSuggestion(prop: string, validProperties: string[] = 
 
 // Export default
 export default {
+  KNOWN_MACROS,
   getSuggestion,
   getSuggestions,
   getPropertySuggestion,

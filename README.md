@@ -62,6 +62,242 @@ const hero = chain()
 **No CSS syntax. No template literals. Compiler-enforced quality.**
 
 
+# Constraint-Based Styling
+
+Declare relationships, not values. The constraint solver compiles them to native CSS at build time.
+
+**No runtime JS. No manual `calc()`. The compiler picks the best CSS feature.**
+
+---
+
+## 1. Aspect Ratios from Math
+
+Describe the relationship between width and height:
+
+```ts
+chain()
+  .constrain("height", "= width * 0.5") // 2:1 ratio
+  .constrain("width", "< parent")       // Don't overflow container
+  .$el("video");
+```
+
+### Compiles to
+
+```css
+.video {
+  aspect-ratio: 1 / 2;
+  max-width: 100%;
+}
+```
+
+The solver detects `width * 0.5` and emits `aspect-ratio` instead of:
+
+```css
+height: calc(width * 0.5);
+```
+
+`aspect-ratio` has better performance and avoids layout shifts.
+
+### Tailwind Equivalent
+
+```txt
+aspect-[2/1] max-w-full
+```
+
+### ChainCSS Difference
+
+You write the math. The compiler writes the CSS.
+
+---
+
+## 2. Container-Aware Responsive Layouts
+
+Use conditional constraints to generate `@container` queries automatically.
+
+```ts
+chain()
+  .constrain("columns", ">= 3 when > 768px")
+  .constrain("gap", "= 24px")
+  .$el("grid");
+```
+
+### Compiles to
+
+```css
+.grid {
+  gap: 24px;
+}
+
+@container (min-width: 768px) {
+  .grid {
+    columns: 3;
+  }
+}
+```
+
+> Requires `container-type: inline-size` on the parent.  
+> ChainCSS adds it automatically when container constraints are detected.
+
+---
+
+## 3. Fluid Values with `clamp()`
+
+Stop calculating `clamp()` manually.
+
+```ts
+chain()
+  .constrain("fontSize", "= clamp(14px, 5vw, 24px)")
+  .constrain("padding", "= clamp(16px, 4vw, 32px)")
+  .$el("hero");
+```
+
+### Compiles to
+
+```css
+.hero {
+  font-size: clamp(14px, 5vw, 24px);
+  padding: clamp(16px, 4vw, 32px);
+}
+```
+
+Works with:
+
+- `clamp()`
+- `min()`
+- `max()`
+- `calc()`
+
+---
+
+## 4. Scroll-Driven Sticky Positioning
+
+"Stick this element until another element reaches the viewport."
+
+```ts
+chain()
+  .constrain("sidebar", "sticky until footer")
+  .$el("sidebar");
+```
+
+### Compiles to
+
+```css
+.sidebar {
+  position: sticky;
+  top: 0;
+
+  animation: sticky-sidebar 1s linear both;
+  animation-timeline: scroll();
+  animation-range: contain 0% contain 100%;
+}
+
+@keyframes sticky-sidebar {
+  to {
+    position: relative;
+  }
+}
+```
+
+Zero JavaScript. Uses native `animation-timeline: scroll()` available in modern Chromium browsers.
+
+---
+
+## 5. Parent-Relative Constraints
+
+Keep elements inside their parents without writing media queries.
+
+```ts
+chain()
+  .constrain("width", "< parent")
+  .constrain("width", "> 320px")
+  .$el("modal");
+```
+
+### Compiles to
+
+```css
+.modal {
+  max-width: 100%;
+  min-width: 320px;
+}
+```
+
+---
+
+# How It Works
+
+The compiler parses constraint expressions and resolves them into the most optimal native CSS feature.
+
+| You Write | Compiler Resolves To | Strategy |
+|---|---|---|
+| `width < parent` | `max-width: 100%` | Direct mapping |
+| `height = width * 0.5` | `aspect-ratio: 1 / 2` | Aspect-ratio optimization |
+| `fontSize = clamp(14, 5vw, 24)` | `font-size: clamp(...)` | Native clamp |
+| `columns >= 3 when > 768px` | `@container (min-width: 768px)` | Container query |
+| `sidebar sticky until footer` | `animation-timeline: scroll()` | Scroll timeline |
+
+---
+
+## Supported Operators
+
+```txt
+<   >   <=   >=   =   !=
+```
+
+## Supported References
+
+```txt
+parent
+viewport
+self
+sibling.width
+```
+
+## Supported Functions
+
+```txt
+clamp()
+min()
+max()
+calc()
+```
+
+---
+
+# Debugging Constraints
+
+See how constraints were resolved during compilation.
+
+## CLI
+
+```bash
+chaincss build --explain
+```
+
+### Output
+
+```txt
+card: height = width * 0.5 → aspect-ratio: 1/2
+card: width < parent → max-width: 100%
+```
+
+---
+
+## Programmatic Debugging
+
+```ts
+import { resolveConstraint } from "chaincss/compiler";
+
+const result = resolveConstraint({
+  property: "height",
+  operator: "=",
+  expression: "width * 0.5",
+});
+
+console.log(result.explanation);
+// "height = width * 0.5 → aspect-ratio: 1/2"
+```
+
 
 # What Makes ChainCSS Different
 

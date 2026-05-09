@@ -8,3 +8,7 @@ npm-debug.log*
 
 dist/
 dist/
+demo/
+demo-website/
+__tests__/
+.chaincss-cache
