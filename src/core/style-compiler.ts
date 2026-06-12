@@ -67,14 +67,34 @@ export function compileToCSS(
   // Use explicit selectors if provided, otherwise use scopeSelector
   const effectiveSelector = selectors?.join(', ') || scope;
   
-  // Generate main declarations
-  const mainDeclarations = compileDeclarations(properties, indent, options);
+  // Separate pseudo-classes (&:hover, &:focus) from regular properties
+  const pseudoClasses: Record<string, Record<string, any>> = {};
+  const regularProps: Record<string, any> = {};
+  for (const [key, value] of Object.entries(properties)) {
+    if (key.startsWith('&:')) {
+      pseudoClasses[key.substring(1)] = value as Record<string, any>; // :hover, :focus
+    } else if (!key.startsWith('_')) {
+      regularProps[key] = value;
+    }
+  }
+  
+  // Generate main declarations (without pseudo-classes)
+  const mainDeclarations = compileDeclarations(regularProps, indent, options);
   
   if (mainDeclarations.length > 0 && effectiveSelector) {
     const source = options.sourceMap && options.sourceFile
       ? `/* ${options.sourceFile} */${newline}`
       : '';
     parts.push(`${source}${effectiveSelector} {${newline}${mainDeclarations.join(newline)}${newline}}`);
+  }
+  
+  // Generate pseudo-class rules as separate selectors
+  for (const [pseudo, pseudoStyles] of Object.entries(pseudoClasses)) {
+    const pseudoSelector = `${effectiveSelector}${pseudo}`;
+    const pseudoDeclarations = compileDeclarations(pseudoStyles, indent, options);
+    if (pseudoDeclarations.length > 0) {
+      parts.push(`${pseudoSelector} {${newline}${pseudoDeclarations.join(newline)}${newline}}`);
+    }
   }
   
   // Process at-rules
@@ -116,21 +136,9 @@ function compileDeclarations(
     // Skip functions (can't compile to static CSS)
     if (typeof value === 'function') continue;
     
-    // Handle pseudo-classes (&:hover, &:focus, etc.)
-    if (prop.startsWith('&:')) {
-      const pseudo = prop.substring(1); // :hover
-      const pseudoLines = compileDeclarations(value, indent + indent, options);
-      if (pseudoLines.length > 0) {
-        lines.push(`${indent}${pseudo} {`);
-        lines.push(...pseudoLines);
-        lines.push(`${indent}}`);
-      }
-      continue;
-    }
-    
     // Handle nested objects (could be nested pseudo-elements)
     if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-      // Skip — handled by nested rules
+      // Skip — handled by nested rules or pseudo-class extraction
       continue;
     }
     
