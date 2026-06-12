@@ -2,7 +2,7 @@
 
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { compileRuntime, setTokens as setGlobalTokens, removeRuntimeModule } from './injector.js';
-import { RuntimeChain } from './Chain.js';
+import { chain } from '../core/style-collector.js';
 
 export interface UseChainStylesOptions {
   cache?: boolean;

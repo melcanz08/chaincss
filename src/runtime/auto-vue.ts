@@ -1,7 +1,7 @@
 // src/runtime/auto-vue.ts
 
 import { ref, watch, onUnmounted, type Ref } from 'vue';
-import { smartChain } from '../core/smart-chain.js';
+import { chain } from '../core/style-collector.js';
 import { styleInjector, compileRuntime } from './injector.js';
 
 export interface UseSmartStylesOptions {
@@ -22,7 +22,7 @@ export function useSmartStyles<T extends Record<string, any>>(
     styleInjector.removeModule(moduleId);
     
     // Build styles with auto-detection
-    const chainInstance = smartChain();
+    const chainInstance = chain();
     const result = styleBuilder(chainInstance);
     
     // Handle hybrid result

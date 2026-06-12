@@ -1,7 +1,7 @@
 // src/runtime/auto-hooks.tsx
 
 import React, { useEffect, useRef, useState } from 'react';
-import { smartChain } from '../core/smart-chain.js';
+import { chain } from '../core/style-collector.js';
 import { styleInjector, compileRuntime } from './injector.js';
 
 export interface UseSmartStylesOptions {
@@ -28,7 +28,7 @@ export function useSmartStyles<T extends Record<string, any>>(
     }
     
     // Build styles with auto-detection
-    const chainInstance = smartChain();
+    const chainInstance = chain();
     const result = styleBuilder(chainInstance);
     
     // Check if we got a hybrid result

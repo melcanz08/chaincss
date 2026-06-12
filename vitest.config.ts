@@ -1,3 +1,5 @@
+// vitest.config.ts
+
 import { defineConfig } from 'vitest/config';
 import path from 'path';
 
@@ -11,7 +13,7 @@ export default defineConfig({
     exclude: ['node_modules', 'dist'],
     
     // Global setup
-    setupFiles: ['./__tests__/setup.ts'],
+    setupFiles: ['./vitest.setup.ts'],
     
     // Timeouts
     testTimeout: 15000,

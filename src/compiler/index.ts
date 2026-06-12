@@ -1,26 +1,19 @@
 // src/compiler/index.ts
 
 // Export all compiler modules
-export { 
-  chain, 
-  chains, 
-  run, 
-  compile, 
-  createTokens, 
-  configureAtomic, 
-  setAtomicOptimizer, 
-  recipe, 
-  tokens,
-  enableDebug,
-  setBreakpoints,
+export {
   enableTimeline,
   getStyleHistory,
   getStyleChanges,
   getStyleDiff,
   exportTimeline,
   clearTimeline,
-  setSourceComments
-} from './btt.js';
+} from './timeline.js';
+
+// Other utilities
+export { recipe } from './recipe.js';
+export { tokens } from './tokens.js';
+export { setBreakpoints } from './breakpoints.js';
 
 // Export atomic optimizer
 export { AtomicOptimizer } from './atomic-optimizer.js';

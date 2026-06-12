@@ -9,27 +9,22 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "default": "./dist/index.js"
+      "require": "./dist/index.cjs"
     },
     "./runtime": {
       "types": "./dist/runtime/index.d.ts",
       "import": "./dist/runtime/index.js",
-      "default": "./dist/runtime/index.js"
+      "require": "./dist/runtime/index.cjs"
     },
     "./compiler": {
       "types": "./dist/compiler/index.d.ts",
       "import": "./dist/compiler/index.js",
-      "default": "./dist/compiler/index.js"
+      "require": "./dist/compiler/index.cjs"
     },
-    "./plugin/vite": {
-      "types": "./dist/plugins/vite.d.ts",
-      "import": "./dist/plugins/vite.js",
-      "default": "./dist/plugins/vite.js"
-    },
-    "./plugin/webpack": {
-      "types": "./dist/plugins/webpack.d.ts",
-      "import": "./dist/plugins/webpack.js",
-      "default": "./dist/plugins/webpack.js"
+    "./internal/*": {
+      "types": "./dist/core/*.d.ts",
+      "import": "./dist/core/*.js",
+      "require": "./dist/core/*.cjs"
     }
   },
   "scripts": {
@@ -37,7 +32,7 @@
     "build:clean": "rm -rf dist",
     "build:types": "tsc -p tsconfig.build.json",
     "build:core": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js --packages=external",
-    "build:cli": "esbuild src/cli/index.ts --bundle --platform=node --format=esm --outfile=dist/cli/index.js --packages=external && chmod +x dist/cli/index.js",
+    "build:cli": "esbuild src/cli/index.ts --bundle --platform=node --format=esm --outfile=dist/cli/index.js --packages=external && printf '#!/usr/bin/env node\\n' | cat - dist/cli/index.js > dist/cli/tmp && mv dist/cli/tmp dist/cli/index.js && chmod +x dist/cli/index.js",
     "build:plugins": "esbuild src/plugins/vite.ts --bundle --platform=node --format=esm --outfile=dist/plugins/vite.js --packages=external && esbuild src/plugins/webpack.ts --bundle --platform=node --format=esm --outfile=dist/plugins/webpack.js --packages=external",
     "build:runtime": "esbuild src/runtime/index.ts --bundle --platform=browser --format=esm --outfile=dist/runtime/index.js --external:react --external:react-dom --external:vue --external:svelte --external:url",
     "build:browser": "esbuild src/browser.ts --bundle --platform=browser --format=esm --outfile=dist/browser.js --external:react --external:react-dom --external:vue --external:svelte --external:url",
@@ -115,5 +110,9 @@
     "chokidar": "^5.0.0",
     "commander": "^14.0.3",
     "glob": "^13.0.6"
+  },
+  "browser": "./dist/browser.js",
+  "bin": {
+    "chaincss": "./dist/cli/index.js"
   }
 }

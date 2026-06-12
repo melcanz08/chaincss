@@ -3,7 +3,7 @@
 
 import { ref, computed, watch, onMounted, onUnmounted, inject, provide, reactive, h, Ref } from 'vue';
 import { compileRuntime, removeRuntimeModule, styleInjector } from './injector.js';
-import { $ } from './Chain.js';
+import { chain } from '../core/style-collector.js';
 
 const CHAIN_CSS_KEY = Symbol('chaincss');
 

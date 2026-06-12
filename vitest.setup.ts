@@ -1,4 +1,5 @@
 // vitest.setup.ts
+
 // Global test setup for ChainCSS
 
 import { beforeAll, afterAll, vi } from 'vitest';

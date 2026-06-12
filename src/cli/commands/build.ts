@@ -13,8 +13,11 @@ export async function buildCommand(options: BuildOptions): Promise<void> {
   
   logger.header('ChainCSS Build');
   
-  const config = await loadConfig(options.config);
-  const inputs = config.inputs || ['src/**/*.chain.{js,ts}', 'src/**/*.chain.{jsx,tsx}'];
+  // If -c is passed, treat it as a glob pattern, not a config file
+  const config = await loadConfig(options.config && !options.config.includes('*') ? options.config : undefined);
+  const inputs = options.config && options.config.includes('*') 
+    ? [options.config] 
+    : config.inputs || ['src/**/*.chain.{js,ts}', 'src/**/*.chain.{jsx,tsx}'];
   
   // Determine output directory
   let outputDir = 'dist/styles';

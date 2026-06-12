@@ -1,6 +1,6 @@
 // chaincss/src/compiler/shorthands.ts
 
-import { createChain } from './Chain.js';
+import { chain } from '../core/style-collector.js';
 
 /**
  * 1. THE DICTIONARY (Simple 1-to-1 Swaps)
@@ -481,7 +481,7 @@ function handlePosition(type: string, v: any, c: any): void {
 }
 
 function getSubStyles(callback: any, useTokens: boolean): Record<string, any> {
-  const sub = createChain(useTokens);
+  const sub = chain();
   callback(sub);
   const result = sub.$el();
   const { selectors, atRules, nestedRules, ...pure } = result;

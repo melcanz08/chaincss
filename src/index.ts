@@ -1,208 +1,140 @@
-// chaincss/src/index.ts --- Main exports for ChainCSS
+// src/index.ts
 
 /**
  * ChainCSS - Zero-runtime CSS-in-JS with Atomic CSS optimization
- * @packageDocumentation
  */
 
 // ============================================================================
-// 🆕 NEW: Smart Chain API (Auto-detection mixed mode)
+// Core API — The one chain to rule them all
 // ============================================================================
-export { smartChain, smartChain as chainV3, buildChain, runtimeChain } from './core/smart-chain.js';
-export { injectChainStyles } from './runtime/index.js';
-export { autoDetector, AutoDetector, type ValueType, type Mode } from './core/auto-detector.js';
+
+export { chain, StyleCollector } from './core/style-collector.js';
+export type { StyleObject, AtRule, NestedRule, Explanation } from './core/style-collector.js';
+
+export { compileToCSS, partitionForBuild } from './core/style-compiler.js';
+export type { CompileOptions, CompileResult } from './core/style-compiler.js';
+
+export { classifyValue, partitionStyles, hasDynamicValues } from './core/value-classifier.js';
+export type { ValueClass } from './core/value-classifier.js';
+
+// Default export
+export { default } from './core/style-collector.js';
 
 // ============================================================================
-// 🆕 NEW: React Hooks with Auto-Detection
+// Compiler (Build-time CSS generation)
 // ============================================================================
-export { useSmartStyles, createSmartComponent, withSmartStyles } from './runtime/auto-hooks.js';
 
-// ============================================================================
-// Core Compiler (unchanged - keep for backward compatibility)
-// ============================================================================
 export { ChainCSSCompiler, compileChainCSS } from './core/compiler.js';
 
 // ============================================================================
-// Chain API - Main entry point for style definitions (unchanged)
+// Runtime Injection (Browser)
 // ============================================================================
-export { 
-  chain, 
-  chain as $,           // Alias for convenience
-  recipe,               // Variant system
-  createTokens,         // Design token creation
-  configureAtomic,      // Atomic CSS configuration
-  tokens,               // Default token instance
-  enableDebug,          // Debug mode
-  setBreakpoints,       // Responsive breakpoints
-  enableTimeline,       // Style timeline tracking
-  getStyleHistory,      // Timeline history
-  getStyleChanges,      // Timeline changes
-  getStyleDiff,         // Timeline diff
-  exportTimeline,       // Export timeline
-  clearTimeline         // Clear timeline
-} from './compiler/btt.js';
+
+export {
+  styleInjector,
+  setTokens,
+  compileRuntime,
+  removeRuntimeModule,
+  clearRuntimeStyles,
+  enableRuntimeDebug,
+  runRuntime
+} from './runtime/injector.js';
 
 // ============================================================================
-// Atomic Optimizer (unchanged)
+// Shorthands & Macros
 // ============================================================================
-export { AtomicOptimizer } from './compiler/atomic-optimizer.js';
+
+export {
+  shorthandMap,
+  macros,
+  handleShorthand,
+  isShorthand,
+  expandShorthand,
+  getAvailableShorthands
+} from './compiler/shorthands.js';
 
 // ============================================================================
-// CSS Prefixer (Autoprefixer alternative) (unchanged)
+// Design Tokens
 // ============================================================================
-export { ChainCSSPrefixer } from './compiler/prefixer.js';
 
-// ============================================================================
-// Design Tokens System (unchanged)
-// ============================================================================
-export { DesignTokens, createTokens as createDesignTokens } from './compiler/tokens.js';
-
-// ============================================================================
-// Theme Contract System (unchanged)
-// ============================================================================
-export { 
-  createThemeContract, 
-  validateTheme, 
-  createTheme, 
-  Theme 
-} from './compiler/theme-contract.js';
-
-// ============================================================================
-// Cache Management (unchanged)
-// ============================================================================
-export { CacheManager } from './compiler/cache-manager.js';
-export { PersistentCache } from './compiler/content-addressable-cache.js';
-
-// ============================================================================
-// Shorthands & Macros (unchanged)
-// ============================================================================
-export { shorthandMap, macros, handleShorthand, isShorthand, expandShorthand, getAvailableShorthands } from './compiler/shorthands.js';
-export { KNOWN_MACROS } from './compiler/suggestions.js';
-
-// ============================================================================
-// Helpers & Utilities (unchanged)
-// ============================================================================
-export { helpers } from './compiler/helpers.js';
-export { animationPresets, createAnimation, getAnimationPreset, hasAnimationPreset, getAnimationPresetNames } from './compiler/animations.js';
-export { getSuggestion, getSuggestions, getPropertySuggestion, getShorthandSuggestion } from './compiler/suggestions.js';
-
-// ============================================================================
-// Types - Core Types (unchanged)
-// ============================================================================
-export type {
-  StyleDefinition,
-  AtRule,
-  NestedRule,
-  ThemeBlock,
-  Recipe,
-  RecipeOptions,
-  ChainObject
-} from './compiler/btt.js';
-
-// ============================================================================
-// Types - Atomic Optimizer (unchanged)
-// ============================================================================
-export type {
-  AtomicClass,
-  AtomicOptimizerOptions,
-  AtomicOptimizerStats,
-  ComponentClassMapEntry,
-  OptimizeResult
-} from './compiler/atomic-optimizer.js';
-
-// ============================================================================
-// Types - Prefixer (unchanged)
-// ============================================================================
-export type {
-  PrefixerConfig,
-  PrefixerResult
-} from './compiler/prefixer.js';
-
-// ============================================================================
-// Types - Theme Contract (unchanged)
-// ============================================================================
-export type {
-  ThemeContract,
-  ThemeTokens
-} from './compiler/theme-contract.js';
-
+export { DesignTokens, createTokens } from './compiler/tokens.js';
 export type { TokensStructure } from './compiler/tokens.js';
 
 // ============================================================================
-// Types - Configuration (unchanged)
+// Theme Contracts
 // ============================================================================
+
+export {
+  createThemeContract,
+  validateTheme,
+  createTheme,
+  Theme
+} from './compiler/theme-contract.js';
+export type { ThemeContract, ThemeTokens } from './compiler/theme-contract.js';
+
+// ============================================================================
+// Atomic Optimizer
+// ============================================================================
+
+export { AtomicOptimizer } from './compiler/atomic-optimizer.js';
 export type {
-  ChainCSSConfig,
-  CompileResult,
-  ChainCSSPlugin
-} from './core/types.js';
+  AtomicClass,
+  AtomicOptimizerOptions,
+  AtomicOptimizerStats
+} from './compiler/atomic-optimizer.js';
 
 // ============================================================================
-// Types - Chain API (unchanged)
+// CSS Prefixer
 // ============================================================================
-export type { Chain } from './compiler/Chain.js';
+
+export { ChainCSSPrefixer } from './compiler/prefixer.js';
+export type { PrefixerConfig, PrefixerResult } from './compiler/prefixer.js';
 
 // ============================================================================
-// Types - Animations (unchanged)
+// Animations
 // ============================================================================
+
+export {
+  animationPresets,
+  createAnimation,
+  getAnimationPreset,
+  hasAnimationPreset,
+  getAnimationPresetNames
+} from './compiler/animations.js';
 export type { AnimationConfig, KeyframeDefinition } from './compiler/animations.js';
 
 // ============================================================================
-// Types - Breakpoints (unchanged)
+// Breakpoints
 // ============================================================================
+
+export { setBreakpoints, currentBreakpoints } from './compiler/breakpoints.js';
 export type { BreakpointsMap, ResponsiveStyle } from './compiler/breakpoints.js';
 
 // ============================================================================
-// Runtime Exports (for runtime mode) - unchanged
+// Multi-Pass Optimization Pipeline
 // ============================================================================
-// Runtime available via separate import: "chaincss/runtime"
-// export * from './runtime/index.js';
 
-// ============================================================================
-// Version - UPDATE to 3.0.0
-// ============================================================================
-export const VERSION = '3.0.0';
-
-// ============================================================================
-// Default Export - Keep original chain for backward compatibility
-// ============================================================================
-// ============================================================================
-// 🆕 Design System Orchestrator (v2.3)
-// ============================================================================
 export {
-  orchestrator,
-  contrastRatio,
-  checkContrast,
-  auditContrast,
-  createContextualToken,
-  resolveContextual,
-  generateContextualCSS,
-  validateTokenRelationships,
-} from './compiler/design-orchestrator.js';
-export type { ContrastResult, ContrastReport, ContextualToken, TokenContext } from './compiler/design-orchestrator.js';
+  PassManager,
+  runDefaultPipeline,
+  DEFAULT_PIPELINE,
+  intentRecoveryPass,
+  unitResolutionPass,
+  validationPass,
+  specificitySortPass,
+  deadEliminationPass,
+  atomicExtractionPass,
+  mediaQueryPackingPass,
+  cssIfTranspilePass,
+  cssCompressionPass,
+  diagnosticsExportPass,
+} from './compiler/pass-manager.js';
+export type { PassName, PassPriority, PassDefinition, PassResult, PipelineResult } from './compiler/pass-manager.js';
 
 // ============================================================================
-// Default Export - Keep original chain for backward compatibility
+// Style IR System
 // ============================================================================
-// ============================================================================
-// 🆕 Scroll Timeline Engine (v2.3)
-// ============================================================================
-export {
-  scrollTimeline,
-  compileScrollAnimation,
-  compileScrollAnimations,
-  createScrollAnimation,
-  getScrollPresets,
-  SCROLL_PRESETS,
-} from './compiler/scroll-timeline.js';
-export type { ScrollTimelineConfig, ScrollAnimation, ScrollTimelineResult, KeyframeStep } from './compiler/scroll-timeline.js';
 
-// ============================================================================
-// Default Export - Keep original chain for backward compatibility
-// ============================================================================
-// ============================================================================
-// 🆕 Style IR System (v2.3)
-// ============================================================================
 export {
   styleIR,
   createIR,
@@ -232,197 +164,49 @@ export type {
 } from './compiler/style-ir.js';
 
 // ============================================================================
-// Default Export - Keep original chain for backward compatibility
+// Style Graph Compiler
 // ============================================================================
-// ============================================================================
-// 🆕 Multi-Pass Optimization Pipeline (v2.3)
-// ============================================================================
+
 export {
-  PassManager,
-  runDefaultPipeline,
-  DEFAULT_PIPELINE,
-  intentRecoveryPass,
-  unitResolutionPass,
-  validationPass,
-  specificitySortPass,
-  deadEliminationPass,
-  atomicExtractionPass,
-  mediaQueryPackingPass,
-  cssIfTranspilePass,
-  cssCompressionPass,
-  diagnosticsExportPass,
-} from './compiler/pass-manager.js';
-export type { PassName, PassPriority, PassDefinition, PassResult, PipelineResult } from './compiler/pass-manager.js';
-
-// ============================================================================
-// Default Export - Keep original chain for backward compatibility
-// ============================================================================
-// ============================================================================
-// 🆕 Constraint-Based Styling Engine (v2.3)
-// ============================================================================
-export {
-  constraintSolver,
-  resolveConstraint,
-  resolveStickyUntil,
-  resolveContainerQuery,
-  parseConstraint,
-  constraintSolverPass,
-} from './compiler/constraint-solver.js';
-export type { Constraint, ConstraintOperator, ConstraintTarget, ResolvedConstraint } from './compiler/constraint-solver.js';
-
-// ============================================================================
-// Default Export - Keep original chain for backward compatibility
-// ============================================================================
-// ============================================================================
-// 🆕 Layout Intelligence Engine (v2.3)
-// ============================================================================
-export {
-  layoutIntelligence,
-  recognizeLayout,
-  suggestMacro,
-  getLayoutPatterns,
-  layoutIntelligencePass,
-} from './compiler/layout-intelligence.js';
-export type { LayoutPattern, PatternMatch, PatternReport } from './compiler/layout-intelligence.js';
-
-// ============================================================================
-// Default Export - Keep original chain for backward compatibility
-// ============================================================================
-// ============================================================================
-// 🆕 Automatic Responsive Inference (v2.3)
-// ============================================================================
-export {
-  responsiveInference,
-  analyzeResponsive,
-  generateResponsiveReport,
-  autoFixIssue,
-  autoFixAll,
-  responsiveInferencePass,
-} from './compiler/responsive-inference.js';
-export type { ResponsiveIssue, ResponsiveReport } from './compiler/responsive-inference.js';
-
-// ============================================================================
-// Default Export - Keep original chain for backward compatibility
-// ============================================================================
-// ============================================================================
-// 🆕 Style Pattern Learner (v2.3)
-// ============================================================================
-export {
-  patternLearner,
-  learnPatterns,
-  getExtractionCandidates,
-  patternLearningPass,
-} from './compiler/pattern-learner.js';
-export type { StyleFingerprint, PatternCluster, LearningReport } from './compiler/pattern-learner.js';
-
-// ============================================================================
-// Default Export - Keep original chain for backward compatibility
-// ============================================================================
-// ============================================================================
-// 🆕 Source-Aware Optimization Engine (v2.3)
-// ============================================================================
-export {
-  sourceOptimizer,
-  optimizeSource,
-  sourceOptimizerPass,
-} from './compiler/source-optimizer.js';
-export type { OptimizationReport, DuplicateGroup, DeadRule, SpecificityConflict, AnimationConflict, MediaQueryRedundancy } from './compiler/source-optimizer.js';
-
-// ============================================================================
-// Default Export - Keep original chain for backward compatibility
-// ============================================================================
-// ============================================================================
-// 🆕 Semantic Token System (v2.3)
-// ============================================================================
-export {
-  semanticTokens,
-  resolveSemantic,
-  getSemanticIntents,
-  getSemanticDescription,
-  semanticTokensPass,
-} from './compiler/semantic-tokens.js';
-export type { SurfaceIntent, TextIntent, ElevationIntent, StateIntent, SpacingIntent, SemanticMapping, ThemeContext } from './compiler/semantic-tokens.js';
-
-// ============================================================================
-// Default Export - Keep original chain for backward compatibility
-// ============================================================================
-// ============================================================================
-// 🆕 Accessibility Intelligence Engine (v2.3)
-// ============================================================================
-export {
-  accessibilityEngine,
-  auditAccessibility,
-  checkRule,
-  accessibilityPass,
-} from './compiler/accessibility-engine.js';
-export type { AccessibilityIssue, AccessibilityReport } from './compiler/accessibility-engine.js';
-
-// ============================================================================
-// Default Export - Keep original chain for backward compatibility
-// ============================================================================
-// ============================================================================
-// 🆕 Intent-Based API (v2.3)
-// ============================================================================
-export {
-  intentAPI,
-  resolveIntent,
-  getAvailableIntents,
-  getIntentsByCategory,
-  getIntentDescription,
-  intentAPIPass,
-} from './compiler/intent-api.js';
-
-// ============================================================================
-// Default Export - Keep original chain for backward compatibility
-// ============================================================================
-import { chain } from './compiler/Chain.js';
-export default chain;
-
-// ============================================================================
-// 🆕 NEW: Smart Chain as alternative default (optional)
-// ============================================================================
-import { smartChain } from './core/smart-chain.js';
-
-// ============================================================================
-// Initialize global defaults (non-blocking) - unchanged
-// ============================================================================
-import { chains } from './compiler/btt.js';
-
-if (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'test') {
-  chains.initializeProperties().catch((err: Error) => {
-    if (process.env?.DEBUG) {
-      console.warn('[ChainCSS] Failed to load CSS properties:', err.message);
-    }
-  });
-}
-
-// ============================================================================
-// Re-export commonly used types for convenience (unchanged)
-// ============================================================================
+  StyleGraphCompiler,
+  compileGraph
+} from './compiler/style-graph.js';
 export type {
-  Properties as CSSProperties
-} from 'csstype';
-
-export type TokenValue<T = string> = T | `$${string}`;
-
-export type ResponsiveValue<T> = T | {
-  base?: T;
-  sm?: T;
-  md?: T;
-  lg?: T;
-  xl?: T;
-  '2xl'?: T;
-  [key: string]: T | undefined;
-};
-
-export type StyleWithTokens<T = any> = T | ((tokens: DesignTokens) => T);
-
-import { DesignTokens } from './compiler/tokens.js';
+  StyleGraph,
+  StyleGraphNode,
+  StyleGraphEdge,
+  GraphCompileOptions,
+  GraphCompileResult
+} from './compiler/style-graph.js';
 
 // ============================================================================
-// 🆕 Math Engine (v3.0)
+// Cache Management
 // ============================================================================
-export { 
+
+export { CacheManager } from './compiler/cache-manager.js';
+export { PersistentCache } from './compiler/content-addressable-cache.js';
+
+// ============================================================================
+// Design Orchestrator
+// ============================================================================
+
+export {
+  orchestrator,
+  contrastRatio,
+  checkContrast,
+  auditContrast,
+  createContextualToken,
+  resolveContextual,
+  generateContextualCSS,
+  validateTokenRelationships,
+} from './compiler/design-orchestrator.js';
+export type { ContrastResult, ContrastReport, ContextualToken, TokenContext } from './compiler/design-orchestrator.js';
+
+// ============================================================================
+// Math Engine
+// ============================================================================
+
+export {
   math,
   add,
   subtract,
@@ -433,17 +217,18 @@ export {
   toPx,
   scale
 } from './compiler/math-engine.js';
-export type { 
-  CSSUnit, 
-  CSSMathValue, 
-  MathContext, 
-  MathResult, 
-  FluidTypeConfig 
+export type {
+  CSSUnit,
+  CSSMathValue,
+  MathContext,
+  MathResult,
+  FluidTypeConfig
 } from './compiler/math-engine.js';
 
 // ============================================================================
-// 🆕 Intent Engine — Self-Healing CSS (v3.0)
+// Intent Engine
 // ============================================================================
+
 export {
   intent,
   correct,
@@ -459,30 +244,28 @@ export type {
 } from './compiler/intent-engine.js';
 
 // ============================================================================
-// 🆕 Style Graph Compiler (v3.0)
+// Helpers & Utilities
 // ============================================================================
-export {
-  StyleGraphCompiler,
-  compileGraph
-} from './compiler/style-graph.js';
-export type {
-  StyleGraph,
-  StyleGraphNode,
-  StyleGraphEdge,
-  GraphCompileOptions,
-  GraphCompileResult
-} from './compiler/style-graph.js';
+
+export { helpers } from './compiler/helpers.js';
+export { getSuggestion, getSuggestions, getPropertySuggestion } from './compiler/suggestions.js';
 
 // ============================================================================
-// 🆕 Static Analyzer — IDE Intelligence Layer (v3.0)
+// Recipe System
 // ============================================================================
-export {
-  StyleAnalyzer,
-  analyze as analyzeStyle
-} from './compiler/analyzer.js';
-export type {
-  StyleDiagnostic,
-  StyleAnalysis,
-  BreakpointInference,
-  DiagnosticSeverity
-} from './compiler/analyzer.js';
+
+export { recipe } from './compiler/recipe.js';
+export type { RecipeOptions, Recipe } from './compiler/recipe.js';
+
+// ============================================================================
+// Component Generator
+// ============================================================================
+
+export { generateComponentCode, detectFramework } from './compiler/component-generator.js';
+export type { ComponentInfo } from './compiler/component-generator.js';
+
+// ============================================================================
+// Version
+// ============================================================================
+
+export const VERSION = '2.4.0';

@@ -1,4 +1,13 @@
-// chaincss/src/core/compiler.ts
+// src/core/compiler.ts
+
+/**
+ * ChainCSS Build Compiler
+ * 
+ * Orchestrates the build pipeline: scanning, atomic optimization,
+ * CSS generation, and manifest creation.
+ * 
+ * Uses the unified StyleCollector + compileToCSS pipeline internally.
+ */
 
 import fs from 'fs';
 import path from 'path';
@@ -16,56 +25,62 @@ import {
 import { generateClassName, formatCSS, writeFile, getBaseName } from './utils.js';
 import type { ChainCSSConfig, CompileResult, StyleDefinition } from './types.js';
 
-// Core Compiler Logic
-import { compile as bttCompile, setAtomicOptimizer, setBreakpoints, setSourceComments, scanFileForStyles } from '../compiler/btt.js';
+// New unified pipeline
+import { compileToCSS, partitionForBuild } from './style-compiler.js';
+import type { StyleObject } from './style-collector.js';
+
+// Compiler passes
 import { AtomicOptimizer } from '../compiler/atomic-optimizer.js';
-import ChainCSSPrefixer from '../compiler/prefixer.js';
+import type { AtomicClass } from '../compiler/atomic-optimizer.js';
+import { ChainCSSPrefixer } from '../compiler/prefixer.js';
 import { CacheManager } from '../compiler/cache-manager.js';
 import { PersistentCache } from '../compiler/content-addressable-cache.js';
-import { shorthandMap, macros } from '../compiler/shorthands.js';
-import type { AtomicClass } from '../compiler/atomic-optimizer.js';
-
 import { StyleGraphCompiler } from '../compiler/style-graph.js';
 import type { GraphCompileOptions } from '../compiler/style-graph.js';
 
+// Legacy — kept for backward compatibility during migration
+import { scanFileForStyles } from '../compiler/scanner.js';
+import { setBreakpoints } from '../compiler/breakpoints.js';
 
-const __filename = typeof import.meta !== 'undefined' ? (() => { try { return fileURLToPath(import.meta.url); } catch { return ''; } })() : '';
+const __filename = typeof import.meta !== 'undefined' 
+  ? (() => { try { return fileURLToPath(import.meta.url); } catch { return ''; } })() 
+  : '';
 const __dirname = __filename ? path.dirname(__filename) : '';
 
+// ============================================================================
+// Types
+// ============================================================================
+
 interface CachedStyleEntry {
-  result: {
-    css: string;
-    classMap: Record<string, string>;
-    atomicClasses: AtomicClass[];
-    stats: any;
-  };
+  result: CompileResult;
   accessCount: number;
   lastAccessed: number;
   hash: string;
 }
+
+// ============================================================================
+// ChainCSSCompiler
+// ============================================================================
 
 export class ChainCSSCompiler {
   private config: Required<ChainCSSConfig>;
   private prefixer: ChainCSSPrefixer | null = null;
   public atomicOptimizer: AtomicOptimizer | null = null;
 
-  private sharedStyles: Map<string, number> = new Map();
+  // Caching
   private styleCache = new Map<string, CachedStyleEntry>();
-  private classMap = new Map<string, string>();
-  private runtimeCache: CacheManager;
-  private persistentCache: PersistentCache;
+  private lruList: string[] = [];
+  private readonly MAX_CACHE_SIZE = PERFORMANCE.CACHE_MAX_ENTRIES || 500;
   
-  private readonly MAX_STYLE_CACHE_SIZE = PERFORMANCE.CACHE_MAX_ENTRIES || 500;
-  private importedModules = new Map<string, { timestamp: number; hash: string }>();
-  private dependencyGraph = new Map<string, Set<string>>();
-  private generatedCSS: string = '';
+  // Build state
   private accumulatedCSS: string = '';
   private compileInProgress: boolean = false;
   private compileQueue: Array<{ resolve: () => void; reject: (error: Error) => void }> = [];
   
-  // LRU tracking for O(1) eviction
-  private lruList: string[] = [];
-
+  // Module tracking
+  private importedModules = new Map<string, { timestamp: number; hash: string }>();
+  private dependencyGraph = new Map<string, Set<string>>();
+  
   constructor(config: ChainCSSConfig) {
     this.config = {
       ...DEFAULT_CONFIG,
@@ -79,385 +94,179 @@ export class ChainCSSCompiler {
     } as Required<ChainCSSConfig>;
 
     this.setupCompilerGlobals();
-    
-    this.runtimeCache = new CacheManager(this.config.cachePath || './.chaincss-cache');
-    this.persistentCache = new PersistentCache({
-      cacheDir: (this.config as any).persistentCachePath || './.chaincss/persistent-cache',
-      maxAgeDays: (this.config as any).cacheMaxAgeDays || 30,
-      maxSizeMB: (this.config as any).cacheMaxSizeMB || 500,
-      enabled: (this.config as any).cacheEnabled !== false,
-      verbose: this.config.verbose
-    });
-
-    this.atomicOptimizer = new AtomicOptimizer(this.config as any);
-
     this.initOptimizer();
     this.initPrefixer();
   }
 
-  /**
- * Compile using the style graph compiler for advanced optimizations.
- * 
- * @example
- * const result = compiler.compileWithGraph(styles, { 
- *   eliminateDead: true, 
- *   knownSelectors: ['.header', '.footer'],
- *   mergeIdentical: true 
- * });
- */
-  public compileWithGraph(
-    styles: Record<string, import('./types.js').StyleDefinition>,
-    options?: GraphCompileOptions
-  ): import('./types.js').GraphCompileResult {
-    const graphCompiler = new StyleGraphCompiler({
-      ...options,
-      verbose: this.config.verbose,
-    });
-    
-    const result = graphCompiler.compile(styles);
-    
-    if (this.config.verbose) {
-      if (result.eliminatedDead > 0) {
-        console.log(`  🧹 Eliminated ${result.eliminatedDead} dead styles`);
-      }
-      if (result.mergedRules > 0) {
-        console.log(`  🔗 Merged ${result.mergedRules} identical rules`);
-      }
-      if (result.optimizationTime > 0) {
-        console.log(`  ⚡ Graph compilation: ${result.optimizationTime}ms`);
-      }
-    }
-    
-    return result;
-  }
-
-  public hasStyles(): boolean {
-    const combined = this.getCombinedCSS();
-    return !!(combined && combined.trim().length > 0);
-  }
-
-  private async processStyleObject(styleObj: Record<string, any>, componentName: string): Promise<void> {
-    if (!this.atomicOptimizer) return;
-
-    // Transform the style object - expand shorthands
-    const finalStyle: Record<string, any> = {};
-    
-    for (let [key, value] of Object.entries(styleObj)) {
-      // Handle hover states properly
-      if (key === 'hover' && typeof value === 'object') {
-        const expandedHover: Record<string, any> = {};
-        for (const [hk, hv] of Object.entries(value)) {
-          const realKey = shorthandMap[hk] || hk;
-          expandedHover[realKey] = hv;
-        }
-        finalStyle.hover = expandedHover;
-        continue;
-      }
-      
-      // Handle atRules
-      if (key === 'atRules') {
-        finalStyle.atRules = value;
-        continue;
-      }
-      
-      // Handle nested selectors
-      if (key.startsWith('.') || key.startsWith('&')) {
-        finalStyle[key] = value;
-        continue;
-      }
-      
-      // Transform standard properties
-      const realKey = shorthandMap[key] || key;
-      finalStyle[realKey] = value;
-    }
-
-    const result = this.atomicOptimizer.optimize({
-      [componentName]: { 
-        selectors: [componentName], 
-        ...finalStyle
-      }
-    });
-    
-    if (result.css && result.css.trim()) {
-      this.accumulatedCSS += result.css + '\n';
-    }
-    
-    // Cache for HMR - use SHA256 for consistency
-    const cacheKey = crypto.createHash('sha256')
-      .update(`${componentName}-${JSON.stringify(styleObj)}`)
-      .digest('hex')
-      .slice(0, 16);
-    
-    this.addToCache(cacheKey, {
-      result: {
-        css: result.css || '',
-        classMap: result.map || {},
-        atomicClasses: [],
-        stats: this.getStats()
-      },
-      accessCount: 1,
-      lastAccessed: Date.now(),
-      hash: cacheKey
-    });
-  }
-
-  private addToCache(key: string, entry: CachedStyleEntry): void {
-    // If key already exists, just update it
-    if (this.styleCache.has(key)) {
-      this.styleCache.set(key, entry);
-      // Move to end of LRU list (most recently used)
-      this.lruList = this.lruList.filter(k => k !== key);
-      this.lruList.push(key);
-      return;
-    }
-    
-    // Evict oldest entries if at capacity
-    while (this.styleCache.size >= this.MAX_STYLE_CACHE_SIZE && this.lruList.length > 0) {
-      const oldest = this.lruList.shift();
-      if (oldest) {
-        this.styleCache.delete(oldest);
-        if (this.config.verbose) {
-          console.log(chalk.gray(`  🧹 Cache evicted: ${oldest.slice(0, 8)}...`));
-        }
-      }
-    }
-    
-    this.styleCache.set(key, entry);
-    this.lruList.push(key);
-  }
-
-  /**
-   * Scans a raw source string (from Vite) for useChainStyles patterns 
-   * and registers them with the optimizer.
-   * Uses brace-counting parser instead of fragile regex.
-   */
-  public async compileSource(source: string, id: string): Promise<void> {
-    if (!this.atomicOptimizer || id.includes('\0')) return;
-
-    try {
-      let processedCount = 0;
-      
-      if (this.config.verbose && processedCount > 0) {
-        console.log(`  └─ Processed ${processedCount} chain() styles from ${id.split('/').pop()}`);
-      }
-    } catch (error) {
-      console.error(chalk.red(`  ❌ Error compiling source ${id}: ${error}`));
-    }
-  }
-
-  /**
-   * Safely parse a style object string without using eval.
-   * Supports JSON-like syntax and token references.
-   */
-  private safeParseStyleObject(input: string): Record<string, any> {
-    try {
-      // Remove comments
-      let cleaned = input
-        .replace(/\/\*[\s\S]*?\*\//g, '')
-        .replace(/\/\/[^\n]*/g, '');
-      
-      // Handle token references like $colors.primary -> "__TOKEN__colors.primary__"
-      const tokenPlaceholders: string[] = [];
-      cleaned = cleaned.replace(/\$([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)/g, (match) => {
-        tokenPlaceholders.push(match);
-        return `"__TOKEN_${tokenPlaceholders.length - 1}__"`;
-      });
-      
-      // Try JSON.parse first
-      if (cleaned.trim().startsWith('{')) {
-        try {
-          const result = JSON.parse(cleaned);
-          // Restore token references
-          return this.restoreTokens(result, tokenPlaceholders);
-        } catch {
-          // If JSON fails, try a limited object literal parser
-          return this.parseObjectLiteral(cleaned, tokenPlaceholders);
-        }
-      }
-    } catch (err) {
-      if (this.config.verbose) {
-        console.warn(chalk.yellow(`  ⚠️  Failed to parse style body: ${input.substring(0, 100)}...`));
-      }
-    }
-    
-    return {};
-  }
-
-  /**
-   * Parse a limited subset of JavaScript object literal syntax.
-   * Handles: strings, numbers, booleans, null, nested objects, arrays.
-   * Does NOT execute code.
-   */
-  private parseObjectLiteral(str: string, tokenPlaceholders: string[]): Record<string, any> {
-    // This is a simplified safe parser. For production, consider using a library like json5.
-    // It handles the common cases without eval.
-    try {
-      // Replace single-quoted strings with double-quoted
-      let normalized = str
-        .replace(/'([^'\\]*(\\.[^'\\]*)*)'/g, '"$1"')
-        // Handle unquoted property names
-        .replace(/(\{|\,)\s*([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:/g, '$1"$2":')
-        // Handle trailing commas
-        .replace(/,\s*([}\]])/g, '$1');
-      
-      const result = JSON.parse(normalized);
-      return this.restoreTokens(result, tokenPlaceholders);
-    } catch {
-      return {};
-    }
-  }
-
-  private restoreTokens(obj: any, tokens: string[]): any {
-    if (typeof obj === 'string') {
-      const match = obj.match(/^__TOKEN_(\d+)__$/);
-      if (match) {
-        const idx = parseInt(match[1]);
-        return tokens[idx] || obj;
-      }
-      return obj;
-    }
-    if (Array.isArray(obj)) {
-      return obj.map(item => this.restoreTokens(item, tokens));
-    }
-    if (obj && typeof obj === 'object') {
-      const result: Record<string, any> = {};
-      for (const [key, value] of Object.entries(obj)) {
-        result[key] = this.restoreTokens(value, tokens);
-      }
-      return result;
-    }
-    return obj;
-  }
-
-  /**
-   * @deprecated Use safeParseStyleObject instead.
-   * Kept for backward compatibility during migration.
-   */
-  private looseParse(styleBody: string): Record<string, any> {
-    return this.safeParseStyleObject(styleBody);
-  }
+  // ==========================================================================
+  // Initialization
+  // ==========================================================================
 
   private setupCompilerGlobals(): void {
-    setSourceComments(this.config.sourceComments !== false);
     if (this.config.breakpoints) {
       setBreakpoints(this.config.breakpoints);
     }
   }
 
-  // ============================================================================
-  // Caching & Imports
-  // ============================================================================
-
-  private hashStyleDef(styleDef: StyleDefinition): string {
-    const { _componentName, _generateComponent, _framework, _propsDefinition, ...relevant } = styleDef;
-    return crypto.createHash('sha256').update(JSON.stringify(relevant)).digest('hex').slice(0, 16);
-  }
-
-  private async importModule(filePath: string): Promise<Record<string, any>> {
-    const absolutePath = path.resolve(filePath);
-    
-    // Check if file exists
-    if (!fs.existsSync(absolutePath)) {
-      throw new Error(`File not found: ${absolutePath}`);
-    }
-    
-    const fileUrl = pathToFileURL(absolutePath).href;
-    
-    try {
-      // Check for TSX/JSX files that need preprocessing
-      if (filePath.endsWith('.tsx') || filePath.endsWith('.jsx')) {
-        throw new Error(`Component file ${path.basename(filePath)} will be processed by scanner`);
-      }
-      
-      // Clear require cache for HMR
-      const moduleId = `${fileUrl}?t=${Date.now()}`;
-      const imported = await import(/* @vite-ignore */ moduleId);
-      
-      return imported.default && typeof imported.default === 'object' 
-        ? { ...imported.default, ...imported }
-        : imported;
-    } catch (error: any) {
-      error.message = `Failed to import ${path.basename(filePath)}: ${error.message}`;
-      throw error;
+  private initOptimizer(): void {
+    if (this.config.atomic.enabled) {
+      this.atomicOptimizer = new AtomicOptimizer(this.config.atomic);
     }
   }
 
-  // ============================================================================
-  // Compilation Methods
-  // ============================================================================
+  private initPrefixer(): void {
+    if (this.config.prefixer.enabled) {
+      this.prefixer = new ChainCSSPrefixer(this.config.prefixer);
+    }
+  }
 
+  // ==========================================================================
+  // Style Compilation (the core method)
+  // ==========================================================================
+
+  /**
+   * Compile a single style definition to CSS + class map.
+   * 
+   * This is the primary compilation entry point. It:
+   * 1. Checks cache
+   * 2. Runs atomic optimization (if enabled)
+   * 3. Generates CSS using the unified compileToCSS
+   * 4. Returns class mappings and stats
+   */
   public compileStyle(styleId: string, styleDef: StyleDefinition): CompileResult {
     const hash = this.hashStyleDef(styleDef);
     const cacheKey = `${styleId}:${hash}`;
 
-    if (this.styleCache.has(cacheKey)) {
-      const cached = this.styleCache.get(cacheKey)!;
+    // Check cache
+    const cached = this.styleCache.get(cacheKey);
+    if (cached) {
       cached.lastAccessed = Date.now();
       cached.accessCount++;
-      // Update LRU position
-      this.lruList = this.lruList.filter(k => k !== cacheKey);
-      this.lruList.push(cacheKey);
+      this.touchLRU(cacheKey);
       return cached.result;
     }
 
-    // Phase 1: Standard Compile
-    let finalCSS = bttCompile({ [styleId]: styleDef });
-    let finalClassName = generateClassName(styleId, this.config.atomic.naming);
-    let atomicClassNames: string[] = [];
+    // Determine selectors
+    const selectors = styleDef.selectors || [];
+    const isGlobalSelector = selectors.some(s => 
+      !s.startsWith('.') && !s.startsWith('#')
+    );
+
+    let finalClassName = '';
+    let finalCSS = '';
     let atomicClasses: AtomicClass[] = [];
 
-    if (this.atomicOptimizer && this.config.atomic.enabled) {
+    // Phase 1: Atomic Optimization
+    if (this.atomicOptimizer && this.config.atomic.enabled && !isGlobalSelector) {
       const optimized = this.atomicOptimizer.optimize({ [styleId]: styleDef });
       
-      const componentMapping = this.atomicOptimizer.getComponentMapEntry(styleId);
-      atomicClassNames = componentMapping?.atomicClasses || [];
-      
-      // Get full AtomicClass data from the optimizer instead of creating empty ones
-      atomicClasses = atomicClassNames
-        .map(className => {
-          const atomicEntry = (this.atomicOptimizer as any)?.getAtomicEntry?.(className);
-          if (atomicEntry) {
-            return atomicEntry;
-          }
-          // Fallback only if entry not found
-          return {
-            className,
-            prop: '',
-            value: '',
-            usageCount: 0,
-            rules: ''
-          };
-        })
-        .filter(Boolean) as AtomicClass[];
-      
+      // Get the full class string from the optimizer
       if (optimized.map && optimized.map[styleId]) {
-        finalClassName = [optimized.map[styleId], ...atomicClassNames].join(' ');
+        finalClassName = optimized.map[styleId];
       }
       
-      // Only use atomic CSS if it produced output, otherwise keep standard CSS
+      // Use atomic CSS if available
       if (optimized.css && optimized.css.trim()) {
         finalCSS = optimized.css;
       }
-      // else keep finalCSS from bttCompile above
+      
+      // Collect atomic class metadata
+      const componentMapping = this.atomicOptimizer.getComponentMapEntry(styleId);
+      if (componentMapping?.atomicClasses) {
+        atomicClasses = componentMapping.atomicClasses
+          .map(className => {
+            const entry = (this.atomicOptimizer as any)?.getAtomicEntry?.(className);
+            return entry || { className, prop: '', value: '', usageCount: 0, rules: '' };
+          })
+          .filter(Boolean) as AtomicClass[];
+      }
     }
+
+    // Phase 2: CSS Generation (unified pipeline)
+    if (!finalCSS || isGlobalSelector) {
+      // Convert StyleDefinition to StyleObject for the unified compiler
+      const styleObject = this.styleDefToObject(styleDef, styleId);
+      
+      // Generate CSS using the unified compiler
+      finalCSS = compileToCSS(styleObject, {
+        scopeSelector: selectors.join(', ') || `.${styleId}`,
+        minify: this.config.output.minify,
+        sourceMap: this.config.sourceComments,
+        sourceFile: styleId
+      });
+      
+      // For global selectors, don't export a class name
+      if (isGlobalSelector) {
+        finalClassName = '';
+      } else {
+        finalClassName = finalClassName || generateClassName(styleId, this.config.atomic.naming);
+      }
+    }
+
+    // Phase 3: Partition for build/runtime split
+    const styleObject = this.styleDefToObject(styleDef, styleId);
+    const { hasDynamic } = partitionForBuild(styleObject);
 
     const result: CompileResult = {
       css: formatCSS(finalCSS, this.config.output.minify),
-      classMap: { [styleId]: finalClassName },
-      atomicClasses,
+      classMap: isGlobalSelector ? {} : { [styleId]: finalClassName },
+      atomicClasses: isGlobalSelector ? [] : atomicClasses,
       stats: this.getStats()
     };
 
-    // Cache the result
-    this.addToCache(cacheKey, {
-      result,
-      accessCount: 1,
-      lastAccessed: Date.now(),
-      hash
-    });
+    // Cache
+    this.addToCache(cacheKey, { result, accessCount: 1, lastAccessed: Date.now(), hash });
 
     return result;
   }
+
+  /**
+   * Convert a StyleDefinition to the unified StyleObject format.
+   */
+  private styleDefToObject(styleDef: StyleDefinition, id: string): StyleObject {
+    const {
+      selectors,
+      atRules,
+      nestedRules,
+      hover,
+      themes,
+      _componentName,
+      _generateComponent,
+      _framework,
+      _propsDefinition,
+      ...properties
+    } = styleDef as any;
+
+    const styleObject: StyleObject = { ...properties };
+
+    // Map hover
+    if (hover && typeof hover === 'object') {
+      styleObject['&:hover'] = hover;
+    }
+
+    // Map atRules
+    if (atRules && Array.isArray(atRules)) {
+      styleObject._atRules = atRules;
+    }
+
+    // Map nestedRules
+    if (nestedRules && Array.isArray(nestedRules)) {
+      styleObject._nestedRules = nestedRules;
+    }
+
+    // Handle pseudo-classes and nested selectors
+    for (const key of Object.keys(styleDef)) {
+      if (key.startsWith('&') || key.startsWith('.')) {
+        styleObject[key] = (styleDef as any)[key];
+      }
+    }
+
+    return styleObject;
+  }
+
+  // ==========================================================================
+  // Recipe Compilation
+  // ==========================================================================
 
   public compileRecipe(recipeId: string, recipeValue: any): CompileResult {
     try {
@@ -485,7 +294,7 @@ export class ChainCSSCompiler {
           }
         }
         
-        // Deduplicate by className
+        // Deduplicate atomic classes
         const seen = new Set<string>();
         allAtomicClassObjects = allAtomicClassObjects.filter(ac => {
           if (seen.has(ac.className)) return false;
@@ -504,13 +313,42 @@ export class ChainCSSCompiler {
       console.error(`Failed to compile recipe ${recipeId}:`, error);
     }
     
-    return {
-      css: '',
-      classMap: {},
-      atomicClasses: [],
-      stats: this.getStats()
-    };
+    return { css: '', classMap: {}, atomicClasses: [], stats: this.getStats() };
   }
+
+  // ==========================================================================
+  // Graph Compilation (advanced optimization)
+  // ==========================================================================
+
+  public compileWithGraph(
+    styles: Record<string, StyleDefinition>,
+    options?: GraphCompileOptions
+  ): import('./types.js').GraphCompileResult {
+    const graphCompiler = new StyleGraphCompiler({
+      ...options,
+      verbose: this.config.verbose,
+    });
+    
+    const result = graphCompiler.compile(styles);
+    
+    if (this.config.verbose) {
+      if (result.eliminatedDead > 0) {
+        console.log(`  🧹 Eliminated ${result.eliminatedDead} dead styles`);
+      }
+      if (result.mergedRules > 0) {
+        console.log(`  🔗 Merged ${result.mergedRules} identical rules`);
+      }
+      if (result.optimizationTime > 0) {
+        console.log(`  ⚡ Graph compilation: ${result.optimizationTime}ms`);
+      }
+    }
+    
+    return result;
+  }
+
+  // ==========================================================================
+  // File & Batch Compilation
+  // ==========================================================================
 
   public async compile(inputFile: string, outputDir: string): Promise<any> {
     const results = await this.compileFile(inputFile);
@@ -533,8 +371,10 @@ export class ChainCSSCompiler {
     return results;
   }
 
+  /**
+   * Main build method — compiles all components and generates output files.
+   */
   public async compileComponents(components: string[]): Promise<void> {
-    // Ensure only one compilation at a time
     if (this.compileInProgress) {
       return new Promise((resolve, reject) => {
         this.compileQueue.push({ resolve, reject });
@@ -592,24 +432,18 @@ export class ChainCSSCompiler {
           console.log(chalk.gray(`  📊 Processed ${Math.min(i + BATCH_SIZE, components.length)}/${components.length} files`));
         }
       }
-      
-      if (errors.length > 0 && this.config.verbose) {
-        console.warn(chalk.yellow(`  ⚠️  ${errors.length} scanning errors occurred`));
-      }
 
       if (!this.config.silent) {
         console.log(chalk.blue('\n🏗️  Phase 2: Generating Component Styles...'));
       }
       
-      const publicDir = path.resolve(process.cwd(), 'public');
       const manifestDir = path.resolve(process.cwd(), '.chaincss', 'manifest');
-
-      if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
-      if (!fs.existsSync(manifestDir)) fs.mkdirSync(manifestDir, { recursive: true });
+      if (!fs.existsSync(manifestDir)) {
+        fs.mkdirSync(manifestDir, { recursive: true });
+      }
 
       let processedComponents = 0;
       const generatedClassFiles: string[] = [];
-      let totalAtomicRules = 0;
       
       for (const file of components) {
         if (!file.endsWith('.chain.js') && !file.endsWith('.chain.ts')) continue;
@@ -632,36 +466,66 @@ export class ChainCSSCompiler {
           for (const [name, style] of Object.entries(styles)) {
             if (style && typeof style === 'object' && (style as any).selectors) {
               const result = this.compileStyle(name, style as StyleDefinition);
-              
-              if (this.config.verbose) {
-                const className = Object.values(result.classMap)[0];
-                console.log(chalk.gray(`   📝 ${name} → ${className || '(empty)'}`));
-              }
-              
               const className = Object.values(result.classMap)[0];
+              
               if (className) {
                 jsBuffer += `export const ${name} = '${className}';\n`;
+                
+                // Write atomic class rules
+                if (result.atomicClasses && result.atomicClasses.length > 0 && this.atomicOptimizer) {
+                  const allAtomic = (this.atomicOptimizer as any).getAllAtomicClasses() || [];
+                  const atomicMap = new Map(allAtomic.map((a: any) => [a.className, a]));
+                  const seenAtomic = new Set<string>();
+                  
+                  for (const ac of result.atomicClasses) {
+                    const acName = typeof ac === 'string' ? ac : ac.className;
+                    if (!seenAtomic.has(acName)) {
+                      seenAtomic.add(acName);
+                      const fullAtomic: any = atomicMap.get(acName);
+                      if (fullAtomic?.rules) {
+                        cssBuffer += `.${acName} { ${fullAtomic.rules} }\n`;
+                      }
+                    }
+                  }
+                }
+                
                 cssBuffer += result.css + '\n';
                 hasContent = true;
-                totalAtomicRules += result.atomicClasses?.length || 0;
+              } else {
+                // Global style — just CSS, no class export
+                hasContent = true;
+                cssBuffer += result.css + '\n';
               }
             }
           }
 
           if (hasContent) {
-            const targetDir = path.join(sourceDir, 'style');
-            
+            const targetDir = sourceDir;
             if (!fs.existsSync(targetDir)) {
               fs.mkdirSync(targetDir, { recursive: true });
             }
             
+            // Write class map
             const classFilePath = path.join(targetDir, `${baseName}.class.js`);
             fs.writeFileSync(classFilePath, jsBuffer);
             generatedClassFiles.push(classFilePath);
             
+            // Write CSS
             if (cssBuffer.trim()) {
               const cssFilePath = path.join(targetDir, `${baseName}.css`);
-              fs.writeFileSync(cssFilePath, formatCSS(cssBuffer, false));
+              let finalCSS = cssBuffer;
+              
+              // Run through autoprefixer if enabled
+              if (this.prefixer && this.config.prefixer.enabled) {
+                try {
+                  const prefixed = await this.prefixer.process(finalCSS);
+                  finalCSS = prefixed.css || finalCSS;
+                } catch (e) {
+                  // Fall through with unprefixed CSS
+                }
+              }
+              
+              fs.writeFileSync(cssFilePath, formatCSS(finalCSS, false));
             }
             
             processedComponents++;
@@ -675,17 +539,9 @@ export class ChainCSSCompiler {
         }
       }
 
+      // Phase 3: Manifest
       if (!this.config.silent) {
         console.log(chalk.blue('\n🌍 Phase 3: Finalizing Global Assets...'));
-      }
-
-      const finalAtomicCSS = this.atomicOptimizer ? this.atomicOptimizer.generateAtomicCSS() : '';
-      
-      const globalCssPath = path.join(publicDir, 'global.css');
-      fs.writeFileSync(globalCssPath, formatCSS(finalAtomicCSS, this.config.output.minify));
-      
-      if (this.config.verbose) {
-        console.log(chalk.blue(`   📦 Global CSS → ${path.relative(process.cwd(), globalCssPath)} (${finalAtomicCSS.length} bytes)`));
       }
 
       const manifestData = {
@@ -699,15 +555,10 @@ export class ChainCSSCompiler {
       const manifestPath = path.join(manifestDir, 'manifest.json');
       fs.writeFileSync(manifestPath, JSON.stringify(manifestData, null, 2));
       
-      if (this.config.verbose) {
-        console.log(chalk.blue(`   📦 Manifest → ${path.relative(process.cwd(), manifestPath)}`));
-      }
-      
       if (!this.config.silent) {
         console.log(chalk.green(`\n✅ Build Complete!`));
         console.log(chalk.gray(`   📁 Components processed: ${processedComponents}`));
         console.log(chalk.gray(`   📁 Class files generated: ${generatedClassFiles.length}`));
-        console.log(chalk.gray(`   📁 Global CSS: ${path.relative(process.cwd(), globalCssPath)}`));
         console.log(chalk.gray(`   📁 Manifest: ${path.relative(process.cwd(), manifestPath)}`));
 
         if (this.atomicOptimizer) {
@@ -725,31 +576,94 @@ export class ChainCSSCompiler {
       
     } finally {
       this.compileInProgress = false;
-      
-      // Process queued compilations safely
       this.drainCompileQueue();
     }
   }
-  
-  /**
-   * Drains the compile queue safely, handling items added during draining.
-   */
-  private drainCompileQueue(): void {
-    while (this.compileQueue.length > 0) {
-      const queue = [...this.compileQueue];
-      this.compileQueue = [];
-      for (const item of queue) {
-        item.resolve();
+
+  // ==========================================================================
+  // Caching
+  // ==========================================================================
+
+  private addToCache(key: string, entry: CachedStyleEntry): void {
+    if (this.styleCache.has(key)) {
+      this.styleCache.set(key, entry);
+      this.touchLRU(key);
+      return;
+    }
+    
+    while (this.styleCache.size >= this.MAX_CACHE_SIZE && this.lruList.length > 0) {
+      const oldest = this.lruList.shift();
+      if (oldest) {
+        this.styleCache.delete(oldest);
       }
     }
+    
+    this.styleCache.set(key, entry);
+    this.lruList.push(key);
   }
-  
-  // ============================================================================
-  // Utilities & Plugin Helpers
-  // ============================================================================
+
+  private touchLRU(key: string): void {
+    this.lruList = this.lruList.filter(k => k !== key);
+    this.lruList.push(key);
+  }
+
+  private hashStyleDef(styleDef: StyleDefinition): string {
+    const { _componentName, _generateComponent, _framework, _propsDefinition, ...relevant } = styleDef as any;
+    return crypto.createHash('sha256')
+      .update(JSON.stringify(relevant))
+      .digest('hex')
+      .slice(0, 16);
+  }
+
+  // ==========================================================================
+  // Module Imports
+  // ==========================================================================
+
+  private async importModule(filePath: string): Promise<Record<string, any>> {
+    const absolutePath = path.resolve(filePath);
+    
+    if (!fs.existsSync(absolutePath)) {
+      throw new Error(`File not found: ${absolutePath}`);
+    }
+    
+    const fileUrl = pathToFileURL(absolutePath).href;
+    
+    try {
+      if (filePath.endsWith('.tsx') || filePath.endsWith('.jsx')) {
+        throw new Error(`Component file ${path.basename(filePath)} will be processed by scanner`);
+      }
+      
+      const moduleId = `${fileUrl}?t=${Date.now()}`;
+      const imported = await import(/* @vite-ignore */ moduleId);
+      return imported.default && typeof imported.default === 'object'
+        ? { ...imported.default, ...imported }
+        : imported;
+    } catch (error: any) {
+      error.message = `Failed to import ${path.basename(filePath)}: ${error.message}`;
+      throw error;
+    }
+  }
+
+  // ==========================================================================
+  // Source Scanning (for Vite/Webpack plugins)
+  // ==========================================================================
+
+  public async compileSource(source: string, id: string): Promise<void> {
+    if (!this.atomicOptimizer || id.includes('\0')) return;
+    // Source scanning is handled by scanFileForStyles from scanner.ts
+    // This method exists for plugin compatibility
+  }
+
+  // ==========================================================================
+  // Utilities
+  // ==========================================================================
 
   public getCombinedCSS(): string {
     return this.accumulatedCSS;
+  }
+
+  public hasStyles(): boolean {
+    return !!(this.accumulatedCSS && this.accumulatedCSS.trim().length > 0);
   }
 
   public clearCSS(): void {
@@ -759,19 +673,20 @@ export class ChainCSSCompiler {
     if (this.atomicOptimizer) {
       this.atomicOptimizer.reset();
     }
-    if (this.config.verbose) {
-      console.log('[Compiler] CSS cache cleared');
-    }
   }
 
   public getStats() {
     const stats = this.atomicOptimizer?.getStats();
     return {
-        totalStyles: stats?.totalStyles || 0,
-        atomicStyles: (stats as any)?.atomicStyles || 0,
-        uniqueProperties: (stats as any)?.uniqueProperties || 0,
-        savings: stats?.savings || '0%'
+      totalStyles: stats?.totalStyles || 0,
+      atomicStyles: (stats as any)?.atomicStyles || 0,
+      uniqueProperties: (stats as any)?.uniqueProperties || 0,
+      savings: stats?.savings || '0%'
     };
+  }
+
+  public getAtomicMap(): Record<string, string> {
+    return (this.atomicOptimizer as any)?.classMap || {};
   }
 
   private generateCSSFile(results: Record<string, CompileResult>, outputPath: string): void {
@@ -780,25 +695,26 @@ export class ChainCSSCompiler {
     writeFile(outputPath, css);
   }
 
-  public getAtomicMap(): Record<string, string> {
-    return (this.atomicOptimizer as any)?.classMap || {};
-  }
-
-  private initOptimizer(): void {
-    if (this.config.atomic.enabled) {
-      if (!this.atomicOptimizer) {
-        this.atomicOptimizer = new AtomicOptimizer(this.config.atomic);
-        setAtomicOptimizer(this.atomicOptimizer);
+  private drainCompileQueue(): void {
+    while (this.compileQueue.length > 0) {
+      const queue = [...this.compileQueue];
+      this.compileQueue = [];
+      for (const item of queue) {
+        item.resolve();
       }
     }
   }
-
-  private initPrefixer(): void {
-    if (this.config.prefixer.enabled) this.prefixer = new ChainCSSPrefixer(this.config.prefixer);
-  }
 }
 
-export async function compileChainCSS(inputFile: string, outputDir: string, config?: ChainCSSConfig) {
+// ============================================================================
+// Convenience function
+// ============================================================================
+
+export async function compileChainCSS(
+  inputFile: string,
+  outputDir: string,
+  config?: ChainCSSConfig
+) {
   const compiler = new ChainCSSCompiler(config || {});
   return await compiler.compile(inputFile, outputDir);
 }

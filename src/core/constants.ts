@@ -46,18 +46,20 @@ export const NEVER_ATOMIC_PROPERTIES = [
   'clip-path',
   'mask',
   'filter',
-  'backdrop-filter'
+  'display',
+  'backdrop-filter',
+  'display',
+  'width',
+  'margin-left',
 ];
 
 // Default CSS properties that should always be atomic (high reuse)
 export const ALWAYS_ATOMIC_PROPERTIES = [
-  'display',
   'position',
   'margin',
   'margin-top',
   'margin-right',
   'margin-bottom',
-  'margin-left',
   'padding',
   'padding-top',
   'padding-right',
@@ -68,7 +70,6 @@ export const ALWAYS_ATOMIC_PROPERTIES = [
   'background',
   'border',
   'border-radius',
-  'width',
   'height',
   'max-width',
   'max-height',

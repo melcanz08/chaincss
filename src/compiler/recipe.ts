@@ -2,9 +2,9 @@
 /**
  * Recipe System - Type-safe component variants
  */
-import { chain } from './Chain.js';
+import { chain } from '../core/style-collector.js';
 import type { StyleDefinition } from '../core/types.js';
-import { run } from './btt.js';
+import { run } from '../core/style-compiler.js';
 
 export interface RecipeOptions<TVariants extends Record<string, Record<string, any>>> {
   base?: StyleDefinition | (() => StyleDefinition);

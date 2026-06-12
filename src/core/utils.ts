@@ -13,7 +13,7 @@ import path from 'node:path';
 export * from './common-utils.js';
 
 // Import types
-import type { StyleDefinition } from '../compiler/btt.js';
+import type { StyleDefinition } from '../core/types.js';
 
 /**
  * 2. HASHING & NAMING (Node/Compiler Only)

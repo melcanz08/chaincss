@@ -1,4 +1,5 @@
 // chaincss/src/compiler/atomic-optimizer.ts
+
 import { ChainCSSConfig } from '../cli/types.js';
 import crypto from 'crypto';
 import path from 'path';
@@ -386,14 +387,45 @@ export class AtomicOptimizer {
   }
   
   private shouldBeAtomic(prop: string, value: string, context: string = 'base'): boolean {
+    // Never atomicize if mode is standard
     if (this.options.mode === 'standard') return false;
-    if (this.options.mode === 'atomic') return true;
-
+    
     const kebabProp = kebab(prop);
-
+    
+    // Always respect neverAtomic list
     if (this.options.neverAtomic.includes(kebabProp)) return false;
+    
+    // Always respect alwaysAtomic list (even in media queries)
     if (this.options.alwaysAtomic.includes(kebabProp)) return true;
-
+    
+    // Full atomic mode - everything becomes atomic
+    if (this.options.mode === 'atomic') {
+      if (context !== 'base') {
+        // For responsive contexts in atomic mode, higher threshold
+        const key = `${context}|${prop}:${value}`;
+        const usage = this.usageCount.get(key) || 0;
+        const responsiveThreshold = (this.options.threshold || 2) * 2;
+        return usage >= responsiveThreshold;
+      }
+      return true;
+    }
+    
+    // HYBRID MODE (default) - The recommended approach
+    // Check if we're in a media query or other atRule context
+    if (context !== 'base' && context !== 'standard') {
+      // This is inside @media, @supports, @container, etc.
+      // Be conservative - only atomize if very high usage
+      const key = `${context}|${prop}:${value}`;
+      const usage = this.usageCount.get(key) || 0;
+      
+      // Use 3x threshold for responsive contexts
+      // This means a responsive property needs to be used many times
+      // across different components before becoming atomic
+      const responsiveThreshold = (this.options.threshold || 2) * 3;
+      return usage >= responsiveThreshold;
+    }
+    
+    // Base context (normal properties) - use standard threshold
     const key = `${context}|${prop}:${value}`;
     const usage = this.usageCount.get(key) || 0;
     
@@ -403,7 +435,6 @@ export class AtomicOptimizer {
   private getOrCreateAtomic(prop: string, value: string, context: string = 'base'): string {
     const key = `${context}|${prop}:${value}`;
     
-    // Check cache hit
     if (this.atomicClasses.has(key)) {
       this.stats.cacheHits++;
       return this.atomicClasses.get(key)!.className;
@@ -411,21 +442,26 @@ export class AtomicOptimizer {
     
     this.stats.cacheMisses++;
     
-    const className = this.generateClassName(prop, value, 'atomic');
-    const propKebab = kebab(prop);
+    // Generate context-aware class name
+    let className;
+    if (context !== 'base' && context !== 'standard') {
+      // Responsive context - include breakpoint in name
+      const breakpointSlug = context.replace(/[^a-zA-Z0-9]/g, '-').substring(0, 15).toLowerCase();
+      className = `a-${breakpointSlug}-${kebab(prop)}-${hashKey(key)}`;
+    } else {
+      className = `a-${kebab(prop)}-${hashKey(key)}`;
+    }
     
+    // Store with context-aware key
     this.atomicClasses.set(key, {
       className,
       prop,
       value,
-      rules: `${propKebab}: ${value};`,
+      rules: `${kebab(prop)}: ${value};`,
       usageCount: this.usageCount.get(key) || 0,
       createdAt: Date.now(),
       hash: crypto.createHash('md5').update(key).digest('hex').slice(0, 8)
     });
-    
-    this.stats.atomicStyles++;
-    this.stats.uniqueProperties++;
     
     return className;
   }
@@ -464,37 +500,151 @@ export class AtomicOptimizer {
     let standardRules = '';
     const selectorStr = selectors.join(', ');
 
+    // Process regular style properties
     for (const [prop, value] of Object.entries(style)) {
-      if (['selectors', 'atRules', 'nestedRules', 'hover'].includes(prop) || prop.startsWith('_')) continue;
-      if (typeof value === 'object') continue;
+      // Skip metadata and special keys
+      if (['selectors', 'atRules', 'nestedRules', 'hover', 'focus', 'active', 
+           'visited', 'disabled', 'checked'].includes(prop) || prop.startsWith('_')) {
+        continue;
+      }
+      
+      // Skip nested objects (handled separately)
+      if (typeof value === 'object' && value !== null) continue;
+      if (value === null || value === undefined) continue;
 
-      if (this.shouldBeAtomic(prop, value as string, context)) {
-        const atomicClass = this.getOrCreateAtomic(prop, value as string, context);
-        atomicClasses.push(atomicClass);
+      const stringValue = String(value);
+      
+      // Check if this property should become atomic based on context
+      if (this.shouldBeAtomic(prop, stringValue, context)) {
+        const atomicClass = this.getOrCreateAtomic(prop, stringValue, context);
+        if (atomicClass) {
+          atomicClasses.push(atomicClass);
+        }
       } else {
-        standardRules += `  ${kebab(prop)}: ${value};\n`;
+        // Keep as component-scoped property
+        standardRules += `  ${kebab(prop)}: ${stringValue};\n`;
       }
     }
 
-    let css = standardRules ? `${selectorStr} {\n${standardRules}}\n` : '';
-
-    if (style.nestedRules) {
-      style.nestedRules.forEach((nested: any) => {
-        const nestedSelector = nested.selector.replace('&', selectorStr);
-        const nestedResult = this.generateComponentCSS(nested.styles, [nestedSelector], context);
-        css += nestedResult.css;
-        atomicClasses.push(...nestedResult.atomicClasses);
-      });
+    // Build the base CSS for this selector
+    let css = '';
+    if (standardRules) {
+      css += `${selectorStr} {\n${standardRules}}\n`;
     }
 
-    if (style.atRules) {
-      style.atRules.forEach((rule: any) => {
-        if (rule.styles) {
-          const ruleResult = this.generateComponentCSS(rule.styles, selectors, rule.query || context);
-          css += `@${rule.type} ${rule.query} {\n${ruleResult.css}}\n`;
-          atomicClasses.push(...ruleResult.atomicClasses);
+    // Process pseudo-classes (hover, focus, etc.)
+    for (const [prop, value] of Object.entries(style)) {
+      if (typeof value === 'object' && value !== null) {
+        if (['hover', 'focus', 'active', 'visited', 'disabled', 'checked'].includes(prop)) {
+          css += this.generatePseudoCSS(prop, value as Record<string, any>, selectorStr);
         }
-      });
+      }
+    }
+
+    // Process nested rules (like .nest() in chain API)
+    if (style.nestedRules && Array.isArray(style.nestedRules)) {
+      for (const nested of style.nestedRules) {
+        if (nested.styles) {
+          const nestedSelector = nested.selector.replace('&', selectorStr);
+          const nestedResult = this.generateComponentCSS(nested.styles, [nestedSelector], context);
+          css += nestedResult.css;
+          // Nested rules inside base context can contribute atomic classes
+          if (context === 'base' || context === 'standard') {
+            atomicClasses.push(...nestedResult.atomicClasses);
+          }
+        }
+      }
+    }
+
+    // Process atRules with proper context handling
+    if (style.atRules && Array.isArray(style.atRules)) {
+      for (const rule of style.atRules) {
+        if (!rule.styles) continue;
+
+        if (rule.type === 'media') {
+          const mediaContext = rule.query || 'media';
+          const ruleResult = this.generateComponentCSS(rule.styles, selectors, mediaContext);
+          
+          if (ruleResult.css || ruleResult.atomicClasses.length > 0) {
+            css += `@media ${rule.query} {\n`;
+            
+            // INCLUDE atomic class rules inside the media query
+            if (ruleResult.atomicClasses.length > 0) {
+              const allAtomic = this.getAllAtomicClasses();
+              const atomicMap = new Map(allAtomic.map((a: any) => [a.className, a]));
+              const seenAtomic = new Set<string>();
+              
+              for (const ac of ruleResult.atomicClasses) {
+                if (seenAtomic.has(ac)) continue;
+                seenAtomic.add(ac);
+                const fullAtomic = atomicMap.get(ac);
+                if (fullAtomic?.rules) {
+                  css += `  .${ac} { ${fullAtomic.rules} }\n`;
+                }
+              }
+            }
+            
+            // Then the component CSS
+            css += `${ruleResult.css}`;
+            css += `}\n`;
+          }
+          
+           atomicClasses.push(...ruleResult.atomicClasses);
+
+        } else if (rule.type === 'supports') {
+          const ruleResult = this.generateComponentCSS(rule.styles, selectors, context);
+          if (ruleResult.css) {
+            css += `@supports ${rule.condition} {\n${ruleResult.css}}\n`;
+          }
+          if (context === 'base' || context === 'standard') {
+            atomicClasses.push(...ruleResult.atomicClasses);
+          }
+          
+        } else if (rule.type === 'container') {
+          const ruleResult = this.generateComponentCSS(rule.styles, selectors, context);
+          if (ruleResult.css) {
+            css += `@container ${rule.condition} {\n${ruleResult.css}}\n`;
+          }
+          if (context === 'base' || context === 'standard') {
+            atomicClasses.push(...ruleResult.atomicClasses);
+          }
+          
+        } else if (rule.type === 'layer') {
+          const ruleResult = this.generateComponentCSS(rule.styles, selectors, context);
+          if (ruleResult.css) {
+            css += `@layer ${rule.name} {\n${ruleResult.css}}\n`;
+          }
+          if (context === 'base' || context === 'standard') {
+            atomicClasses.push(...ruleResult.atomicClasses);
+          }
+          
+        } else if (rule.type === 'keyframes') {
+          // Keyframes are never atomic - process inline
+          if (rule.steps) {
+            let keyframeCSS = `@keyframes ${rule.name} {\n`;
+            for (const [step, props] of Object.entries(rule.steps)) {
+              keyframeCSS += `  ${step} {\n`;
+              for (const [k, v] of Object.entries(props as Record<string, any>)) {
+                keyframeCSS += `    ${kebab(k)}: ${v};\n`;
+              }
+              keyframeCSS += `  }\n`;
+            }
+            keyframeCSS += `}\n`;
+            css += keyframeCSS;
+          }
+          
+        } else if (rule.type === 'font-face') {
+          // Font-face is never atomic - process inline
+          if (rule.properties) {
+            let fontCSS = '@font-face {\n';
+            for (const [k, v] of Object.entries(rule.properties)) {
+              fontCSS += `  ${kebab(k)}: ${v};\n`;
+            }
+            fontCSS += '}\n';
+            css += fontCSS;
+          }
+        }
+      }
     }
 
     return { css, atomicClasses };
@@ -590,7 +740,7 @@ export class AtomicOptimizer {
     const selector = `.${componentClassName}`;
 
     if (this.options.verbose) {
-      // Optimizing component (silent)
+      if (this.options.verbose) console.log(`  ⚙️  Optimizing: ${componentId} → ${componentClassName}`);
     }
 
     let classList: string[] = [componentClassName];
@@ -615,21 +765,23 @@ export class AtomicOptimizer {
       const kebabProp = prop.replace(/([A-Z])/g, '-$1').toLowerCase();
       const stringValue = String(value);
 
-      // 3. ATOMIC CHECK
-      if (this.shouldBeAtomic(prop, stringValue)) {
-        // Get or Create the global rule
-        const atomicClass = this.getOrCreateAtomic(prop, stringValue);
-        classList.push(atomicClass);
-        atomicClasses.push(atomicClass);
+      // 3. ATOMIC CHECK - now passes 'base' context
+      if (this.shouldBeAtomic(prop, stringValue, 'base')) {
+        // Get or Create the global rule with base context
+        const atomicClass = this.getOrCreateAtomic(prop, stringValue, 'base');
+        if (atomicClass) {
+          classList.push(atomicClass);
+          atomicClasses.push(atomicClass);
 
-        // POPULATE THE MAP: Fixes the empty atomicMap issue
-        this.atomicMap[`${prop}:${stringValue}`] = atomicClass;
-        
-        // Update stats
-        this.stats.atomicStyles++;
-        
-        if (this.options.verbose) {
-          // [Atomic] (silent)
+          // Populate the atomicMap
+          this.atomicMap[`${prop}:${stringValue}`] = atomicClass;
+          
+          // Update stats
+          this.stats.atomicStyles++;
+          
+          if (this.options.verbose) {
+            if (this.options.verbose) console.log(`    ⚛️  [Atomic] ${prop}: ${stringValue} → .${atomicClass}`);
+          }
         }
       } else {
         // It stays local to the component
@@ -637,7 +789,7 @@ export class AtomicOptimizer {
         this.stats.standardStyles++;
         
         if (this.options.verbose) {
-          // [Standard] (silent)
+          if (this.options.verbose) console.log(`    📝 [Component] ${prop}: ${stringValue}`);
         }
       }
     }
@@ -645,7 +797,7 @@ export class AtomicOptimizer {
     // Store component mapping
     this.componentMap.set(componentId, {
       atomicClasses: atomicClasses,
-      hoverAtomicClasses: [], // Will be populated if hover styles exist
+      hoverAtomicClasses: [],
       selectors: [selector],
       componentClassName: componentClassName
     });
@@ -658,27 +810,94 @@ export class AtomicOptimizer {
 
     // 4. Build final CSS Output
     let componentCSS = '';
+    
+    // Add local component rules
     if (localRules) {
-      componentCSS = `${selector} {\n${localRules}}\n`;
+      componentCSS += `${selector} {\n${localRules}}\n`;
     }
     
+    // Add pseudo-class rules
     if (pseudoRules) {
       componentCSS += pseudoRules;
     }
+    
+    // 5. Process atRules and nestedRules using the fixed generateComponentCSS
+    if (styleDef.atRules || styleDef.nestedRules) {
+      // Create a temporary style object with only atRules and nestedRules
+      // to avoid reprocessing base properties
+      const atRuleOnlyStyle: any = {};
+      if (styleDef.atRules) {
+        atRuleOnlyStyle.atRules = styleDef.atRules;
+      }
+      if (styleDef.nestedRules) {
+        atRuleOnlyStyle.nestedRules = styleDef.nestedRules;
+      }
+      
+      // Process with generateComponentCSS - it will handle media query context properly
+      const atRuleResult = this.generateComponentCSS(atRuleOnlyStyle, [selector], 'base');
+      
+      if (atRuleResult.css.trim()) {
+        componentCSS += atRuleResult.css;
+      }
+      
+      // Add atomic classes from atRules (but NOT from media queries)
+      // generateComponentCSS now filters out media query atomic classes
+      for (const ac of atRuleResult.atomicClasses) {
+        if (atomicClasses.indexOf(ac) === -1) {
+          atomicClasses.push(ac);
+          classList.push(ac);
+        }
+      }
+    }
+
+     // 6. Generate atomic CSS - SEPARATE base from responsive
+    let baseAtomicCSS = '';
+    let responsiveAtomicCSS = '';
+    
+    const allAtomic = this.getAllAtomicClasses();
+    const atomicMap = new Map(allAtomic.map((a: any) => [a.className, a]));
+    const seenBaseAtomic = new Set<string>();
+    const seenResponsiveAtomic = new Set<string>();
+    
+    for (const ac of atomicClasses) {
+      // Check if this is a responsive atomic class (has breakpoint in name)
+      if (ac.startsWith('a--max-width--') || ac.startsWith('a--min-width--')) {
+        if (seenResponsiveAtomic.has(ac)) continue;
+        seenResponsiveAtomic.add(ac);
+      } else {
+        if (seenBaseAtomic.has(ac)) continue;
+        seenBaseAtomic.add(ac);
+        
+        if (ac.includes('--max-width--') || ac.includes('--min-width--')) continue;
+
+        const fullAtomic = atomicMap.get(ac);
+        if (fullAtomic?.rules) {
+          baseAtomicCSS += `.${ac} { ${fullAtomic.rules} }\n`;
+        }
+      }
+    }
+    
+    // Base atomic CSS comes first, then component CSS (which includes media queries with responsive atomic)
+    const finalCSS = baseAtomicCSS + componentCSS;
 
     const finalClassName = classList.join(' ');
     
     // Save cache for future builds
     this.saveCache();
     
-    // 5. Return the full result for the compiler to write to disk
+    if (this.options.verbose) {
+      if (this.options.verbose) {
+        console.log(`    🎯 Final class: ${finalClassName}`);
+        console.log(`    📊 Atomic: ${atomicClasses.length}, Component rules: ${localRules ? 'yes' : 'no'}`);
+      }
+    }
+    
+    // 7. Return the full result
     return {
-      css: componentCSS,
-      map: { 
-        [componentId]: finalClassName 
-      },
+      css: finalCSS,
+      map: { [componentId]: finalClassName },
       stats: this.getStats(),
-      atomicCSS: this.generateAtomicCSS(),
+      atomicCSS: baseAtomicCSS,    // or just '' if you removed that logic
       componentCSS: componentCSS,
       componentMap: this.componentMap
     };

@@ -92,9 +92,9 @@ program
     generateGlobalCSS: true
   },
   atomic: {
-    enabled: true,
-    naming: 'hash',
-    mode: 'hybrid'
+    enabled: false,
+    naming: 'readable',
+    mode: 'build'
   },
   verbose: true
 };`;
@@ -110,6 +110,7 @@ program
 // ============================================================================
 program
   .command('build')
+  .option('-c, --config <pattern>', 'Glob pattern for input files')
   .option('-v, --verbose', 'Verbose output')
   .action(async (opts) => {
     try {
@@ -118,7 +119,9 @@ program
       
       console.log(chalk.blue('🚀 Starting ChainCSS Build...'));
 
-      const patterns = config.inputs || ['src/**/*.chain.{js,ts}', 'src/**/*.tsx'];
+      const patterns = opts.config 
+        ? [opts.config] 
+        : config.inputs || ['src/**/*.chain.{js,ts}', 'src/**/*.tsx'];
       const files = await glob(patterns);
       
       // The compiler handles the logic we wrote earlier:
