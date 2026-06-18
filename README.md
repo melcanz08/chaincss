@@ -1,678 +1,364 @@
-<h1 align="center">ChainCSS</h1>
+# ChainCSS v2.4
 
-<p align="center">
-  <strong>The CSS-in-JS platform with compiler intelligence.</strong><br>
-  Zero runtime by default. Semantic styling. WCAG-aware. Intent-driven.
-</p>
-
-<p align="center">
-  <a href="https://www.npmjs.com/package/chaincss">
-    <img src="https://img.shields.io/npm/v/chaincss" alt="npm">
-  </a>
-
-  <a href="https://github.com/melcanz08/chaincss/blob/main/LICENSE">
-    <img src="https://img.shields.io/github/license/melcanz08/chaincss" alt="license">
-  </a>
-
-  <a href="https://github.com/melcanz08/chaincss/actions">
-    <img src="https://img.shields.io/badge/tests-708%20passed-brightgreen" alt="tests">
-  </a>
-
-  <a href="https://github.com/melcanz08/chaincss">
-    <img src="https://img.shields.io/badge/modules-17-blue" alt="modules">
-  </a>
-</p>
-
-
-
-# What is ChainCSS?
-
-ChainCSS lets you write styles as **native JavaScript method chains** — no CSS syntax, no template literals, no object literals.
-
-It automatically detects which styles are static (compiled to zero-runtime CSS) and which are dynamic (stay in JS), then splits them automatically.
-
-ChainCSS is also a **CSS intelligence platform** — not just a styling library.
-
-It writes, checks, and optimizes your styles at build time with zero runtime cost.
-
-```ts
-import { chain } from "chaincss";
-
-// A single intent expands to a full,
-// accessible, responsive card:
-const card = chain()
-  .intent("card")
-  .$el("card");
-
-// Or write explicit styles:
-const hero = chain()
-  .display("flex")
-  .flexDirection("column")
-  .gap(16)
-  .padding(24)
-  .background("white")
-  .borderRadius(12)
-  .hover()
-    .boxShadow("0 4px 12px rgba(0,0,0,0.15)")
-    .transform("translateY(-2px)")
-  .end()
-  .$el("hero");
-```
-
-**No CSS syntax. No template literals. Compiler-enforced quality.**
-
-
-# Constraint-Based Styling
-
-Declare relationships, not values. The constraint solver compiles them to native CSS at build time.
-
-**No runtime JS. No manual `calc()`. The compiler picks the best CSS feature.**
-
----
-
-## 1. Aspect Ratios from Math
-
-Describe the relationship between width and height:
-
-```ts
-chain()
-  .constrain("height", "= width * 0.5") // 2:1 ratio
-  .constrain("width", "< parent")       // Don't overflow container
-  .$el("video");
-```
-
-### Compiles to
-
-```css
-.video {
-  aspect-ratio: 1 / 2;
-  max-width: 100%;
-}
-```
-
-The solver detects `width * 0.5` and emits `aspect-ratio` instead of:
-
-```css
-height: calc(width * 0.5);
-```
-
-`aspect-ratio` has better performance and avoids layout shifts.
-
-### Tailwind Equivalent
-
-```txt
-aspect-[2/1] max-w-full
-```
-
-### ChainCSS Difference
-
-You write the math. The compiler writes the CSS.
-
----
-
-## 2. Container-Aware Responsive Layouts
-
-Use conditional constraints to generate `@container` queries automatically.
-
-```ts
-chain()
-  .constrain("columns", ">= 3 when > 768px")
-  .constrain("gap", "= 24px")
-  .$el("grid");
-```
-
-### Compiles to
-
-```css
-.grid {
-  gap: 24px;
-}
-
-@container (min-width: 768px) {
-  .grid {
-    columns: 3;
-  }
-}
-```
-
-> Requires `container-type: inline-size` on the parent.  
-> ChainCSS adds it automatically when container constraints are detected.
-
----
-
-## 3. Fluid Values with `clamp()`
-
-Stop calculating `clamp()` manually.
-
-```ts
-chain()
-  .constrain("fontSize", "= clamp(14px, 5vw, 24px)")
-  .constrain("padding", "= clamp(16px, 4vw, 32px)")
-  .$el("hero");
-```
-
-### Compiles to
-
-```css
-.hero {
-  font-size: clamp(14px, 5vw, 24px);
-  padding: clamp(16px, 4vw, 32px);
-}
-```
-
-Works with:
-
-- `clamp()`
-- `min()`
-- `max()`
-- `calc()`
-
----
-
-## 4. Scroll-Driven Sticky Positioning
-
-"Stick this element until another element reaches the viewport."
-
-```ts
-chain()
-  .constrain("sidebar", "sticky until footer")
-  .$el("sidebar");
-```
-
-### Compiles to
-
-```css
-.sidebar {
-  position: sticky;
-  top: 0;
-
-  animation: sticky-sidebar 1s linear both;
-  animation-timeline: scroll();
-  animation-range: contain 0% contain 100%;
-}
-
-@keyframes sticky-sidebar {
-  to {
-    position: relative;
-  }
-}
-```
-
-Zero JavaScript. Uses native `animation-timeline: scroll()` available in modern Chromium browsers.
-
----
-
-## 5. Parent-Relative Constraints
-
-Keep elements inside their parents without writing media queries.
-
-```ts
-chain()
-  .constrain("width", "< parent")
-  .constrain("width", "> 320px")
-  .$el("modal");
-```
-
-### Compiles to
-
-```css
-.modal {
-  max-width: 100%;
-  min-width: 320px;
-}
-```
-
----
-
-# How It Works
-
-The compiler parses constraint expressions and resolves them into the most optimal native CSS feature.
-
-| You Write | Compiler Resolves To | Strategy |
-|---|---|---|
-| `width < parent` | `max-width: 100%` | Direct mapping |
-| `height = width * 0.5` | `aspect-ratio: 1 / 2` | Aspect-ratio optimization |
-| `fontSize = clamp(14, 5vw, 24)` | `font-size: clamp(...)` | Native clamp |
-| `columns >= 3 when > 768px` | `@container (min-width: 768px)` | Container query |
-| `sidebar sticky until footer` | `animation-timeline: scroll()` | Scroll timeline |
-
----
-
-## Supported Operators
-
-```txt
-<   >   <=   >=   =   !=
-```
-
-## Supported References
-
-```txt
-parent
-viewport
-self
-sibling.width
-```
-
-## Supported Functions
-
-```txt
-clamp()
-min()
-max()
-calc()
-```
-
----
-
-# Debugging Constraints
-
-See how constraints were resolved during compilation.
-
-## CLI
-
-```bash
-chaincss build --explain
-```
-
-### Output
-
-```txt
-card: height = width * 0.5 → aspect-ratio: 1/2
-card: width < parent → max-width: 100%
-```
-
----
-
-## Programmatic Debugging
-
-```ts
-import { resolveConstraint } from "chaincss/compiler";
-
-const result = resolveConstraint({
-  property: "height",
-  operator: "=",
-  expression: "width * 0.5",
-});
-
-console.log(result.explanation);
-// "height = width * 0.5 → aspect-ratio: 1/2"
-```
-
-
-# What Makes ChainCSS Different
-
-| Capability | ChainCSS | Tailwind | StyleX | Vanilla Extract |
-|---|---|---|---|---|
-| Zero runtime | ✅ | ✅ | ✅ | ✅ |
-| Intent-based API | ✅ | ❌ | ❌ | ❌ |
-| Semantic tokens | ✅ | ❌ | ❌ | ❌ |
-| WCAG accessibility checking | ✅ | ❌ | ❌ | ❌ |
-| Responsive inference | ✅ | ❌ | ❌ | ❌ |
-| Pattern learning | ✅ | ❌ | ❌ | ❌ |
-| CSS `if()` transpiler | ✅ | ❌ | ❌ | ❌ |
-| Constraint-based styling | ✅ | ❌ | ❌ | ❌ |
-| Layout intelligence | ✅ | ❌ | ❌ | ❌ |
-| Scroll-driven animations | ✅ | ❌ | ❌ | ❌ |
-| Self-healing CSS | ✅ | ❌ | ❌ | ❌ |
-| Source-aware optimization | ✅ | ❌ | ❌ | ❌ |
-| Design system extraction | ✅ | ❌ | ❌ | ❌ |
-| 3 modes (build/runtime/hybrid) | ✅ | ❌ | ❌ | ❌ |
-
-
-
-# Installation
+**Zero-runtime CSS-in-JS with auto-detection.** Static styles compile to plain CSS. Dynamic values resolve at runtime. No manual mode switching.
 
 ```bash
 npm install chaincss
 ```
 
+Quick Start
+### tsx
 
-# Quick Start
+```tsx
+import { chain } from 'chaincss';
 
-| Environment | Setup |
-|---|---|
-| Vite | Add `chaincss()` plugin to `vite.config.ts` |
-| Node.js | `import { chain } from "chaincss"` |
-| Browser CDN | `import { chain } from "https://cdn.jsdelivr.net/npm/chaincss/dist/browser.js"` |
+const btn = chain()
+  .bg('#6366f1')
+  .color('#ffffff')
+  .padding('12px 24px')
+  .rounded(8)
+  .fontSize(16)
+  .fontWeight(600)
+  .hover()
+    .bg('#4f46e5')
+    .transform('translateY(-2px)')
+  .end()
+  .$el('button');
 
-
-# Intent API (v2.3)
-
-The highest-level API.
-
-Write what you want — the compiler figures out how.
-
-```ts
-// Layout intents
-chain().intent("center-content").$el("centered");
-chain().intent("stack").$el("stack");
-chain().intent("sidebar-layout").$el("dashboard");
-
-// Component intents
-chain().intent("card").$el("card");
-chain().intent("button-primary").$el("cta");
-chain().intent("modal").$el("dialog");
-
-// Semantic intents
-chain().intent("hero-section").$el("hero");
-chain().intent("sticky-header").$el("nav");
-
-// Interaction intents
-chain().intent("hover-lift").$el("interactive");
-chain().intent("focus-ring").$el("accessible");
+// { selectors: ['.chain-button'], backgroundColor: '#6366f1', ... }
+// CSS output: .chain-button { background-color: #6366f1; ... }
+// CSS output: .chain-button:hover { background-color: #4f46e5; ... }
 ```
 
-Each intent triggers:
-- semantic tokens
-- responsive overrides
-- accessibility checks
-- theme adaptation
+Auto-Detection: Static vs Dynamic
+ChainCSS automatically detects what can be compiled at build time and what needs runtime resolution. You never specify which is which.
 
-—all at build time.
-
-
-
-# Semantic Tokens
-
-```ts
-chain()
-  .surface("interactive")
-  .text("primary")
-  .elevation("floating")
-  .spacing("comfortable")
-  .state("hover")
-  .state("focus")
-  .$el("composed");
+```tsx
+const styles = chain()
+  .bg('#6366f1')                          // static -> goes to CSS file
+  .color(() => isActive ? 'green' : 'red') // dynamic -> resolved at runtime
+  .padding(16)                              // static -> goes to CSS file
+  .border(() => isActive ? '2px solid green' : '1px solid gray') // dynamic
+  .$el('btn');
 ```
+Rule: Strings and numbers are static. Functions are dynamic.
 
-| Category | Available Intents |
-|---|---|
-| surface | interactive, container, overlay, sheet |
-| text | primary, secondary, muted, link |
-| elevation | flat, raised, floating, modal |
-| spacing | none, tight, compact, spacious |
-| state | hover, active, focus, disabled |
-
-
-
-# Compiler Intelligence
-
-ChainCSS analyzes your styles at build time and reports issues before they ship.
+API
+### chain()
+Creates a new style chain. Returns a proxy that collects styles.
 
 ```ts
-chain()
-  .width("1200px")
-  .color("#999")
-  .fontSize("10px")
-  .outline("none")
-  .animation("fadeIn 1s")
-  .$el("risky-button");
-```
-
-The compiler can:
-- detect WCAG contrast failures
-- fix invalid font sizes
-- add focus-visible fallbacks
-- wrap animations in reduced-motion queries
-- prevent mobile overflow
-
-
-
-# Constraint-Based Styling
-
-```ts
-chain()
-  .constrain("width", "< parent")
-  .constrain("height", "= width * 0.5")
-  .constrain("columns", ">= 3 when > 768px")
-  .$el("responsive-card");
-```
-
-
-
-# Scroll Timeline Engine
-
-```ts
-import {
-  createScrollAnimation,
-  compileScrollAnimation
-} from "chaincss";
-
-const fadeIn = createScrollAnimation(
-  "fadeIn",
-  ".reveal"
-);
-
-const parallax = createScrollAnimation(
-  "parallax",
-  ".bg"
-);
-```
-
-Native scroll-driven animations with zero JavaScript runtime.
-
-
-
-# Core API
-
-## The Chain
-
-```ts
-import { chain } from "chaincss";
+import { chain } from 'chaincss';
 
 const styles = chain()
-  .display("flex")
-  .padding(20)
-  .color("red")
-  .$el("my-component");
+  .property(value)   // any CSS property (camelCase)
+  .$el('name');      // finalize, returns { selectors: ['.chain-name'], ...properties }
 ```
 
-## Smart Chain
-
-```ts
-import { smartChain } from "chaincss";
-
-const styles = smartChain()
-  .display("flex")
-  .padding(20)
-  .color(props.textColor)
-  .fontSize(theme.sizes.lg)
-  .$el("hybrid-card");
-```
-
-
-
-# Shorthands
+Properties
+All 500+ CSS properties are available as camelCase methods:
 
 ```ts
 chain()
-  .bg("#fff")
-  .m(16)
-  .p(20)
-  .br(8)
-  .fs(16)
-  .fw(700)
-  .c("#333");
+  .backgroundColor('#fff')
+  .fontSize(16)
+  .borderRadius(8)
+  .display('flex')
+  .alignItems('center')
+  .justifyContent('space-between')
 ```
+Numeric values automatically get px added (except unitless properties like opacity, zIndex, fontWeight).
 
+Shorthands
+Common properties have short aliases:
 
-# Macros
+| Shorthand | CSS Property |
+| :--- | :--- |
+| bg() | background-color |
+| fs() | font-size |
+| fw() | font-weight |
+| rounded() | border-radius |
+| p() | padding |
+| m() | margin |
+| px() / py() | padding-left/right / padding-top/bottom |
+| mx() / my() | margin-left/right / margin-top/bottom |
+| flex() | display: flex |
+| grid() | display: grid |
+| inlineFlex() | display: inline-flex |
+| block() | display: block |
+| w() / h() | width / height |
+| maxW() / minH() | max-width / min-height |
+| lh() | line-height |
+| ls() | letter-spacing |
+| ov() | overflow |
+| pos() | position |
+| z() | z-index |
+| op() | opacity |
+| gap() | gap |
+| gridCols() | grid-template-columns |
+| align() | text-align |
+| cursor() | cursor |
+| shadow() | box-shadow |
+| transform() | transform |
+| transition() | transition |
 
-```ts
-chain().flex();
-chain().grid();
-chain().center();
-chain().stack(16);
-chain().glass();
-chain().glow("#6366f1");
-chain().focusRing("#3b82f6");
-```
+Macros
+One method replaces multiple CSS declarations:
 
+| Macro | What it does |
+| :--- | :--- |
+| center() | display: flex; align-items: center; justify-content: center |
+| flexCenter(dir?) | Flex centering, optional 'row' or 'col' direction |
+| gridCenter() | display: grid; place-items: center |
+| pill() | border-radius: 9999px; padding: 8px 20px; display: inline-flex; align-items: center |
+| circle(size) | Perfect circle with flex centering |
+| square(size) | Square with flex centering |
+| glass(blur?) | Backdrop blur glassmorphism effect |
+| glow({color, size}) | Box-shadow glow effect |
+| hide() | opacity: 0; visibility: hidden; pointer-events: none |
+| show() | opacity: 1; visibility: visible; pointer-events: auto |
+| truncate() | overflow: hidden; text-overflow: ellipsis; white-space: nowrap |
+| textGradient(colors) | Gradient text with webkit background clip |
+| meshGradient(colors) | Multi-color mesh gradient background |
+| absolute(coords?) | position: absolute with optional top/right/bottom/left |
+| fixed(coords?) | position: fixed with optional coordinates |
+| sticky(coords?) | position: sticky with optional coordinates |
+| relative() | position: relative |
+| size(value) | Sets both width and height |
+| stack({spacing, dir?}) | Flex column with configurable spacing and direction |
+| gridTable(minWidth) | Responsive auto-fit grid table |
+| aspect(ratio) | Set aspect-ratio (supports 'square', 'video', 'golden') |
+| safeArea(edge?) | iOS safe area padding |
+| clickScale(amount?) | Scale down on :active pseudo-class |
+| pressable() | Combines cursor: pointer + unselectable + clickScale |
+| focusRing(color?) | Focus-visible outline ring |
+| skeleton({active, color?}) | Loading skeleton animation |
+| shimmer() | Shimmer loading animation |
+| fluidText({min, max, vw?}) | Responsive fluid typography using clamp() |
+| lineClamp(lines?) | Multi-line text truncation |
+| frostedNav(blur?) | Fixed navbar with glass effect + safe area |
+| parallax(scale?) | Parallax scrolling container |
+| noise(opacity?) | SVG noise texture background |
+| scrollable(axis?) | Scrollable container ('x', 'y', 'both') |
+| unselectable() | Disable text selection |
+| outlineDebug() | Red outline debugging for layout |
 
-
-# Conditional Styles
+States & Selectors
 
 ```ts
 chain()
-  .padding(12)
-  .when(isActive, c =>
-    c.background("#10b981")
-      .color("white")
-  )
-  .$el("stateful-btn");
+  .hover()
+    .bg('red')
+  .end()
+  .nest('.child', (c) => c.color('blue'))
+  .children((c) => c.padding(8))       // shortcut for nest('& > *', ...)
+  .media('(min-width: 768px)', (c) => c.flexDirection('row'))
+  .supports('display: grid', (c) => c.gap(16))
+  .container('(min-width: 400px)', (c) => c.color('red'))
+  .layer('base', (c) => c.bg('white'))
+  .when(condition, (c) => c.display('none'))
 ```
 
-
-
-# Responsive Design
+Transforms
 
 ```ts
 chain()
-  .display("flex")
-  .flexDirection("column")
-  .responsive("md", c =>
-    c.flexDirection("row")
-  )
-  .$el("responsive");
+  .scale(1.2)
+  .rotate('45deg')
+  .x(10)          // translateX with automatic px
+  .y(20)          // translateY with automatic px
+  .skew('5deg')
 ```
 
-
-
-# Math Engine
+Keyframes & Fonts
 
 ```ts
-import {
-  math,
-  add,
-  fluidType,
-  convert
-} from "chaincss";
+chain()
+  .keyframes('fadeIn', {
+    '0%': { opacity: 0 },
+    '100%': { opacity: 1 }
+  })
+  .fontFace({ fontFamily: 'MyFont', src: 'url(/myfont.woff2)' })
+```
 
-add("10px", "2rem");
+Mixins
 
-fluidType({
-  minSize: 14,
-  maxSize: 20
+```ts
+const mixin = { color: 'red', fontSize: '16px' };
+chain().use(mixin).bg('blue').$el('test');
+```
+
+Compiling to CSS
+
+```ts
+import { chain, compileToCSS } from 'chaincss';
+
+const styles = chain()
+  .bg('red')
+  .padding(16)
+  .hover().bg('darkred').end()
+  .build(['button']);
+
+const css = compileToCSS(styles, { scopeSelector: '.btn' });
+// .btn { background-color: red; padding: 16px; }
+// .btn:hover { background-color: darkred; }
+```
+
+`compileToCSS(styleObject, options?)`
+
+| Option | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| scopeSelector | string | '' | CSS selector for the rule |
+| minify | boolean | false | Minify output |
+| sourceMap | boolean | false | Add source comments |
+| sourceFile | string | '' | Source file path for comments |
+
+`partitionForBuild(styleObject, options?)`
+Splits styles into static CSS and dynamic values for build-time extraction:
+
+```ts
+const { css, dynamicValues, hasDynamic } = partitionForBuild(styles, { scopeSelector: '.btn' });
+// css: '.btn { background-color: red; }'
+// dynamicValues: { color: <function> }
+// hasDynamic: true
+```
+
+Vite Plugin
+
+```ts
+// vite.config.ts
+import chaincssPlugin from 'chaincss/plugin/vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [
+    chaincssPlugin({ verbose: true }),
+    react(),
+  ],
 });
-
-convert("32px", "rem");
 ```
+The plugin:
+* Serves generated CSS at `/__chaincss.css`
+* Auto-injects `<link>` tag into HTML
+* Watches for CSS changes and hot-reloads
 
-
-
-# Design Tokens
+Setup
+Create a CSS generation script and add it to your package.json:
 
 ```ts
-import {
-  createTokens,
-  createThemeContract,
-  createTheme
-} from "chaincss";
+// src/generate-css.ts
+import { compileToCSS } from 'chaincss';
+import * as styles from './styles.chain';
+import fs from 'fs';
 
-const tokens = createTokens({
-  colors: {
-    primary: "#6366f1",
-    secondary: "#10b981"
+let css = '*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}\n';
+css += 'body{font-family:system-ui,sans-serif}\n\n';
+
+for (const [_, obj] of Object.entries(styles)) {
+  const sel = (obj as any).selectors?.[0];
+  if (sel) css += compileToCSS(obj as any, { scopeSelector: sel }) + '\n\n';
+}
+fs.writeFileSync('public/chaincss.css', css);
+```
+
+```json
+{
+  "scripts": {
+    "dev": "npm run css && vite",
+    "css": "npx tsx src/generate-css.ts"
   }
-});
+}
 ```
 
-
-
-# Recipe System
+Debug Mode
 
 ```ts
-import { recipe } from "chaincss";
+const debugChain = chain({ debug: true })
+  .bg('red')
+  .color(() => themeColor)
+  .padding(16);
 
-const button = recipe({
-  base: {
-    selectors: ["btn"],
-    display: "inline-flex",
-    borderRadius: "8px"
-  }
-});
+console.log(debugChain.explain().visualization);
+```
+Output:
+```text
+ChainCSS Style Explanation
+--------------------------
+bg       -> red      (static)
+color    -> <fn>     (dynamic)
+padding  -> 16       (static)
+--------------------------
+Static: 2 | Dynamic: 1
 ```
 
+Class Names
+`chain().$el('button')` produces the selector `.chain-button`. To use it in JSX:
 
+```tsx
+// Option 1: Extract manually
+<button className={btn.selectors[0].replace('.', '')}>Click</button>
 
-# Animations
+// Option 2: Helper function
+const cls = (c: any) => c.selectors?.[0]?.replace('.', '') || '';
+<button className={cls(btn)}>Click</button>
 
-```ts
-chain()
-  .fadeIn()
-  .slideInUp()
-  .zoomIn()
-  .bounce()
-  .pulse()
-  .$el("animated");
+// Option 3: Wrapper file (styles.ts)
+import * as S from './styles.chain';
+export const btn = S.btn.selectors[0].replace('.', '');
 ```
 
+Framework Integration
+ChainCSS is framework-agnostic. `$el()` returns a plain object:
 
+```tsx
+// React
+<div style={styles}>...</div>
 
-# Self-Healing CSS
+// Vue
+<div :style="styles">...</div>
 
-```ts
-import { correct, heal } from "chaincss";
+// Svelte
+<div style={styles}>...</div>
 
-correct("display", "flexbox");
-correct("position", "abs");
-
-heal(
-  {
-    display: "flexbox",
-    position: "abs"
-  },
-  "smart"
-);
+// Plain HTML (with CSS file)
+<div class="chain-button">...</div>
 ```
 
+API Reference
+Main Exports
 
+| Export | Description |
+| :--- | :--- |
+| chain(options?) | Create a style chain |
+| compileToCSS(obj, opts?) | Compile style object to CSS string |
+| partitionForBuild(obj, opts?) | Split static/dynamic, return { css, dynamicValues } |
+| classifyValue(value) | Returns 'static' or 'dynamic' |
+| partitionStyles(obj) | Split object into { static, dynamic } |
+| compileToCSS | Generate CSS from style object |
 
-# CLI
+Value Classification
 
-```bash
-chaincss init
-chaincss build
-chaincss watch
-chaincss cache clear
-chaincss optimize --report
-chaincss doctor
-```
+| Value type | Classification | Behavior |
+| :--- | :--- | :--- |
+| '#6366f1' (string) | static | Compiled to CSS |
+| 16 (number) | static | Compiled to CSS (px added if needed) |
+| () => themeColor (function) | dynamic | Stays in JS, resolved at runtime |
+| 'theme.primary' (token ref) | dynamic | Resolved at runtime |
 
+Migration from v2.3
 
+| Old API | New API |
+| :--- | :--- |
+| createChain() | chain() |
+| smartChain() | chain() |
+| buildChain() | chain() — static values auto-detected |
+| runtimeChain() | chain() — dynamic values auto-detected |
+| btt.compile() | compileToCSS() |
+| btt.run() | compileToCSS() |
+| enableDebug() | chain({ debug: true }) |
 
-# Performance
+License
+MIT
 
-- Zero runtime for static styles
-- Atomic CSS extraction
-- Smart static/dynamic splitting
-- Cross-file dead code elimination
-- Multi-pass optimization pipeline
-
-
-
-# Contributing
-
-```bash
-git clone https://github.com/melcanz08/chaincss.git
-
-cd chaincss
-
-npm install
-
-npm test
-```
-
-
-
-# License
-
-MIT © Rommel Caneos
-
-<p align="center">
-  <strong>ChainCSS v2.3</strong> — The CSS intelligence platform.<br>
-
-  <a href="https://github.com/melcanz08/chaincss">
-    github.com/melcanz08/chaincss
-  </a>
-</p>
+Author
+Rommel Caneos
