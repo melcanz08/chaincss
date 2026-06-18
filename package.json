@@ -1,6 +1,6 @@
 {
   "name": "chaincss",
-  "version": "2.4.2",
+  "version": "2.4.3",
   "description": "ChainCSS - The first CSS-in-JS library with true auto-detection mixed mode. Zero runtime by default, dynamic when you need it.",
   "type": "module",
   "main": "./dist/index.js",
