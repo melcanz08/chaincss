@@ -173,16 +173,18 @@ export const macros: Record<string, MacroHandler> = {
 
   // --- Shapes & Content ---
   circle: (v, c) => {
-    c.width = v; 
-    c.height = v; 
+    const val = typeof v === 'number' ? `${v}px` : v;
+    c.width = val; 
+    c.height = val; 
     c.borderRadius = '50%';
     c.display = 'flex'; 
     c.alignItems = 'center'; 
     c.justifyContent = 'center';
   },
   square: (v, c) => {
-    c.width = v; 
-    c.height = v;
+    const val = typeof v === 'number' ? `${v}px` : v;
+    c.width = val; 
+    c.height = val;
     c.display = 'flex'; 
     c.alignItems = 'center'; 
     c.justifyContent = 'center';

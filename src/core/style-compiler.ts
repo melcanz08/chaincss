@@ -144,7 +144,12 @@ function compileDeclarations(
     
     // Regular property
     const cssProp = camelToKebab(prop);
-    lines.push(`${indent}${cssProp}: ${value};`);
+    let finalValue = value;
+    // Add px to numeric values for dimension properties
+    if (typeof value === 'number' && ['width','height','min-width','max-width','min-height','max-height'].includes(cssProp)) {
+      finalValue = value + 'px';
+    }
+    lines.push(`${indent}${cssProp}: ${finalValue};`);
   }
   
   return lines;
