@@ -2,11 +2,7 @@ import { Plugin } from 'vite';
 import path from 'path';
 import fs from 'fs';
 
-export interface ChainCSSPluginOptions {
-  verbose?: boolean;
-}
-
-export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plugin {
+export default function chaincssPlugin(options: { verbose?: boolean } = {}): Plugin {
   let cssContent = '';
   let cssPath = '';
 
@@ -26,12 +22,11 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
       server.watcher.add(cssPath);
       server.watcher.on('change', (file: string) => {
         if (file === cssPath) {
-          try { cssContent = fs.readFileSync(cssPath, 'utf8'); } catch {}
+          try { cssContent = fs.readFileSync(cssPath, 'utf8'); log('CSS updated'); } catch {}
           server.ws.send({ type: 'full-reload' });
         }
       });
-      
-      try { cssContent = fs.readFileSync(cssPath, 'utf8'); } catch {}
+      try { cssContent = fs.readFileSync(cssPath, 'utf8'); log(`Serving ${cssContent.length} bytes`); } catch { log('No CSS file yet'); }
 
       server.middlewares.use('/__chaincss.css', (_req, res) => {
         res.setHeader('Content-Type', 'text/css');
