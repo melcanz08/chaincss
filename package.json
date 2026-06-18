@@ -25,6 +25,11 @@
       "types": "./dist/core/*.d.ts",
       "import": "./dist/core/*.js",
       "require": "./dist/core/*.cjs"
+    },
+    "./plugin/vite": {
+      "types": "./dist/plugins/vite.d.ts",
+      "import": "./dist/plugins/vite.js",
+      "require": "./dist/plugins/vite.cjs"
     }
   },
   "scripts": {
