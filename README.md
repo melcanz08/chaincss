@@ -1,4 +1,5 @@
 # ChainCSS v2.4
+[![npm version](https://badge.fury.io/js/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![npm downloads](https://img.shields.io/npm/dm/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![license](https://img.shields.io/npm/l/chaincss.svg)](LICENSE) [![tests](https://img.shields.io/badge/tests-657%20passing-brightgreen)]()
 
 **Zero-runtime CSS-in-JS with auto-detection.** Static styles compile to plain CSS. Dynamic values resolve at runtime. No manual mode switching.
 
