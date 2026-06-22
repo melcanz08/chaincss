@@ -1,4 +1,5 @@
 // src/compiler/pass-manager.ts
+
 /**
  * Multi-Pass Optimization Pipeline
  * 
@@ -8,20 +9,47 @@
  * Architecture inspired by: LLVM, Babel, SWC, Rust compiler
  * 
  * Pipeline order (optimized for maximum information gain per pass):
- *   1. Intent Recovery      — fix typos, add defaults
- *   2. Unit Resolution       — resolve units, constant fold
- *   3. Validation            — contrast checks, conflict detection
- *   4. Specificity Sorting   — order rules by specificity
- *   5. Dead Elimination      — remove unused selectors
- *   6. Atomic Extraction     — extract shared properties
- *   7. Media Query Packing   — group same-query rules
- *   8. CSS if() Transpiling  — emit native if() + fallback
- *   9. CSS Compression       — minify output
- *  10. Diagnostics Export    — collect all pass diagnostics
+ * 
+ *   PHASE 1 — Clean & Normalize
+ *   1. Intent Recovery       — fix typos, add defaults (flexbox→flex, abs→absolute)
+ *   2. Unit Resolution        — resolve units, add px to numbers
+ * 
+ *   PHASE 2 — Analyze & Detect
+ *   3. Accessibility          — WCAG 2.2: contrast, font-size, touch-target, focus, motion, hover-only
+ *   4. Responsive Inference   — detect mobile overflow, grid collapse, 100vh issues
+ *   5. Layout Intelligence    — recognize 35+ patterns, suggest macros
+ *   6. Validation             — z-index conflicts, flex/grid property mismatches
+ * 
+ *   PHASE 3 — Optimize
+ *   7. Specificity Sorting    — order rules by specificity
+ *   8. Dead Elimination       — remove unused selectors
+ *   9. Pattern Learner        — cluster repeated styles, suggest recipes
+ *  10. Source Optimizer       — duplicates, specificity wars, animation conflicts, MQ consolidation
+ *  11. Atomic Extraction      — extract shared properties (3+ uses)
+ *  12. Media Query Packing    — group same-query rules
+ *  13. CSS if() Transpiling   — emit native if() + fallback
+ * 
+ *   PHASE 4 — Resolve High-Level APIs
+ *  14. Semantic Tokens        — surface/text/elevation/state/spacing with theme support
+ *  15. Intent API             — 20+ component intents (card, button, hero, modal)
+ *  16. Constraint Solver      — width < parent, height = width * 0.5, clamp()
+ * 
+ *   PHASE 5 — Finalize
+ *  17. CSS Compression        — shorten hex, remove leading zeros
+ *  18. Diagnostics Export     — collect, deduplicate, organize all diagnostics
  */
 
 import type { StyleIR, IRPass, IRRule, IRDeclaration } from './style-ir.js';
 import { applyPass, countNodes, debugIR } from './style-ir.js';
+
+import { accessibilityPass } from './accessibility-engine.js';
+import { responsiveInferencePass } from './responsive-inference.js';
+import { layoutIntelligencePass } from './layout-intelligence.js';
+import { patternLearningPass } from './pattern-learner.js';
+import { sourceOptimizerPass } from './source-optimizer.js';
+import { semanticTokensPass } from './semantic-tokens.js';
+import { intentAPIPass } from './intent-api.js';
+import { constraintSolverPass } from './constraint-solver.js';
 
 // ============================================================================
 // Types
@@ -30,16 +58,24 @@ import { applyPass, countNodes, debugIR } from './style-ir.js';
 export type PassName =
   | 'intent-recovery'
   | 'unit-resolution'
+  | 'accessibility'
+  | 'responsive-inference'
+  | 'layout-intelligence'
   | 'validation'
   | 'specificity-sort'
   | 'dead-elimination'
+  | 'pattern-learner'
+  | 'source-optimizer'
   | 'atomic-extraction'
   | 'media-query-packing'
   | 'css-if-transpile'
+  | 'semantic-tokens'
+  | 'intent-api'
+  | 'constraint-solver'
   | 'css-compression'
   | 'diagnostics-export';
 
-export type PassPriority = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+export type PassPriority = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18;
 
 export interface PassDefinition {
   name: PassName;
@@ -373,8 +409,17 @@ export const diagnosticsExportPass: IRPass = (ir: StyleIR): StyleIR => {
 
 /**
  * The default pass pipeline — runs all passes in optimal order.
+ * 
+ * Phase 1: Clean & normalize (fix typos, resolve units)
+ * Phase 2: Analyze & detect (accessibility, responsive, layout patterns)
+ * Phase 3: Optimize (dead code, duplicates, atomic extraction)
+ * Phase 4: Resolve high-level APIs (semantic tokens, intents, constraints)
+ * Phase 5: Finalize (compress, export diagnostics)
  */
 export const DEFAULT_PIPELINE: PassDefinition[] = [
+  // =========================================================================
+  // PHASE 1: Clean & Normalize
+  // =========================================================================
   {
     name: 'intent-recovery',
     priority: 1,
@@ -391,68 +436,148 @@ export const DEFAULT_PIPELINE: PassDefinition[] = [
     requires: [],
     enabled: true,
   },
+
+  // =========================================================================
+  // PHASE 2: Analyze & Detect
+  // =========================================================================
   {
-    name: 'validation',
+    name: 'accessibility',
     priority: 3,
-    description: 'Run contrast checks and conflict detection',
-    pass: validationPass,
+    description: 'WCAG 2.2 compliance: contrast, font-size, touch-target, focus, motion, hover-only — with auto-fixes',
+    pass: accessibilityPass,
     requires: ['intent-recovery'],
     enabled: true,
   },
   {
-    name: 'specificity-sort',
+    name: 'responsive-inference',
     priority: 4,
-    description: 'Order rules by specificity',
+    description: 'Detect mobile layout issues: overflow, grid collapse, large typography, 100vh, large spacing',
+    pass: responsiveInferencePass,
+    requires: ['unit-resolution'],
+    enabled: true,
+  },
+  {
+    name: 'layout-intelligence',
+    priority: 5,
+    description: 'Recognize 35+ layout patterns, suggest macros, find duplicate patterns',
+    pass: layoutIntelligencePass,
+    requires: ['intent-recovery'],
+    enabled: true,
+  },
+  {
+    name: 'validation',
+    priority: 6,
+    description: 'Run conflict detection: z-index on static, flex props on non-flex, shorthand opportunities',
+    pass: validationPass,
+    requires: ['intent-recovery'],
+    enabled: true,
+  },
+
+  // =========================================================================
+  // PHASE 3: Optimize
+  // =========================================================================
+  {
+    name: 'specificity-sort',
+    priority: 7,
+    description: 'Order rules by specificity for predictable cascade',
     pass: specificitySortPass,
     requires: [],
     enabled: true,
   },
   {
     name: 'dead-elimination',
-    priority: 5,
-    description: 'Remove unused selectors',
+    priority: 8,
+    description: 'Remove unused selectors marked as dead',
     pass: deadEliminationPass,
     requires: ['specificity-sort'],
     enabled: true,
   },
   {
+    name: 'pattern-learner',
+    priority: 9,
+    description: 'Cluster repeated styles across files, suggest recipe extraction, estimate bundle savings',
+    pass: patternLearningPass,
+    requires: ['dead-elimination'],
+    enabled: true,
+  },
+  {
+    name: 'source-optimizer',
+    priority: 10,
+    description: 'Find duplicates, specificity wars, animation conflicts, redundant media queries',
+    pass: sourceOptimizerPass,
+    requires: ['pattern-learner'],
+    enabled: true,
+  },
+  {
     name: 'atomic-extraction',
-    priority: 6,
-    description: 'Extract shared properties into atomic classes',
+    priority: 11,
+    description: 'Extract shared properties into atomic classes (threshold: 3+ uses)',
     pass: atomicExtractionPass,
     requires: ['unit-resolution'],
     enabled: true,
   },
   {
     name: 'media-query-packing',
-    priority: 7,
-    description: 'Group same-query rules together',
+    priority: 12,
+    description: 'Group same-query rules together for consolidation',
     pass: mediaQueryPackingPass,
     requires: ['specificity-sort'],
     enabled: true,
   },
   {
     name: 'css-if-transpile',
-    priority: 8,
-    description: 'Transpile conditional patterns to native CSS if()',
+    priority: 13,
+    description: 'Transpile conditional patterns to native CSS if() with fallback',
     pass: cssIfTranspilePass,
     requires: ['intent-recovery'],
     enabled: true,
   },
+
+  // =========================================================================
+  // PHASE 4: Resolve High-Level APIs
+  // =========================================================================
+  {
+    name: 'semantic-tokens',
+    priority: 14,
+    description: 'Resolve semantic token intents (surface, text, elevation, state, spacing) to CSS with light/dark/high-contrast themes',
+    pass: semanticTokensPass,
+    requires: ['intent-recovery'],
+    enabled: true,
+  },
+  {
+    name: 'intent-api',
+    priority: 15,
+    description: 'Resolve 20+ high-level component intents (card, button-primary, hero-section, modal, etc.)',
+    pass: intentAPIPass,
+    requires: ['semantic-tokens'],
+    enabled: true,
+  },
+  {
+    name: 'constraint-solver',
+    priority: 16,
+    description: 'Resolve constraint expressions (width < parent, height = width * 0.5) to concrete CSS',
+    pass: constraintSolverPass,
+    requires: ['unit-resolution'],
+    enabled: true,
+  },
+
+  // =========================================================================
+  // PHASE 5: Finalize
+  // =========================================================================
   {
     name: 'css-compression',
-    priority: 9,
-    description: 'Minify CSS output',
+    priority: 17,
+    description: 'Minify CSS: shorten hex colors, remove leading zeros, collapse whitespace',
     pass: cssCompressionPass,
     requires: [],
     enabled: true,
   },
   {
     name: 'diagnostics-export',
-    priority: 10,
-    description: 'Collect and organize diagnostics',
+    priority: 18,
+    description: 'Collect, deduplicate, and organize all diagnostics from all passes',
     pass: diagnosticsExportPass,
-    requires: ['validation'],
+    requires: ['validation', 'accessibility', 'layout-intelligence', 'source-optimizer'],
     enabled: true,
   },
 ];

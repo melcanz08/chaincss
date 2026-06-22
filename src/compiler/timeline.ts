@@ -1,7 +1,10 @@
 // src/compiler/timeline.ts
+
+
 /**
- * Style Timeline & Diff Viewer
- * Tracks every style change, lets you diff versions
+ * @deprecated Dev tool — not part of the compiler pipeline.
+ * Used only for debugging style changes during development.
+ * May move to cli/utils/ in a future version.
  */
 
 export interface StyleSnapshot {

@@ -976,7 +976,7 @@ export class AtomicOptimizer {
     return atomic ? atomic.className : null;
   }
   
-  getAllAtomicClasses(): AtomicClass[] {
+  public getAllAtomicClasses(): AtomicClass[] {
     return Array.from(this.atomicClasses.values());
   }
   
@@ -988,7 +988,7 @@ export class AtomicOptimizer {
     if (this.options.cache && fs.existsSync(this.options.cachePath)) {
       fs.unlinkSync(this.options.cachePath);
       if (this.options.verbose) {
-        if (this.options.verbose) console.log('Cache cleared');
+        console.log('Cache cleared');
       }
     }
   }

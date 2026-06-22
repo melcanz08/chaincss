@@ -105,8 +105,6 @@ export {
   sortClassNames
 } from './common-utils.js';
 
-export * from './smart-style-node.js';
-
 export { chain, StyleCollector } from './style-collector.js';
 export { compileToCSS, partitionForBuild } from './style-compiler.js';
 export { classifyValue, partitionStyles, hasDynamicValues } from './value-classifier.js';

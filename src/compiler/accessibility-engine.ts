@@ -1,4 +1,5 @@
 // src/compiler/accessibility-engine.ts
+
 /**
  * Accessibility Intelligence Engine
  * 

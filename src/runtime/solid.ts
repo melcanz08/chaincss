@@ -7,9 +7,8 @@
  * Supports both runtime style injection and hybrid atomic CSS mode.
  */
 
-import { createSignal, createMemo, onCleanup, useContext, createContext, useContextProvider, type Accessor, type Setter, type JSX, type Component, children as childrenHelper } from 'solid-js';
-import { compileRuntime, styleInjector, removeRuntimeModule } from './injector.js';
-import { setManifest as setGlobalManifest, setTokens as setGlobalTokens } from './Chain.js';
+import { createSignal, createMemo, onCleanup, useContext, createContext, useContextProvider, type Accessor, type Setter, type JSX, type Component } from 'solid-js';
+import { compileRuntime, styleInjector, removeRuntimeModule, setManifest as setGlobalManifest, setTokens as setGlobalTokens } from './injector.js';
 
 // Context keys
 const ChainCSSContext = createContext<ChainCSSContextValue>({});
@@ -130,55 +129,29 @@ export function styled<T extends keyof JSX.IntrinsicElements>(
   tag: T,
   styles: Record<string, any> | Accessor<Record<string, any>> | (() => Record<string, any>)
 ): Component<JSX.IntrinsicElements[T] & { class?: string }> {
-  const StyledComponent: Component<JSX.IntrinsicElements[T] & { class?: string }> = (props) => {
+  return (props: JSX.IntrinsicElements[T] & { class?: string }) => {
     const resolvedStyles = typeof styles === 'function' ? styles() : styles;
-    const { classes } = useAtomicClasses({ root: resolvedStyles });
+    const { classes, cx } = useAtomicClasses({ root: resolvedStyles });
     
     const combinedClass = () => {
       const rootClass = classes().root || '';
       return [rootClass, props.class].filter(Boolean).join(' ');
     };
     
-    // Create element using Solid's dynamic element creation
-    const Tag = tag as string;
-    const elementProps = { ...props, class: combinedClass() };
+    const elementProps = { ...props };
+    delete (elementProps as any).class;
     
-    // Use Solid's createElement directly
-    return (Fragment as any)({
-      children: (() => {
-        const el = document.createElement(Tag);
-        Object.entries(elementProps).forEach(([k, v]) => {
-          if (k === 'children') return;
-          if (k === 'class') {
-            el.className = v as string;
-          } else if (k.startsWith('on') && typeof v === 'function') {
-            const eventName = k.slice(2).toLowerCase();
-            el.addEventListener(eventName, v);
-          } else {
-            el.setAttribute(k, String(v));
-          }
-        });
-        if (props.children) {
-          const childNodes = childrenHelper(() => props.children as any)();
-          if (Array.isArray(childNodes)) {
-            childNodes.forEach(node => el.appendChild(node as Node));
-          } else if (childNodes) {
-            el.appendChild(childNodes as Node);
-          }
-        }
-        return el;
-      })()
-    });
+    return (
+      // @ts-ignore — SolidJS dynamic element
+      <Dynamic component={tag} class={combinedClass()} {...elementProps} />
+    );
   };
-  
-  StyledComponent.displayName = `ChainCSS.${String(tag)}`;
-  return StyledComponent;
 }
 
-// Simple Fragment component for Solid
-const Fragment: Component<{ children?: any }> = (props) => {
-  return props.children;
-};
+// Dynamic element helper — needed because Solid doesn't have a built-in Dynamic by default
+// Using a simple workaround with JSX spread
+import { createComponent } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 
 /**
  * Create multiple styled components at once
@@ -228,7 +201,6 @@ export function useDynamicStyles<T extends Record<string, any>>(
   deps: Accessor<any[]>
 ): AtomicClassesReturn {
   const computedStyles = createMemo(() => {
-    // Run the factory to generate fresh styles
     return styleFactory();
   }, deps());
   
@@ -261,7 +233,7 @@ export const ChainCSSProvider: Component<ChainCSSProviderProps> = (props) => {
   
   useContextProvider(ChainCSSContext, contextValue);
   
-  return props.children;
+  return <>{props.children}</>;
 };
 
 /**
@@ -310,11 +282,15 @@ export function cx(...classes: (string | undefined | null | false | Record<strin
  */
 export function withChainStyles<P extends object>(
   styles: Record<string, any> | ((props: P) => Record<string, any>)
-): Component<P & { chainStyles?: Record<string, string> }> {
-  return (props: P & { chainStyles?: Record<string, string> }) => {
-    const styleProps = typeof styles === 'function' ? styles(props) : styles;
+): Component<P & { chainStyles?: Record<string, string>; children?: any }> {
+  return (props: P & { chainStyles?: Record<string, string>; children?: any }) => {
+    const styleProps = typeof styles === 'function' ? styles(props as P) : styles;
     const { classes } = useAtomicClasses(styleProps);
-    return (props as any).children?.({ chainStyles: classes() });
+    
+    if (typeof props.children === 'function') {
+      return <>{props.children({ chainStyles: classes() })}</>;
+    }
+    return <>{props.children}</>;
   };
 }
 
