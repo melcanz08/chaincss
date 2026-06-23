@@ -289,8 +289,9 @@ export class ChainCSSCompiler {
       if (componentMapping?.atomicClasses) {
         atomicClasses = componentMapping.atomicClasses
           .map(className => {
-            const entry = (this.atomicOptimizer as any)?.getAtomicEntry?.(className);
-            return entry || { className, prop: '', value: '', usageCount: 0, cssRule: '' };
+            const allClasses = this.atomicOptimizer?.getAllAtomicClasses?.() || [];
+            const entry = allClasses.find((a: any) => a.className === className);
+            return entry || { className, prop: '', value: '', usageCount: 0, rules: '' };
           })
           .filter(Boolean) as AtomicClass[];
       }
@@ -844,7 +845,7 @@ export class ChainCSSCompiler {
   }
 
   public getAtomicMap(): Record<string, string> {
-    return (this.atomicOptimizer as any)?.classMap || {};
+    return this.atomicOptimizer?.getAtomicMap?.() || {};
   }
 
   private generateCSSFile(results: Record<string, CompileResult>, outputPath: string): void {
