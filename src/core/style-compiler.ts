@@ -97,8 +97,9 @@ export function compileToCSS(
     }
   }
   
-  // Process at-rules
-  for (const rule of _atRules) {
+  // Process nested rules (from both _nestedRules and nestedRules)
+  const allNestedRules = [...(_nestedRules || []), ...(properties.nestedRules || [])];
+  for (const rule of allNestedRules) {
     const compiled = compileAtRule(rule, effectiveSelector, indent, newline, options);
     if (compiled) parts.push(compiled);
   }
@@ -136,16 +137,17 @@ function compileDeclarations(
     // Skip functions (can't compile to static CSS)
     if (typeof value === 'function') continue;
     
+    // Skip nested rules — they're handled separately
+    if (prop === 'nestedRules' || prop === 'atRules') continue;
+    
     // Handle nested objects (could be nested pseudo-elements)
     if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-      // Skip — handled by nested rules or pseudo-class extraction
       continue;
     }
     
     // Regular property
     const cssProp = camelToKebab(prop);
     let finalValue = value;
-    // Add px to numeric values for dimension properties
     if (typeof value === 'number' && ['width','height','min-width','max-width','min-height','max-height'].includes(cssProp)) {
       finalValue = value + 'px';
     }
