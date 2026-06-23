@@ -579,6 +579,14 @@ export class StyleCollector {
         // Prevent Promise-like behavior (React and other frameworks check .then)
         if (prop === 'then') return undefined;
         
+        // Check if it's a registered macro (gridList, hero, pill, etc.)
+        if (macros[prop]) {
+          return (value: any) => {
+            target.set(prop, value);
+            return proxy;
+          };
+        }
+        
         // Check if it's a method on the collector itself
         if (typeof (target as any)[prop] === 'function' && 
             !['set', 'build', '$el', 'hover', 'end'].includes(prop)) {

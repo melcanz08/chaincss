@@ -26,7 +26,7 @@ export const shorthandMap: Record<string, string> = {
   'roundedBR': 'borderBottomRightRadius', 'roundedBL': 'borderBottomLeftRadius',
   'border': 'border', 'borderW': 'borderWidth', 'borderC': 'borderColor', 'borderS': 'borderStyle',
   'borderT': 'borderTop', 'borderR': 'borderRight', 'borderB': 'borderBottom', 'borderL': 'borderLeft',
-  'fontF': 'fontFamily', 'text': 'color', 'align': 'textAlign', 
+  'fontF': 'fontFamily', 'italic': 'fontStyle', 'text': 'color', 'align': 'textAlign', 
   'fs': 'fontSize', 'fw': 'fontWeight', 'lh': 'lineHeight', 'ls': 'letterSpacing',
   'shadow': 'boxShadow', 'textShadow': 'textShadow',
   'transform': 'transform', 'transformOrigin': 'transformOrigin',
@@ -92,6 +92,7 @@ export const macros: Record<string, MacroHandler> = {
     if (v && v !== true && typeof v === 'string') c.grid = v; 
   },
   inlineGrid: (v, c) => { c.display = 'inline-grid'; },
+  block: (v, c) => { c.display = 'block'; },
   cols: (v, c) => { 
     c.gridTemplateColumns = typeof v === 'number' ? `repeat(${v}, minmax(0, 1fr))` : v; 
   },
@@ -148,7 +149,6 @@ export const macros: Record<string, MacroHandler> = {
     c.WebkitUserSelect = 'none';
     c.MozUserSelect = 'none'; 
     c.msUserSelect = 'none'; 
-    c.cursor = 'default';
   },
   scrollable: (v, c) => {
     if (v === 'x') {
@@ -404,10 +404,13 @@ export const macros: Record<string, MacroHandler> = {
     });
   },
   pressable: (v, c, useTokens) => { 
-    c.cursor = 'pointer'; 
-    macros.unselectable(v, c, useTokens); 
+    c.cursor = 'pointer';
+    c.userSelect = 'none'; 
+    c.WebkitUserSelect = 'none';
+    c.MozUserSelect = 'none'; 
+    c.msUserSelect = 'none';
+    // Don't call unselectable — it overrides cursor
     macros.clickScale(v, c, useTokens);
-    // Add hover effect
     if (!c.nestedRules) c.nestedRules = [];
     c.nestedRules.push({ 
       selector: '&:hover', 
@@ -460,7 +463,21 @@ export const macros: Record<string, MacroHandler> = {
     macros.glass(v || 15, c, useTokens);
     macros.safeArea('top', c, useTokens);
     c.zIndex = 1000;
-  }
+  },
+  gridList: (v, c) => {
+    c.display = 'grid';
+    c.gridTemplateColumns = 'repeat(auto-fit, minmax(280px, 1fr))';
+    c.gap = typeof v === 'number' ? `${v}px` : v || '24px';
+  },
+  hero: (v, c) => {
+    c.display = 'flex';
+    c.flexDirection = 'column';
+    c.justifyContent = 'center';
+    c.alignItems = 'center';
+    c.width = '100%';
+    c.minHeight = '60vh';
+    c.textAlign = 'center';
+  },
 };
 
 /**
