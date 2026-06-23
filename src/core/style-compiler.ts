@@ -98,16 +98,15 @@ export function compileToCSS(
   }
   
   // Process nested rules (from both _nestedRules and nestedRules)
-  const allNestedRules = [...(_nestedRules || []), ...(properties.nestedRules || [])];
+  const allNestedRules = [
+    ...(_nestedRules || []),
+    ...(Array.isArray(properties.nestedRules) ? properties.nestedRules : [])
+  ];
   for (const rule of allNestedRules) {
-    const compiled = compileAtRule(rule, effectiveSelector, indent, newline, options);
-    if (compiled) parts.push(compiled);
-  }
-  
-  // Process nested rules
-  for (const rule of _nestedRules) {
     const nestedScope = effectiveSelector
-      ? `${effectiveSelector} ${rule.selector}`
+      ? rule.selector.startsWith('&') 
+        ? `${effectiveSelector}${rule.selector.slice(1)}`
+        : `${effectiveSelector} ${rule.selector}`
       : rule.selector;
     
     const nestedCSS = compileToCSS(rule.styles, {

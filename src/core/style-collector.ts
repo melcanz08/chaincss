@@ -102,7 +102,7 @@ export class StyleCollector {
     if (macros[prop]) {
       const target = this.hoverStyles || this.styles;
       macros[prop](value, target, true);
-      this.logDebug(prop, prop, value, '[macro]', classifyValue(value));
+      this.logDebug(prop, prop, '[macro]', '[macro]', classifyValue('[macro]'));
       return this;
     }
     
