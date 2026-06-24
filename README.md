@@ -1,4 +1,4 @@
-# ChainCSS v2.5 [![npm version](https://badge.fury.io/js/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![npm downloads](https://img.shields.io/npm/dm/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![license](https://img.shields.io/npm/l/chaincss.svg)](LICENSE) [![tests](https://img.shields.io/badge/tests-640%20passing-brightgreen)]()
+# ChainCSS v2.6 [![npm version](https://badge.fury.io/js/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![npm downloads](https://img.shields.io/npm/dm/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![license](https://img.shields.io/npm/l/chaincss.svg)](LICENSE) [![tests](https://img.shields.io/badge/tests-640%20passing-brightgreen)]()
 
 **Zero-runtime CSS-in-JS with a build-time design assistant.** Static styles compile to plain CSS. Dynamic values resolve at runtime. An 18-pass pipeline audits accessibility, responsiveness, layout patterns, and more — all at build time, all with zero runtime cost.
 
