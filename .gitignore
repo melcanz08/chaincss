@@ -12,3 +12,7 @@ demo/
 demo-website/
 __tests__/
 .chaincss-cache
+
+# ChainCSS generated files
+*.class.js
+*.class.ts

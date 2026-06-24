@@ -322,56 +322,118 @@ console.log(debugChain.explain().visualization);
 
 ---
 
-## Vite Plugin
+## Vite Plugin (Automatic Zero-Runtime)
+
+Add the plugin to your `vite.config.ts` — that's it. No manual scripts, no CSS generation files.
 
 ```ts
 // vite.config.ts
-import chaincssPlugin from 'chaincss/plugin/vite';
-import react from '@vitejs/plugin-react';
+import chaincss from 'chaincss/plugin/vite'
+import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [
-    chaincssPlugin({ verbose: true }),
-    react(),
-  ],
-});
+    chaincss(),
+    react()
+  ]
+})
 ```
 
-The plugin:
-* Serves generated CSS at `/__chaincss.css`
-* Auto-injects `<link>` tag into HTML
-* Watches for CSS changes and hot-reloads
-* Runs the 18-pass pipeline with diagnostics in verbose mode
+### How it works
 
----
-
-## Setup
-
-Create a CSS generation script:
+1. **Create a `.chain.ts` file** anywhere in `src/`:
 
 ```ts
-// src/generate-css.ts
-import { compileToCSS } from 'chaincss';
-import * as styles from './styles.chain';
-import fs from 'fs';
+// src/styles/button.chain.ts
+import { chain } from 'chaincss'
 
-let css = '*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}\n';
-css += 'body{font-family:system-ui,sans-serif}\n\n';
-
-for (const [_, obj] of Object.entries(styles)) {
-  const sel = (obj as any).selectors?.[0];
-  if (sel) css += compileToCSS(obj as any, { scopeSelector: sel }) + '\n\n';
-}
-fs.writeFileSync('public/chaincss.css', css);
+export const btn = chain()
+  .bg('#6366f1')
+  .color('#ffffff')
+  .padding('12px 24px')
+  .rounded(8)
+  .hover()
+    .bg('#4f46e5')
+  .end()
+  .$el('button')
 ```
 
-```json
-{
-  "scripts": {
-    "dev": "npm run css && vite",
-    "css": "npx tsx src/generate-css.ts"
-  }
+2. **Import and use** — the class name is a plain string:
+
+```tsx
+// src/components/Button.tsx
+import { btn } from '../styles/button.chain'
+
+function Button() {
+  return <button className={btn}>Click me</button>
 }
+```
+
+3. **The plugin handles everything automatically:**
+   - Finds all `.chain.ts` files in `src/`
+   - Runs the 18-pass pipeline on every file
+   - Generates `.css` and `.class.js` next to your source
+   - Serves combined CSS at `/__chaincss.css`
+   - Injects `<link>` tag into HTML
+   - Watches for changes and hot-reloads
+
+### Plugin Options
+
+```ts
+chaincss({
+  // Logging
+  verbose: true,          // Show per-file details and diagnostics (default: false)
+  pipelineReport: true,   // Show full 18-pass table after build
+  silent: true,           // Suppress all output except errors
+
+  // Pipeline
+  disablePipeline: false, // Skip 18-pass pipeline for faster builds
+
+  // Features
+  atomic: true,           // Enable atomic CSS extraction (default: true)
+  
+  // Customization
+  breakpoints: {          // Custom breakpoints for responsive inference
+    sm: '(max-width: 640px)',
+    lg: '(min-width: 1024px)'
+  },
+  tokens: {               // Design tokens
+    colors: { primary: '#6366f1' }
+  },
+  minify: true,           // Override auto-minification
+})
+```
+
+### Output
+
+**Default (`verbose: false`):**
+```
+[ChainCSS] Initialized (18-pass pipeline, atomic CSS)
+[ChainCSS] Built 10/10 files in 234ms • 18 passes • 5 diagnostics • 3 auto-fixes
+```
+
+**Verbose (`verbose: true`):**
+```
+[ChainCSS] Initialized (18-pass pipeline, atomic CSS)
+[ChainCSS] Building 10 file(s) with 18-pass pipeline...
+[ChainCSS]   ✓ button.chain.ts → 1 class, 247B CSS
+[ChainCSS]     ❌ [a11y] Contrast 4.5:1 fails WCAG AA (#fff on #6366f1)
+[ChainCSS]        ↳ Darken text or lighten background
+[ChainCSS]     ⚠️  [a11y] Missing focus indicator — auto-fixed
+[ChainCSS]   ✓ card.chain.ts → 4 classes, 520B CSS
+[ChainCSS] Built 10/10 files in 234ms • 18 passes • 5 diagnostics • 3 auto-fixes
+```
+
+**Pipeline report (`pipelineReport: true`):**
+```
+═══════════════════════════════════════════
+  ChainCSS Multi-Pass Pipeline Report
+═══════════════════════════════════════════
+  ✓ intent-recovery           2ms  nodes: 5 → 5
+  ✓ unit-resolution           1ms  nodes: 5 → 5
+  ✓ accessibility             8ms  nodes: 5 → 7
+  ...all 18 passes...
+═══════════════════════════════════════════
 ```
 
 ---

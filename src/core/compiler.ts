@@ -351,6 +351,11 @@ export class ChainCSSCompiler {
 
     const styleObject: StyleObject = { ...properties };
 
+    // FIX: Preserve selectors on the style object so CSS generation uses them
+    if (selectors && Array.isArray(selectors)) {
+      (styleObject as any).selectors = selectors;
+    }
+
     if (hover && typeof hover === 'object') {
       styleObject['&:hover'] = hover;
     }

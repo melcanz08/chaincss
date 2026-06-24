@@ -1,46 +1,392 @@
-import { Plugin } from 'vite';
-import path from 'path';
-import fs from 'fs';
+// src/plugins/vite.ts
 
-export default function chaincssPlugin(options: { verbose?: boolean } = {}): Plugin {
-  let cssContent = '';
-  let cssPath = '';
+import type { Plugin, ViteDevServer } from 'vite'
+import path from 'path'
+import fs from 'fs'
+import { ChainCSSCompiler } from '../core/compiler.js'
+import { formatCSS, ensureDir } from '../core/utils.js'
+import { DEFAULT_CONFIG, ENVIRONMENT_PRESETS } from '../core/constants.js'
+import type { ChainCSSConfig } from '../core/types.js'
 
+const CHAIN_FILE_RE = /\.chain\.(ts|js)x?$/
+
+// ============================================================================
+// Types
+// ============================================================================
+
+interface ChainCSSPluginOptions {
+  // ── Logging ──────────────────────────────────────────────
+  /** Show per-file compilation details and diagnostics (default: true) */
+  verbose?: boolean
+  /** Show the full 18-pass pipeline report table after build */
+  pipelineReport?: boolean
+  /** Suppress all output except errors */
+  silent?: boolean
+
+  // ── Pipeline ─────────────────────────────────────────────
+  /** Disable the 18-pass IR pipeline for faster builds */
+  disablePipeline?: boolean
+
+  // ── Atomic CSS ───────────────────────────────────────────
+  /** Enable atomic CSS extraction (default: true) */
+  atomic?: boolean
+
+  // ── Customization ────────────────────────────────────────
+  /** Custom breakpoints for responsive inference */
+  breakpoints?: Record<string, string>
+  /** Design token configuration */
+  tokens?: ChainCSSConfig['tokens']
+  /** Override minification (default: auto based on mode) */
+  minify?: boolean
+  /** Additional glob patterns to scan */
+  include?: string[]
+  /** Patterns to exclude */
+  exclude?: string[]
+}
+
+// ============================================================================
+// Plugin
+// ============================================================================
+
+export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plugin {
+  // ── Options ──────────────────────────────────────────────
+  const verbose = options.verbose !== false
+  const pipelineReport = options.pipelineReport ?? verbose
+  const silent = options.silent ?? false
+  const disablePipeline = options.disablePipeline ?? false
+  const atomic = options.atomic ?? true
+
+  // ── State ────────────────────────────────────────────────
+  let compiler: ChainCSSCompiler
+  let root: string = ''
+  let cssCache = ''
+  let totalDiagnostics = 0
+  let totalAutoFixes = 0
+
+  // ── Logging Helpers ──────────────────────────────────────
   function log(msg: string) {
-    if (options.verbose !== false) console.log(`[ChainCSS] ${msg}`);
+    if (!silent && verbose) console.log(`[ChainCSS] ${msg}`)
   }
+
+  function warn(msg: string) {
+    if (!silent) console.warn(`[ChainCSS] ⚠️  ${msg}`)
+  }
+
+  function error(msg: string) {
+    console.error(`[ChainCSS] ❌ ${msg}`)
+  }
+
+  function summary(msg: string) {
+    if (!silent) console.log(`[ChainCSS] ${msg}`)
+  }
+
+  // ── Compilation ──────────────────────────────────────────
+
+  async function compileFile(chainPath: string): Promise<{
+    css: string
+    classMap: Record<string, string>
+    diagnostics: any[]
+  }> {
+    const result = await compiler.compileFile(chainPath)
+    let css = ''
+    const classMap: Record<string, string> = {}
+    const allDiagnostics: any[] = []
+
+    for (const [name, compileResult] of Object.entries(result)) {
+      // Collect diagnostics
+      if ((compileResult as any)._diagnostics) {
+        for (const d of (compileResult as any)._diagnostics) {
+          allDiagnostics.push({ ...d, styleName: name })
+        }
+      }
+
+      if (compileResult.css) {
+        let fileCss = compileResult.css
+        const className = Object.values(compileResult.classMap)[0]
+
+        // Fix: Replace wrong CSS selector with correct class name
+        if (className && fileCss) {
+          const firstSelector = fileCss.match(/^\.([a-zA-Z0-9_-]+)/)?.[1]
+          if (firstSelector && firstSelector !== className) {
+            fileCss = fileCss.replace(
+              new RegExp('\\.' + firstSelector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
+              '.' + className
+            )
+          }
+        }
+
+        css += fileCss + '\n'
+      }
+
+      const className = Object.values(compileResult.classMap)[0]
+      if (className) classMap[name] = className
+    }
+
+    return { css, classMap, diagnostics: allDiagnostics }
+  }
+
+  function printDiagnostics(diagnostics: any[], fileName: string) {
+    if (!verbose || silent) return
+
+    const errors = diagnostics.filter(d => d.severity === 'error')
+    const warnings = diagnostics.filter(d => d.severity === 'warning')
+    const infos = diagnostics.filter(d => d.severity === 'info' || d.severity === 'hint')
+
+    // Errors
+    for (const d of errors) {
+      console.log(`[ChainCSS]     ❌ ${d.message}`)
+      if (d.suggestion) console.log(`[ChainCSS]        ↳ ${d.suggestion}`)
+    }
+
+    // Warnings
+    for (const d of warnings.slice(0, 3)) {
+      console.log(`[ChainCSS]     ⚠️  ${d.message}`)
+      if (d.suggestion) console.log(`[ChainCSS]        ↳ ${d.suggestion}`)
+    }
+    if (warnings.length > 3) {
+      console.log(`[ChainCSS]     ... and ${warnings.length - 3} more warnings`)
+    }
+
+    // Info (only in pipelineReport mode)
+    if (pipelineReport && infos.length > 0) {
+      for (const d of infos.slice(0, 2)) {
+        console.log(`[ChainCSS]     ℹ️  ${d.message}`)
+      }
+      if (infos.length > 2) {
+        console.log(`[ChainCSS]     ... and ${infos.length - 2} more info`)
+      }
+    }
+
+    totalDiagnostics += diagnostics.length
+    totalAutoFixes += diagnostics.filter(d => d.autoFixable).length
+  }
+
+  async function compileAllStyles(): Promise<string> {
+    const startTime = Date.now()
+    const srcDir = path.join(root, 'src')
+    if (!fs.existsSync(srcDir)) return ''
+
+    // Reset counters
+    totalDiagnostics = 0
+    totalAutoFixes = 0
+
+    // Find .chain files
+    const chainFiles: string[] = []
+    function walk(dir: string) {
+      let entries: fs.Dirent[]
+      try { entries = fs.readdirSync(dir, { withFileTypes: true }) }
+      catch { return }
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name)
+        if (entry.isDirectory()) {
+          if (entry.name === 'node_modules' || entry.name === 'dist') continue
+          walk(fullPath)
+        } else if (CHAIN_FILE_RE.test(entry.name)) {
+          chainFiles.push(fullPath)
+        }
+      }
+    }
+    walk(srcDir)
+
+    if (!silent) {
+      const mode = disablePipeline ? 'direct' : '18-pass pipeline'
+      summary(`Building ${chainFiles.length} file(s) with ${mode}...`)
+    }
+
+    let allCSS = '/* ChainCSS Generated */\n'
+    let successCount = 0
+
+    for (const file of chainFiles) {
+      try {
+        const { css, classMap, diagnostics } = await compileFile(file)
+        const fileName = path.basename(file)
+
+        if (css.trim()) {
+          allCSS += `\n/* ${path.relative(root, file)} */\n${css}`
+        }
+
+        // Write .css
+        const cssPath = file.replace(CHAIN_FILE_RE, '.css')
+        ensureDir(path.dirname(cssPath))
+        fs.writeFileSync(cssPath, formatCSS(css, false), 'utf8')
+
+        // Write .class.js
+        const classPath = file.replace(CHAIN_FILE_RE, '.class.js')
+        const classLines: string[] = [
+          '/** ChainCSS Generated — DO NOT EDIT */',
+          ''
+        ]
+        for (const [name, className] of Object.entries(classMap)) {
+          classLines.push(`export const ${name} = '${className}'`)
+        }
+        if (classLines.length > 2) {
+          ensureDir(path.dirname(classPath))
+          fs.writeFileSync(classPath, classLines.join('\n'), 'utf8')
+        }
+
+        // Print per-file results
+        if (verbose && !silent) {
+          const classCount = Object.keys(classMap).length
+          const cssSize = css.length
+          console.log(`[ChainCSS]   ✓ ${fileName} → ${classCount} class${classCount !== 1 ? 'es' : ''}, ${cssSize}B CSS`)
+        }
+
+        // Print diagnostics
+        printDiagnostics(diagnostics, fileName)
+
+        successCount++
+      } catch (err) {
+        error(`Failed: ${path.basename(file)} — ${(err as Error).message}`)
+      }
+    }
+
+    const elapsed = Date.now() - startTime
+
+    // Build summary
+    if (!silent) {
+      const parts: string[] = [
+        `Built ${successCount}/${chainFiles.length} files in ${elapsed}ms`
+      ]
+      if (!disablePipeline) {
+        parts.push('18 passes')
+      }
+      if (totalDiagnostics > 0) {
+        const errs = totalDiagnostics
+        parts.push(`${errs} diagnostic${errs !== 1 ? 's' : ''}`)
+      }
+      if (totalAutoFixes > 0) {
+        parts.push(`${totalAutoFixes} auto-fix${totalAutoFixes !== 1 ? 'es' : ''}`)
+      }
+      summary(parts.join(' • '))
+    }
+
+    // Pipeline report
+    if (pipelineReport && !disablePipeline && !silent) {
+      console.log('')
+      console.log(compiler.getPassManager().report())
+    }
+
+    return allCSS
+  }
+
+  // =========================================================================
+  // Plugin Hooks
+  // =========================================================================
 
   return {
     name: 'chaincss',
     enforce: 'pre',
 
     configResolved(config) {
-      cssPath = path.resolve(config.root, 'public/chaincss.css');
+      root = config.root
+      const isProduction = config.mode === 'production'
+      const preset = isProduction ? ENVIRONMENT_PRESETS.production : ENVIRONMENT_PRESETS.development
+
+      compiler = new ChainCSSCompiler({
+        ...DEFAULT_CONFIG,
+        ...preset,
+        atomic: {
+          ...DEFAULT_CONFIG.atomic,
+          ...preset.atomic,
+          enabled: atomic
+        },
+        tokens: options.tokens || DEFAULT_CONFIG.tokens,
+        output: {
+          ...DEFAULT_CONFIG.output,
+          minify: options.minify !== undefined ? options.minify : isProduction
+        },
+        breakpoints: options.breakpoints || DEFAULT_CONFIG.breakpoints,
+        verbose,
+        silent
+      })
+
+      if (disablePipeline) {
+        compiler.setPipelineEnabled(false)
+      }
+
+      if (!silent) {
+        const features: string[] = []
+        if (!disablePipeline) features.push('18-pass pipeline')
+        if (atomic) features.push('atomic CSS')
+        if (options.tokens) features.push('design tokens')
+        summary(`Initialized (${features.join(', ') || 'basic compilation'})`)
+      }
     },
 
-    configureServer(server) {
-      server.watcher.add(cssPath);
-      server.watcher.on('change', (file: string) => {
-        if (file === cssPath) {
-          try { cssContent = fs.readFileSync(cssPath, 'utf8'); log('CSS updated'); } catch {}
-          server.ws.send({ type: 'full-reload' });
-        }
-      });
-      try { cssContent = fs.readFileSync(cssPath, 'utf8'); log(`Serving ${cssContent.length} bytes`); } catch { log('No CSS file yet'); }
+    // ---------------------------------------------------------------
+    // TRANSFORM: Rewrite .chain.ts files to export class name strings
+    // ---------------------------------------------------------------
+    async transform(code, id) {
+      if (!CHAIN_FILE_RE.test(id)) return null
 
-      server.middlewares.use('/__chaincss.css', (_req, res) => {
-        res.setHeader('Content-Type', 'text/css');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.end(cssContent);
-      });
+      try {
+        const { classMap } = await compileFile(id)
+
+        if (Object.keys(classMap).length === 0) return null
+
+        const lines: string[] = [
+          '// Auto-generated by ChainCSS Vite Plugin',
+          '// DO NOT EDIT',
+          ''
+        ]
+        for (const [name, className] of Object.entries(classMap)) {
+          lines.push(`export const ${name} = '${className}'`)
+        }
+
+        const classPath = id.replace(CHAIN_FILE_RE, '.class.js')
+        ensureDir(path.dirname(classPath))
+        fs.writeFileSync(classPath, lines.join('\n'), 'utf8')
+
+        return { code: lines.join('\n'), map: null }
+      } catch (err) {
+        error(`Transform failed for ${path.basename(id)}: ${(err as Error).message}`)
+        return null
+      }
+    },
+
+    // ---------------------------------------------------------------
+    // Dev Server
+    // ---------------------------------------------------------------
+    configureServer(devServer: ViteDevServer) {
+      devServer.httpServer?.once('listening', async () => {
+        try {
+          cssCache = await compileAllStyles()
+        } catch (err) {
+          error(`Build failed: ${(err as Error).message}`)
+        }
+      })
+
+      devServer.middlewares.use('/__chaincss.css', (_req, res) => {
+        res.setHeader('Content-Type', 'text/css')
+        res.setHeader('Cache-Control', 'no-cache')
+        res.end(cssCache || '/* ChainCSS: no styles yet */')
+      })
+
+      devServer.watcher.on('change', async (filePath: string) => {
+        if (CHAIN_FILE_RE.test(filePath)) {
+          log(`Change detected: ${path.basename(filePath)}`)
+
+          const { css } = await compileFile(filePath)
+          cssCache = await compileAllStyles()
+
+          const mod = devServer.moduleGraph.getModuleById(filePath)
+          if (mod) devServer.moduleGraph.invalidateModule(mod)
+
+          devServer.ws.send({ type: 'full-reload' })
+        }
+      })
     },
 
     transformIndexHtml() {
       return [{
         tag: 'link',
-        attrs: { rel: 'stylesheet', href: '/__chaincss.css' },
-        injectTo: 'head',
-      }];
-    },
-  };
+        attrs: {
+          rel: 'stylesheet',
+          href: '/__chaincss.css',
+          'data-chaincss': ''
+        },
+        injectTo: 'head'
+      }]
+    }
+  }
 }
