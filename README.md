@@ -1,4 +1,4 @@
-# ChainCSS v2.6 [![npm version](https://badge.fury.io/js/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![npm downloads](https://img.shields.io/npm/dm/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![license](https://img.shields.io/npm/l/chaincss.svg)](LICENSE) [![tests](https://img.shields.io/badge/tests-640%20passing-brightgreen)]()
+# ChainCSS v2.6.1 [![npm version](https://badge.fury.io/js/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![npm downloads](https://img.shields.io/npm/dm/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![license](https://img.shields.io/npm/l/chaincss.svg)](LICENSE) [![tests](https://img.shields.io/badge/tests-640%20passing-brightgreen)]()
 
 **Zero-runtime CSS-in-JS with a build-time design assistant.** Static styles compile to plain CSS. Dynamic values resolve at runtime. An 18-pass pipeline audits accessibility, responsiveness, layout patterns, and more — all at build time, all with zero runtime cost.
 
@@ -31,7 +31,7 @@ const btn = chain()
 
 ---
 
-## 18-Pass Build Pipeline (NEW in v2.5)
+## 18-Pass Build Pipeline
 
 Every style automatically runs through 18 optimization passes at build time. No configuration needed — it just works.
 
@@ -181,7 +181,7 @@ One method replaces multiple CSS declarations:
 | unselectable() | Disable text selection |
 | outlineDebug() | Red outline debugging for layout |
 
-### Intent Macros (NEW in v2.5)
+### Intent Macros 
 High-level component intents that resolve to full, accessible CSS:
 
 | Intent | What It Generates |
@@ -197,7 +197,7 @@ High-level component intents that resolve to full, accessible CSS:
 | truncate() | Single-line text truncation with ellipsis |
 | srOnly() | Screen-reader only (visually hidden but accessible) |
 
-### Semantic Tokens (NEW in v2.5)
+### Semantic Tokens 
 
 ```ts
 chain()
@@ -209,7 +209,7 @@ chain()
 ```
 *Supports light, dark, and high-contrast themes.*
 
-### Constraint Solver (NEW in v2.5)
+### Constraint Solver 
 Declare relationships, not values:
 
 ```ts
@@ -352,17 +352,16 @@ export const btn = chain()
   .color('#ffffff')
   .padding('12px 24px')
   .rounded(8)
-  .hover()
-    .bg('#4f46e5')
-  .end()
+  .hover().bg('#4f46e5').end()
   .$el('button')
 ```
 
-2. **Import and use** — the class name is a plain string:
+2. **Import and use** — the class name is a plain string, zero runtime:
 
 ```tsx
 // src/components/Button.tsx
 import { btn } from '../styles/button.chain'
+// btn === 'chain-btn' (a string, not an object)
 
 function Button() {
   return <button className={btn}>Click me</button>
@@ -374,7 +373,7 @@ function Button() {
    - Runs the 18-pass pipeline on every file
    - Generates `.css` and `.class.js` next to your source
    - Serves combined CSS at `/__chaincss.css`
-   - Injects `<link>` tag into HTML
+   - Auto-injects `<link>` tag into HTML
    - Watches for changes and hot-reloads
 
 ### Plugin Options
@@ -382,7 +381,7 @@ function Button() {
 ```ts
 chaincss({
   // Logging
-  verbose: true,          // Show per-file details and diagnostics (default: false)
+  verbose: true,          // Show per-file details and diagnostics
   pipelineReport: true,   // Show full 18-pass table after build
   silent: true,           // Suppress all output except errors
 
@@ -393,7 +392,7 @@ chaincss({
   atomic: true,           // Enable atomic CSS extraction (default: true)
   
   // Customization
-  breakpoints: {          // Custom breakpoints for responsive inference
+  breakpoints: {          // Custom breakpoints
     sm: '(max-width: 640px)',
     lg: '(min-width: 1024px)'
   },
@@ -404,7 +403,7 @@ chaincss({
 })
 ```
 
-### Output
+### Output Examples
 
 **Default (`verbose: false`):**
 ```
@@ -416,12 +415,11 @@ chaincss({
 ```
 [ChainCSS] Initialized (18-pass pipeline, atomic CSS)
 [ChainCSS] Building 10 file(s) with 18-pass pipeline...
-[ChainCSS]   ✓ button.chain.ts → 1 class, 247B CSS
+[ChainCSS]   ✓ button.chain.ts → 1 class, 247B CSS [static]
 [ChainCSS]     ❌ [a11y] Contrast 4.5:1 fails WCAG AA (#fff on #6366f1)
 [ChainCSS]        ↳ Darken text or lighten background
-[ChainCSS]     ⚠️  [a11y] Missing focus indicator — auto-fixed
-[ChainCSS]   ✓ card.chain.ts → 4 classes, 520B CSS
-[ChainCSS] Built 10/10 files in 234ms • 18 passes • 5 diagnostics • 3 auto-fixes
+[ChainCSS]   ✓ mixed.chain.ts → 1 class, 312B CSS [mixed]
+[ChainCSS] Built 10/10 files in 234ms • 18 passes • 5 diagnostics
 ```
 
 **Pipeline report (`pipelineReport: true`):**
@@ -436,29 +434,115 @@ chaincss({
 ═══════════════════════════════════════════
 ```
 
+## Mixed Mode: `chain.dynamic()` (NEW in v2.6)
+
+Mark a chain as mixed mode — static values compile to CSS, dynamic functions resolve at runtime. One API, automatic split.
+
+```ts
+import { chain } from 'chaincss'
+
+export const btn = chain.dynamic()
+  .bg('#6366f1')                                    // static → CSS
+  .color('#ffffff')                                  // static → CSS
+  .padding('12px 24px')                              // static → CSS
+  .rounded(8)                                        // static → CSS
+  .opacity(() => isActive ? 1 : 0.5)                 // dynamic → runtime
+  .shadow(() => isActive 
+    ? '0 8px 25px rgba(16,185,129,0.6)' 
+    : '0 2px 8px rgba(0,0,0,0.3)')                  // dynamic → runtime
+  .$el('btn')
+```
+
+**Component usage:**
+
+```tsx
+import { btn, btnClass } from '../styles/button.chain'
+import { useChainStyles } from 'chaincss/runtime'
+
+function Button({ isActive }) {
+  const classes = useChainStyles({ btn }, [isActive])
+  // btnClass = 'chain-btn' (static class name)
+  // classes.btn = runtime-injected class (dynamic values)
+  
+  return <button className={`${btnClass} ${classes.btn}`}>Click</button>
+}
+```
+
+| Export | Type | What it is |
+| :--- | :--- | :--- |
+| `btn` | `StyleObject` | Original style object with dynamic functions |
+| `btnClass` | `string` | Static class name (`'chain-btn'`) |
+
+> **Rule:** `chain()` for static-only styles. `chain.dynamic()` when you have functions that need runtime resolution.
+
+---
+
+## CLI (Standalone Build Tool)
+
+Use the CLI for CI/CD pipelines, non-Vite projects, or static site generation.
+
+```bash
+# Build once
+npx chaincss build
+
+# Watch for changes
+npx chaincss watch
+
+# Initialize a config file
+npx chaincss init
+```
+
+**Configuration (`chaincss.config.js`):**
+
+```js
+export default {
+  inputs: ['src/**/*.chain.ts'],
+  output: {
+    outputDir: 'dist',
+    minify: true
+  },
+  atomic: { enabled: true }
+}
+```
+
+The CLI generates `.css` and `.class.js` files next to your source. Import the CSS in your HTML and use the class names directly — zero JavaScript required.
+
 ---
 
 ## Framework Integration
-ChainCSS is framework-agnostic. `$el()` returns a plain object:
+
+### With Vite Plugin (Recommended)
+
+```tsx
+// React — import the class name string directly
+import { btn } from './styles/button.chain'
+<button className={btn}>Click</button>
+```
+
+### With CLI (Pure HTML)
+
+```html
+<link rel="stylesheet" href="src/styles/button.css">
+<button class="chain-btn">Click</button>
+```
+
+### Runtime Support
+
+ChainCSS provides runtime hooks for dynamic styles:
 
 ```tsx
 // React
-<div className={styles.selectors[0].replace('.', '')}>...</div>
+import { useChainStyles } from 'chaincss/runtime'
+const classes = useChainStyles(styles, [dependencies])
 
 // Vue
-<div :class="styles.selectors[0].replace('.', '')">...</div>
+import { useAtomicClasses } from 'chaincss/runtime'
+const { classes } = useAtomicClasses(styles)
 
-// Svelte
-<div class={styles.selectors[0].replace('.', '')}>...</div>
-
-// SolidJS — use the runtime
-import { useAtomicClasses } from 'chaincss/runtime';
-const { classes, cx } = useAtomicClasses(styles);
-
-// Plain HTML (with CSS file)
-<div class="chain-button">...</div>
+// SolidJS
+import { useAtomicClasses } from 'chaincss/runtime'
 ```
-*Runtime support: React, Vue, Svelte, and SolidJS (all optional peer dependencies).*
+*React, Vue, Svelte, and SolidJS are optional peer dependencies.*
 
 ### Class Names
 
@@ -519,19 +603,17 @@ export const btn = S.btn.selectors[0].replace('.', '');
 | btt.run() | compileToCSS() |
 | enableDebug() | chain({ debug: true }) |
 
-### New in v2.5:
-* 18-pass IR pipeline active by default
-* Accessibility engine (WCAG 2.2)
-* Responsive inference
-* Layout intelligence (35+ patterns)
-* Pattern learner with recipe suggestions
-* Source optimizer (duplicates, specificity, animations)
-* Semantic tokens with theme support
-* Intent API (intent('card'), intent('button-primary'))
-* Constraint solver (constrain('width', '< parent'))
-* SolidJS runtime
-* Scroll-driven animations engine
-* explain() visualization for debug mode
+### New in v2.6:
+* **Automatic Vite plugin** — zero-config setup, auto-detects `.chain.ts` files
+* **Import transform** — `.chain.ts` exports become clean class name strings
+* **HMR** — file changes trigger instant rebuild and browser reload
+* **`chain.dynamic()`** — mixed mode with automatic static/dynamic split
+* **`useChainStyles`** — runtime hook for dynamic CSS injection
+* **Plugin configuration** — `verbose`, `silent`, `pipelineReport`, `disablePipeline`, `atomic`, `breakpoints`, `tokens`, `minify`
+* **CLI mixed mode** — detects `chain.dynamic()` and generates dual exports
+* **Built-in Vue shim** — no Vue dependency errors in React projects
+* **Fixed hover styles** — properly compiled through the 18-pass pipeline
+* **640 tests passing** — zero regressions
 
 ---
 

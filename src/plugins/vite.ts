@@ -16,31 +16,21 @@ const CHAIN_FILE_RE = /\.chain\.(ts|js)x?$/
 
 interface ChainCSSPluginOptions {
   // ── Logging ──────────────────────────────────────────────
-  /** Show per-file compilation details and diagnostics (default: true) */
   verbose?: boolean
-  /** Show the full 18-pass pipeline report table after build */
   pipelineReport?: boolean
-  /** Suppress all output except errors */
   silent?: boolean
 
   // ── Pipeline ─────────────────────────────────────────────
-  /** Disable the 18-pass IR pipeline for faster builds */
   disablePipeline?: boolean
 
   // ── Atomic CSS ───────────────────────────────────────────
-  /** Enable atomic CSS extraction (default: true) */
   atomic?: boolean
 
   // ── Customization ────────────────────────────────────────
-  /** Custom breakpoints for responsive inference */
   breakpoints?: Record<string, string>
-  /** Design token configuration */
   tokens?: ChainCSSConfig['tokens']
-  /** Override minification (default: auto based on mode) */
   minify?: boolean
-  /** Additional glob patterns to scan */
   include?: string[]
-  /** Patterns to exclude */
   exclude?: string[]
 }
 
@@ -49,21 +39,20 @@ interface ChainCSSPluginOptions {
 // ============================================================================
 
 export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plugin {
-  // ── Options ──────────────────────────────────────────────
   const verbose = options.verbose !== false
   const pipelineReport = options.pipelineReport ?? verbose
   const silent = options.silent ?? false
   const disablePipeline = options.disablePipeline ?? false
   const atomic = options.atomic ?? true
 
-  // ── State ────────────────────────────────────────────────
   let compiler: ChainCSSCompiler
   let root: string = ''
   let cssCache = ''
   let totalDiagnostics = 0
   let totalAutoFixes = 0
 
-  // ── Logging Helpers ──────────────────────────────────────
+  // ── Logging ──────────────────────────────────────────────
+
   function log(msg: string) {
     if (!silent && verbose) console.log(`[ChainCSS] ${msg}`)
   }
@@ -93,7 +82,6 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
     const allDiagnostics: any[] = []
 
     for (const [name, compileResult] of Object.entries(result)) {
-      // Collect diagnostics
       if ((compileResult as any)._diagnostics) {
         for (const d of (compileResult as any)._diagnostics) {
           allDiagnostics.push({ ...d, styleName: name })
@@ -104,7 +92,6 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
         let fileCss = compileResult.css
         const className = Object.values(compileResult.classMap)[0]
 
-        // Fix: Replace wrong CSS selector with correct class name
         if (className && fileCss) {
           const firstSelector = fileCss.match(/^\.([a-zA-Z0-9_-]+)/)?.[1]
           if (firstSelector && firstSelector !== className) {
@@ -132,13 +119,11 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
     const warnings = diagnostics.filter(d => d.severity === 'warning')
     const infos = diagnostics.filter(d => d.severity === 'info' || d.severity === 'hint')
 
-    // Errors
     for (const d of errors) {
       console.log(`[ChainCSS]     ❌ ${d.message}`)
       if (d.suggestion) console.log(`[ChainCSS]        ↳ ${d.suggestion}`)
     }
 
-    // Warnings
     for (const d of warnings.slice(0, 3)) {
       console.log(`[ChainCSS]     ⚠️  ${d.message}`)
       if (d.suggestion) console.log(`[ChainCSS]        ↳ ${d.suggestion}`)
@@ -147,7 +132,6 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
       console.log(`[ChainCSS]     ... and ${warnings.length - 3} more warnings`)
     }
 
-    // Info (only in pipelineReport mode)
     if (pipelineReport && infos.length > 0) {
       for (const d of infos.slice(0, 2)) {
         console.log(`[ChainCSS]     ℹ️  ${d.message}`)
@@ -166,11 +150,9 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
     const srcDir = path.join(root, 'src')
     if (!fs.existsSync(srcDir)) return ''
 
-    // Reset counters
     totalDiagnostics = 0
     totalAutoFixes = 0
 
-    // Find .chain files
     const chainFiles: string[] = []
     function walk(dir: string) {
       let entries: fs.Dirent[]
@@ -210,15 +192,29 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
         ensureDir(path.dirname(cssPath))
         fs.writeFileSync(cssPath, formatCSS(css, false), 'utf8')
 
-        // Write .class.js
+        // Write .class.js (only for static chains — mixed handled in transform)
+        const source = fs.readFileSync(file, 'utf8')
+        const hasDynamic = source.includes('chain.dynamic()')
+
         const classPath = file.replace(CHAIN_FILE_RE, '.class.js')
         const classLines: string[] = [
           '/** ChainCSS Generated — DO NOT EDIT */',
           ''
         ]
+
         for (const [name, className] of Object.entries(classMap)) {
           classLines.push(`export const ${name} = '${className}'`)
         }
+
+        if (hasDynamic) {
+          classLines.push('')
+          classLines.push('// Mixed mode: style objects for runtime use')
+          classLines.push('// Import { useChainStyles } from "chaincss/runtime" to resolve dynamic values')
+          for (const name of Object.keys(classMap)) {
+            classLines.push(`export { ${name} as ${name}Styles }`)
+          }
+        }
+
         if (classLines.length > 2) {
           ensureDir(path.dirname(classPath))
           fs.writeFileSync(classPath, classLines.join('\n'), 'utf8')
@@ -228,12 +224,11 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
         if (verbose && !silent) {
           const classCount = Object.keys(classMap).length
           const cssSize = css.length
-          console.log(`[ChainCSS]   ✓ ${fileName} → ${classCount} class${classCount !== 1 ? 'es' : ''}, ${cssSize}B CSS`)
+          const mode = hasDynamic ? 'mixed' : 'static'
+          console.log(`[ChainCSS]   ✓ ${fileName} → ${classCount} class${classCount !== 1 ? 'es' : ''}, ${cssSize}B CSS [${mode}]`)
         }
 
-        // Print diagnostics
         printDiagnostics(diagnostics, fileName)
-
         successCount++
       } catch (err) {
         error(`Failed: ${path.basename(file)} — ${(err as Error).message}`)
@@ -242,25 +237,16 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
 
     const elapsed = Date.now() - startTime
 
-    // Build summary
     if (!silent) {
       const parts: string[] = [
         `Built ${successCount}/${chainFiles.length} files in ${elapsed}ms`
       ]
-      if (!disablePipeline) {
-        parts.push('18 passes')
-      }
-      if (totalDiagnostics > 0) {
-        const errs = totalDiagnostics
-        parts.push(`${errs} diagnostic${errs !== 1 ? 's' : ''}`)
-      }
-      if (totalAutoFixes > 0) {
-        parts.push(`${totalAutoFixes} auto-fix${totalAutoFixes !== 1 ? 'es' : ''}`)
-      }
+      if (!disablePipeline) parts.push('18 passes')
+      if (totalDiagnostics > 0) parts.push(`${totalDiagnostics} diagnostic${totalDiagnostics !== 1 ? 's' : ''}`)
+      if (totalAutoFixes > 0) parts.push(`${totalAutoFixes} auto-fix${totalAutoFixes !== 1 ? 'es' : ''}`)
       summary(parts.join(' • '))
     }
 
-    // Pipeline report
     if (pipelineReport && !disablePipeline && !silent) {
       console.log('')
       console.log(compiler.getPassManager().report())
@@ -276,6 +262,30 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
   return {
     name: 'chaincss',
     enforce: 'pre',
+
+    // Vue shim — prevents runtime errors when Vue is not installed
+    resolveId(id) {
+      if (id === 'vue') return '\0virtual:vue-shim'
+      return null
+    },
+
+    load(id) {
+      if (id === '\0virtual:vue-shim') {
+        return `
+          export const ref = (v) => ({ value: v });
+          export const computed = (fn) => ({ get value() { return fn(); } });
+          export const watch = () => {};
+          export const onMounted = () => {};
+          export const onUnmounted = () => {};
+          export const inject = () => null;
+          export const provide = () => {};
+          export const reactive = (v) => v;
+          export const h = () => null;
+          export default {};
+        `
+      }
+      return null
+    },
 
     configResolved(config) {
       root = config.root
@@ -300,9 +310,7 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
         silent
       })
 
-      if (disablePipeline) {
-        compiler.setPipelineEnabled(false)
-      }
+      if (disablePipeline) compiler.setPipelineEnabled(false)
 
       if (!silent) {
         const features: string[] = []
@@ -314,16 +322,44 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
     },
 
     // ---------------------------------------------------------------
-    // TRANSFORM: Rewrite .chain.ts files to export class name strings
+    // TRANSFORM
     // ---------------------------------------------------------------
     async transform(code, id) {
       if (!CHAIN_FILE_RE.test(id)) return null
 
       try {
         const { classMap } = await compileFile(id)
-
         if (Object.keys(classMap).length === 0) return null
 
+        const hasDynamic = code.includes('chain.dynamic()')
+
+        if (hasDynamic) {
+          // Mixed mode: keep the original exports (style objects with functions)
+          // and append class name constants
+          const suffix = Object.entries(classMap)
+            .map(([name, className]) => `export const ${name}Class = '${className}'`)
+            .join('\n')
+          
+          const classPath = id.replace(CHAIN_FILE_RE, '.class.js')
+          ensureDir(path.dirname(classPath))
+          
+          // Write class.js with class names
+          const classLines = [
+            '/** ChainCSS Generated — DO NOT EDIT */',
+            ''
+          ]
+          for (const [name, className] of Object.entries(classMap)) {
+            classLines.push(`export const ${name}Class = '${className}'`)
+          }
+          fs.writeFileSync(classPath, classLines.join('\n'), 'utf8')
+
+          return {
+            code: code + '\n\n// ChainCSS auto-generated class names\n' + suffix,
+            map: null
+          }
+        }
+
+        // Static mode: replace with class name strings
         const lines: string[] = [
           '// Auto-generated by ChainCSS Vite Plugin',
           '// DO NOT EDIT',
@@ -365,8 +401,7 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
       devServer.watcher.on('change', async (filePath: string) => {
         if (CHAIN_FILE_RE.test(filePath)) {
           log(`Change detected: ${path.basename(filePath)}`)
-
-          const { css } = await compileFile(filePath)
+          await compileFile(filePath)
           cssCache = await compileAllStyles()
 
           const mod = devServer.moduleGraph.getModuleById(filePath)

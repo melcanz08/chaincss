@@ -5,8 +5,9 @@
  * 
  * The unified style collection API. All chain() calls flow through this one class.
  * 
- * Replaces: BuildExecutor, RuntimeExecutor, SmartChainProxy, HybridExecutor,
- *           smart-chain.ts, smart-style-node.ts, base-chain.ts
+ * Supports two modes:
+ *   chain()         — static-only (all values compiled to CSS at build time)
+ *   chain.dynamic() — mixed mode (static → CSS, dynamic functions → runtime)
  */
 
 import { shorthandMap, macros } from '../compiler/shorthands.js';
@@ -78,6 +79,13 @@ export class StyleCollector {
   private debugMode: boolean;
   private debugLog: DebugEntry[] = [];
   
+  /**
+   * Mixed mode flag. When true, this chain supports dynamic function values
+   * that will be resolved at runtime via useChainStyles().
+   * Set via chain.dynamic().
+   */
+  private _mixed: boolean = false;
+  
   // Unitless CSS properties that shouldn't get 'px' suffix
   private static UNITLESS = new Set([
     'zIndex', 'opacity', 'flex', 'flexGrow', 'flexShrink', 'order',
@@ -87,6 +95,27 @@ export class StyleCollector {
   
   constructor(options?: { debug?: boolean }) {
     this.debugMode = options?.debug ?? false;
+  }
+
+  // ==========================================================================
+  // Mixed Mode
+  // ==========================================================================
+
+  /**
+   * Mark this chain as mixed-mode.
+   * Static values → extracted to CSS at build time.
+   * Dynamic functions → resolved at runtime via useChainStyles().
+   */
+  markMixed(): this {
+    this._mixed = true;
+    return this;
+  }
+
+  /**
+   * Check if this chain is in mixed mode.
+   */
+  isMixed(): boolean {
+    return this._mixed;
   }
   
   // ==========================================================================
@@ -256,10 +285,8 @@ export class StyleCollector {
   // ==========================================================================
   
   nest(selector: string, fn: (c: StyleCollector & Record<string, any>) => void): this {
-    // Create a chainable proxy for the child, so callbacks can use .color(), .bg(), etc.
     const childProxy = StyleCollector.createProxy(this.debugMode);
     fn(childProxy);
-    // Extract the built styles from the proxy's underlying collector
     const childResult = (childProxy as any).build 
       ? (childProxy as any).build() 
       : childProxy.$el();
@@ -297,12 +324,10 @@ export class StyleCollector {
     if (condition) {
       const childProxy = StyleCollector.createProxy(this.debugMode);
       fn(childProxy);
-      // Merge the child's styles into this collector
       const childResult = (childProxy as any).build 
         ? (childProxy as any).build() 
         : childProxy.$el();
       
-      // Copy properties from child result to this collector's styles
       for (const [key, value] of Object.entries(childResult)) {
         if (key !== 'selectors' && key !== '_atRules' && key !== '_nestedRules') {
           (this.hoverStyles || this.styles)[key] = value;
@@ -338,6 +363,11 @@ export class StyleCollector {
    */
   build(selectors?: string[] | string): StyleObject & { selectors?: string[] } {
     const result: StyleObject & { selectors?: string[] } = { ...this.styles };
+    
+    // Preserve mixed mode flag on the output
+    if (this._mixed) {
+      (result as any)._mixed = true;
+    }
     
     // Compile transforms
     if (result._transforms) {
@@ -387,6 +417,7 @@ export class StyleCollector {
     this.styles = {};
     this.hoverStyles = null;
     this.debugLog = [];
+    // Note: _mixed is NOT reset — it's set once per chain
   }
   
   // ==========================================================================
@@ -499,8 +530,6 @@ export class StyleCollector {
   static createProxy(debug: boolean = false): StyleCollector & Record<string, any> {
     const collector = new StyleCollector({ debug });
     
-    // Create proxy reference that can be returned from traps
-    // Must be declared BEFORE the proxy so closures can capture it
     let proxy: any;
     
     proxy = new Proxy(collector, {
@@ -508,11 +537,14 @@ export class StyleCollector {
         // Terminal methods — return their result directly
         if (prop === '$el') return (...args: string[]) => target.$el(...args);
         if (prop === 'build') return (...args: any[]) => {
-          // Flatten: if first arg is an array, use it directly; otherwise wrap
           const selectors = args.length === 1 && Array.isArray(args[0]) ? args[0] : args;
           return target.build(selectors);
         };
         if (prop === 'explain') return () => target.explain();
+        
+        // Mixed mode API
+        if (prop === 'isMixed') return () => target.isMixed();
+        if (prop === '_mixed') return target.isMixed();
         
         // Context methods — return the proxy for continued chaining
         if (prop === 'hover') return () => { target.hover(); return proxy; };
@@ -606,7 +638,6 @@ export class StyleCollector {
     
     return proxy;
   }
-
 }
 
 // ============================================================================
@@ -614,35 +645,38 @@ export class StyleCollector {
 // ============================================================================
 
 /**
- * Create a new chainable style collector.
+ * Create a new chainable style collector (static-only mode).
+ * All values are compiled to CSS at build time.
  * 
  * @example
- * // Basic usage
  * const styles = chain()
  *   .bg('red')
  *   .color('white')
  *   .padding(16)
  *   .$el('button')
- * 
- * @example
- * // With hover
- * const styles = chain()
- *   .bg('blue')
- *   .hover()
- *     .bg('darkblue')
- *   .end()
- *   .$el('btn')
- * 
- * @example
- * // Debug mode
- * const debugChain = chain({ debug: true })
- *   .bg('red')
- *   .color(() => props.color)
- * 
- * console.log(debugChain.explain().visualization)
  */
 export function chain(options?: { debug?: boolean }): StyleCollector & Record<string, any> {
   return StyleCollector.createProxy(options?.debug ?? false);
 }
+
+/**
+ * Create a mixed-mode chain. Static values go to CSS, dynamic functions
+ * stay in JS and are resolved at runtime via useChainStyles().
+ * 
+ * @example
+ * const styles = chain.dynamic()
+ *   .bg('#6366f1')                           // static → CSS
+ *   .opacity(() => isActive ? 1 : 0.5)        // dynamic → runtime
+ *   .$el('btn')
+ * 
+ * // In your component:
+ * // import { useChainStyles } from 'chaincss/runtime'
+ * // const classes = useChainStyles({ btn: styles }, [isActive])
+ */
+chain.dynamic = function(options?: { debug?: boolean }): StyleCollector & Record<string, any> {
+  const proxy = StyleCollector.createProxy(options?.debug ?? false);
+  (proxy as any).markMixed();
+  return proxy;
+};
 
 export default chain;

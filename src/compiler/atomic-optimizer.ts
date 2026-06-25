@@ -498,7 +498,7 @@ export class AtomicOptimizer {
   } {
     const atomicClasses: string[] = [];
     let standardRules = '';
-    const selectorStr = selectors.join(', ');
+    const selectorStr = Array.isArray(selectors) ? selectors.join(', ') : String(selectors);
 
     // Process regular style properties
     for (const [prop, value] of Object.entries(style)) {

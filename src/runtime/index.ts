@@ -1,11 +1,4 @@
-// chaincss/src/runtime/index.ts
-
-/**
- * ChainCSS Runtime Module
- * 
- * WARNING: Importing from this module adds ~3.2KB to your bundle.
- * For production, use build-time compilation with chaincss/plugin/vite instead.
- */
+// src/runtime/index.ts — fixed Vue stubs
 
 // Core runtime
 export { compileRuntime as compile, runRuntime as run, styleInjector } from './injector.js';
@@ -27,15 +20,28 @@ export {
   useComputedStyles
 } from './react.js';
 
-// Vue composables — lazy stubs (only load vue.js when called)
-const _lazyVue = () => import('./vue.js');
-export const useAtomicClassesVue = (...args: any[]) => _lazyVue().then((m: any) => m.useAtomicClasses(...args as any[]));
-export const ChainCSSGlobalVue = (props: any) => { _lazyVue(); return null; };
-export const createStyledVueComponent = (...args: any[]) => (...a: any[]) => { _lazyVue(); return null; };
-export const createStyledVueComponents = (...args: any[]) => { _lazyVue(); return {}; };
-export const useComputedStylesVue = (...args: any[]) => { _lazyVue(); return {}; };
-export const provideStyleContext = (...args: any[]) => { _lazyVue(); };
-export const injectStyleContext = (...args: any[]) => { _lazyVue(); return {}; };
+// Vue composables — fully inert stubs (never load vue unless Vue is detected)
+const _hasVue = () => {
+  try {
+    return typeof window !== 'undefined' && !!(window as any).__VUE__;
+  } catch { return false; }
+};
+
+const _vueStub: any = {};
+const _loadVue = async () => {
+  if (!_hasVue()) return _vueStub;
+  try {
+    return await import('./vue.js');
+  } catch { return _vueStub; }
+};
+
+export const useAtomicClassesVue = (...args: any[]) => _loadVue().then((m: any) => (m.useAtomicClasses || (() => ({})))(...args));
+export const ChainCSSGlobalVue = (...args: any[]) => {};
+export const createStyledVueComponent = (...args: any[]) => () => null;
+export const createStyledVueComponents = (...args: any[]) => ({});
+export const useComputedStylesVue = (...args: any[]) => ({});
+export const provideStyleContext = (...args: any[]) => {};
+export const injectStyleContext = (...args: any[]) => ({});
 
 // Svelte — loaded lazily
 let _svelteExports: any = null;
@@ -89,6 +95,7 @@ export type {
   HMRPayload,
   ChainCSSDebugger
 } from './types.js';
+
 // Auto-inject styles into DOM
 export function injectChainStyles(styles: Record<string, any>) {
   let css = '';
@@ -121,7 +128,6 @@ export function injectChainStyles(styles: Record<string, any>) {
   el.textContent = css;
   document.head.appendChild(el);
   
-  // Show split stats in console
   console.log('⛓️ ChainCSS — ' + Object.keys(styles).length + ' styles injected | CSS: ' + css.length + ' bytes | smartChain auto-detect active');
   
   return el;

@@ -65,8 +65,7 @@ export function compileToCSS(
   } = styleObject as any;
   
   // Use explicit selectors if provided, otherwise use scopeSelector
-  const effectiveSelector = selectors?.join(', ') || scope;
-  
+  const effectiveSelector = Array.isArray(selectors) ? selectors.join(', ') : (typeof selectors === 'string' ? selectors : scope);
   // Separate pseudo-classes (&:hover, &:focus) from regular properties
   const pseudoClasses: Record<string, Record<string, any>> = {};
   const regularProps: Record<string, any> = {};

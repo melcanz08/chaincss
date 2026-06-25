@@ -302,7 +302,7 @@ export class ChainCSSCompiler {
       const styleObject = this.styleDefToObject(styleDef, styleId);
       
       finalCSS = compileToCSS(styleObject, {
-        scopeSelector: selectors.join(', ') || `.${styleId}`,
+        scopeSelector: Array.isArray(selectors) ? selectors.join(', ') : `.${styleId}`,
         minify: this.config.output.minify,
         sourceMap: this.config.sourceComments,
         sourceFile: styleId
@@ -620,6 +620,11 @@ export class ChainCSSCompiler {
  */\n\n`;
         let cssBuffer = '';
 
+        // Read source to detect mixed mode (chain.dynamic())
+        let sourceCode = '';
+        try { sourceCode = fs.readFileSync(file, 'utf8'); } catch {}
+        const hasDynamic = sourceCode.includes('chain.dynamic()');
+
         try {
           const rawExports = await this.importModule(file);
           const styles = rawExports.default || rawExports;
@@ -630,7 +635,11 @@ export class ChainCSSCompiler {
               const className = Object.values(result.classMap)[0];
               
               if (className) {
-                jsBuffer += `export const ${name} = '${className}';\n`;
+                if (hasDynamic) {
+                  jsBuffer += `export const ${name}Class = '${className}';\n`;
+                } else {
+                  jsBuffer += `export const ${name} = '${className}';\n`;
+                }
                 
                 if (result.atomicClasses && result.atomicClasses.length > 0 && this.atomicOptimizer) {
                   const allEntries = this.atomicOptimizer.getAllAtomicClasses?.() || [];

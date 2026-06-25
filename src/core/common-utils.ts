@@ -178,8 +178,8 @@ export function extractCSS(styleDef: Record<string, any>): string {
   }
   
   if (!css) return '';
-  
-  return `${selectors.join(', ')} { ${css} }`;
+  const safeSelectors = Array.isArray(selectors) ? selectors : [selectors];
+  return `${safeSelectors.join(', ')} { ${css} }`;
 }
 
 /**
@@ -198,8 +198,8 @@ export function extractHoverCSS(styleDef: Record<string, any>): string {
   }
   
   if (!hoverCSS) return '';
-  
-  return `${selectors.join(', ')}:hover { ${hoverCSS} }`;
+  const safeSelectors = Array.isArray(selectors) ? selectors : [selectors];
+  return `${safeSelectors.join(', ')}:hover { ${hoverCSS} }`;
 }
 
 // ============================================================================

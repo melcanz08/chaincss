@@ -240,7 +240,8 @@ export function parseIR(
       }
 
       // Parse hover pseudo-class
-      if (styleDef.hover && typeof styleDef.hover === 'object') {
+            const hoverStyles = styleDef.hover || styleDef['&:hover'];
+      if (hoverStyles && typeof hoverStyles === 'object') {
         const pc: IRPseudoClass = {
           id: nextId('hover'),
           name: 'hover',
@@ -248,7 +249,7 @@ export function parseIR(
           source: rule.source,
           history: [record('parser', 'created', undefined, 'Parsed hover block')],
         };
-        for (const [prop, value] of Object.entries(styleDef.hover)) {
+        for (const [prop, value] of Object.entries(hoverStyles)) {
           if (typeof value === 'string' || typeof value === 'number') {
             pc.declarations.push(createDeclaration(prop, value, rule.source));
           }
