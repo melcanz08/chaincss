@@ -64,7 +64,7 @@ const compiler = new ChainCSSCompiler({ experimental: { enablePipeline: false } 
 
 ---
 
-## Auto-Detection: Static vs Dynamic
+## Auto-Detection: Static vs Dynamic (--under maintenanace for future implementation--)
 
 ChainCSS automatically detects what can be compiled at build time and what needs runtime resolution. You never specify which is which.
 
@@ -544,21 +544,6 @@ import { useAtomicClasses } from 'chaincss/runtime'
 ```
 *React, Vue, Svelte, and SolidJS are optional peer dependencies.*
 
-### Class Names
-
-```tsx
-// Option 1: Extract manually
-<button className={btn.selectors[0].replace('.', '')}>Click</button>
-
-// Option 2: Helper function
-const cls = (c: any) => c.selectors?.[0]?.replace('.', '') || '';
-<button className={cls(btn)}>Click</button>
-
-// Option 3: Wrapper file (styles.ts)
-import * as S from './styles.chain';
-export const btn = S.btn.selectors[0].replace('.', '');
-```
-
 ---
 
 ## API Reference
@@ -590,18 +575,6 @@ export const btn = S.btn.selectors[0].replace('.', '');
 | 'theme.primary' (token ref) | dynamic | Resolved at runtime |
 
 ---
-
-## Migration from v2.3 / v2.4
-
-| Old API | New API |
-| :--- | :--- |
-| createChain() | chain() |
-| smartChain() | chain() |
-| buildChain() | chain() — static values auto-detected |
-| runtimeChain() | chain() — dynamic values auto-detected |
-| btt.compile() | compileToCSS() |
-| btt.run() | compileToCSS() |
-| enableDebug() | chain({ debug: true }) |
 
 ### New in v2.6:
 * **Automatic Vite plugin** — zero-config setup, auto-detects `.chain.ts` files
