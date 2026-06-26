@@ -52,6 +52,7 @@ export function createRule(
     atRules: [],
     nestedRules: [],
     conditions: [],
+    _dirty: true,
     isDead: false,
     specificity: 0,
     hash: '',
@@ -72,6 +73,8 @@ export function createIR(sourceFiles: string[] = []): StyleIR {
       sourceFiles,
       passCount: 0,
       passes: [],
+      dirtyRules: 0,
+      compiledAt: Date.now(),
     },
   };
 }

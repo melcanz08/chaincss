@@ -129,14 +129,22 @@ export class Pipeline {
     return true;
   }
 
-  /** Internal sync implementation with conditional execution. */
+  /** Internal sync implementation with conditional execution and incremental support. */
   private runSync(ir: StyleIR): PipelineResult {
     const startTime = Date.now();
     const timeline: PipelineStageResult[] = [];
     let current = ir;
     let skipped = 0;
+    let incrementalSkipped = 0;
 
     const features = this.detectFeatures(ir);
+    
+    // Incremental: count dirty rules and track whether this is a full or partial build
+    const dirtyCount = ir.rules.filter(r => r._dirty).length;
+    const totalRules = ir.rules.length;
+    const isIncremental = dirtyCount > 0 && dirtyCount < totalRules;
+    ir.meta.dirtyRules = dirtyCount;
+    ir.meta.compiledAt = Date.now();
 
     // Stage 1: Normalize
     for (const pass of this.normalization) {
@@ -197,7 +205,7 @@ export class Pipeline {
       });
     }
 
-    return { ir: current, timeline, totalDuration: Date.now() - startTime, finalCSS };
+    return { ir: current, timeline, totalDuration: Date.now() - startTime, finalCSS, incremental: { dirtyCount, totalRules, incrementalSkipped } };
   }
 
   /**

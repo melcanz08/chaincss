@@ -34,6 +34,8 @@ export interface IRRule {
   nestedRules: IRRule[];
   /** Conditional if() expressions */
   conditions: IRCondition[];
+  /** Incremental: dirty flag for selective recompilation */
+  _dirty: boolean;
   /** Dead code flag — set by optimizer passes */
   isDead: boolean;
   /** Specificity — set by graph pass */
@@ -96,6 +98,10 @@ export interface StyleIR {
     sourceFiles: string[];
     passCount: number;
     passes: string[];
+    /** Incremental: rules changed since last compilation */
+    dirtyRules: number;
+    /** Incremental: timestamp of this compilation */
+    compiledAt: number;
   };
 }
 
@@ -107,4 +113,16 @@ export interface IRDiagnostic {
   message: string;
   suggestion?: string;
   pass: string;
+}
+
+// ============================================================================
+// Incremental Compilation Support (v2.9+)
+// ============================================================================
+
+/** Tracks whether a node has been modified since last compilation */
+export interface IRDirtyFlag {
+  /** Node has been added or modified since last run */
+  dirty: boolean;
+  /** Timestamp of last modification */
+  changedAt: number;
 }

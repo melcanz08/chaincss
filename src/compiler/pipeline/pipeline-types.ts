@@ -154,6 +154,11 @@ export interface PipelineResult {
   timeline: PipelineStageResult[];
   totalDuration: number;
   finalCSS?: string;
+  incremental?: {
+    dirtyCount: number;
+    totalRules: number;
+    incrementalSkipped: number;
+  };
 }
 
 export interface PipelineConfig {
