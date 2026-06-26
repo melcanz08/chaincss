@@ -173,7 +173,7 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
     walk(srcDir)
 
     if (!silent) {
-      const mode = disablePipeline ? 'direct' : useNewPipeline ? '5-stage pipeline (v2.7+)' : '18-pass pipeline'
+      const mode = disablePipeline ? 'direct' : '3-stage pipeline (v2.8+)'
       summary(`Building ${chainFiles.length} file(s) with ${mode}...`)
     }
 
@@ -243,7 +243,7 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
       const parts: string[] = [
         `Built ${successCount}/${chainFiles.length} files in ${elapsed}ms`
       ]
-      if (!disablePipeline) parts.push('18 passes')
+      if (!disablePipeline) parts.push('6 passes')
       if (totalDiagnostics > 0) parts.push(`${totalDiagnostics} diagnostic${totalDiagnostics !== 1 ? 's' : ''}`)
       if (totalAutoFixes > 0) parts.push(`${totalAutoFixes} auto-fix${totalAutoFixes !== 1 ? 'es' : ''}`)
       summary(parts.join(' • '))
@@ -322,7 +322,7 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
         const features: string[] = []
         if (useNewPipeline) features.push('5-stage pipeline')
         else 
-        if (!disablePipeline) features.push('18-pass pipeline')
+        if (!disablePipeline) features.push('3-stage pipeline')
         if (atomic) features.push('atomic CSS')
         if (options.tokens) features.push('design tokens')
         summary(`Initialized (${features.join(', ') || 'basic compilation'})`)
@@ -421,6 +421,8 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
     },
 
     transformIndexHtml() {
+      // Only inject virtual CSS in dev mode. In production, Vite bundles CSS automatically.
+      if (process.env.NODE_ENV === 'production') return []
       return [{
         tag: 'link',
         attrs: {
