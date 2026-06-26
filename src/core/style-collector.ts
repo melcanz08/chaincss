@@ -10,8 +10,8 @@
  *   chain.dynamic() — mixed mode (static → CSS, dynamic functions → runtime)
  */
 
-import { shorthandMap, macros } from '../compiler/shorthands.js';
-import { resolveToken } from '../compiler/token-resolver.js';
+import { shorthandMap, macros } from '../compiler/utils/shorthands.js';
+import { resolveToken } from '../compiler/tokens/token-resolver.js';
 import { classifyValue, type ValueClass } from './value-classifier.js';
 
 // ============================================================================

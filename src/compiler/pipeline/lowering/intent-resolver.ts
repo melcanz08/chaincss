@@ -1,40 +1,22 @@
-// src/compiler/intent-api.ts
-/**
- * Intent-Based API
- * 
- * The highest-level API — developers declare WHAT they want,
- * the compiler resolves HOW using all available modules.
- * 
- * @example
- *   chain.intent('card')          // → full card component
- *   chain.intent('center-content') // → flex/grid centering
- *   chain.intent('button-primary') // → accessible blue button
- */
+// src/compiler/generators/intent-resolver.ts
 
-import type { StyleIR, IRRule, IRPass } from './style-ir.js';
-import { createDeclaration, createRule } from './style-ir.js';
-import { resolveSemantic } from './semantic-tokens.js';
+import type { StyleIR, IRRule } from '../../style-ir.js';
+import type { LoweringPass, LoweringResult, LoweringContext } from '../pipeline-types.js';
+import { createDeclaration } from '../../style-ir.js';
+import { resolveSemantic } from '../../legacy/semantic-tokens.js';
 
 // ============================================================================
-// Intent Catalog
+// Intent Catalog (unchanged - this is the knowledge base)
 // ============================================================================
 
 interface IntentDefinition {
-  /** Human-readable name */
   name: string;
-  /** Category for organization */
   category: 'layout' | 'component' | 'semantic' | 'interaction';
-  /** Description */
   description: string;
-  /** Semantic tokens to apply */
   semantics?: Array<{ category: string; intent: string }>;
-  /** Direct properties (for simple intents) */
   properties?: Record<string, string | number>;
-  /** Pseudo-classes */
   states?: Record<string, Record<string, string | number>>;
-  /** Responsive overrides */
   responsive?: Record<string, Record<string, string | number>>;
-  /** Accessibility requirements */
   a11y?: string[];
 }
 
@@ -325,26 +307,18 @@ const INTENT_CATALOG: Record<string, IntentDefinition> = {
 };
 
 // ============================================================================
-// Resolver
+// Intent Resolver (pure function - no IR mutation)
 // ============================================================================
 
-/**
- * Resolve an intent into all its constituent parts.
- * Calls semantic tokens, properties, states, responsive overrides.
- */
-export function resolveIntent(
-  intentName: string,
-  options?: {
-    theme?: 'light' | 'dark' | 'high-contrast';
-    viewport?: string;
-  }
-): {
+interface ResolvedIntent {
   properties: Record<string, string | number>;
   states: Record<string, Record<string, string | number>>;
   responsive: Record<string, Record<string, string | number>>;
   a11y: string[];
   description: string;
-} | null {
+}
+
+function resolveIntent(intentName: string, theme?: 'light' | 'dark' | 'high-contrast'): ResolvedIntent | null {
   const intent = INTENT_CATALOG[intentName];
   if (!intent) return null;
 
@@ -352,11 +326,11 @@ export function resolveIntent(
   const states: Record<string, Record<string, string | number>> = {};
   const responsive: Record<string, Record<string, string | number>> = {};
 
-  // 1. Resolve semantic tokens
+  // Resolve semantic tokens
   if (intent.semantics) {
     for (const sem of intent.semantics) {
       const resolved = resolveSemantic(sem.category as any, sem.intent, {
-        mode: options?.theme || 'light',
+        mode: theme || 'light',
       });
       if (resolved) {
         for (const [prop, value] of Object.entries(resolved.properties)) {
@@ -371,12 +345,10 @@ export function resolveIntent(
     }
   }
 
-  // 2. Apply direct properties
-  if (intent.properties) {
-    Object.assign(properties, intent.properties);
-  }
-
-  // 3. Apply states
+  // Apply direct properties
+  if (intent.properties) Object.assign(properties, intent.properties);
+  
+  // Apply states
   if (intent.states) {
     for (const [state, props] of Object.entries(intent.states)) {
       if (!states[state]) states[state] = {};
@@ -384,10 +356,8 @@ export function resolveIntent(
     }
   }
 
-  // 4. Apply responsive overrides
-  if (intent.responsive) {
-    Object.assign(responsive, intent.responsive);
-  }
+  // Apply responsive overrides
+  if (intent.responsive) Object.assign(responsive, intent.responsive);
 
   return {
     properties,
@@ -398,108 +368,82 @@ export function resolveIntent(
   };
 }
 
-/**
- * Get all available intents.
- */
-export function getAvailableIntents(): string[] {
-  return Object.keys(INTENT_CATALOG);
-}
-
-/**
- * Get intents by category.
- */
-export function getIntentsByCategory(category: IntentDefinition['category']): string[] {
-  return Object.entries(INTENT_CATALOG)
-    .filter(([, def]) => def.category === category)
-    .map(([name]) => name);
-}
-
-/**
- * Get a description of an intent.
- */
-export function getIntentDescription(intentName: string): string | null {
-  return INTENT_CATALOG[intentName]?.description || null;
-}
-
 // ============================================================================
-// IR Pass
+// Generation Pass
 // ============================================================================
 
-/**
- * Intent API IR pass.
- * Resolves _intent metadata on rules into full component definitions.
- */
-export const intentAPIPass: IRPass = (ir: StyleIR): StyleIR => {
-  for (const rule of ir.rules) {
-    const intentName: string = rule.meta._intent;
-    if (!intentName) continue;
+export const intentResolver: LoweringPass = {
+  name: 'intent-resolver',
+  
+  generate(ir: StyleIR, context: LoweringContext): LoweringResult {
+    let generatedNodes = 0;
 
-    const resolved = resolveIntent(intentName);
-    if (!resolved) continue;
+    for (const rule of ir.rules) {
+      const intentName: string = rule.meta._intent;
+      if (!intentName) continue;
 
-    // Apply properties
-    for (const [prop, value] of Object.entries(resolved.properties)) {
-      rule.declarations.push({
-        id: 'intent-prop-' + Date.now() + '-' + prop,
-        property: prop,
-        value,
-        history: [{
-          pass: 'intent-api',
-          action: 'resolved-intent',
+      const resolved = resolveIntent(intentName);
+      if (!resolved) continue;
+
+      // Lower properties to declarations using factory
+      for (const [prop, value] of Object.entries(resolved.properties)) {
+        rule.declarations.push(
+          createDeclaration(prop, value, rule.source, { 
+            intent: intentName,
+            category: 'lowered-intent',
+          })
+        );
+        // Add history entry
+        const decl = rule.declarations[rule.declarations.length - 1];
+        decl.history.push({
+          pass: 'intent-resolver',
+          action: 'lowered-intent',
           timestamp: Date.now(),
-          reason: 'intent("' + intentName + '") → ' + prop + ': ' + value,
-        }],
-        meta: { intent: intentName },
-      });
-    }
+          reason: `intent("${intentName}") → ${prop}: ${value}`,
+        });
+        generatedNodes++;
+      }
 
-    // Apply states as pseudo-classes
-    for (const [stateName, stateProps] of Object.entries(resolved.states)) {
-      rule.pseudoClasses.push({
-        id: 'intent-state-' + Date.now() + '-' + stateName,
-        name: stateName,
-        declarations: Object.entries(stateProps).map(([prop, value]) => ({
-          id: 'intent-decl-' + prop,
-          property: prop,
-          value,
+      // Lower states to pseudo-classes
+      for (const [stateName, stateProps] of Object.entries(resolved.states)) {
+        rule.pseudoClasses.push({
+          id: `intent-state-${rule.id}-${stateName}`,
+          name: stateName,
+          declarations: Object.entries(stateProps).map(([prop, value]) => {
+            const decl = createDeclaration(prop, value, rule.source, { intent: intentName });
+            decl.history.push({
+              pass: 'intent-resolver',
+              action: 'lowered-state',
+              timestamp: Date.now(),
+              reason: `intent("${intentName}") state:${stateName}`,
+            });
+            generatedNodes++;
+            return decl;
+          }),
+          source: rule.source,
           history: [{
-            pass: 'intent-api',
-            action: 'resolved-state',
+            pass: 'intent-resolver',
+            action: 'created-pseudo-class',
             timestamp: Date.now(),
-            reason: 'intent("' + intentName + '") state:' + stateName,
+            reason: `Lowered intent state: ${stateName}`,
           }],
-          meta: {},
-        })),
-        source: rule.source,
-        history: [],
-      });
+        });
+      }
+
+      // Store responsive info for responsive-analyzer (metadata, not mutation)
+      if (Object.keys(resolved.responsive).length > 0) {
+        rule.meta._responsiveIntents = resolved.responsive;
+      }
+
+      // Store a11y requirements for accessibility-optimizer
+      if (resolved.a11y.length > 0) {
+        rule.meta._a11yRequirements = resolved.a11y;
+      }
     }
 
-    // Store responsive info for responsive-inference pass
-    if (Object.keys(resolved.responsive).length > 0) {
-      rule.meta._responsiveIntents = resolved.responsive;
-    }
-
-    // Store a11y requirements for accessibility pass
-    if (resolved.a11y.length > 0) {
-      rule.meta._a11yRequirements = resolved.a11y;
-    }
-  }
-
-  return ir;
+    return {
+      ir,
+      generatedNodes,
+    };
+  },
 };
-
-// ============================================================================
-// Quick API
-// ============================================================================
-
-export const intentAPI = {
-  resolve: resolveIntent,
-  list: getAvailableIntents,
-  byCategory: getIntentsByCategory,
-  description: getIntentDescription,
-  catalog: INTENT_CATALOG,
-  pass: intentAPIPass,
-};
-
-export default intentAPI;

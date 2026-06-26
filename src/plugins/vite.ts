@@ -22,6 +22,7 @@ interface ChainCSSPluginOptions {
 
   // ── Pipeline ─────────────────────────────────────────────
   disablePipeline?: boolean
+  useNewPipeline?: boolean  // Use new 5-stage Pipeline (v2.7+)
 
   // ── Atomic CSS ───────────────────────────────────────────
   atomic?: boolean
@@ -43,6 +44,7 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
   const pipelineReport = options.pipelineReport ?? verbose
   const silent = options.silent ?? false
   const disablePipeline = options.disablePipeline ?? false
+  const useNewPipeline = options.useNewPipeline ?? false
   const atomic = options.atomic ?? true
 
   let compiler: ChainCSSCompiler
@@ -171,7 +173,7 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
     walk(srcDir)
 
     if (!silent) {
-      const mode = disablePipeline ? 'direct' : '18-pass pipeline'
+      const mode = disablePipeline ? 'direct' : useNewPipeline ? '5-stage pipeline (v2.7+)' : '18-pass pipeline'
       summary(`Building ${chainFiles.length} file(s) with ${mode}...`)
     }
 
@@ -249,7 +251,11 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
 
     if (pipelineReport && !disablePipeline && !silent) {
       console.log('')
-      console.log(compiler.getPassManager().report())
+      if (compiler.isUsingNewPipeline()) {
+        console.log(compiler.getPipeline().report([]))  
+      } else {
+        console.log(compiler.getPassManager().report())
+      }
     }
 
     return allCSS
@@ -314,6 +320,8 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
 
       if (!silent) {
         const features: string[] = []
+        if (useNewPipeline) features.push('5-stage pipeline')
+        else 
         if (!disablePipeline) features.push('18-pass pipeline')
         if (atomic) features.push('atomic CSS')
         if (options.tokens) features.push('design tokens')

@@ -1,3 +1,8 @@
+/**
+ * @deprecated Use pipeline/optimizers/source-optimizer.ts instead.
+ * This file will be removed in v3.0.
+ */
+
 // src/compiler/source-optimizer.ts
 /**
  * Source-Aware Optimization Engine
@@ -12,7 +17,7 @@
  *   - Unused variants and recipes
  */
 
-import type { StyleIR, IRRule, IRPass } from './style-ir.js';
+import type { StyleIR, IRRule, IRPass } from '../style-ir.js';
 
 // ============================================================================
 // Types

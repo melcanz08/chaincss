@@ -1,3 +1,8 @@
+/**
+ * @deprecated Use pipeline/analyzers/layout-analyzer.ts instead.
+ * This file will be removed in v3.0.
+ */
+
 // src/compiler/layout-intelligence.ts
 /**
  * Layout Intelligence Engine
@@ -9,7 +14,7 @@
  *   4. SUGGEST: Diagnostic when verbose CSS could be a macro
  */
 
-import type { StyleIR, IRRule, IRDeclaration, IRPass } from './style-ir.js';
+import type { StyleIR, IRRule, IRDeclaration, IRPass } from '../style-ir.js';
 
 // ============================================================================
 // Types

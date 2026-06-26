@@ -1,3 +1,9 @@
+/**
+ * @deprecated Use pipeline/lowering/token-resolver.ts instead.
+ * The resolveSemantic function is still used by the new pipeline.
+ * This file will be removed in v3.0.
+ */
+
 // src/compiler/semantic-tokens.ts
 /**
  * Semantic Token System
@@ -13,8 +19,8 @@
  *   chain.spacing('comfortable')  // → maps to padding
  */
 
-import type { StyleIR, IRRule, IRPass } from './style-ir.js';
-import { createDeclaration } from './style-ir.js';
+import type { StyleIR, IRRule, IRPass } from '../style-ir.js';
+import { createDeclaration } from '../style-ir.js';
 
 // ============================================================================
 // Types

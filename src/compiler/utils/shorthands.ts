@@ -1,6 +1,6 @@
 // chaincss/src/compiler/shorthands.ts
 
-import { chain } from '../core/style-collector.js';
+import { chain } from '../../core/style-collector.js';
 
 /**
  * 1. THE DICTIONARY (Simple 1-to-1 Swaps)

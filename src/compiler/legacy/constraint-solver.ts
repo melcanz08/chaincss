@@ -1,3 +1,8 @@
+/**
+ * @deprecated Use pipeline/lowering/constraint-resolver.ts instead.
+ * This file will be removed in v3.0.
+ */
+
 // src/compiler/constraint-solver.ts
 /**
  * Constraint-Based Styling Engine
@@ -11,8 +16,8 @@
  *   .constrain('columns', '>= 3 when > 768px')
  */
 
-import type { StyleIR, IRRule, IRDeclaration, IRPass } from './style-ir.js';
-import { createDeclaration } from './style-ir.js';
+import type { StyleIR, IRRule, IRDeclaration, IRPass } from '../style-ir.js';
+import { createDeclaration } from '../style-ir.js';
 
 // ============================================================================
 // Types

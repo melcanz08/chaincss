@@ -1,3 +1,10 @@
+/**
+ * @deprecated This file is being replaced by the new Pipeline architecture.
+ * For validation: use pipeline/validators/accessibility-validator.ts
+ * For optimization: use pipeline/optimizers/accessibility-optimizer.ts
+ * This file will be removed in v3.0.
+ */
+
 // src/compiler/accessibility-engine.ts
 
 /**
@@ -15,8 +22,8 @@
  *   - Hover-only interactions
  */
 
-import type { StyleIR, IRRule, IRDeclaration, IRPass } from './style-ir.js';
-import { contrastRatio } from './design-orchestrator.js';
+import type { StyleIR, IRRule, IRDeclaration, IRPass } from '../style-ir.js';
+import { contrastRatio } from '../tokens/design-orchestrator.js';
 
 // ============================================================================
 // Types

@@ -32,16 +32,20 @@ import { compileToCSS, partitionForBuild } from './style-compiler.js';
 import type { StyleObject } from './style-collector.js';
 
 // Compiler passes
-import { AtomicOptimizer } from '../compiler/atomic-optimizer.js';
-import type { AtomicClass } from '../compiler/atomic-optimizer.js';
+import { AtomicOptimizer } from '../compiler/legacy/atomic-optimizer.js';
+import type { AtomicClass } from '../compiler/legacy/atomic-optimizer.js';
 import { ChainCSSPrefixer } from '../compiler/prefixer.js';
-import { CacheManager } from '../compiler/cache-manager.js';
-import { PersistentCache } from '../compiler/content-addressable-cache.js';
+import { CacheManager } from '../compiler/cache/cache-manager.js';
+import { PersistentCache } from '../compiler/cache/content-addressable-cache.js';
 import { StyleGraphCompiler } from '../compiler/style-graph.js';
 import type { GraphCompileOptions } from '../compiler/style-graph.js';
 
 // Legacy — kept for backward compatibility
 import { scanFileForStyles } from '../compiler/scanner.js';
+
+// New 5-stage Pipeline (v2.7+)
+import { Pipeline, createDefaultPipeline } from '../compiler/pipeline/index.js';
+import type { PipelineResult } from '../compiler/pipeline/index.js';
 import { setBreakpoints } from '../compiler/breakpoints.js';
 
 // IR Pipeline — runs all 18 optimization passes
@@ -77,6 +81,8 @@ export class ChainCSSCompiler {
 
   // IR Pipeline — runs all 18 passes
   private passManager: PassManager;
+  private pipeline: Pipeline;
+  private useNewPipeline: boolean;
   private pipelineEnabled: boolean;
 
   // Caching
@@ -112,6 +118,8 @@ export class ChainCSSCompiler {
     // Initialize the IR pass pipeline (enabled by default)
     this.pipelineEnabled = (config as any).experimental?.enablePipeline !== false;
     this.passManager = new PassManager(DEFAULT_PIPELINE);
+    this.pipeline = createDefaultPipeline();
+    this.useNewPipeline = (config as any).experimental?.useNewPipeline === true;
   }
 
   // ==========================================================================
@@ -195,8 +203,9 @@ export class ChainCSSCompiler {
       { sourceFile: styleId }
     );
 
-    // Phase 3: Run the full 18-pass pipeline
-    const pipelineResult = this.passManager.run(ir);
+    const pipelineResult = this.useNewPipeline
+      ? this.pipeline.executeSync(ir)
+      : this.passManager.run(ir);
 
     // Phase 4: Generate CSS from optimized IR
     let finalCSS = generateCSS(pipelineResult.ir, {
@@ -233,7 +242,7 @@ export class ChainCSSCompiler {
 
     // Attach pipeline diagnostics if verbose
     if (this.config.verbose) {
-      (result as any)._pipelineReport = pipelineResult.summary;
+      (result as any)._pipelineReport = (pipelineResult as any).summary || '';
       (result as any)._diagnostics = pipelineResult.ir.diagnostics || [];
     }
 
@@ -400,6 +409,28 @@ export class ChainCSSCompiler {
   /**
    * Get the pass manager for direct pipeline control.
    */
+  /**
+   * Switch to the new 5-stage Pipeline (v2.7+).
+   */
+  public setUseNewPipeline(useNew: boolean): this {
+    this.useNewPipeline = useNew;
+    return this;
+  }
+
+  /**
+   * Get the new Pipeline instance.
+   */
+  public getPipeline(): Pipeline {
+    return this.pipeline;
+  }
+
+  /**
+   * Check which pipeline is active.
+   */
+  public isUsingNewPipeline(): boolean {
+    return this.useNewPipeline;
+  }
+
   public getPassManager(): PassManager {
     return this.passManager;
   }

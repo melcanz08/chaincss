@@ -51,14 +51,14 @@ export {
   isShorthand,
   expandShorthand,
   getAvailableShorthands
-} from './compiler/shorthands.js';
+} from './compiler/utils/shorthands.js';
 
 // ============================================================================
 // Design Tokens
 // ============================================================================
 
-export { DesignTokens, createTokens } from './compiler/tokens.js';
-export type { TokensStructure } from './compiler/tokens.js';
+export { DesignTokens, createTokens } from './compiler/tokens/tokens.js';
+export type { TokensStructure } from './compiler/tokens/tokens.js';
 
 // ============================================================================
 // Theme Contracts
@@ -69,19 +69,19 @@ export {
   validateTheme,
   createTheme,
   Theme
-} from './compiler/theme-contract.js';
-export type { ThemeContract, ThemeTokens } from './compiler/theme-contract.js';
+} from './compiler/tokens/theme-contract.js';
+export type { ThemeContract, ThemeTokens } from './compiler/tokens/theme-contract.js';
 
 // ============================================================================
 // Atomic Optimizer
 // ============================================================================
 
-export { AtomicOptimizer } from './compiler/atomic-optimizer.js';
+export { AtomicOptimizer } from './compiler/legacy/atomic-optimizer.js';
 export type {
   AtomicClass,
   AtomicOptimizerOptions,
   AtomicOptimizerStats
-} from './compiler/atomic-optimizer.js';
+} from './compiler/legacy/atomic-optimizer.js';
 
 // ============================================================================
 // CSS Prefixer
@@ -183,8 +183,8 @@ export type {
 // Cache Management
 // ============================================================================
 
-export { CacheManager } from './compiler/cache-manager.js';
-export { PersistentCache } from './compiler/content-addressable-cache.js';
+export { CacheManager } from './compiler/cache/cache-manager.js';
+export { PersistentCache } from './compiler/cache/content-addressable-cache.js';
 
 // ============================================================================
 // Design Orchestrator
@@ -199,8 +199,8 @@ export {
   resolveContextual,
   generateContextualCSS,
   validateTokenRelationships,
-} from './compiler/design-orchestrator.js';
-export type { ContrastResult, ContrastReport, ContextualToken, TokenContext } from './compiler/design-orchestrator.js';
+} from './compiler/tokens/design-orchestrator.js';
+export type { ContrastResult, ContrastReport, ContextualToken, TokenContext } from './compiler/tokens/design-orchestrator.js';
 
 // ============================================================================
 // Math Engine
@@ -235,20 +235,20 @@ export {
   heal,
   validate as validateValue,
   getIntent
-} from './compiler/intent-engine.js';
+} from './compiler/pipeline/normalizers/intent-detector.js';
 export type {
   CorrectionResult,
   HealMode,
   HealResult,
   IntentContext
-} from './compiler/intent-engine.js';
+} from './compiler/pipeline/normalizers/intent-detector.js';
 
 // ============================================================================
 // Helpers & Utilities
 // ============================================================================
 
-export { helpers } from './compiler/helpers.js';
-export { getSuggestion, getSuggestions, getPropertySuggestion } from './compiler/suggestions.js';
+export { helpers } from './compiler/utils/helpers.js';
+export { getSuggestion, getSuggestions, getPropertySuggestion } from './compiler/utils/suggestions.js';
 
 // ============================================================================
 // Recipe System
@@ -261,8 +261,8 @@ export type { RecipeOptions, Recipe } from './compiler/recipe.js';
 // Component Generator
 // ============================================================================
 
-export { generateComponentCode, detectFramework } from './compiler/component-generator.js';
-export type { ComponentInfo } from './compiler/component-generator.js';
+export { generateComponentCode, detectFramework } from './compiler/features/framework-codegen.js';
+export type { ComponentInfo } from './compiler/features/framework-codegen.js';
 
 // ============================================================================
 // Version

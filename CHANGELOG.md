@@ -1,5 +1,46 @@
 # Changelog
 
+## [2.7.0] - 2026-06-26
+
+### Architecture — 5-Stage Compiler Pipeline
+
+The entire compiler has been reorganized into a proper multi-stage pipeline:
+
+Source → IR → Normalize → Validate → Analyze → Optimize → Lower → Emit CSS
+text
+
+
+- **`pipeline/`** directory with 5 distinct stages: normalizers, validators, analyzers, optimizers, lowering
+- **`pipeline/ir/`** extracted as standalone subsystem: types, factory, parser, printer, utils
+- **Conditional execution**: passes are skipped when IR has no relevant features (e.g., no constraints → skip constraint resolver)
+- **`CompilerPass` interface**: unified interface for all pass types with phase discrimination
+- Legacy `PassManager` deprecated — coexists with new `Pipeline` during migration
+
+### Reorganization
+
+- **`legacy/`**: 9 deprecated files moved (accessibility-engine, constraint-solver, intent-api, layout-intelligence, pattern-learner, responsive-inference, semantic-tokens, source-optimizer, atomic-optimizer)
+- **`cache/`**: cache-manager, content-addressable-cache
+- **`tokens/`**: tokens, theme-contract, token-resolver, design-orchestrator
+- **`utils/`**: helpers, suggestions, shorthands
+- **`features/`**: framework-codegen (was component-generator)
+
+### Renames
+
+- `generators/` → `lowering/` (aligns with compiler terminology)
+- `css-generator.ts` → `css-emitter.ts`
+- `ir/generator.ts` → `ir/css-printer.ts`
+- `intent-engine.ts` → `intent-detector.ts` (normalizers)
+- `token-resolver.ts` → `token-lowering.ts` (avoids name collision with tokens/token-resolver.ts)
+
+### Vite Plugin
+
+- New `useNewPipeline` option to switch between legacy PassManager and 5-stage Pipeline
+
+### Internals
+
+- 681 passing tests (41 new pipeline-specific tests)
+- Full backward compatibility maintained
+
 All notable changes to ChainCSS will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),

@@ -1,7 +1,7 @@
 // src/core/common-utils.ts
 
-import { shorthandMap, macros } from '../compiler/shorthands.js';
-import type { DesignTokens } from '../compiler/tokens.js';
+import { shorthandMap, macros } from '../compiler/utils/shorthands.js';
+import type { DesignTokens } from '../compiler/tokens/tokens.js';
 
 // ============================================================================
 // Utility Functions

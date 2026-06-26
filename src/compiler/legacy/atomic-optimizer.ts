@@ -1,6 +1,6 @@
 // chaincss/src/compiler/atomic-optimizer.ts
 
-import { ChainCSSConfig } from '../cli/types.js';
+import { ChainCSSConfig } from '../../cli/types.js';
 import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';

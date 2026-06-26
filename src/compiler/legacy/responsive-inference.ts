@@ -1,3 +1,8 @@
+/**
+ * @deprecated Use pipeline/analyzers/responsive-analyzer.ts instead.
+ * This file will be removed in v3.0.
+ */
+
 // src/compiler/responsive-inference.ts
 /**
  * Automatic Responsive Inference Engine
@@ -14,7 +19,7 @@
  *   - Multiple fixed-width columns → suggest auto-fit grid
  */
 
-import type { StyleIR, IRRule, IRDeclaration, IRPass } from './style-ir.js';
+import type { StyleIR, IRRule, IRDeclaration, IRPass } from '../style-ir.js';
 
 // ============================================================================
 // Types

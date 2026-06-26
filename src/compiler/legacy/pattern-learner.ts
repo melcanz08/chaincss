@@ -1,3 +1,8 @@
+/**
+ * @deprecated Use pipeline/analyzers/pattern-detector.ts instead.
+ * This file will be removed in v3.0.
+ */
+
 // src/compiler/pattern-learner.ts
 /**
  * Style Pattern Learner
@@ -11,7 +16,7 @@
  * This is compiler-assisted design system extraction.
  */
 
-import type { StyleIR, IRRule, IRPass } from './style-ir.js';
+import type { StyleIR, IRRule, IRPass } from '../style-ir.js';
 import crypto from 'crypto';
 
 // ============================================================================

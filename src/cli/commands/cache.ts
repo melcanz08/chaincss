@@ -3,7 +3,7 @@
 import chalk from 'chalk';
 import fs from 'fs';
 import path from 'path';
-import { PersistentCache } from '../../compiler/content-addressable-cache.js';
+import { PersistentCache } from '../../compiler/cache/content-addressable-cache.js';
 
 // Helper to format bytes
 function formatBytes(bytes: number): string {

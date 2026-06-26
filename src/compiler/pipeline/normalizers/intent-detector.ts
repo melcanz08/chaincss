@@ -1,7 +1,7 @@
 // src/compiler/intent-engine.ts
 
-import type { CorrectionResult, HealMode, HealResult, IntentContext } from '../core/types.js';
-import { detectIfPatterns, emitCSSIf } from './css-if-transpiler.js';
+import type { CorrectionResult, HealMode, HealResult, IntentContext } from '../../../core/types.js';
+import { detectIfPatterns, emitCSSIf } from '../lowering/css-if-lowering.js';
 export type { CorrectionResult, HealMode, HealResult, IntentContext };
 
 interface ValueCorrection { wrong: string; correct: string; confidence: number; }

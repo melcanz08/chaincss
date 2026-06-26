@@ -42,14 +42,14 @@
 import type { StyleIR, IRPass, IRRule, IRDeclaration } from './style-ir.js';
 import { applyPass, countNodes, debugIR } from './style-ir.js';
 
-import { accessibilityPass } from './accessibility-engine.js';
-import { responsiveInferencePass } from './responsive-inference.js';
-import { layoutIntelligencePass } from './layout-intelligence.js';
-import { patternLearningPass } from './pattern-learner.js';
-import { sourceOptimizerPass } from './source-optimizer.js';
-import { semanticTokensPass } from './semantic-tokens.js';
-import { intentAPIPass } from './intent-api.js';
-import { constraintSolverPass } from './constraint-solver.js';
+import { accessibilityPass } from './legacy/accessibility-engine.js';
+import { responsiveInferencePass } from './legacy/responsive-inference.js';
+import { layoutIntelligencePass } from './legacy/layout-intelligence.js';
+import { patternLearningPass } from './legacy/pattern-learner.js';
+import { sourceOptimizerPass } from './legacy/source-optimizer.js';
+import { semanticTokensPass } from './legacy/semantic-tokens.js';
+import { intentAPIPass } from './legacy/intent-api.js';
+import { constraintSolverPass } from './legacy/constraint-solver.js';
 
 // ============================================================================
 // Types
