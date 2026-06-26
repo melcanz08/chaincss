@@ -16,3 +16,6 @@ __tests__/
 # ChainCSS generated files
 *.class.js
 *.class.ts
+benchmarks/node_modules/
+benchmarks/package-lock.json
+.chaincss/
