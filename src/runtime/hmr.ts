@@ -20,7 +20,7 @@ function getHMREnvironment(): 'vite' | 'webpack' | 'none' {
   }
   
   // Check for Webpack HMR
-  if ((module as any).hot) {
+  if (typeof module !== 'undefined' && (module as any).hot) {
     return 'webpack';
   }
   
@@ -92,7 +92,9 @@ function setupViteHMR(): void {
 function setupWebpackHMR(): void {
   if (typeof window === 'undefined') return;
   
-  const hot = (module as any).hot;
+  if (typeof module === 'undefined') return;
+  if (typeof module === 'undefined') return;
+  // (webpack HMR handler removed — use chaincss/plugin/webpack)
   if (!hot) return;
   
   // Webpack HMR uses accept() pattern
@@ -167,7 +169,9 @@ function registerWebpackHMR(
   styles?: Record<string, any>,
   callback?: (newStyles: Record<string, any>) => void
 ): void {
-  const hot = (module as any).hot;
+  if (typeof module === 'undefined') return;
+  if (typeof module === 'undefined') return;
+  // (webpack HMR handler removed — use chaincss/plugin/webpack)
   if (!hot) return;
   
   hot.accept(() => {

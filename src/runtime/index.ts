@@ -66,7 +66,7 @@ export const injectStyleContextSvelte = (...args: any[]) => getSvelteExports().i
 export const chainStyles = (...args: any[]) => getSvelteExports().chainStyles?.(...args);
 
 // HMR
-export { setupHMR, registerForHMR } from './hmr.js';
+// HMR exports moved to plugin packages
 
 // Utilities
 export {
