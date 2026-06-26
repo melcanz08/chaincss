@@ -8,7 +8,7 @@
 // Core API — The one chain to rule them all
 // ============================================================================
 
-export { chain, StyleCollector } from './core/style-collector.js';
+export { chain, chain as $, StyleCollector } from './core/style-collector.js';
 export type { StyleObject, AtRule, NestedRule, Explanation } from './core/style-collector.js';
 
 export { compileToCSS, partitionForBuild } from './core/style-compiler.js';

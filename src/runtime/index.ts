@@ -2,7 +2,7 @@
 
 // Core runtime
 export { compileRuntime as compile, runRuntime as run, styleInjector } from './injector.js';
-export { chain } from '../core/style-collector.js';
+export { chain, chain as $ } from '../core/style-collector.js';
 export { setManifest } from './injector.js';
 
 // React hooks
