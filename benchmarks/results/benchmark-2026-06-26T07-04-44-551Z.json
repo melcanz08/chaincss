@@ -1,0 +1,456 @@
+{
+  "compiler": "chaincss",
+  "version": "2.7.2",
+  "pipeline": "18 passes (normalize→validate→analyze→optimize→lower→emit)",
+  "timestamp": "2026-06-26T07-04-44-551Z",
+  "systemInfo": {
+    "node": "v22.22.2",
+    "platform": "linux",
+    "arch": "x64",
+    "cpus": 4,
+    "memoryGB": 4
+  },
+  "coldWarm": {
+    "coldMs": 63.62,
+    "warmAvgMs": 21.83,
+    "overheadMs": 41.79
+  },
+  "results": [
+    {
+      "scenario": "small",
+      "label": "Small (5 rules)",
+      "rules": 5,
+      "declarations": 20,
+      "pseudoClasses": 1,
+      "atRules": 1,
+      "estimatedCSSBytes": 500,
+      "iterations": 100,
+      "metrics": {
+        "avg": 0.334,
+        "median": 0.256,
+        "min": 0.243,
+        "max": 3.716,
+        "p95": 0.63,
+        "p99": 3.716,
+        "stdDev": 0.356
+      },
+      "memory": {
+        "startMB": 22.43,
+        "endMB": 13.59,
+        "peakMB": 26.83,
+        "avgPeakMB": 19.22,
+        "deltaMB": -8.84
+      },
+      "passBreakdown": {
+        "normalization": {
+          "total": 0,
+          "passes": [
+            {
+              "name": "intent-normalizer",
+              "duration": 0
+            },
+            {
+              "name": "unit-normalizer",
+              "duration": 0
+            }
+          ]
+        },
+        "validation": {
+          "total": 0,
+          "passes": [
+            {
+              "name": "accessibility-validator",
+              "duration": 0
+            },
+            {
+              "name": "conflict-validator",
+              "duration": 0
+            }
+          ]
+        },
+        "analysis": {
+          "total": 0,
+          "passes": [
+            {
+              "name": "pattern-detector",
+              "duration": 0
+            }
+          ]
+        },
+        "optimization": {
+          "total": 0,
+          "passes": [
+            {
+              "name": "accessibility-optimizer",
+              "duration": 0
+            },
+            {
+              "name": "specificity-sorter",
+              "duration": 0
+            },
+            {
+              "name": "dead-code-eliminator",
+              "duration": 0
+            },
+            {
+              "name": "atomic-extractor",
+              "duration": 0
+            },
+            {
+              "name": "media-query-packer",
+              "duration": 0
+            },
+            {
+              "name": "source-optimizer",
+              "duration": 0
+            },
+            {
+              "name": "css-compressor",
+              "duration": 0
+            }
+          ]
+        },
+        "lowering": {
+          "total": 0,
+          "passes": [
+            {
+              "name": "token-resolver",
+              "duration": 0
+            },
+            {
+              "name": "css-emitter",
+              "duration": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "scenario": "medium",
+      "label": "Medium (50 rules)",
+      "rules": 50,
+      "declarations": 400,
+      "pseudoClasses": 10,
+      "atRules": 5,
+      "estimatedCSSBytes": 10000,
+      "iterations": 50,
+      "metrics": {
+        "avg": 2.704,
+        "median": 2.476,
+        "min": 1.862,
+        "max": 4.593,
+        "p95": 4.266,
+        "p99": 4.593,
+        "stdDev": 0.753
+      },
+      "memory": {
+        "startMB": 14.92,
+        "endMB": 17.48,
+        "peakMB": 26.12,
+        "avgPeakMB": 19.59,
+        "deltaMB": 2.57
+      },
+      "passBreakdown": {
+        "normalization": {
+          "total": 0,
+          "passes": [
+            {
+              "name": "intent-normalizer",
+              "duration": 0
+            },
+            {
+              "name": "unit-normalizer",
+              "duration": 0
+            }
+          ]
+        },
+        "validation": {
+          "total": 0,
+          "passes": [
+            {
+              "name": "accessibility-validator",
+              "duration": 0
+            },
+            {
+              "name": "conflict-validator",
+              "duration": 0
+            }
+          ]
+        },
+        "analysis": {
+          "total": 1,
+          "passes": [
+            {
+              "name": "pattern-detector",
+              "duration": 1
+            }
+          ]
+        },
+        "optimization": {
+          "total": 1,
+          "passes": [
+            {
+              "name": "accessibility-optimizer",
+              "duration": 0
+            },
+            {
+              "name": "specificity-sorter",
+              "duration": 0
+            },
+            {
+              "name": "dead-code-eliminator",
+              "duration": 0
+            },
+            {
+              "name": "atomic-extractor",
+              "duration": 1
+            },
+            {
+              "name": "media-query-packer",
+              "duration": 0
+            },
+            {
+              "name": "source-optimizer",
+              "duration": 0
+            },
+            {
+              "name": "css-compressor",
+              "duration": 0
+            }
+          ]
+        },
+        "lowering": {
+          "total": 1,
+          "passes": [
+            {
+              "name": "token-resolver",
+              "duration": 0
+            },
+            {
+              "name": "css-emitter",
+              "duration": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "scenario": "large",
+      "label": "Large (500 rules)",
+      "rules": 500,
+      "declarations": 5000,
+      "pseudoClasses": 100,
+      "atRules": 50,
+      "estimatedCSSBytes": 125000,
+      "iterations": 30,
+      "metrics": {
+        "avg": 28.778,
+        "median": 27.067,
+        "min": 19.302,
+        "max": 58.813,
+        "p95": 52.23,
+        "p99": 58.813,
+        "stdDev": 8.507
+      },
+      "memory": {
+        "startMB": 18.84,
+        "endMB": 21.96,
+        "peakMB": 57.69,
+        "avgPeakMB": 39.84,
+        "deltaMB": 3.13
+      },
+      "passBreakdown": {
+        "normalization": {
+          "total": 1,
+          "passes": [
+            {
+              "name": "intent-normalizer",
+              "duration": 0
+            },
+            {
+              "name": "unit-normalizer",
+              "duration": 1
+            }
+          ]
+        },
+        "validation": {
+          "total": 2,
+          "passes": [
+            {
+              "name": "accessibility-validator",
+              "duration": 1
+            },
+            {
+              "name": "conflict-validator",
+              "duration": 1
+            }
+          ]
+        },
+        "analysis": {
+          "total": 8,
+          "passes": [
+            {
+              "name": "pattern-detector",
+              "duration": 8
+            }
+          ]
+        },
+        "optimization": {
+          "total": 32,
+          "passes": [
+            {
+              "name": "accessibility-optimizer",
+              "duration": 1
+            },
+            {
+              "name": "specificity-sorter",
+              "duration": 3
+            },
+            {
+              "name": "dead-code-eliminator",
+              "duration": 0
+            },
+            {
+              "name": "atomic-extractor",
+              "duration": 8
+            },
+            {
+              "name": "media-query-packer",
+              "duration": 1
+            },
+            {
+              "name": "source-optimizer",
+              "duration": 18
+            },
+            {
+              "name": "css-compressor",
+              "duration": 1
+            }
+          ]
+        },
+        "lowering": {
+          "total": 7,
+          "passes": [
+            {
+              "name": "token-resolver",
+              "duration": 0
+            },
+            {
+              "name": "css-emitter",
+              "duration": 7
+            }
+          ]
+        }
+      }
+    },
+    {
+      "scenario": "xlarge",
+      "label": "X-Large (2000 rules)",
+      "rules": 2000,
+      "declarations": 20000,
+      "pseudoClasses": 400,
+      "atRules": 200,
+      "estimatedCSSBytes": 500000,
+      "iterations": 10,
+      "metrics": {
+        "avg": 134.079,
+        "median": 120.218,
+        "min": 110.639,
+        "max": 196.119,
+        "p95": 196.119,
+        "p99": 196.119,
+        "stdDev": 28.354
+      },
+      "memory": {
+        "startMB": 42.04,
+        "endMB": 62.6,
+        "peakMB": 95,
+        "avgPeakMB": 75.24,
+        "deltaMB": 20.56
+      },
+      "passBreakdown": {
+        "normalization": {
+          "total": 5,
+          "passes": [
+            {
+              "name": "intent-normalizer",
+              "duration": 2
+            },
+            {
+              "name": "unit-normalizer",
+              "duration": 3
+            }
+          ]
+        },
+        "validation": {
+          "total": 20,
+          "passes": [
+            {
+              "name": "accessibility-validator",
+              "duration": 17
+            },
+            {
+              "name": "conflict-validator",
+              "duration": 3
+            }
+          ]
+        },
+        "analysis": {
+          "total": 30,
+          "passes": [
+            {
+              "name": "pattern-detector",
+              "duration": 30
+            }
+          ]
+        },
+        "optimization": {
+          "total": 38,
+          "passes": [
+            {
+              "name": "accessibility-optimizer",
+              "duration": 1
+            },
+            {
+              "name": "specificity-sorter",
+              "duration": 3
+            },
+            {
+              "name": "dead-code-eliminator",
+              "duration": 0
+            },
+            {
+              "name": "atomic-extractor",
+              "duration": 20
+            },
+            {
+              "name": "media-query-packer",
+              "duration": 0
+            },
+            {
+              "name": "source-optimizer",
+              "duration": 11
+            },
+            {
+              "name": "css-compressor",
+              "duration": 3
+            }
+          ]
+        },
+        "lowering": {
+          "total": 15,
+          "passes": [
+            {
+              "name": "token-resolver",
+              "duration": 0
+            },
+            {
+              "name": "css-emitter",
+              "duration": 15
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

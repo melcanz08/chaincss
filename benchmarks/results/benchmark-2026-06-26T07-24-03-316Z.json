@@ -1,0 +1,440 @@
+{
+  "compiler": "chaincss",
+  "version": "2.7.2",
+  "pipeline": "18 passes (normalize→validate→analyze→optimize→lower→emit)",
+  "timestamp": "2026-06-26T07-24-03-316Z",
+  "systemInfo": {
+    "node": "v22.22.2",
+    "platform": "linux",
+    "arch": "x64",
+    "cpus": 4,
+    "memoryGB": 4
+  },
+  "coldWarm": {
+    "coldMs": 55.45,
+    "warmAvgMs": 16.85,
+    "overheadMs": 38.6
+  },
+  "results": [
+    {
+      "scenario": "small",
+      "label": "Small (5 rules)",
+      "rules": 5,
+      "declarations": 20,
+      "pseudoClasses": 1,
+      "atRules": 1,
+      "estimatedCSSBytes": 500,
+      "iterations": 100,
+      "metrics": {
+        "avg": 0.313,
+        "median": 0.226,
+        "min": 0.221,
+        "max": 6.637,
+        "p95": 0.399,
+        "p99": 6.637,
+        "stdDev": 0.64
+      },
+      "memory": {
+        "startMB": 27.12,
+        "endMB": 15.55,
+        "peakMB": 27.44,
+        "avgPeakMB": 12.81,
+        "deltaMB": -11.57
+      },
+      "passBreakdown": {
+        "normalization": {
+          "total": 0,
+          "passes": [
+            {
+              "name": "intent-normalizer",
+              "duration": 0
+            },
+            {
+              "name": "unit-normalizer",
+              "duration": 0
+            }
+          ]
+        },
+        "validation": {
+          "total": 0,
+          "passes": [
+            {
+              "name": "accessibility-validator",
+              "duration": 0
+            },
+            {
+              "name": "conflict-validator",
+              "duration": 0
+            }
+          ]
+        },
+        "analysis": {
+          "total": 0,
+          "passes": [
+            {
+              "name": "pattern-detector",
+              "duration": 0
+            }
+          ]
+        },
+        "optimization": {
+          "total": 1,
+          "passes": [
+            {
+              "name": "accessibility-optimizer",
+              "duration": 0
+            },
+            {
+              "name": "specificity-sorter",
+              "duration": 1
+            },
+            {
+              "name": "dead-code-eliminator",
+              "duration": 0
+            },
+            {
+              "name": "media-query-packer",
+              "duration": 0
+            },
+            {
+              "name": "source-optimizer",
+              "duration": 0
+            },
+            {
+              "name": "css-compressor",
+              "duration": 0
+            }
+          ]
+        },
+        "lowering": {
+          "total": 0,
+          "passes": [
+            {
+              "name": "token-resolver",
+              "duration": 0
+            },
+            {
+              "name": "css-emitter",
+              "duration": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "scenario": "medium",
+      "label": "Medium (50 rules)",
+      "rules": 50,
+      "declarations": 400,
+      "pseudoClasses": 10,
+      "atRules": 5,
+      "estimatedCSSBytes": 10000,
+      "iterations": 50,
+      "metrics": {
+        "avg": 1.802,
+        "median": 1.734,
+        "min": 1.384,
+        "max": 2.969,
+        "p95": 2.754,
+        "p99": 2.969,
+        "stdDev": 0.371
+      },
+      "memory": {
+        "startMB": 16.81,
+        "endMB": 14.98,
+        "peakMB": 24.41,
+        "avgPeakMB": 17.99,
+        "deltaMB": -1.83
+      },
+      "passBreakdown": {
+        "normalization": {
+          "total": 0,
+          "passes": [
+            {
+              "name": "intent-normalizer",
+              "duration": 0
+            },
+            {
+              "name": "unit-normalizer",
+              "duration": 0
+            }
+          ]
+        },
+        "validation": {
+          "total": 0,
+          "passes": [
+            {
+              "name": "accessibility-validator",
+              "duration": 0
+            },
+            {
+              "name": "conflict-validator",
+              "duration": 0
+            }
+          ]
+        },
+        "analysis": {
+          "total": 1,
+          "passes": [
+            {
+              "name": "pattern-detector",
+              "duration": 1
+            }
+          ]
+        },
+        "optimization": {
+          "total": 0,
+          "passes": [
+            {
+              "name": "accessibility-optimizer",
+              "duration": 0
+            },
+            {
+              "name": "specificity-sorter",
+              "duration": 0
+            },
+            {
+              "name": "dead-code-eliminator",
+              "duration": 0
+            },
+            {
+              "name": "media-query-packer",
+              "duration": 0
+            },
+            {
+              "name": "source-optimizer",
+              "duration": 0
+            },
+            {
+              "name": "css-compressor",
+              "duration": 0
+            }
+          ]
+        },
+        "lowering": {
+          "total": 0,
+          "passes": [
+            {
+              "name": "token-resolver",
+              "duration": 0
+            },
+            {
+              "name": "css-emitter",
+              "duration": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "scenario": "large",
+      "label": "Large (500 rules)",
+      "rules": 500,
+      "declarations": 5000,
+      "pseudoClasses": 100,
+      "atRules": 50,
+      "estimatedCSSBytes": 125000,
+      "iterations": 30,
+      "metrics": {
+        "avg": 20.057,
+        "median": 21.016,
+        "min": 13.412,
+        "max": 44.745,
+        "p95": 28.328,
+        "p99": 44.745,
+        "stdDev": 6.144
+      },
+      "memory": {
+        "startMB": 15.67,
+        "endMB": 56.03,
+        "peakMB": 56.03,
+        "avgPeakMB": 38.07,
+        "deltaMB": 40.36
+      },
+      "passBreakdown": {
+        "normalization": {
+          "total": 0,
+          "passes": [
+            {
+              "name": "intent-normalizer",
+              "duration": 0
+            },
+            {
+              "name": "unit-normalizer",
+              "duration": 0
+            }
+          ]
+        },
+        "validation": {
+          "total": 1,
+          "passes": [
+            {
+              "name": "accessibility-validator",
+              "duration": 1
+            },
+            {
+              "name": "conflict-validator",
+              "duration": 0
+            }
+          ]
+        },
+        "analysis": {
+          "total": 5,
+          "passes": [
+            {
+              "name": "pattern-detector",
+              "duration": 5
+            }
+          ]
+        },
+        "optimization": {
+          "total": 4,
+          "passes": [
+            {
+              "name": "accessibility-optimizer",
+              "duration": 0
+            },
+            {
+              "name": "specificity-sorter",
+              "duration": 1
+            },
+            {
+              "name": "dead-code-eliminator",
+              "duration": 0
+            },
+            {
+              "name": "media-query-packer",
+              "duration": 0
+            },
+            {
+              "name": "source-optimizer",
+              "duration": 3
+            },
+            {
+              "name": "css-compressor",
+              "duration": 0
+            }
+          ]
+        },
+        "lowering": {
+          "total": 3,
+          "passes": [
+            {
+              "name": "token-resolver",
+              "duration": 0
+            },
+            {
+              "name": "css-emitter",
+              "duration": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "scenario": "xlarge",
+      "label": "X-Large (2000 rules)",
+      "rules": 2000,
+      "declarations": 20000,
+      "pseudoClasses": 400,
+      "atRules": 200,
+      "estimatedCSSBytes": 500000,
+      "iterations": 10,
+      "metrics": {
+        "avg": 92.114,
+        "median": 93.31,
+        "min": 74.508,
+        "max": 144.739,
+        "p95": 144.739,
+        "p99": 144.739,
+        "stdDev": 19.833
+      },
+      "memory": {
+        "startMB": 41.6,
+        "endMB": 82.73,
+        "peakMB": 93.13,
+        "avgPeakMB": 77.57,
+        "deltaMB": 41.13
+      },
+      "passBreakdown": {
+        "normalization": {
+          "total": 3,
+          "passes": [
+            {
+              "name": "intent-normalizer",
+              "duration": 1
+            },
+            {
+              "name": "unit-normalizer",
+              "duration": 2
+            }
+          ]
+        },
+        "validation": {
+          "total": 4,
+          "passes": [
+            {
+              "name": "accessibility-validator",
+              "duration": 2
+            },
+            {
+              "name": "conflict-validator",
+              "duration": 2
+            }
+          ]
+        },
+        "analysis": {
+          "total": 32,
+          "passes": [
+            {
+              "name": "pattern-detector",
+              "duration": 32
+            }
+          ]
+        },
+        "optimization": {
+          "total": 21,
+          "passes": [
+            {
+              "name": "accessibility-optimizer",
+              "duration": 1
+            },
+            {
+              "name": "specificity-sorter",
+              "duration": 3
+            },
+            {
+              "name": "dead-code-eliminator",
+              "duration": 0
+            },
+            {
+              "name": "media-query-packer",
+              "duration": 0
+            },
+            {
+              "name": "source-optimizer",
+              "duration": 12
+            },
+            {
+              "name": "css-compressor",
+              "duration": 5
+            }
+          ]
+        },
+        "lowering": {
+          "total": 12,
+          "passes": [
+            {
+              "name": "token-resolver",
+              "duration": 1
+            },
+            {
+              "name": "css-emitter",
+              "duration": 11
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

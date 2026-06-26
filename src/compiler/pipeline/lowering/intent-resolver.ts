@@ -1,4 +1,5 @@
 // src/compiler/generators/intent-resolver.ts
+import { recordHistory } from '../ir/utils.js';
 
 import type { StyleIR, IRRule } from '../../style-ir.js';
 import type { LoweringPass, LoweringResult, LoweringContext } from '../pipeline-types.js';
@@ -395,12 +396,7 @@ export const intentResolver: LoweringPass = {
         );
         // Add history entry
         const decl = rule.declarations[rule.declarations.length - 1];
-        decl.history.push({
-          pass: 'intent-resolver',
-          action: 'lowered-intent',
-          timestamp: Date.now(),
-          reason: `intent("${intentName}") → ${prop}: ${value}`,
-        });
+        recordHistory(decl, 'intent-resolver', 'lowered-intent', undefined, `intent("${intentName}") → ${prop}: ${value}`);
         generatedNodes++;
       }
 
@@ -411,12 +407,7 @@ export const intentResolver: LoweringPass = {
           name: stateName,
           declarations: Object.entries(stateProps).map(([prop, value]) => {
             const decl = createDeclaration(prop, value, rule.source, { intent: intentName });
-            decl.history.push({
-              pass: 'intent-resolver',
-              action: 'lowered-state',
-              timestamp: Date.now(),
-              reason: `intent("${intentName}") state:${stateName}`,
-            });
+            recordHistory(decl, 'intent-resolver', 'lowered-state', undefined, `intent("${intentName}") state:${stateName}`);
             generatedNodes++;
             return decl;
           }),

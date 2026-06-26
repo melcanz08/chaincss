@@ -1,4 +1,5 @@
 // src/compiler/pipeline/optimizers/accessibility-optimizer.ts
+import { recordHistory } from '../ir/utils.js';
 
 import type { StyleIR } from '../../style-ir.js';
 import type { OptimizationPass, OptimizationResult } from '../pipeline-types.js';
@@ -31,12 +32,7 @@ export const accessibilityOptimizer: OptimizationPass = {
           const pxMatch = decl.value.match(/^(\d+(\.\d+)?)px$/);
           if (pxMatch && parseFloat(pxMatch[1]) < WCAG.MIN_FONT_SIZE) {
             decl.value = `max(${WCAG.MIN_FONT_SIZE}px, ${decl.value})`;
-            decl.history.push({
-              pass: 'accessibility-optimizer',
-              action: 'auto-fix-min-font',
-              timestamp: Date.now(),
-              reason: `Ensured minimum font size of ${WCAG.MIN_FONT_SIZE}px`,
-            });
+            recordHistory(decl, 'accessibility-optimizer', 'auto-fix-min-font', undefined, `Ensured minimum font size of ${WCAG.MIN_FONT_SIZE}px`);
             changes++;
           }
         }

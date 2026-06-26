@@ -1,0 +1,283 @@
+{
+  "compiler": "chaincss",
+  "version": "2.7.2",
+  "timestamp": "2026-06-26T08-15-53-760Z",
+  "systemInfo": {
+    "node": "v22.22.2",
+    "platform": "linux",
+    "arch": "x64",
+    "cpus": 4,
+    "memoryGB": 4
+  },
+  "coldWarm": {
+    "coldMs": 21.19,
+    "warmAvgMs": 10.19,
+    "overheadMs": 11
+  },
+  "results": [
+    {
+      "scenario": "small",
+      "label": "Small (5 rules)",
+      "rulesIn": 5,
+      "rulesOut": 5,
+      "deadRules": 0,
+      "declarationsIn": 20,
+      "declarationsOut": 20,
+      "pseudoClasses": 1,
+      "atRules": 1,
+      "cssBytes": 574,
+      "bytesSaved": -74,
+      "savingsPct": "-14.8",
+      "iterations": 100,
+      "metrics": {
+        "avg": 0.061,
+        "median": 0.058,
+        "min": 0.055,
+        "max": 0.107,
+        "p95": 0.087,
+        "p99": 0.107,
+        "stdDev": 0.009
+      },
+      "memory": {
+        "startMB": 20.13,
+        "endMB": 14.37,
+        "deltaMB": -5.76
+      },
+      "passBreakdown": {
+        "normalization": {
+          "total": 0,
+          "passes": [
+            {
+              "name": "intent-normalizer",
+              "duration": 0
+            },
+            {
+              "name": "unit-normalizer",
+              "duration": 0
+            }
+          ]
+        },
+        "optimization": {
+          "total": 0,
+          "passes": [
+            {
+              "name": "css-compressor",
+              "duration": 0
+            }
+          ]
+        },
+        "lowering": {
+          "total": 0,
+          "passes": [
+            {
+              "name": "token-resolver",
+              "duration": 0
+            },
+            {
+              "name": "css-emitter",
+              "duration": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "scenario": "medium",
+      "label": "Medium (50 rules)",
+      "rulesIn": 50,
+      "rulesOut": 50,
+      "deadRules": 0,
+      "declarationsIn": 400,
+      "declarationsOut": 400,
+      "pseudoClasses": 10,
+      "atRules": 5,
+      "cssBytes": 9242,
+      "bytesSaved": 758,
+      "savingsPct": "7.6",
+      "iterations": 50,
+      "metrics": {
+        "avg": 0.654,
+        "median": 0.518,
+        "min": 0.471,
+        "max": 4.13,
+        "p95": 0.715,
+        "p99": 4.13,
+        "stdDev": 0.554
+      },
+      "memory": {
+        "startMB": 15.21,
+        "endMB": 25.79,
+        "deltaMB": 10.58
+      },
+      "passBreakdown": {
+        "normalization": {
+          "total": 0,
+          "passes": [
+            {
+              "name": "intent-normalizer",
+              "duration": 0
+            },
+            {
+              "name": "unit-normalizer",
+              "duration": 0
+            }
+          ]
+        },
+        "optimization": {
+          "total": 0,
+          "passes": [
+            {
+              "name": "css-compressor",
+              "duration": 0
+            }
+          ]
+        },
+        "lowering": {
+          "total": 0,
+          "passes": [
+            {
+              "name": "token-resolver",
+              "duration": 0
+            },
+            {
+              "name": "css-emitter",
+              "duration": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "scenario": "large",
+      "label": "Large (500 rules)",
+      "rulesIn": 500,
+      "rulesOut": 500,
+      "deadRules": 0,
+      "declarationsIn": 5000,
+      "declarationsOut": 5000,
+      "pseudoClasses": 100,
+      "atRules": 50,
+      "cssBytes": 112057,
+      "bytesSaved": 12943,
+      "savingsPct": "10.4",
+      "iterations": 30,
+      "metrics": {
+        "avg": 6.996,
+        "median": 5.055,
+        "min": 4.533,
+        "max": 19.088,
+        "p95": 18.505,
+        "p99": 19.088,
+        "stdDev": 3.979
+      },
+      "memory": {
+        "startMB": 21.18,
+        "endMB": 40.76,
+        "deltaMB": 19.58
+      },
+      "passBreakdown": {
+        "normalization": {
+          "total": 1,
+          "passes": [
+            {
+              "name": "intent-normalizer",
+              "duration": 0
+            },
+            {
+              "name": "unit-normalizer",
+              "duration": 1
+            }
+          ]
+        },
+        "optimization": {
+          "total": 0,
+          "passes": [
+            {
+              "name": "css-compressor",
+              "duration": 0
+            }
+          ]
+        },
+        "lowering": {
+          "total": 3,
+          "passes": [
+            {
+              "name": "token-resolver",
+              "duration": 0
+            },
+            {
+              "name": "css-emitter",
+              "duration": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "scenario": "xlarge",
+      "label": "X-Large (2000 rules)",
+      "rulesIn": 2000,
+      "rulesOut": 2000,
+      "deadRules": 0,
+      "declarationsIn": 20000,
+      "declarationsOut": 20000,
+      "pseudoClasses": 400,
+      "atRules": 200,
+      "cssBytes": 449957,
+      "bytesSaved": 50043,
+      "savingsPct": "10.0",
+      "iterations": 10,
+      "metrics": {
+        "avg": 37.764,
+        "median": 36.13,
+        "min": 25.884,
+        "max": 56.978,
+        "p95": 56.978,
+        "p99": 56.978,
+        "stdDev": 8.891
+      },
+      "memory": {
+        "startMB": 35.54,
+        "endMB": 67.32,
+        "deltaMB": 31.78
+      },
+      "passBreakdown": {
+        "normalization": {
+          "total": 2,
+          "passes": [
+            {
+              "name": "intent-normalizer",
+              "duration": 1
+            },
+            {
+              "name": "unit-normalizer",
+              "duration": 1
+            }
+          ]
+        },
+        "optimization": {
+          "total": 3,
+          "passes": [
+            {
+              "name": "css-compressor",
+              "duration": 3
+            }
+          ]
+        },
+        "lowering": {
+          "total": 25,
+          "passes": [
+            {
+              "name": "token-resolver",
+              "duration": 0
+            },
+            {
+              "name": "css-emitter",
+              "duration": 25
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

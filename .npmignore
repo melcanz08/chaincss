@@ -7,3 +7,5 @@ fix-errors.sh
 structure.txt
 src/runtime/solid.ts.bak
 demo-new
+benchmarks/
+.chaincss/

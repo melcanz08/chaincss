@@ -79,7 +79,6 @@ export type { ThemeContract, ThemeTokens } from './compiler/tokens/theme-contrac
 export { AtomicOptimizer } from './compiler/legacy/atomic-optimizer.js';
 export type {
   AtomicClass,
-  AtomicOptimizerOptions,
   AtomicOptimizerStats
 } from './compiler/legacy/atomic-optimizer.js';
 
@@ -268,4 +267,4 @@ export type { ComponentInfo } from './compiler/features/framework-codegen.js';
 // Version
 // ============================================================================
 
-export const VERSION = '2.4.0';
+export const VERSION = "2.8.0";

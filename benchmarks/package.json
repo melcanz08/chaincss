@@ -1,0 +1,16 @@
+{
+  "name": "chaincss-benchmarks",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "run": "node --expose-gc run.js",
+    "quick": "node --expose-gc run.js --quick",
+    "ci": "node --expose-gc run.js --ci --output results/"
+  },
+  "dependencies": {
+    "@stylexjs/stylex": "^0.10.0",
+    "@vanilla-extract/css": "^1.15.0",
+    "benny": "^3.7.0",
+    "gzip-size": "^7.0.0"
+  }
+}

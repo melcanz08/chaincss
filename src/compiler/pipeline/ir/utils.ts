@@ -45,3 +45,15 @@ export function debugIR(ir: StyleIR): string {
     '}',
   ].join('\n');
 }
+
+/** Record a transform in a declaration's history — only in development. */
+export function recordHistory(decl: { history: any[] }, pass: string, action: string, previous?: any, reason?: string): void {
+  if (process.env.NODE_ENV === 'production') return;
+  decl.history.push({
+    pass,
+    action,
+    timestamp: Date.now(),
+    previous,
+    reason,
+  });
+}

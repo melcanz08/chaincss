@@ -1,0 +1,46 @@
+🔄 ChainCSS Incremental Compilation Benchmark
+
+══════════════════════════════════════════════════════════════════════
+
+📦 FULL REBUILD (no cache)
+
+  500 rules, 4000 decls
+  Full rebuild: 45.35ms avg
+
+📝 INCREMENTAL: 1 rule changed
+
+  1 rule changed out of 500
+  Current (full recompile): 23.18ms
+  Best case (skip to emit): ~11.34ms
+  Potential speedup: 2.0x
+
+📊 INCREMENTAL SCALING
+
+Changed | Time(ms) | vs Full | Speedup
+──────────────────────────────────────────────────
+1       | 23.41     | 45.35   | 1.9x
+5       | 15.01     | 45.35   | 3.0x
+10      | 15.06     | 45.35   | 3.0x
+25      | 15.94     | 45.35   | 2.8x
+50      | 14.59     | 45.35   | 3.1x
+100     | 14.92     | 45.35   | 3.0x
+
+🔬 PASSES THAT COULD SKIP ON INCREMENTAL
+
+Stateful (need full IR):
+  accessibility-validator      1ms — needs all rules
+  conflict-validator           1ms — needs all rules
+  pattern-detector             10ms — needs all rules
+
+Stateless (can run on changed only):
+  intent-normalizer            0ms — can isolate
+  unit-normalizer              0ms — can isolate
+  specificity-sorter           1ms — can isolate
+  dead-code-eliminator         0ms — can isolate
+  css-compressor               1ms — can isolate
+  css-emitter                  5ms — can isolate
+
+✅ Done!
+
+💡 Recommendation: Implement dirty flag per-rule so stateless
+   passes only process changed rules on incremental builds.

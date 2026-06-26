@@ -1,0 +1,91 @@
+{
+  "compiler": "chaincss",
+  "version": "2.7.2",
+  "pipeline": "18 passes (normalize→validate→analyze→optimize→lower→emit)",
+  "timestamp": "2026-06-26T05-57-26-525Z",
+  "systemInfo": {
+    "node": "v22.22.2",
+    "platform": "linux",
+    "arch": "x64",
+    "cpus": 4,
+    "memoryGB": 4
+  },
+  "results": [
+    {
+      "scenario": "small",
+      "label": "Small (5 rules)",
+      "rules": 5,
+      "declarations": 20,
+      "pseudoClasses": 1,
+      "atRules": 1,
+      "iterations": 100,
+      "metrics": {
+        "avg": 0.881,
+        "median": 0.731,
+        "min": 0.372,
+        "max": 3.618,
+        "p95": 2.023,
+        "p99": 3.618,
+        "stdDev": 0.543
+      },
+      "memoryDeltaMB": 2.38
+    },
+    {
+      "scenario": "medium",
+      "label": "Medium (50 rules)",
+      "rules": 50,
+      "declarations": 400,
+      "pseudoClasses": 10,
+      "atRules": 5,
+      "iterations": 50,
+      "metrics": {
+        "avg": 4.087,
+        "median": 2.744,
+        "min": 1.954,
+        "max": 26.414,
+        "p95": 9.725,
+        "p99": 26.414,
+        "stdDev": 3.767
+      },
+      "memoryDeltaMB": 3.54
+    },
+    {
+      "scenario": "large",
+      "label": "Large (500 rules)",
+      "rules": 500,
+      "declarations": 5000,
+      "pseudoClasses": 100,
+      "atRules": 50,
+      "iterations": 30,
+      "metrics": {
+        "avg": 23.946,
+        "median": 22.336,
+        "min": 19.112,
+        "max": 52.046,
+        "p95": 45.235,
+        "p99": 52.046,
+        "stdDev": 6.996
+      },
+      "memoryDeltaMB": 18.89
+    },
+    {
+      "scenario": "xlarge",
+      "label": "X-Large (2000 rules)",
+      "rules": 2000,
+      "declarations": 20000,
+      "pseudoClasses": 400,
+      "atRules": 200,
+      "iterations": 10,
+      "metrics": {
+        "avg": 96.791,
+        "median": 96.091,
+        "min": 85.988,
+        "max": 108.02,
+        "p95": 108.02,
+        "p99": 108.02,
+        "stdDev": 6.481
+      },
+      "memoryDeltaMB": 28.88
+    }
+  ]
+}

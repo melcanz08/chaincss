@@ -71,19 +71,6 @@ export interface CompileStats {
   compileTime?: number;
 }
 
-export interface AtomicOptimizerOptions {
-  enabled: boolean;
-  threshold: number;
-  naming: 'hash' | 'readable';
-  cache: boolean;
-  cachePath: string;
-  minify: boolean;
-  mode: 'standard' | 'atomic' | 'hybrid';
-  outputStrategy: 'component-first' | 'utility-first';
-  alwaysAtomic: string[];
-  neverAtomic: string[];
-  verbose: boolean;
-}
 
 export interface TokenContext {
   tokens: Record<string, any>;

@@ -1,4 +1,5 @@
 // src/compiler/pipeline/normalizers/intent-normalizer.ts
+import { recordHistory } from '../ir/utils.js';
 
 import type { StyleIR } from '../../style-ir.js';
 import type { NormalizationPass, NormalizationResult, Correction } from '../pipeline-types.js';
@@ -23,13 +24,7 @@ export const intentNormalizer: NormalizationPass = {
             corrected: 'flex',
             reason: 'flexbox → flex',
           });
-          decl.history.push({
-            pass: 'intent-normalizer',
-            action: 'corrected-value',
-            timestamp: Date.now(),
-            previous: original,
-            reason: 'flexbox → flex',
-          });
+          recordHistory(decl, 'intent-normalizer', 'corrected-value', original, 'flexbox → flex');
 
           // Add centering defaults
           const hasJustify = rule.declarations.some(d => d.property === 'justifyContent');
@@ -70,13 +65,7 @@ export const intentNormalizer: NormalizationPass = {
             corrected: 'absolute',
             reason: 'abs → absolute',
           });
-          decl.history.push({
-            pass: 'intent-normalizer',
-            action: 'corrected-value',
-            timestamp: Date.now(),
-            previous: original,
-            reason: 'abs → absolute',
-          });
+          recordHistory(decl, 'intent-normalizer', 'corrected-value', original, 'abs → absolute');
         }
       }
     }

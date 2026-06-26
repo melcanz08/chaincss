@@ -1,0 +1,128 @@
+{
+  "compiler": "chaincss",
+  "version": "2.7.2",
+  "pipeline": "18 passes (normalize→validate→analyze→optimize→lower→emit)",
+  "timestamp": "2026-06-26T06-10-11-050Z",
+  "systemInfo": {
+    "node": "v22.22.2",
+    "platform": "linux",
+    "arch": "x64",
+    "cpus": 4,
+    "memoryGB": 4
+  },
+  "coldWarm": {
+    "coldMs": 63.46,
+    "warmAvgMs": 18.4,
+    "overheadMs": 45.05
+  },
+  "results": [
+    {
+      "scenario": "small",
+      "label": "Small (5 rules)",
+      "rules": 5,
+      "declarations": 20,
+      "pseudoClasses": 1,
+      "atRules": 1,
+      "estimatedCSSBytes": 500,
+      "iterations": 100,
+      "metrics": {
+        "avg": 0.301,
+        "median": 0.254,
+        "min": 0.247,
+        "max": 1.833,
+        "p95": 0.469,
+        "p99": 1.833,
+        "stdDev": 0.172
+      },
+      "memory": {
+        "startMB": 22.44,
+        "endMB": 13.63,
+        "peakMB": 26.85,
+        "avgPeakMB": 19.25,
+        "deltaMB": -8.81
+      },
+      "passBreakdown": {}
+    },
+    {
+      "scenario": "medium",
+      "label": "Medium (50 rules)",
+      "rules": 50,
+      "declarations": 400,
+      "pseudoClasses": 10,
+      "atRules": 5,
+      "estimatedCSSBytes": 10000,
+      "iterations": 50,
+      "metrics": {
+        "avg": 2.232,
+        "median": 2.02,
+        "min": 1.739,
+        "max": 3.587,
+        "p95": 3.392,
+        "p99": 3.587,
+        "stdDev": 0.52
+      },
+      "memory": {
+        "startMB": 14.95,
+        "endMB": 17.5,
+        "peakMB": 26.14,
+        "avgPeakMB": 19.54,
+        "deltaMB": 2.55
+      },
+      "passBreakdown": {}
+    },
+    {
+      "scenario": "large",
+      "label": "Large (500 rules)",
+      "rules": 500,
+      "declarations": 5000,
+      "pseudoClasses": 100,
+      "atRules": 50,
+      "estimatedCSSBytes": 125000,
+      "iterations": 30,
+      "metrics": {
+        "avg": 22.378,
+        "median": 21.911,
+        "min": 18.837,
+        "max": 42.257,
+        "p95": 31.694,
+        "p99": 42.257,
+        "stdDev": 4.493
+      },
+      "memory": {
+        "startMB": 18.63,
+        "endMB": 18.61,
+        "peakMB": 48.37,
+        "avgPeakMB": 36.41,
+        "deltaMB": -0.02
+      },
+      "passBreakdown": {}
+    },
+    {
+      "scenario": "xlarge",
+      "label": "X-Large (2000 rules)",
+      "rules": 2000,
+      "declarations": 20000,
+      "pseudoClasses": 400,
+      "atRules": 200,
+      "estimatedCSSBytes": 500000,
+      "iterations": 10,
+      "metrics": {
+        "avg": 128.997,
+        "median": 117.268,
+        "min": 110.944,
+        "max": 164.69,
+        "p95": 164.69,
+        "p99": 164.69,
+        "stdDev": 20.872
+      },
+      "memory": {
+        "startMB": 50.04,
+        "endMB": 64.83,
+        "peakMB": 87.31,
+        "avgPeakMB": 64.66,
+        "deltaMB": 14.79
+      },
+      "passBreakdown": {}
+    }
+  ]
+}

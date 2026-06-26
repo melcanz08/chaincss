@@ -1,4 +1,5 @@
 // src/compiler/pipeline/generators/token-resolver.ts
+import { recordHistory } from '../ir/utils.js';
 
 import type { StyleIR } from '../../style-ir.js';
 import type { LoweringPass, LoweringResult } from '../pipeline-types.js';
@@ -21,12 +22,7 @@ export const tokenLowering: LoweringPass = {
 
         for (const [prop, value] of Object.entries(resolved.properties)) {
           const decl = createDeclaration(prop, value);
-          decl.history.push({
-            pass: 'token-resolver',
-            action: 'resolved-token',
-            timestamp: Date.now(),
-            reason: `${category}:${intent} → ${prop}: ${value}`,
-          });
+          recordHistory(decl, 'token-resolver', 'resolved-token', undefined, `${category}:${intent} → ${prop}: ${value}`);
           decl.meta.semantic = { category, intent };
 
           if (resolved.pseudoClass) {

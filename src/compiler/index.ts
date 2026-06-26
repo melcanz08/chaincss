@@ -19,8 +19,7 @@ export { setBreakpoints } from './breakpoints.js';
 export { AtomicOptimizer } from './legacy/atomic-optimizer.js';
 export type { 
   AtomicClass, 
-  AtomicOptimizerOptions, 
-  AtomicOptimizerStats,
+  
   ComponentClassMapEntry,
   OptimizeResult 
 } from './legacy/atomic-optimizer.js';

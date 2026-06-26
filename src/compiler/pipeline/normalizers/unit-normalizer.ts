@@ -1,4 +1,5 @@
 // src/compiler/pipeline/normalizers/unit-normalizer.ts
+import { recordHistory } from '../ir/utils.js';
 
 import type { StyleIR } from '../../style-ir.js';
 import type { NormalizationPass, NormalizationResult, Correction } from '../pipeline-types.js';
@@ -28,13 +29,7 @@ export const unitNormalizer: NormalizationPass = {
               corrected: decl.value,
               reason: 'Added px unit to number value',
             });
-            decl.history.push({
-              pass: 'unit-normalizer',
-              action: 'added-unit',
-              timestamp: Date.now(),
-              previous: original,
-              reason: 'Added px unit to number value',
-            });
+            recordHistory(decl, 'unit-normalizer', 'added-unit', original, 'Added px unit to number value');
           }
         }
 

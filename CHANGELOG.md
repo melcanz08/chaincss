@@ -150,3 +150,26 @@ ChainCSS 2.0 is a complete rewrite focused on **zero-runtime CSS-in-JS** with op
 - Vue composables
 - Token system
 - Recipe variants
+## 2.8.0 (2026-06-26)
+
+### Performance
+- Pipeline trimmed to 6 core passes (down from 18): intent-normalizer, unit-normalizer, css-compressor, intent-resolver, token-resolver, css-emitter
+- X-Large compilation (2000 rules, 20K declarations): 166ms → 52ms (3.2x faster)
+- Cold start: 82ms → 21ms (3.9x faster)
+- Bundle size: 221KB → 163KB (26% smaller)
+- Memory peak: 95MB → 56MB (41% reduction)
+- CSS compression: 10% average savings now measured and reported
+
+### Architecture
+- Compiler now uses new Pipeline by default instead of legacy PassManager
+- Linters and analyzers preserved as documented opt-in plugins (accessibility, conflict detection, pattern analysis, dead code elimination)
+- Legacy AtomicOptimizer stubbed — atomic extraction available via opt-in plugin
+- Declaration history tracking gated on NODE_ENV (production memory savings)
+
+### Benchmarking
+- Full benchmark suite: cold/warm start, 4 scale scenarios, per-stage timing, CSS bytes saved, incremental potential
+- JSON and Markdown output to benchmarks/results/
+- Per-pass profiling identifies lowering stage as primary cost center (css-emitter)
+
+### Breaking Changes
+- None. All removed passes are available as opt-in imports.

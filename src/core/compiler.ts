@@ -119,7 +119,7 @@ export class ChainCSSCompiler {
     this.pipelineEnabled = (config as any).experimental?.enablePipeline !== false;
     this.passManager = new PassManager(DEFAULT_PIPELINE);
     this.pipeline = createDefaultPipeline();
-    this.useNewPipeline = (config as any).experimental?.useNewPipeline === true;
+    this.useNewPipeline = (config as any).experimental?.useNewPipeline !== false;
   }
 
   // ==========================================================================

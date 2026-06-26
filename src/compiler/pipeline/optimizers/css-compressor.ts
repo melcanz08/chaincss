@@ -1,4 +1,5 @@
 // src/compiler/pipeline/optimizers/css-compressor.ts
+import { recordHistory } from '../ir/utils.js';
 
 import type { StyleIR } from '../../style-ir.js';
 import type { OptimizationPass, OptimizationResult } from '../pipeline-types.js';
@@ -18,13 +19,7 @@ export const cssCompressor: OptimizationPass = {
           const hex = decl.value;
           if (hex[1] === hex[2] && hex[3] === hex[4] && hex[5] === hex[6]) {
             const shortened = '#' + hex[1] + hex[3] + hex[5];
-            decl.history.push({
-              pass: 'css-compressor',
-              action: 'shortened-hex',
-              timestamp: Date.now(),
-              previous: hex,
-              reason: 'Shortened hex color',
-            });
+            recordHistory(decl, 'css-compressor', 'shortened-hex', hex, 'Shortened hex color');
             decl.value = shortened;
             changes++;
           }
