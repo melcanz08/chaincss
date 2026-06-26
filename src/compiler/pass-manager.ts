@@ -42,14 +42,6 @@
 import type { StyleIR, IRPass, IRRule, IRDeclaration } from './style-ir.js';
 import { applyPass, countNodes, debugIR } from './style-ir.js';
 
-import { accessibilityPass } from './legacy/accessibility-engine.js';
-import { responsiveInferencePass } from './legacy/responsive-inference.js';
-import { layoutIntelligencePass } from './legacy/layout-intelligence.js';
-import { patternLearningPass } from './legacy/pattern-learner.js';
-import { sourceOptimizerPass } from './legacy/source-optimizer.js';
-import { semanticTokensPass } from './legacy/semantic-tokens.js';
-import { intentAPIPass } from './legacy/intent-api.js';
-import { constraintSolverPass } from './legacy/constraint-solver.js';
 
 // ============================================================================
 // Types
@@ -440,30 +432,9 @@ export const DEFAULT_PIPELINE: PassDefinition[] = [
   // =========================================================================
   // PHASE 2: Analyze & Detect
   // =========================================================================
-  {
-    name: 'accessibility',
-    priority: 3,
-    description: 'WCAG 2.2 compliance: contrast, font-size, touch-target, focus, motion, hover-only — with auto-fixes',
-    pass: accessibilityPass,
-    requires: ['intent-recovery'],
-    enabled: true,
-  },
-  {
-    name: 'responsive-inference',
-    priority: 4,
-    description: 'Detect mobile layout issues: overflow, grid collapse, large typography, 100vh, large spacing',
-    pass: responsiveInferencePass,
-    requires: ['unit-resolution'],
-    enabled: true,
-  },
-  {
-    name: 'layout-intelligence',
-    priority: 5,
-    description: 'Recognize 35+ layout patterns, suggest macros, find duplicate patterns',
-    pass: layoutIntelligencePass,
-    requires: ['intent-recovery'],
-    enabled: true,
-  },
+  // accessibility — removed (available via @chaincss/lint)
+  // responsive-inference — removed (available via @chaincss/analyze)
+  // layout-intelligence — removed (available via @chaincss/analyze)
   {
     name: 'validation',
     priority: 6,
@@ -492,22 +463,8 @@ export const DEFAULT_PIPELINE: PassDefinition[] = [
     requires: ['specificity-sort'],
     enabled: true,
   },
-  {
-    name: 'pattern-learner',
-    priority: 9,
-    description: 'Cluster repeated styles across files, suggest recipe extraction, estimate bundle savings',
-    pass: patternLearningPass,
-    requires: ['dead-elimination'],
-    enabled: true,
-  },
-  {
-    name: 'source-optimizer',
-    priority: 10,
-    description: 'Find duplicates, specificity wars, animation conflicts, redundant media queries',
-    pass: sourceOptimizerPass,
-    requires: ['pattern-learner'],
-    enabled: true,
-  },
+  // pattern-learner — removed (available via @chaincss/analyze)
+  // source-optimizer — removed (available via @chaincss/optimize)
   {
     name: 'atomic-extraction',
     priority: 11,
@@ -536,30 +493,9 @@ export const DEFAULT_PIPELINE: PassDefinition[] = [
   // =========================================================================
   // PHASE 4: Resolve High-Level APIs
   // =========================================================================
-  {
-    name: 'semantic-tokens',
-    priority: 14,
-    description: 'Resolve semantic token intents (surface, text, elevation, state, spacing) to CSS with light/dark/high-contrast themes',
-    pass: semanticTokensPass,
-    requires: ['intent-recovery'],
-    enabled: true,
-  },
-  {
-    name: 'intent-api',
-    priority: 15,
-    description: 'Resolve 20+ high-level component intents (card, button-primary, hero-section, modal, etc.)',
-    pass: intentAPIPass,
-    requires: ['semantic-tokens'],
-    enabled: true,
-  },
-  {
-    name: 'constraint-solver',
-    priority: 16,
-    description: 'Resolve constraint expressions (width < parent, height = width * 0.5) to concrete CSS',
-    pass: constraintSolverPass,
-    requires: ['unit-resolution'],
-    enabled: true,
-  },
+  // semantic-tokens — moved to pipeline/lowering/token-lowering.ts
+  // intent-api — moved to pipeline/lowering/intent-resolver.ts
+  // constraint-solver — removed (available via @chaincss/resolve)
 
   // =========================================================================
   // PHASE 5: Finalize
@@ -577,7 +513,7 @@ export const DEFAULT_PIPELINE: PassDefinition[] = [
     priority: 18,
     description: 'Collect, deduplicate, and organize all diagnostics from all passes',
     pass: diagnosticsExportPass,
-    requires: ['validation', 'accessibility', 'layout-intelligence', 'source-optimizer'],
+    requires: [], // linters moved to opt-in packages
     enabled: true,
   },
 ];
