@@ -1,0 +1,28 @@
+{
+  "version": "2.8.1",
+  "date": "2026-06-26T09:59:36.015Z",
+  "node": "v22.22.2",
+  "results": {
+    "small": {
+      "avg": 0.291,
+      "rules": 5,
+      "decls": 20
+    },
+    "medium": {
+      "avg": 2.664,
+      "rules": 50,
+      "decls": 400
+    },
+    "large": {
+      "avg": 32.142,
+      "rules": 500,
+      "decls": 5000
+    },
+    "xlarge": {
+      "avg": 145.734,
+      "rules": 2000,
+      "decls": 20000
+    },
+    "coldStart": 9.16
+  }
+}

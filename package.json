@@ -55,7 +55,10 @@
     "test:coverage": "vitest run --coverage",
     "test:verbose": "CHAINCSS_TEST_VERBOSE=1 vitest run",
     "test:unit": "vitest run __tests__/unit",
-    "test:integration": "vitest run __tests__/integration"
+    "test:integration": "vitest run __tests__/integration",
+    "bench:baseline": "node --expose-gc --import tsx benchmarks/save-baseline.js",
+    "bench:check": "node --expose-gc --import tsx benchmarks/check-regression.js",
+    "bench:ci": "npm run bench:check"
   },
   "peerDependencies": {
     "react": ">=16.8.0",
