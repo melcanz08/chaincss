@@ -1,4 +1,4 @@
-// src/compiler/pipeline.ts
+// src/compiler/pipeline/pipeline.ts
 
 import type {
   PipelineConfig,
@@ -13,8 +13,6 @@ import type {
   AnalysisResult,
   OptimizationPass,
   OptimizationResult,
-
-
 } from './pipeline-types.js';
 import type { StyleIR } from './ir/types.js';
 import { countNodes } from './ir/utils.js';
@@ -26,6 +24,7 @@ export class Pipeline {
   private optimization: OptimizationPass[];
   private lowering: LoweringPass[];
   private contexts: Required<PipelineConfig['contexts']>;
+  private lastResult: PipelineResult | null = null;
 
   constructor(config: PipelineConfig = {}) {
     this.normalization = config.normalization || [];
@@ -46,17 +45,24 @@ export class Pipeline {
    * Execute the full pipeline in strict stage order.
    * Validation runs early to prevent wasted work on invalid IR.
    */
-
-  /** Synchronous wrapper — all passes are sync, so this just calls execute. */
-
   async execute(ir: StyleIR): Promise<PipelineResult> {
     return this.runSync(ir);
   }
 
+  /**
+   * Synchronous execution — all current passes are synchronous.
+   * Kept separate from execute() for future async pass support.
+   */
   executeSync(ir: StyleIR): PipelineResult {
-    // execute() is only async for future-proofing; all current passes are synchronous.
-    // We use a simplified sync path to avoid breaking synchronous callers.
     return this.runSync(ir);
+  }
+
+  /**
+   * Get the result from the most recent pipeline execution.
+   * Returns null if the pipeline hasn't run yet.
+   */
+  getLastResult(): PipelineResult | null {
+    return this.lastResult;
   }
 
   /** Scan IR for features that determine which passes are needed. */
@@ -205,7 +211,16 @@ export class Pipeline {
       });
     }
 
-    return { ir: current, timeline, totalDuration: Date.now() - startTime, finalCSS, incremental: { dirtyCount, totalRules, incrementalSkipped } };
+    const result: PipelineResult = {
+      ir: current,
+      timeline,
+      totalDuration: Date.now() - startTime,
+      finalCSS,
+      incremental: { dirtyCount, totalRules, incrementalSkipped }
+    };
+
+    this.lastResult = result;
+    return result;
   }
 
   /**

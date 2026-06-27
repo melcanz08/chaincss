@@ -1,4 +1,8 @@
-# ChainCSS v2.8 [![npm version](https://badge.fury.io/js/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![npm downloads](https://img.shields.io/npm/dm/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![license](https://img.shields.io/npm/l/chaincss.svg)](LICENSE)
+# ChainCSS v2.8 [![npm version](https://badge.fury.io/js/chaincss.svg)](https://www.npmjs.com/package/chaincss)
+[![CI](https://github.com/melcanz08/chaincss/actions/workflows/ci.yml/badge.svg)](https://github.com/melcanz08/chaincss/actions)
+[![codecov](https://codecov.io/gh/melcanz08/chaincss/branch/main/graph/badge.svg)](https://codecov.io/gh/melcanz08/chaincss)
+[![npm downloads](https://img.shields.io/npm/dm/chaincss.svg)](https://www.npmjs.com/package/chaincss)
+[![license](https://img.shields.io/npm/l/chaincss.svg)](LICENSE)
 
 **Zero-runtime CSS-in-JS with a chainable API and build-time optimization.** Static styles compile to plain CSS. Dynamic values resolve at runtime. A 3-stage compiler pipeline normalizes, optimizes, and emits CSS — all with zero runtime cost.
 

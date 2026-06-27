@@ -1,6 +1,18 @@
 // src/compiler/pass-manager.ts
 
 /**
+ * @deprecated Use `Pipeline` from `./pipeline/pipeline.js` instead.
+ * 
+ * The PassManager is the legacy 18-pass system replaced by the 5-stage Pipeline in v2.8.
+ * It will be removed in v3.0.
+ * 
+ * Migration guide:
+ *   Old: new PassManager(DEFAULT_PIPELINE); passManager.run(ir);
+ *   New: import { createDefaultPipeline } from './pipeline/unified-pipeline.js';
+ *        const pipeline = createDefaultPipeline(); pipeline.executeSync(ir);
+ */
+
+/**
  * Multi-Pass Optimization Pipeline
  * 
  * Coordinates all compiler passes in a defined, deterministic order.

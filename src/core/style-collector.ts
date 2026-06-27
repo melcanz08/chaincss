@@ -18,6 +18,15 @@ import { classifyValue, type ValueClass } from './value-classifier.js';
 // Types
 // ============================================================================
 
+// Symbols for internal methods — prevents collision with CSS properties
+export const INTERNAL = {
+  FINALIZE: Symbol('chain.finalize'),
+  BUILD: Symbol('chain.build'),
+  EXPLAIN: Symbol('chain.explain'),
+  RAW: Symbol('chain.raw'),
+  SELECTORS: Symbol('chain.selectors'),
+} as const;
+
 export interface StyleObject {
   [property: string]: any;
   _classes?: string[];
@@ -26,15 +35,13 @@ export interface StyleObject {
   _nestedRules?: NestedRule[];
 }
 
-export interface AtRule {
-  type: 'media' | 'keyframes' | 'font-face' | 'supports' | 'container' | 'layer';
-  query?: string;
-  name?: string;
-  condition?: string;
-  styles?: Record<string, any>;
-  steps?: Record<string, any>;
-  properties?: Record<string, string>;
-}
+export type AtRule = 
+  | { type: 'media'; query: string; styles: Record<string, any> }
+  | { type: 'keyframes'; name: string; steps: Record<string, any> }
+  | { type: 'font-face'; properties: Record<string, string> }
+  | { type: 'supports'; condition: string; styles: Record<string, any> }
+  | { type: 'container'; condition?: string; styles: Record<string, any> }
+  | { type: 'layer'; name?: string; styles: Record<string, any> };
 
 export interface NestedRule {
   selector: string;
@@ -611,6 +618,12 @@ export class StyleCollector {
         // Prevent Promise-like behavior (React and other frameworks check .then)
         if (prop === 'then') return undefined;
         
+        // Symbol-based internal access
+        if (prop === INTERNAL.FINALIZE) return (...args: string[]) => target.$el(...args);
+        if (prop === INTERNAL.BUILD) return (...args: any[]) => target.build(args);
+        if (prop === INTERNAL.EXPLAIN) return () => target.explain();
+        if (prop === INTERNAL.RAW) return () => ({ ...target['styles'] });
+        
         // Check if it's a registered macro (gridList, hero, pill, etc.)
         if (macros[prop]) {
           return (value: any) => {
@@ -679,4 +692,8 @@ chain.dynamic = function(options?: { debug?: boolean }): StyleCollector & Record
   return proxy;
 };
 
+// Alias
+export const $ = chain;
+
+// Default export
 export default chain;

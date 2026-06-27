@@ -173,7 +173,7 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
     walk(srcDir)
 
     if (!silent) {
-      const mode = disablePipeline ? 'direct' : '3-stage pipeline (v2.8+)'
+      const mode = disablePipeline ? 'direct' : '5-stage pipeline'
       summary(`Building ${chainFiles.length} file(s) with ${mode}...`)
     }
 
@@ -243,18 +243,17 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
       const parts: string[] = [
         `Built ${successCount}/${chainFiles.length} files in ${elapsed}ms`
       ]
-      if (!disablePipeline) parts.push('6 passes')
+      if (!disablePipeline) parts.push('5-stage pipeline')
       if (totalDiagnostics > 0) parts.push(`${totalDiagnostics} diagnostic${totalDiagnostics !== 1 ? 's' : ''}`)
       if (totalAutoFixes > 0) parts.push(`${totalAutoFixes} auto-fix${totalAutoFixes !== 1 ? 'es' : ''}`)
       summary(parts.join(' • '))
     }
 
+    // ── UPDATED: Use new methods ──────────────────────────
     if (pipelineReport && !disablePipeline && !silent) {
       console.log('')
-      if (compiler.isUsingNewPipeline()) {
-        console.log(compiler.getPipeline().report([]))  
-      } else {
-        console.log(compiler.getPassManager().report())
+      if (compiler.isPipelineEnabled()) {
+        compiler.printPipelineReport()
       }
     }
 
@@ -320,9 +319,7 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
 
       if (!silent) {
         const features: string[] = []
-        if (useNewPipeline) features.push('5-stage pipeline')
-        else 
-        if (!disablePipeline) features.push('3-stage pipeline')
+        if (!disablePipeline) features.push('5-stage pipeline')
         if (atomic) features.push('atomic CSS')
         if (options.tokens) features.push('design tokens')
         summary(`Initialized (${features.join(', ') || 'basic compilation'})`)

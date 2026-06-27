@@ -1,7 +1,19 @@
 // src/compiler/pipeline/index.ts
 
+/**
+ * ChainCSS Pipeline
+ * 
+ * Unified 5-stage compilation pipeline.
+ * All exports from this module are the canonical pipeline API.
+ */
+
 export { Pipeline } from './pipeline.js';
-export { createDefaultPipeline } from './default-pipeline.js';
+export { 
+  createDefaultPipeline, 
+  getDefaultPipeline, 
+  resetDefaultPipeline 
+} from './unified-pipeline.js';
+
 export type {
   PipelineConfig,
   PipelineResult,
@@ -14,10 +26,8 @@ export type {
   AnalysisResult,
   OptimizationPass,
   OptimizationResult,
-
-
+  LoweringPass,
+  LoweringResult,
   Diagnostic,
   Correction,
-  AnalysisAnnotation,
-  OptimizationSavings,
 } from './pipeline-types.js';

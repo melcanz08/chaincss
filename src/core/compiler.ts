@@ -4,11 +4,7 @@
  * ChainCSS Build Compiler
  * 
  * Orchestrates the build pipeline: scanning, atomic optimization,
- * CSS generation, manifest creation, and the full 18-pass IR pipeline.
- * 
- * Routes every style through: accessibility, responsive inference,
- * layout intelligence, pattern learning, source optimization,
- * semantic tokens, intent API, constraint solver, and more.
+ * CSS generation, manifest creation, and the unified 5-stage pipeline.
  */
 
 import fs from 'fs';
@@ -35,40 +31,23 @@ import type { StyleObject } from './style-collector.js';
 import { AtomicOptimizer } from '../compiler/legacy/atomic-optimizer.js';
 import type { AtomicClass } from '../compiler/legacy/atomic-optimizer.js';
 import { ChainCSSPrefixer } from '../compiler/prefixer.js';
-import { CacheManager } from '../compiler/cache/cache-manager.js';
-import { PersistentCache } from '../compiler/cache/content-addressable-cache.js';
 import { StyleGraphCompiler } from '../compiler/style-graph.js';
 import type { GraphCompileOptions } from '../compiler/style-graph.js';
-
-// Legacy — kept for backward compatibility
 import { scanFileForStyles } from '../compiler/scanner.js';
 
-// New 5-stage Pipeline (v2.7+)
+// Unified Pipeline (single system, no more PassManager)
 import { Pipeline, createDefaultPipeline } from '../compiler/pipeline/index.js';
 import type { PipelineResult } from '../compiler/pipeline/index.js';
 import { setBreakpoints } from '../compiler/breakpoints.js';
 
-// IR Pipeline — runs all 18 optimization passes
+// IR
 import { createIR, compileViaIR, generateCSS, type StyleIR } from '../compiler/style-ir.js';
-import { PassManager, DEFAULT_PIPELINE } from '../compiler/pass-manager.js';
 
-
-
-const __filename = typeof import.meta !== 'undefined' 
-  ? (() => { try { return fileURLToPath(import.meta.url); } catch { return ''; } })() 
-  : '';
-const __dirname = __filename ? path.dirname(__filename) : '';
-
-// ============================================================================
-// Types
-// ============================================================================
-
-interface CachedStyleEntry {
-  result: any;
-  accessCount: number;
-  lastAccessed: number;
-  hash: string;
-}
+// Services (extracted from this class)
+import { ModuleLoader } from '../compiler/services/module-loader.js';
+import { CacheStore } from '../compiler/services/cache-store.js';
+import { ManifestWriter } from '../compiler/services/manifest-writer.js';
+import type { CompilerEvent, CompilerEventHandler } from '../compiler/services/compiler-events.js';
 
 // ============================================================================
 // ChainCSSCompiler
@@ -79,25 +58,22 @@ export class ChainCSSCompiler {
   private prefixer: ChainCSSPrefixer | null = null;
   public atomicOptimizer: AtomicOptimizer | null = null;
 
-  // IR Pipeline — runs all 18 passes
-  private passManager: PassManager;
+  // Unified pipeline — single system
   private pipeline: Pipeline;
-  private useNewPipeline: boolean;
   private pipelineEnabled: boolean;
 
-  // Caching
-  private styleCache = new Map<string, CachedStyleEntry>();
-  private lruList: string[] = [];
-  private readonly MAX_CACHE_SIZE = PERFORMANCE.CACHE_MAX_ENTRIES || 500;
+  // Extracted services
+  private loader: ModuleLoader;
+  private cache: CacheStore<CompileResult>;
+  private manifestWriter: ManifestWriter;
+  
+  // Event system
+  private eventHandlers: CompilerEventHandler[] = [];
   
   // Build state
   private accumulatedCSS: string = '';
   private compileInProgress: boolean = false;
   private compileQueue: Array<{ resolve: () => void; reject: (error: Error) => void }> = [];
-  
-  // Module tracking
-  private importedModules = new Map<string, { timestamp: number; hash: string }>();
-  private dependencyGraph = new Map<string, Set<string>>();
   
   constructor(config: ChainCSSConfig) {
     this.config = {
@@ -115,11 +91,46 @@ export class ChainCSSCompiler {
     this.initOptimizer();
     this.initPrefixer();
 
-    // Initialize the IR pass pipeline (enabled by default)
+    // Initialize services
+    this.loader = new ModuleLoader();
+    this.cache = new CacheStore<CompileResult>(PERFORMANCE.CACHE_MAX_ENTRIES || 500);
+    this.manifestWriter = new ManifestWriter();
+
+    // Initialize unified pipeline (enabled by default)
     this.pipelineEnabled = (config as any).experimental?.enablePipeline !== false;
-    this.passManager = new PassManager(DEFAULT_PIPELINE);
-    this.pipeline = createDefaultPipeline();
-    this.useNewPipeline = (config as any).experimental?.useNewPipeline !== false;
+    this.pipeline = createDefaultPipeline({
+      contexts: {
+        optimization: { minify: this.config.output.minify, atomic: this.config.atomic.enabled },
+      }
+    });
+  }
+
+  // ==========================================================================
+  // Event System
+  // ==========================================================================
+
+  /**
+   * Subscribe to compiler events (warnings, errors, info).
+   * Returns an unsubscribe function.
+   */
+  public onEvent(handler: CompilerEventHandler): () => void {
+    this.eventHandlers.push(handler);
+    return () => {
+      this.eventHandlers = this.eventHandlers.filter(h => h !== handler);
+    };
+  }
+
+  private emit(event: CompilerEvent): void {
+    for (const handler of this.eventHandlers) {
+      try { handler(event); } catch { /* handler errors shouldn't break compilation */ }
+    }
+    // Default behavior: log warnings unless silent mode
+    if (event.type === 'warning' && !this.config.silent) {
+      console.warn(chalk.yellow(`[ChainCSS] ${event.code}: ${event.message}`));
+    }
+    if (event.type === 'error' && !this.config.silent) {
+      console.error(chalk.red(`[ChainCSS] ${event.code}: ${event.message}`));
+    }
   }
 
   // ==========================================================================
@@ -150,27 +161,18 @@ export class ChainCSSCompiler {
 
   /**
    * Compile a single style definition to CSS + class map.
-   * 
-   * Routes through the full 18-pass IR pipeline by default, which includes:
-   * accessibility checks, responsive inference, layout intelligence,
-   * pattern learning, source optimization, semantic tokens, intent API,
-   * constraint solver, and CSS compression.
-   * 
+   * Routes through the unified 5-stage pipeline by default.
    * Set { experimental: { enablePipeline: false } } to use direct compilation.
    */
   public compileStyle(styleId: string, styleDef: StyleDefinition): CompileResult {
-    // Use pipeline if enabled (default: true)
     if (this.pipelineEnabled) {
       return this.compileStyleViaPipeline(styleId, styleDef);
     }
-
-    // Fallback: direct compilation
     return this.compileStyleDirect(styleId, styleDef);
   }
 
   /**
-   * Compile through the full 18-pass IR pipeline.
-   * Returns enhanced CompileResult with diagnostics from all passes.
+   * Compile through the unified 5-stage pipeline.
    */
   private compileStyleViaPipeline(
     styleId: string,
@@ -180,12 +182,9 @@ export class ChainCSSCompiler {
     const cacheKey = `pipeline:${styleId}:${hash}`;
 
     // Check cache
-    const cached = this.styleCache.get(cacheKey);
+    const cached = this.cache.get(cacheKey);
     if (cached) {
-      cached.lastAccessed = Date.now();
-      cached.accessCount++;
-      this.touchLRU(cacheKey);
-      return cached.result;
+      return cached;
     }
 
     const selectors = styleDef.selectors || [];
@@ -196,16 +195,15 @@ export class ChainCSSCompiler {
     // Phase 1: Convert StyleDefinition → StyleObject
     const styleObject = this.styleDefToObject(styleDef, styleId);
 
-    // Phase 2: Parse into IR (compileViaIR handles parseIR internally)
+    // Phase 2: Parse into IR
     const { ir } = compileViaIR(
       { [styleId]: styleObject as any },
-      [], // no extra passes — we use PassManager instead
+      [],
       { sourceFile: styleId }
     );
 
-    const pipelineResult = this.useNewPipeline
-      ? this.pipeline.executeSync(ir)
-      : this.passManager.run(ir);
+    // Phase 3: Run through unified pipeline (single system)
+    const pipelineResult = this.pipeline.executeSync(ir);
 
     // Phase 4: Generate CSS from optimized IR
     let finalCSS = generateCSS(pipelineResult.ir, {
@@ -219,8 +217,14 @@ export class ChainCSSCompiler {
           ? (this.prefixer as any).processSync(finalCSS)
           : finalCSS;
         finalCSS = prefixed?.css || finalCSS;
-      } catch {
-        // Fall through with unprefixed CSS
+      } catch (e) {
+        this.emit({
+          type: 'warning',
+          code: 'PREFIXER_FAILED',
+          message: `CSS prefixing failed for "${styleId}", using unprefixed output`,
+          sourceFile: styleId,
+          originalError: e instanceof Error ? e : new Error(String(e)),
+        });
       }
     }
 
@@ -242,18 +246,18 @@ export class ChainCSSCompiler {
 
     // Attach pipeline diagnostics if verbose
     if (this.config.verbose) {
-      (result as any)._pipelineReport = (pipelineResult as any).summary || '';
+      (result as any)._pipelineReport = pipelineResult.timeline || [];
       (result as any)._diagnostics = pipelineResult.ir.diagnostics || [];
     }
 
     // Cache
-    this.addToCache(cacheKey, { result, accessCount: 1, lastAccessed: Date.now(), hash });
+    this.cache.set(cacheKey, result, hash);
 
     return result;
   }
 
   /**
-   * Direct compilation without the IR pipeline.
+   * Direct compilation without the pipeline.
    * Used when pipeline is disabled or as fallback.
    */
   private compileStyleDirect(
@@ -261,18 +265,14 @@ export class ChainCSSCompiler {
     styleDef: StyleDefinition
   ): CompileResult {
     const hash = this.hashStyleDef(styleDef);
-    const cacheKey = `${styleId}:${hash}`;
+    const cacheKey = `direct:${styleId}:${hash}`;
 
     // Check cache
-    const cached = this.styleCache.get(cacheKey);
+    const cached = this.cache.get(cacheKey);
     if (cached) {
-      cached.lastAccessed = Date.now();
-      cached.accessCount++;
-      this.touchLRU(cacheKey);
-      return cached.result;
+      return cached;
     }
 
-    // Determine selectors
     const selectors = styleDef.selectors || [];
     const isGlobalSelector = selectors.some(s => 
       !s.startsWith('.') && !s.startsWith('#')
@@ -324,7 +324,6 @@ export class ChainCSSCompiler {
       }
     }
 
-    // Phase 3: Partition for build/runtime split
     const styleObject = this.styleDefToObject(styleDef, styleId);
     const { hasDynamic } = partitionForBuild(styleObject);
 
@@ -336,7 +335,7 @@ export class ChainCSSCompiler {
     };
 
     // Cache
-    this.addToCache(cacheKey, { result, accessCount: 1, lastAccessed: Date.now(), hash });
+    this.cache.set(cacheKey, result, hash);
 
     return result;
   }
@@ -360,7 +359,6 @@ export class ChainCSSCompiler {
 
     const styleObject: StyleObject = { ...properties };
 
-    // FIX: Preserve selectors on the style object so CSS generation uses them
     if (selectors && Array.isArray(selectors)) {
       (styleObject as any).selectors = selectors;
     }
@@ -391,8 +389,7 @@ export class ChainCSSCompiler {
   // ==========================================================================
 
   /**
-   * Enable or disable the 18-pass IR pipeline.
-   * When disabled, uses direct CSS compilation (faster but no optimizations).
+   * Enable or disable the pipeline.
    */
   public setPipelineEnabled(enabled: boolean): this {
     this.pipelineEnabled = enabled;
@@ -407,53 +404,28 @@ export class ChainCSSCompiler {
   }
 
   /**
-   * Get the pass manager for direct pipeline control.
-   */
-  /**
-   * Switch to the new 5-stage Pipeline (v2.7+).
-   */
-  public setUseNewPipeline(useNew: boolean): this {
-    this.useNewPipeline = useNew;
-    return this;
-  }
-
-  /**
-   * Get the new Pipeline instance.
+   * Get the Pipeline instance for direct control.
    */
   public getPipeline(): Pipeline {
     return this.pipeline;
   }
 
   /**
-   * Check which pipeline is active.
-   */
-  public isUsingNewPipeline(): boolean {
-    return this.useNewPipeline;
-  }
-
-  public getPassManager(): PassManager {
-    return this.passManager;
-  }
-
-  /**
    * Get diagnostics from the last pipeline run.
    */
   public getDiagnostics(): any[] {
-    const results = this.passManager.getResults();
-    const allDiagnostics: any[] = [];
-    for (const result of results) {
-      if (result.errors.length > 0) {
-        allDiagnostics.push(...result.errors);
-      }
-    }
-    return allDiagnostics;
+    const results = this.pipeline.getLastResult?.();
+    return results?.ir?.diagnostics || [];
   }
 
   /**
    * Print the pipeline report to console.
    */
   public printPipelineReport(): void {
-    console.log(this.passManager.report());
+    const lastResult = this.pipeline.getLastResult?.();
+    if (lastResult?.timeline) {
+      console.log(this.pipeline.report(lastResult.timeline));
+    }
   }
 
   // ==========================================================================
@@ -501,7 +473,13 @@ export class ChainCSSCompiler {
         };
       }
     } catch (error) {
-      console.error(`Failed to compile recipe ${recipeId}:`, error);
+      this.emit({
+        type: 'error',
+        code: 'RECIPE_COMPILE_FAILED',
+        message: `Failed to compile recipe "${recipeId}": ${(error as Error).message}`,
+        sourceFile: recipeId,
+        originalError: error instanceof Error ? error : new Error(String(error)),
+      });
     }
     
     return { css: '', classMap: {}, atomicClasses: [], stats: this.getStats() };
@@ -549,7 +527,7 @@ export class ChainCSSCompiler {
   }
 
   public async compileFile(filePath: string): Promise<Record<string, CompileResult>> {
-    const moduleExports = await this.importModule(filePath);
+    const moduleExports = await this.loader.import(filePath);
     const results: Record<string, CompileResult> = {};
 
     for (const [name, value] of Object.entries(moduleExports)) {
@@ -560,6 +538,15 @@ export class ChainCSSCompiler {
       }
     }
     return results;
+  }
+
+  /**
+   * Compile source code string (for Vite/Webpack plugins).
+   * Safe wrapper used by plugins for source scanning.
+   */
+  public async compileSource(source: string, id: string): Promise<void> {
+    if (!this.atomicOptimizer || id.includes('\0')) return;
+    // Safe no-op — actual compilation is handled by compileFile() / compileStyle()
   }
 
   /**
@@ -600,7 +587,7 @@ export class ChainCSSCompiler {
                 errors.push(...result.errors);
               }
             } else if (file.endsWith('.chain.js') || file.endsWith('.chain.ts')) {
-              const exports = await this.importModule(file);
+              const exports = await this.loader.import(file);
               const styles = exports.default || exports;
               const styleArray = Object.values(styles).filter(s => s && typeof s === 'object');
               this.atomicOptimizer?.trackStyles(styleArray as StyleDefinition[]);
@@ -627,11 +614,6 @@ export class ChainCSSCompiler {
       if (!this.config.silent) {
         console.log(chalk.blue('\n🏗️  Phase 2: Generating Component Styles...'));
       }
-      
-      const manifestDir = path.resolve(process.cwd(), '.chaincss', 'manifest');
-      if (!fs.existsSync(manifestDir)) {
-        fs.mkdirSync(manifestDir, { recursive: true });
-      }
 
       let processedComponents = 0;
       const generatedClassFiles: string[] = [];
@@ -651,13 +633,12 @@ export class ChainCSSCompiler {
  */\n\n`;
         let cssBuffer = '';
 
-        // Read source to detect mixed mode (chain.dynamic())
         let sourceCode = '';
         try { sourceCode = fs.readFileSync(file, 'utf8'); } catch {}
         const hasDynamic = sourceCode.includes('chain.dynamic()');
 
         try {
-          const rawExports = await this.importModule(file);
+          const rawExports = await this.loader.import(file);
           const styles = rawExports.default || rawExports;
           
           for (const [name, style] of Object.entries(styles)) {
@@ -696,7 +677,6 @@ export class ChainCSSCompiler {
                 cssBuffer += result.css + '\n';
               }
 
-              // Collect pipeline diagnostics
               if ((result as any)._diagnostics) {
                 totalDiagnostics += (result as any)._diagnostics.length;
               }
@@ -722,7 +702,13 @@ export class ChainCSSCompiler {
                   const prefixed = await this.prefixer.process(finalCSS);
                   finalCSS = prefixed.css || finalCSS;
                 } catch (e) {
-                  // Fall through with unprefixed CSS
+                  this.emit({
+                    type: 'warning',
+                    code: 'PREFIXER_BATCH_FAILED',
+                    message: `CSS prefixing failed for "${baseName}", using unprefixed output`,
+                    sourceFile: file,
+                    originalError: e instanceof Error ? e : new Error(String(e)),
+                  });
                 }
               }
               
@@ -736,7 +722,13 @@ export class ChainCSSCompiler {
             }
           }
         } catch (error) {
-          console.error(chalk.red(`   ❌ Failed to process ${baseName}: ${(error as Error).message}`));
+          this.emit({
+            type: 'error',
+            code: 'FILE_PROCESS_FAILED',
+            message: `Failed to process ${baseName}: ${(error as Error).message}`,
+            sourceFile: file,
+            originalError: error instanceof Error ? error : new Error(String(error)),
+          });
         }
       }
 
@@ -745,7 +737,7 @@ export class ChainCSSCompiler {
         console.log(chalk.blue('\n🌍 Phase 3: Finalizing Global Assets...'));
       }
 
-      const manifestData = {
+      this.manifestWriter.write({
         version: VERSION,
         timestamp: new Date().toISOString(),
         atomicMap: this.atomicOptimizer?.atomicMap || {},
@@ -753,19 +745,16 @@ export class ChainCSSCompiler {
         pipelineEnabled: this.pipelineEnabled,
         diagnosticsCount: totalDiagnostics,
         classFiles: generatedClassFiles.map(f => path.relative(process.cwd(), f))
-      };
-
-      const manifestPath = path.join(manifestDir, 'manifest.json');
-      fs.writeFileSync(manifestPath, JSON.stringify(manifestData, null, 2));
+      });
       
       if (!this.config.silent) {
         console.log(chalk.green(`\n✅ Build Complete!`));
         console.log(chalk.gray(`   📁 Components processed: ${processedComponents}`));
         console.log(chalk.gray(`   📁 Class files generated: ${generatedClassFiles.length}`));
-        console.log(chalk.gray(`   📁 Manifest: ${path.relative(process.cwd(), manifestPath)}`));
+        console.log(chalk.gray(`   📁 Manifest: ${path.relative(process.cwd(), '.chaincss/manifest/manifest.json')}`));
         
         if (this.pipelineEnabled) {
-          console.log(chalk.cyan(`   🔬 Pipeline: 18 passes active — ${totalDiagnostics} diagnostics`));
+          console.log(chalk.cyan(`   🔬 Pipeline: 5-stage pipeline active — ${totalDiagnostics} diagnostics`));
         }
 
         if (this.atomicOptimizer) {
@@ -787,78 +776,6 @@ export class ChainCSSCompiler {
   }
 
   // ==========================================================================
-  // Caching
-  // ==========================================================================
-
-  private addToCache(key: string, entry: CachedStyleEntry): void {
-    if (this.styleCache.has(key)) {
-      this.styleCache.set(key, entry);
-      this.touchLRU(key);
-      return;
-    }
-    
-    while (this.styleCache.size >= this.MAX_CACHE_SIZE && this.lruList.length > 0) {
-      const oldest = this.lruList.shift();
-      if (oldest) {
-        this.styleCache.delete(oldest);
-      }
-    }
-    
-    this.styleCache.set(key, entry);
-    this.lruList.push(key);
-  }
-
-  private touchLRU(key: string): void {
-    this.lruList = this.lruList.filter(k => k !== key);
-    this.lruList.push(key);
-  }
-
-  private hashStyleDef(styleDef: StyleDefinition): string {
-    const { _componentName, _generateComponent, _framework, _propsDefinition, ...relevant } = styleDef as any;
-    return crypto.createHash('sha256')
-      .update(JSON.stringify(relevant))
-      .digest('hex')
-      .slice(0, 16);
-  }
-
-  // ==========================================================================
-  // Module Imports
-  // ==========================================================================
-
-  private async importModule(filePath: string): Promise<Record<string, any>> {
-    const absolutePath = path.resolve(filePath);
-    
-    if (!fs.existsSync(absolutePath)) {
-      throw new Error(`File not found: ${absolutePath}`);
-    }
-    
-    const fileUrl = pathToFileURL(absolutePath).href;
-    
-    try {
-      if (filePath.endsWith('.tsx') || filePath.endsWith('.jsx')) {
-        throw new Error(`Component file ${path.basename(filePath)} will be processed by scanner`);
-      }
-      
-      const moduleId = `${fileUrl}?t=${Date.now()}`;
-      const imported = await import(/* @vite-ignore */ moduleId);
-      return imported.default && typeof imported.default === 'object'
-        ? { ...imported.default, ...imported }
-        : imported;
-    } catch (error: any) {
-      error.message = `Failed to import ${path.basename(filePath)}: ${error.message}`;
-      throw error;
-    }
-  }
-
-  // ==========================================================================
-  // Source Scanning (for Vite/Webpack plugins)
-  // ==========================================================================
-
-  public async compileSource(source: string, id: string): Promise<void> {
-    if (!this.atomicOptimizer || id.includes('\0')) return;
-  }
-
-  // ==========================================================================
   // Utilities
   // ==========================================================================
 
@@ -872,8 +789,7 @@ export class ChainCSSCompiler {
 
   public clearCSS(): void {
     this.accumulatedCSS = '';
-    this.styleCache.clear();
-    this.lruList = [];
+    this.cache.clear();
     if (this.atomicOptimizer) {
       this.atomicOptimizer.reset();
     }
@@ -907,6 +823,14 @@ export class ChainCSSCompiler {
         item.resolve();
       }
     }
+  }
+
+  private hashStyleDef(styleDef: StyleDefinition): string {
+    const { _componentName, _generateComponent, _framework, _propsDefinition, ...relevant } = styleDef as any;
+    return crypto.createHash('sha256')
+      .update(JSON.stringify(relevant))
+      .digest('hex')
+      .slice(0, 16);
   }
 }
 

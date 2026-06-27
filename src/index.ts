@@ -1,15 +1,19 @@
 // src/index.ts
 
 /**
- * ChainCSS - Zero-runtime CSS-in-JS with Atomic CSS optimization
+ * ChainCSS — Zero-runtime CSS-in-JS with chainable API.
+ * 
+ * This is the main entry point for everyday usage.
+ * For advanced pipeline control, IR manipulation, and compiler internals,
+ * import from 'chaincss/advanced'.
  */
 
 // ============================================================================
-// Core API — The one chain to rule them all
+// Core API — The only exports most users need
 // ============================================================================
 
-export { chain, chain as $, StyleCollector } from './core/style-collector.js';
-export type { StyleObject, AtRule, NestedRule, Explanation } from './core/style-collector.js';
+export { chain, $, StyleCollector } from './core/style-collector.js';
+export type { StyleObject, Explanation } from './core/style-collector.js';
 
 export { compileToCSS, partitionForBuild } from './core/style-compiler.js';
 export type { CompileOptions, CompileResult } from './core/style-compiler.js';
@@ -17,17 +21,14 @@ export type { CompileOptions, CompileResult } from './core/style-compiler.js';
 export { classifyValue, partitionStyles, hasDynamicValues } from './core/value-classifier.js';
 export type { ValueClass } from './core/value-classifier.js';
 
-// Default export
-export { default } from './core/style-collector.js';
-
 // ============================================================================
-// Compiler (Build-time CSS generation)
+// Compiler
 // ============================================================================
 
 export { ChainCSSCompiler, compileChainCSS } from './core/compiler.js';
 
 // ============================================================================
-// Runtime Injection (Browser)
+// Runtime Injection
 // ============================================================================
 
 export {
@@ -39,19 +40,6 @@ export {
   enableRuntimeDebug,
   runRuntime
 } from './runtime/injector.js';
-
-// ============================================================================
-// Shorthands & Macros
-// ============================================================================
-
-export {
-  shorthandMap,
-  macros,
-  handleShorthand,
-  isShorthand,
-  expandShorthand,
-  getAvailableShorthands
-} from './compiler/utils/shorthands.js';
 
 // ============================================================================
 // Design Tokens
@@ -73,24 +61,20 @@ export {
 export type { ThemeContract, ThemeTokens } from './compiler/tokens/theme-contract.js';
 
 // ============================================================================
-// Atomic Optimizer
+// Shorthands & Macros
 // ============================================================================
 
-export { AtomicOptimizer } from './compiler/legacy/atomic-optimizer.js';
-export type {
-  AtomicClass,
-  AtomicOptimizerStats
-} from './compiler/legacy/atomic-optimizer.js';
+export {
+  shorthandMap,
+  macros,
+  handleShorthand,
+  isShorthand,
+  expandShorthand,
+  getAvailableShorthands
+} from './compiler/utils/shorthands.js';
 
 // ============================================================================
-// CSS Prefixer
-// ============================================================================
-
-export { ChainCSSPrefixer } from './compiler/prefixer.js';
-export type { PrefixerConfig, PrefixerResult } from './compiler/prefixer.js';
-
-// ============================================================================
-// Animations
+// Animations & Breakpoints
 // ============================================================================
 
 export {
@@ -102,169 +86,33 @@ export {
 } from './compiler/animations.js';
 export type { AnimationConfig, KeyframeDefinition } from './compiler/animations.js';
 
-// ============================================================================
-// Breakpoints
-// ============================================================================
-
 export { setBreakpoints, currentBreakpoints } from './compiler/breakpoints.js';
 export type { BreakpointsMap, ResponsiveStyle } from './compiler/breakpoints.js';
 
 // ============================================================================
-// Multi-Pass Optimization Pipeline
-// ============================================================================
-
-export {
-  PassManager,
-  runDefaultPipeline,
-  DEFAULT_PIPELINE,
-  intentRecoveryPass,
-  unitResolutionPass,
-  validationPass,
-  specificitySortPass,
-  deadEliminationPass,
-  atomicExtractionPass,
-  mediaQueryPackingPass,
-  cssIfTranspilePass,
-  cssCompressionPass,
-  diagnosticsExportPass,
-} from './compiler/pass-manager.js';
-export type { PassName, PassPriority, PassDefinition, PassResult, PipelineResult } from './compiler/pass-manager.js';
-
-// ============================================================================
-// Style IR System
-// ============================================================================
-
-export {
-  styleIR,
-  createIR,
-  parseIR,
-  generateCSS,
-  createRule,
-  createDeclaration,
-  applyPass,
-  applyPasses,
-  compileViaIR,
-  countNodes,
-  debugIR,
-  resetIdCounter,
-} from './compiler/style-ir.js';
-export type {
-  StyleIR,
-  IRRule,
-  IRDeclaration,
-  IRPseudoClass,
-  IRAtRule,
-  IRCondition,
-  IRTransformRecord,
-  IRDiagnostic,
-  IRNodeId,
-  SourceLocation,
-  IRPass,
-} from './compiler/style-ir.js';
-
-// ============================================================================
-// Style Graph Compiler
-// ============================================================================
-
-export {
-  StyleGraphCompiler,
-  compileGraph
-} from './compiler/style-graph.js';
-export type {
-  StyleGraph,
-  StyleGraphNode,
-  StyleGraphEdge,
-  GraphCompileOptions,
-  GraphCompileResult
-} from './compiler/style-graph.js';
-
-// ============================================================================
-// Cache Management
-// ============================================================================
-
-export { CacheManager } from './compiler/cache/cache-manager.js';
-export { PersistentCache } from './compiler/cache/content-addressable-cache.js';
-
-// ============================================================================
-// Design Orchestrator
-// ============================================================================
-
-export {
-  orchestrator,
-  contrastRatio,
-  checkContrast,
-  auditContrast,
-  createContextualToken,
-  resolveContextual,
-  generateContextualCSS,
-  validateTokenRelationships,
-} from './compiler/tokens/design-orchestrator.js';
-export type { ContrastResult, ContrastReport, ContextualToken, TokenContext } from './compiler/tokens/design-orchestrator.js';
-
-// ============================================================================
-// Math Engine
-// ============================================================================
-
-export {
-  math,
-  add,
-  subtract,
-  multiply,
-  divide,
-  fluidType,
-  convert,
-  toPx,
-  scale
-} from './compiler/math-engine.js';
-export type {
-  CSSUnit,
-  CSSMathValue,
-  MathContext,
-  MathResult,
-  FluidTypeConfig
-} from './compiler/math-engine.js';
-
-// ============================================================================
-// Intent Engine
-// ============================================================================
-
-export {
-  intent,
-  correct,
-  heal,
-  validate as validateValue,
-  getIntent
-} from './compiler/pipeline/normalizers/intent-detector.js';
-export type {
-  CorrectionResult,
-  HealMode,
-  HealResult,
-  IntentContext
-} from './compiler/pipeline/normalizers/intent-detector.js';
-
-// ============================================================================
-// Helpers & Utilities
-// ============================================================================
-
-export { helpers } from './compiler/utils/helpers.js';
-export { getSuggestion, getSuggestions, getPropertySuggestion } from './compiler/utils/suggestions.js';
-
-// ============================================================================
-// Recipe System
+// Recipes & Framework Codegen
 // ============================================================================
 
 export { recipe } from './compiler/recipe.js';
 export type { RecipeOptions, Recipe } from './compiler/recipe.js';
 
-// ============================================================================
-// Component Generator
-// ============================================================================
-
 export { generateComponentCode, detectFramework } from './compiler/features/framework-codegen.js';
 export type { ComponentInfo } from './compiler/features/framework-codegen.js';
+
+// ============================================================================
+// Utilities
+// ============================================================================
+
+export { helpers } from './compiler/utils/helpers.js';
+export { getSuggestion, getSuggestions, getPropertySuggestion } from './compiler/utils/suggestions.js';
+export { ChainCSSPrefixer } from './compiler/prefixer.js';
+export type { PrefixerConfig, PrefixerResult } from './compiler/prefixer.js';
 
 // ============================================================================
 // Version
 // ============================================================================
 
-export const VERSION = "2.8.0";
+export const VERSION = "2.9.0";
+
+// Default export
+export { default } from './core/style-collector.js';
