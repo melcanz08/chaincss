@@ -12,7 +12,7 @@
 // Core API — The only exports most users need
 // ============================================================================
 
-export { chain, $, StyleCollector } from './core/style-collector.js';
+export { chain, StyleCollector } from './core/style-collector.js';
 export type { StyleObject, Explanation } from './core/style-collector.js';
 
 export { compileToCSS, partitionForBuild } from './core/style-compiler.js';
