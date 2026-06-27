@@ -5,8 +5,6 @@
  * 
  * Compiles StyleObjects to CSS strings. This is the single compilation path
  * used by the build pipeline, CLI, runtime injector, and plugins.
- * 
- * Replaces: btt.ts run(), btt.ts compile(), injector.ts generateCSS()
  */
 
 import type { StyleObject, AtRule, NestedRule } from './style-collector.js';
@@ -17,22 +15,15 @@ import { partitionStyles } from './value-classifier.js';
 // ============================================================================
 
 export interface CompileOptions {
-  /** Minify output CSS */
   minify?: boolean;
-  /** Add source comments */
   sourceMap?: boolean;
-  /** Scope selector (e.g., '.my-component') */
   scopeSelector?: string;
-  /** Source file path for comments */
   sourceFile?: string;
 }
 
 export interface CompileResult {
-  /** Generated CSS string */
   css: string;
-  /** Dynamic values that couldn't be compiled */
   dynamicValues: Record<string, any>;
-  /** Whether the output contains any dynamic values */
   hasDynamic: boolean;
 }
 
@@ -40,10 +31,6 @@ export interface CompileResult {
 // CSS String Generation
 // ============================================================================
 
-/**
- * Compile a StyleObject to a CSS string.
- * Handles: properties, hover states, media queries, keyframes, nested rules.
- */
 export function compileToCSS(
   styleObject: StyleObject,
   options: CompileOptions = {}
@@ -53,7 +40,6 @@ export function compileToCSS(
   const indent = options.minify ? '' : '  ';
   const newline = options.minify ? '' : '\n';
   
-  // Separate metadata from CSS properties
   const {
     _classes,
     _transforms,
@@ -64,20 +50,18 @@ export function compileToCSS(
     ...properties
   } = styleObject as any;
   
-  // Use explicit selectors if provided, otherwise use scopeSelector
   const effectiveSelector = Array.isArray(selectors) ? selectors.join(', ') : (typeof selectors === 'string' ? selectors : scope);
-  // Separate pseudo-classes (&:hover, &:focus) from regular properties
+  
   const pseudoClasses: Record<string, Record<string, any>> = {};
   const regularProps: Record<string, any> = {};
   for (const [key, value] of Object.entries(properties)) {
     if (key.startsWith('&:')) {
-      pseudoClasses[key.substring(1)] = value as Record<string, any>; // :hover, :focus
+      pseudoClasses[key.substring(1)] = value as Record<string, any>;
     } else if (!key.startsWith('_')) {
       regularProps[key] = value;
     }
   }
   
-  // Generate main declarations (without pseudo-classes)
   const mainDeclarations = compileDeclarations(regularProps, indent, options);
   
   if (mainDeclarations.length > 0 && effectiveSelector) {
@@ -87,7 +71,6 @@ export function compileToCSS(
     parts.push(`${source}${effectiveSelector} {${newline}${mainDeclarations.join(newline)}${newline}}`);
   }
   
-  // Generate pseudo-class rules as separate selectors
   for (const [pseudo, pseudoStyles] of Object.entries(pseudoClasses)) {
     const pseudoSelector = `${effectiveSelector}${pseudo}`;
     const pseudoDeclarations = compileDeclarations(pseudoStyles, indent, options);
@@ -96,7 +79,7 @@ export function compileToCSS(
     }
   }
   
-  // Process nested rules (from both _nestedRules and nestedRules)
+  // Process nested rules
   const allNestedRules = [
     ...(_nestedRules || []),
     ...(Array.isArray(properties.nestedRules) ? properties.nestedRules : [])
@@ -115,12 +98,15 @@ export function compileToCSS(
     if (nestedCSS) parts.push(nestedCSS);
   }
   
+  // Process at-rules (media queries, keyframes, supports, etc.)
+  for (const rule of _atRules) {
+    const atRuleCSS = compileAtRule(rule, effectiveSelector, indent, newline, options);
+    if (atRuleCSS) parts.push(atRuleCSS);
+  }
+  
   return parts.join(options.minify ? '' : '\n\n');
 }
 
-/**
- * Compile a flat record of CSS properties to declaration strings.
- */
 function compileDeclarations(
   properties: Record<string, any>,
   indent: string,
@@ -129,21 +115,11 @@ function compileDeclarations(
   const lines: string[] = [];
   
   for (const [prop, value] of Object.entries(properties)) {
-    // Skip internal keys
     if (prop.startsWith('_')) continue;
-    
-    // Skip functions (can't compile to static CSS)
     if (typeof value === 'function') continue;
-    
-    // Skip nested rules — they're handled separately
     if (prop === 'nestedRules' || prop === 'atRules') continue;
+    if (typeof value === 'object' && value !== null && !Array.isArray(value)) continue;
     
-    // Handle nested objects (could be nested pseudo-elements)
-    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-      continue;
-    }
-    
-    // Regular property
     const cssProp = camelToKebab(prop);
     let finalValue = value;
     if (typeof value === 'number' && ['width','height','min-width','max-width','min-height','max-height'].includes(cssProp)) {
@@ -155,9 +131,6 @@ function compileDeclarations(
   return lines;
 }
 
-/**
- * Compile an at-rule to CSS string.
- */
 function compileAtRule(
   rule: AtRule,
   parentSelector: string,
@@ -233,11 +206,6 @@ function compileAtRule(
 // Build-Time Partitioning
 // ============================================================================
 
-/**
- * Partition a style object for build-time CSS extraction.
- * Returns compiled static CSS and a map of dynamic values
- * that need runtime resolution.
- */
 export function partitionForBuild(
   styleObject: StyleObject,
   options: CompileOptions = {}
@@ -246,7 +214,6 @@ export function partitionForBuild(
     stripMetadata(styleObject)
   );
   
-  // Compile static properties to CSS
   const staticStyleObject: StyleObject = {
     ...staticProps,
     _atRules: styleObject._atRules,
@@ -279,10 +246,7 @@ function stripMetadata(obj: StyleObject): Record<string, any> {
   }
   return cleaned;
 }
-/**
- * Legacy run() — compile multiple style objects to a CSS string.
- * Used by recipe.ts. Prefer compileToCSS() for new code.
- */
+
 export function run(...styleObjects: StyleObject[]): string {
   return styleObjects
     .map(obj => compileToCSS(obj))

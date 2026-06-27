@@ -174,7 +174,7 @@ export class ChainCSSCompiler {
   /**
    * Compile through the unified 5-stage pipeline.
    */
-  private compileStyleViaPipeline(
+    private compileStyleViaPipeline(
     styleId: string,
     styleDef: StyleDefinition
   ): CompileResult {
@@ -194,6 +194,7 @@ export class ChainCSSCompiler {
 
     // Phase 1: Convert StyleDefinition → StyleObject
     const styleObject = this.styleDefToObject(styleDef, styleId);
+    const hasAtRules = styleObject._atRules && (styleObject._atRules as any[]).length > 0;
 
     // Phase 2: Parse into IR
     const { ir } = compileViaIR(
@@ -206,9 +207,20 @@ export class ChainCSSCompiler {
     const pipelineResult = this.pipeline.executeSync(ir);
 
     // Phase 4: Generate CSS from optimized IR
-    let finalCSS = generateCSS(pipelineResult.ir, {
-      minify: this.config.output.minify,
-    });
+    // Use compileToCSS for styles with at-rules (IR pipeline doesn't handle them yet)
+    let finalCSS: string;
+    if (hasAtRules) {
+      finalCSS = compileToCSS(styleObject, {
+        scopeSelector: Array.isArray(selectors) ? selectors.join(', ') : `.${styleId}`,
+        minify: this.config.output.minify,
+        sourceMap: this.config.sourceComments,
+        sourceFile: styleId
+      });
+    } else {
+      finalCSS = generateCSS(pipelineResult.ir, {
+        minify: this.config.output.minify,
+      });
+    }
 
     // Phase 5: Run through prefixer if enabled
     if (this.prefixer && this.config.prefixer.enabled && finalCSS.trim()) {
@@ -260,7 +272,7 @@ export class ChainCSSCompiler {
    * Direct compilation without the pipeline.
    * Used when pipeline is disabled or as fallback.
    */
-  private compileStyleDirect(
+    private compileStyleDirect(
     styleId: string,
     styleDef: StyleDefinition
   ): CompileResult {
@@ -278,12 +290,16 @@ export class ChainCSSCompiler {
       !s.startsWith('.') && !s.startsWith('#')
     );
 
+    // Build the style object once (used for both at-rule check and partitionForBuild)
+    const styleObject = this.styleDefToObject(styleDef, styleId);
+    const hasAtRules = styleObject._atRules && (styleObject._atRules as any[]).length > 0;
+
     let finalClassName = '';
     let finalCSS = '';
     let atomicClasses: AtomicClass[] = [];
 
-    // Phase 1: Atomic Optimization
-    if (this.atomicOptimizer && this.config.atomic.enabled && !isGlobalSelector) {
+    // Phase 1: Atomic Optimization (skip if there are at-rules — atomic doesn't handle them)
+    if (this.atomicOptimizer && this.config.atomic.enabled && !isGlobalSelector && !hasAtRules) {
       const optimized = this.atomicOptimizer.optimize({ [styleId]: styleDef });
       
       if (optimized.map && optimized.map[styleId]) {
@@ -306,10 +322,8 @@ export class ChainCSSCompiler {
       }
     }
 
-    // Phase 2: CSS Generation
-    if (!finalCSS || isGlobalSelector) {
-      const styleObject = this.styleDefToObject(styleDef, styleId);
-      
+    // Phase 2: CSS Generation (use compileToCSS when atomic skipped or has at-rules)
+    if (!finalCSS || isGlobalSelector || hasAtRules) {
       finalCSS = compileToCSS(styleObject, {
         scopeSelector: Array.isArray(selectors) ? selectors.join(', ') : `.${styleId}`,
         minify: this.config.output.minify,
@@ -324,7 +338,6 @@ export class ChainCSSCompiler {
       }
     }
 
-    const styleObject = this.styleDefToObject(styleDef, styleId);
     const { hasDynamic } = partitionForBuild(styleObject);
 
     const result: CompileResult = {
