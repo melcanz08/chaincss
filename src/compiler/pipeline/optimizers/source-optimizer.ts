@@ -1,6 +1,6 @@
 // src/compiler/pipeline/optimizers/source-optimizer.ts
 
-import type { StyleIR } from '../../style-ir.js';
+import type { StyleIR } from '../ir/types.js';
 import type { OptimizationPass, OptimizationResult } from '../pipeline-types.js';
 
 export const sourceOptimizer: OptimizationPass = {

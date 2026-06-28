@@ -1,4 +1,5 @@
-// src/compiler/helpers.ts
+// src/compiler/utils/helpers.ts
+
 // Types
 export type Unit = 'px' | 'rem' | 'em' | '%' | 'vw' | 'vh' | 'vmin' | 'vmax' | 'ch' | 'ex';
 export type MathOperation = 'add' | 'subtract' | 'multiply' | 'divide';

@@ -1,6 +1,6 @@
 // src/compiler/pipeline/analyzers/layout-analyzer.ts
 
-import type { StyleIR, IRRule } from '../../style-ir.js';
+import type { StyleIR, IRRule } from '../ir/types.js';
 import type { AnalysisPass, AnalysisResult, AnalysisAnnotation } from '../pipeline-types.js';
 
 interface LayoutPattern {

@@ -1,7 +1,7 @@
 // src/compiler/pipeline/optimizers/css-compressor.ts
 import { recordHistory } from '../ir/utils.js';
 
-import type { StyleIR } from '../../style-ir.js';
+import type { StyleIR } from '../ir/types.js';
 import type { OptimizationPass, OptimizationResult } from '../pipeline-types.js';
 
 export const cssCompressor: OptimizationPass = {

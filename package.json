@@ -1,11 +1,11 @@
 {
   "name": "chaincss",
-  "version": "2.8.8",
+  "version": "2.8.9",
   "description": "ChainCSS - The first CSS-in-JS library with true auto-detection mixed mode. Zero runtime by default, dynamic when you need it.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-    "exports": {
+  "exports": {
     ".": {
       "browser": "./dist/browser.js",
       "types": "./dist/index.d.ts",
@@ -26,6 +26,11 @@
       "types": "./dist/compiler/index.d.ts",
       "import": "./dist/compiler/index.js",
       "require": "./dist/compiler/index.cjs"
+    },
+    "./utils": {
+      "types": "./dist/utils.d.ts",
+      "import": "./dist/utils.js",
+      "require": "./dist/utils.cjs"
     },
     "./plugin/vite": {
       "types": "./dist/plugins/vite.d.ts",

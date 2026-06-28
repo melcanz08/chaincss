@@ -5,16 +5,10 @@ import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
 
+import type { AtomicClass } from '../../core/types.js';
+export type { AtomicClass };
+
 // Types
-export interface AtomicClass {
-  className: string;
-  prop: string;
-  value: any;
-  usageCount: number;
-  rules?: string;
-  createdAt?: number;
-  hash?: string;
-}
 
 export interface AtomicOptimizerStats {
   totalStyles: number;

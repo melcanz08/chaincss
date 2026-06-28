@@ -6,6 +6,34 @@ import { createIR, createRule, createDeclaration, nextId, record } from './facto
 import type { IRPseudoClass, IRAtRule, IRCondition, StyleIR } from './types.js';
 
 // ============================================================================
+// Case Normalization
+// ============================================================================
+
+/**
+ * Normalize a CSS property name to kebab-case.
+ * All properties entering the IR MUST be kebab-case.
+ * This is enforced at parse time so no downstream pass needs
+ * to check both camelCase and kebab-case variants.
+ * 
+ * fontSize      → font-size
+ * backgroundColor → background-color
+ * zIndex        → z-index
+ * WebkitAppearance → -webkit-appearance
+ */
+function normalizeProperty(prop: string): string {
+  // Already kebab-case
+  if (!/[A-Z]/.test(prop)) return prop;
+  
+  // Handle vendor prefixes: WebkitAppearance → -webkit-appearance
+  if (/^[A-Z]/.test(prop)) {
+    return '-' + prop.replace(/([A-Z])/g, '-$1').toLowerCase();
+  }
+  
+  // Standard camelCase → kebab-case
+  return prop.replace(/([A-Z])/g, '-$1').toLowerCase();
+}
+
+// ============================================================================
 // Parser: StyleDefinition → StyleIR
 // ============================================================================
 
@@ -13,6 +41,9 @@ import type { IRPseudoClass, IRAtRule, IRCondition, StyleIR } from './types.js';
  * Parse a StyleDefinition (or Record<string, any>) into the IR.
  * This is the bridge — existing code produces StyleDefinition,
  * this converts it to typed IR for all downstream passes.
+ * 
+ * ALL property names are normalized to kebab-case at this entry point.
+ * Downstream passes can safely check for a single casing (kebab-case).
  */
 export function parseIR(
   styles: Record<string, StyleDefinition> | Record<string, any>,
@@ -35,7 +66,7 @@ export function parseIR(
         component: componentName,
       });
 
-      // Parse declarations
+      // Parse declarations — normalize property to kebab-case
       for (const [prop, value] of Object.entries(styleDef)) {
         // Skip metadata
         if (prop === 'selectors' || prop === 'selector' || prop.startsWith('_')) continue;
@@ -43,12 +74,13 @@ export function parseIR(
         if (prop === 'hover' || prop === 'atRules' || prop === 'nestedRules' || prop === 'themes') continue;
 
         if (typeof value === 'string' || typeof value === 'number') {
-          rule.declarations.push(createDeclaration(prop, value, rule.source));
+          const normalizedProp = normalizeProperty(prop);
+          rule.declarations.push(createDeclaration(normalizedProp, value, rule.source));
         }
       }
 
-      // Parse hover pseudo-class
-            const hoverStyles = styleDef.hover || styleDef['&:hover'];
+      // Parse hover pseudo-class — normalize properties
+      const hoverStyles = styleDef.hover || styleDef['&:hover'];
       if (hoverStyles && typeof hoverStyles === 'object') {
         const pc: IRPseudoClass = {
           id: nextId('hover'),
@@ -59,13 +91,14 @@ export function parseIR(
         };
         for (const [prop, value] of Object.entries(hoverStyles)) {
           if (typeof value === 'string' || typeof value === 'number') {
-            pc.declarations.push(createDeclaration(prop, value, rule.source));
+            const normalizedProp = normalizeProperty(prop);
+            pc.declarations.push(createDeclaration(normalizedProp, value, rule.source));
           }
         }
         rule.pseudoClasses.push(pc);
       }
 
-      // Parse at-rules
+      // Parse at-rules — normalize properties
       if (styleDef.atRules && Array.isArray(styleDef.atRules)) {
         for (const atRule of styleDef.atRules) {
           const irAtRule: IRAtRule = {
@@ -82,7 +115,8 @@ export function parseIR(
           if (atRule.styles && typeof atRule.styles === 'object') {
             for (const [prop, value] of Object.entries(atRule.styles)) {
               if (typeof value === 'string' || typeof value === 'number') {
-                irAtRule.declarations.push(createDeclaration(prop, value, rule.source));
+                const normalizedProp = normalizeProperty(prop);
+                irAtRule.declarations.push(createDeclaration(normalizedProp, value, rule.source));
               }
             }
           }
@@ -91,12 +125,12 @@ export function parseIR(
         }
       }
 
-      // Parse CSS if() conditions
+      // Parse CSS if() conditions — normalize property
       if (styleDef._ifConditions && Array.isArray(styleDef._ifConditions)) {
         for (const cond of styleDef._ifConditions) {
           rule.conditions.push({
             id: nextId('cond'),
-            property: cond.property,
+            property: normalizeProperty(cond.property),
             variable: cond.variable,
             conditions: cond.conditions || {},
             defaultValue: cond.defaultValue || '',

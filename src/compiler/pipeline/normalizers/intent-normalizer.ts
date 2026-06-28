@@ -1,9 +1,9 @@
 // src/compiler/pipeline/normalizers/intent-normalizer.ts
 import { recordHistory } from '../ir/utils.js';
 
-import type { StyleIR } from '../../style-ir.js';
+import type { StyleIR } from '../ir/types.js';
 import type { NormalizationPass, NormalizationResult, Correction } from '../pipeline-types.js';
-import { createDeclaration } from '../../style-ir.js';
+import { createDeclaration } from '../ir/factory.js';
 
 export const intentNormalizer: NormalizationPass = {
   name: 'intent-normalizer',

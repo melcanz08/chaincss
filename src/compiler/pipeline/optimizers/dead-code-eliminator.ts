@@ -1,6 +1,6 @@
 // src/compiler/pipeline/optimizers/dead-code-eliminator.ts
 
-import type { StyleIR } from '../../style-ir.js';
+import type { StyleIR } from '../ir/types.js';
 import type { OptimizationPass, OptimizationResult } from '../pipeline-types.js';
 
 export const deadCodeEliminator: OptimizationPass = {

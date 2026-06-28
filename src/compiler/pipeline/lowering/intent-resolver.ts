@@ -1,9 +1,9 @@
 // src/compiler/generators/intent-resolver.ts
 import { recordHistory } from '../ir/utils.js';
 
-import type { StyleIR, IRRule } from '../../style-ir.js';
+import type { StyleIR, IRRule } from '../ir/types.js';
 import type { LoweringPass, LoweringResult, LoweringContext } from '../pipeline-types.js';
-import { createDeclaration } from '../../style-ir.js';
+import { createDeclaration } from '../ir/factory.js';
 import { resolveSemantic } from '../../legacy/semantic-tokens.js';
 
 // ============================================================================

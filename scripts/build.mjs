@@ -99,6 +99,23 @@ const targets = [
     format: 'cjs',
     packages: 'external',
   },
+  // Utilities (shorthands, macros, helpers, suggestions, animations, breakpoints)
+  {
+    name: 'utils',
+    entryPoints: ['src/utils.ts'],
+    outfile: 'dist/utils.js',
+    platform: 'node',
+    format: 'esm',
+    packages: 'external',
+  },
+  {
+    name: 'utils-cjs',
+    entryPoints: ['src/utils.ts'],
+    outfile: 'dist/utils.cjs',
+    platform: 'node',
+    format: 'cjs',
+    packages: 'external',
+  },
   // Plugins
   {
     name: 'plugin-vite',
@@ -144,7 +161,7 @@ async function run() {
   rmSync(dist, { recursive: true, force: true });
   mkdirSync(dist, { recursive: true });
 
-  console.log('🔨 Building ChainCSS...\n');
+  console.log('\uD83D\uDD28 Building ChainCSS...\n');
 
   if (isWatch) {
     // Watch mode: create contexts for incremental rebuilds
@@ -165,7 +182,7 @@ async function run() {
         return ctx;
       })
     );
-    console.log('👀 Watching for changes...\n');
+    console.log('\uD83D\uDC40 Watching for changes...\n');
   } else {
     // Single build
     for (const target of targets) {
@@ -190,14 +207,14 @@ async function run() {
           chmodSync(outfile, target.chmod);
         }
 
-        console.log(`  ✅ ${target.name.padEnd(20)} → ${target.outfile}`);
+        console.log(`  \u2705 ${target.name.padEnd(20)} \u2192 ${target.outfile}`);
       } catch (err) {
-        console.error(`  ❌ ${target.name.padEnd(20)} → ${err.message}`);
+        console.error(`  \u274C ${target.name.padEnd(20)} \u2192 ${err.message}`);
         if (!isWatch) process.exit(1);
       }
     }
 
-    console.log(`\n✨ Build complete! ${targets.length} targets built.`);
+    console.log(`\n\u2728 Build complete! ${targets.length} targets built.`);
   }
 }
 

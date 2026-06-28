@@ -1,8 +1,8 @@
 // src/compiler/pipeline/generators/constraint-resolver.ts
 
-import type { StyleIR } from '../../style-ir.js';
+import type { StyleIR } from '../ir/types.js';
 import type { LoweringPass, LoweringResult } from '../pipeline-types.js';
-import { createDeclaration } from '../../style-ir.js';
+import { createDeclaration } from '../ir/factory.js';
 
 interface Constraint {
   property: string;

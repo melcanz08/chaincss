@@ -1,9 +1,9 @@
 // src/compiler/pipeline/generators/token-resolver.ts
 import { recordHistory } from '../ir/utils.js';
 
-import type { StyleIR } from '../../style-ir.js';
+import type { StyleIR } from '../ir/types.js';
 import type { LoweringPass, LoweringResult } from '../pipeline-types.js';
-import { createDeclaration } from '../../style-ir.js';
+import { createDeclaration } from '../ir/factory.js';
 import { resolveSemantic } from '../../legacy/semantic-tokens.js';
 
 export const tokenLowering: LoweringPass = {

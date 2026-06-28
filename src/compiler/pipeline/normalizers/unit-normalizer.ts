@@ -1,10 +1,14 @@
 // src/compiler/pipeline/normalizers/unit-normalizer.ts
 import { recordHistory } from '../ir/utils.js';
 
-import type { StyleIR } from '../../style-ir.js';
+import type { StyleIR } from '../ir/types.js';
 import type { NormalizationPass, NormalizationResult, Correction } from '../pipeline-types.js';
 
 const UNITLESS_PROPERTIES = [
+  'opacity', 'z-index', 'flex', 'font-weight', 'line-height', 'order',
+  'flex-grow', 'flex-shrink', 'scale', 'zoom',
+  'animation-iteration-count', 'column-count', 'orphans', 'widows',
+  'fill-opacity', 'stroke-opacity',
   'opacity', 'zIndex', 'flex', 'fontWeight', 'lineHeight', 'order',
   'flexGrow', 'flexShrink', 'scale', 'zoom',
 ];

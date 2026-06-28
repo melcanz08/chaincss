@@ -13,9 +13,13 @@ import type {
   AnalysisResult,
   OptimizationPass,
   OptimizationResult,
+  NormalizationContext,
+  ValidationContext,
+  AnalysisContext,
+  OptimizationContext,
+  LoweringContext,
 } from './pipeline-types.js';
 import type { StyleIR } from './ir/types.js';
-import { countNodes } from './ir/utils.js';
 
 export class Pipeline {
   private normalization: NormalizationPass[];
@@ -23,7 +27,14 @@ export class Pipeline {
   private analysis: AnalysisPass[];
   private optimization: OptimizationPass[];
   private lowering: LoweringPass[];
-  private contexts: Required<PipelineConfig['contexts']>;
+
+  // Guaranteed non-undefined — initialized inline, never optional
+  private normCtx: NormalizationContext;
+  private valCtx: ValidationContext;
+  private analysisCtx: AnalysisContext;
+  private optCtx: OptimizationContext;
+  private lowerCtx: LoweringContext;
+
   private lastResult: PipelineResult | null = null;
 
   constructor(config: PipelineConfig = {}) {
@@ -32,64 +43,59 @@ export class Pipeline {
     this.analysis = config.analysis || [];
     this.optimization = config.optimization || [];
     this.lowering = config.lowering || [];
-    this.contexts = {
-      normalization: config.contexts?.normalization || {},
-      validation: config.contexts?.validation || {},
-      analysis: config.contexts?.analysis || {},
-      optimization: config.contexts?.optimization || {},
-      lowering: config.contexts?.lowering || {},
-    };
+    this.normCtx = config.contexts?.normalization || {};
+    this.valCtx = config.contexts?.validation || {};
+    this.analysisCtx = config.contexts?.analysis || {};
+    this.optCtx = config.contexts?.optimization || {};
+    this.lowerCtx = config.contexts?.lowering || {};
   }
 
-  /**
-   * Execute the full pipeline in strict stage order.
-   * Validation runs early to prevent wasted work on invalid IR.
-   */
   async execute(ir: StyleIR): Promise<PipelineResult> {
     return this.runSync(ir);
   }
 
-  /**
-   * Synchronous execution — all current passes are synchronous.
-   * Kept separate from execute() for future async pass support.
-   */
   executeSync(ir: StyleIR): PipelineResult {
     return this.runSync(ir);
   }
 
-  /**
-   * Get the result from the most recent pipeline execution.
-   * Returns null if the pipeline hasn't run yet.
-   */
   getLastResult(): PipelineResult | null {
     return this.lastResult;
   }
 
-  /** Scan IR for features that determine which passes are needed. */
+  private runPassSafe<T>(
+    stage: string,
+    passName: string,
+    fn: () => T,
+    current: StyleIR
+  ): { result: T | null; duration: number } {
+    const startTime = Date.now();
+    try {
+      const result = fn();
+      return { result, duration: Date.now() - startTime };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      current.diagnostics.push({
+        id: `pass-crash-${passName}-${Date.now()}`,
+        nodeId: current.id,
+        severity: 'error',
+        message: `Pass "${passName}" threw an unhandled error: ${message}`,
+        suggestion: 'Check the pass implementation for unhandled edge cases.',
+        pass: `${stage}:${passName}`,
+      });
+      return { result: null, duration: Date.now() - startTime };
+    }
+  }
+
   private detectFeatures(ir: StyleIR): Set<string> {
     const features = new Set<string>();
-
     for (const rule of ir.rules) {
       if (rule.isDead) continue;
-
-      if (rule.meta._constraints && rule.meta._constraints.length > 0) {
-        features.add('constraints');
-      }
-      if (rule.meta._semantic && rule.meta._semantic.length > 0) {
-        features.add('semantic-tokens');
-      }
-      if (rule.meta._intent) {
-        features.add('intents');
-      }
-      if (rule.atRules.length > 0) {
-        features.add('at-rules');
-      }
-      if (rule.pseudoClasses.length > 0) {
-        features.add('pseudo-classes');
-      }
-      if (rule.declarations.length > 0) {
-        features.add('declarations');
-      }
+      if (rule.meta._constraints && rule.meta._constraints.length > 0) features.add('constraints');
+      if (rule.meta._semantic && rule.meta._semantic.length > 0) features.add('semantic-tokens');
+      if (rule.meta._intent) features.add('intents');
+      if (rule.atRules.length > 0) features.add('at-rules');
+      if (rule.pseudoClasses.length > 0) features.add('pseudo-classes');
+      if (rule.declarations.length > 0) features.add('declarations');
       for (const decl of rule.declarations) {
         if (typeof decl.value === 'string') {
           if (decl.value.includes('vh') || decl.value.includes('vw')) features.add('viewport-units');
@@ -99,152 +105,159 @@ export class Pipeline {
         }
       }
     }
-
     features.add('core');
     return features;
   }
 
-  /** Check if a pass should run given the detected features. */
   private shouldRun(passName: string, features: Set<string>): boolean {
     // Normalization always runs
-    if (passName.startsWith('intent-normalizer') || passName.startsWith('unit-normalizer')) return true;
+    if (passName === 'intent-normalizer' || passName === 'unit-normalizer') return true;
 
     // Validation always runs
-    if (passName.startsWith('accessibility-validator') || passName.startsWith('conflict-validator')) return true;
+    if (passName === 'accessibility-validator' || passName === 'conflict-validator') return true;
 
     // Analysis: skip if nothing to analyze
-    if (passName.startsWith('responsive-analyzer')) return features.has('viewport-units') || features.has('large-fixed');
-    if (passName.startsWith('layout-analyzer')) return features.has('flexbox-grid');
-    if (passName.startsWith('pattern-detector')) return features.has('declarations');
+    if (passName === 'responsive-analyzer') return features.has('viewport-units') || features.has('large-fixed');
+    if (passName === 'layout-analyzer') return features.has('flexbox-grid');
+    if (passName === 'pattern-detector') return features.has('declarations');
 
-    // Optimization: skip if nothing to optimize
-    if (passName.startsWith('specificity-sorter')) return true;
-    if (passName.startsWith('dead-code-eliminator')) return true;
-    if (passName.startsWith('accessibility-optimizer')) return features.has('declarations');
-    if (passName.startsWith('atomic-extractor')) return features.has('declarations');
-    if (passName.startsWith('media-query-packer')) return features.has('at-rules');
-    if (passName.startsWith('source-optimizer')) return features.has('declarations');
-    if (passName.startsWith('css-compressor')) return features.has('declarations');
+    // Optimization
+    if (passName === 'specificity-sorter') return true;       // ← ALWAYS runs
+    if (passName === 'dead-code-eliminator') return true;     // ← ALWAYS runs
+    if (passName === 'accessibility-optimizer') return features.has('declarations');
+    if (passName === 'atomic-extractor') return features.has('declarations');
+    if (passName === 'media-query-packer') return features.has('at-rules');
+    if (passName === 'source-optimizer') return features.has('declarations');
+    if (passName === 'css-compressor') return features.has('declarations');
 
     // Generation: skip if no high-level features
-    if (passName.startsWith('token-lowering')) return features.has('semantic-tokens');
-    if (passName.startsWith('intent-resolver')) return features.has('intents');
-    if (passName.startsWith('constraint-resolver')) return features.has('constraints');
-    if (passName.startsWith('css-emitter')) return true;
+    if (passName === 'token-lowering') return features.has('semantic-tokens');
+    if (passName === 'intent-resolver') return features.has('intents');
+    if (passName === 'constraint-resolver') return features.has('constraints');
+    if (passName === 'css-emitter') return true;
 
     return true;
   }
 
-  /** Internal sync implementation with conditional execution and incremental support. */
   private runSync(ir: StyleIR): PipelineResult {
     const startTime = Date.now();
     const timeline: PipelineStageResult[] = [];
     let current = ir;
     let skipped = 0;
-    let incrementalSkipped = 0;
 
     const features = this.detectFeatures(ir);
-    
-    // Incremental: count dirty rules and track whether this is a full or partial build
     const dirtyCount = ir.rules.filter(r => r._dirty).length;
     const totalRules = ir.rules.length;
-    const isIncremental = dirtyCount > 0 && dirtyCount < totalRules;
     ir.meta.dirtyRules = dirtyCount;
     ir.meta.compiledAt = Date.now();
 
     // Stage 1: Normalize
     for (const pass of this.normalization) {
       if (!this.shouldRun(pass.name, features)) { skipped++; continue; }
-      const passStart = Date.now();
-      const result = pass.normalize(current, (this.contexts!.normalization));
-      current = result.ir;
-      timeline.push({ stage: 'normalization', pass: pass.name, duration: Date.now() - passStart, result });
+      const { result, duration } = this.runPassSafe(
+        'normalization', pass.name,
+        () => pass.normalize(current, this.normCtx),
+        current
+      );
+      if (result) {
+        current = result.ir;
+        timeline.push({ stage: 'normalization', pass: pass.name, duration, result });
+      }
     }
 
     // Stage 2: Validate
     for (const pass of this.validation) {
       if (!this.shouldRun(pass.name, features)) { skipped++; continue; }
-      const passStart = Date.now();
-      const result = pass.validate(current, (this.contexts!.validation));
-      for (const diag of result.diagnostics) {
-        current.diagnostics.push({ id: diag.id, nodeId: diag.nodeId, severity: diag.severity, message: diag.message, suggestion: diag.suggestion, pass: `validation:${pass.name}` });
+      const { result, duration } = this.runPassSafe(
+        'validation', pass.name,
+        () => pass.validate(current, this.valCtx),
+        current
+      );
+      if (result) {
+        for (const diag of result.diagnostics) {
+          current.diagnostics.push({
+            id: diag.id, nodeId: diag.nodeId, severity: diag.severity,
+            message: diag.message, suggestion: diag.suggestion,
+            pass: `validation:${pass.name}`,
+          });
+        }
+        timeline.push({ stage: 'validation', pass: pass.name, duration, result });
       }
-      timeline.push({ stage: 'validation', pass: pass.name, duration: Date.now() - passStart, result });
     }
 
     // Stage 3: Analyze
     for (const pass of this.analysis) {
       if (!this.shouldRun(pass.name, features)) { skipped++; continue; }
-      const passStart = Date.now();
-      const result = pass.analyze(current, (this.contexts!.analysis));
-      current = result.ir;
-      timeline.push({ stage: 'analysis', pass: pass.name, duration: Date.now() - passStart, result });
+      const { result, duration } = this.runPassSafe(
+        'analysis', pass.name,
+        () => pass.analyze(current, this.analysisCtx),
+        current
+      );
+      if (result) {
+        current = result.ir;
+        timeline.push({ stage: 'analysis', pass: pass.name, duration, result });
+      }
     }
 
     // Stage 4: Optimize
     for (const pass of this.optimization) {
       if (!this.shouldRun(pass.name, features)) { skipped++; continue; }
-      const passStart = Date.now();
-      const result = pass.optimize(current, (this.contexts!.optimization));
-      current = result.ir;
-      timeline.push({ stage: 'optimization', pass: pass.name, duration: Date.now() - passStart, result });
+      const { result, duration } = this.runPassSafe(
+        'optimization', pass.name,
+        () => pass.optimize(current, this.optCtx),
+        current
+      );
+      if (result) {
+        current = result.ir;
+        timeline.push({ stage: 'optimization', pass: pass.name, duration, result });
+      }
     }
 
-    // Stage 5: Generate
+    // Stage 5: Generate (Lowering)
     let finalCSS: string | undefined;
     for (const pass of this.lowering) {
       if (!this.shouldRun(pass.name, features)) { skipped++; continue; }
-      const passStart = Date.now();
-      const result = pass.generate(current, (this.contexts!.lowering));
-      current = result.ir;
-      if (result.generatedOutput) finalCSS = result.generatedOutput;
-      timeline.push({ stage: 'lowering', pass: pass.name, duration: Date.now() - passStart, result });
+      const { result, duration } = this.runPassSafe(
+        'lowering', pass.name,
+        () => pass.generate(current, this.lowerCtx),
+        current
+      );
+      if (result) {
+        current = result.ir;
+        if (result.generatedOutput) finalCSS = result.generatedOutput;
+        timeline.push({ stage: 'lowering', pass: pass.name, duration, result });
+      }
     }
 
     if (skipped > 0) {
       current.diagnostics.push({
-        id: 'pipeline-skip',
-        nodeId: current.id,
-        severity: 'info',
+        id: 'pipeline-skip', nodeId: current.id, severity: 'info',
         message: `Skipped ${skipped} pass(es) — no relevant features detected`,
         pass: 'pipeline',
       });
     }
 
     const result: PipelineResult = {
-      ir: current,
-      timeline,
-      totalDuration: Date.now() - startTime,
-      finalCSS,
-      incremental: { dirtyCount, totalRules, incrementalSkipped }
+      ir: current, timeline, totalDuration: Date.now() - startTime, finalCSS,
+      incremental: { dirtyCount, totalRules, incrementalSkipped: 0 }
     };
-
     this.lastResult = result;
     return result;
   }
 
-  /**
-   * Print a human-readable pipeline report.
-   */
   report(timeline: PipelineStageResult[]): string {
     const lines = [
       '═══════════════════════════════════════════',
       '  ChainCSS Pipeline Report',
       '═══════════════════════════════════════════',
     ];
-
     let currentStage = '';
     for (const entry of timeline) {
       if (entry.stage !== currentStage) {
         currentStage = entry.stage;
-        lines.push('');
-        lines.push('  [' + currentStage.toUpperCase() + ']');
+        lines.push('', '  [' + currentStage.toUpperCase() + ']');
       }
-      
-      const duration = entry.duration.toString().padStart(4);
-      lines.push('    ✓ ' + entry.pass.padEnd(25) + ' ' + duration + 'ms');
-      
-      // Show warnings/errors if present
+      lines.push('    ✓ ' + entry.pass.padEnd(25) + ' ' + String(entry.duration).padStart(4) + 'ms');
       if (entry.stage === 'validation') {
         const vr = entry.result as ValidationResult;
         if (vr.stats.errors > 0 || vr.stats.warnings > 0) {
@@ -252,9 +265,7 @@ export class Pipeline {
         }
       }
     }
-
-    lines.push('');
-    lines.push('═══════════════════════════════════════════');
+    lines.push('', '═══════════════════════════════════════════');
     return lines.join('\n');
   }
 }

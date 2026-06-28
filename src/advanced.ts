@@ -10,7 +10,13 @@
  */
 
 // Pipeline
-export { Pipeline, createDefaultPipeline, getDefaultPipeline } from './compiler/pipeline/index.js';
+export { 
+  Pipeline, 
+  createDefaultPipeline,
+  createFullPipeline,
+  createPipeline,
+} from './compiler/pipeline/index.js';
+export type { PipelinePreset } from './compiler/pipeline/index.js';
 export type { 
   PipelineConfig, 
   PipelineResult, 
@@ -63,9 +69,12 @@ export type {
 export { CacheManager } from './compiler/cache/cache-manager.js';
 export { PersistentCache } from './compiler/cache/content-addressable-cache.js';
 
-// Atomic Optimizer
+// Atomic Optimizer (deprecated — use pipeline atomic-extractor pass instead)
+/** @deprecated Atomic extraction is now handled by the pipeline's atomic-extractor pass. */
 export { AtomicOptimizer } from './compiler/legacy/atomic-optimizer.js';
-export type { AtomicClass, AtomicOptimizerStats } from './compiler/legacy/atomic-optimizer.js';
+/** @deprecated Use pipeline's IR types instead. */
+export type { AtomicClass } from './core/types.js';
+export type { AtomicOptimizerStats } from './compiler/legacy/atomic-optimizer.js';
 
 // Design Orchestrator
 export {

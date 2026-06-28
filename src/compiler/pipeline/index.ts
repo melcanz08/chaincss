@@ -9,10 +9,11 @@
 
 export { Pipeline } from './pipeline.js';
 export { 
-  createDefaultPipeline, 
-  getDefaultPipeline, 
-  resetDefaultPipeline 
+  createDefaultPipeline,
+  createFullPipeline,
+  createPipeline,
 } from './unified-pipeline.js';
+export type { PipelinePreset } from './unified-pipeline.js';
 
 export type {
   PipelineConfig,

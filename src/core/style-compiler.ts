@@ -8,7 +8,7 @@
  */
 
 import type { StyleObject, AtRule, NestedRule } from './style-collector.js';
-import { partitionStyles } from './value-classifier.js';
+import { partitionStyles, classifyValue } from './value-classifier.js';
 
 // ============================================================================
 // Types
@@ -46,6 +46,7 @@ export function compileToCSS(
     _atRules = [],
     _nestedRules = [],
     _name,
+    _mixed,
     selectors,
     ...properties
   } = styleObject as any;
@@ -121,11 +122,7 @@ function compileDeclarations(
     if (typeof value === 'object' && value !== null && !Array.isArray(value)) continue;
     
     const cssProp = camelToKebab(prop);
-    let finalValue = value;
-    if (typeof value === 'number' && ['width','height','min-width','max-width','min-height','max-height'].includes(cssProp)) {
-      finalValue = value + 'px';
-    }
-    lines.push(`${indent}${cssProp}: ${finalValue};`);
+    lines.push(`${indent}${cssProp}: ${value};`);
   }
   
   return lines;
@@ -203,29 +200,115 @@ function compileAtRule(
 }
 
 // ============================================================================
-// Build-Time Partitioning
+// Build-Time Partitioning (RECURSIVE — handles nested/at-rules)
 // ============================================================================
 
+/**
+ * Partition a StyleObject into static CSS and dynamic values.
+ * Recursively processes nested rules and at-rules so dynamic values
+ * inside @media queries, hover states, and nested selectors are 
+ * properly detected.
+ */
 export function partitionForBuild(
   styleObject: StyleObject,
   options: CompileOptions = {}
 ): CompileResult {
-  const { static: staticProps, dynamic: dynamicProps } = partitionStyles(
+  const { static: topStatic, dynamic: topDynamic } = partitionStyles(
     stripMetadata(styleObject)
   );
+
+  // Recursively partition nested rules
+  const staticNestedRules: NestedRule[] = [];
+  const dynamicNestedRules: Record<string, any> = {};
   
+  const allNested = [
+    ...(styleObject._nestedRules || []),
+    ...(Array.isArray((styleObject as any).nestedRules) ? (styleObject as any).nestedRules : [])
+  ];
+  
+  for (const rule of allNested) {
+    const nestedResult = partitionForBuild(rule.styles, options);
+    if (nestedResult.hasDynamic) {
+      dynamicNestedRules[rule.selector] = nestedResult.dynamicValues;
+    }
+    // Even if the nested rule has dynamic values, we still emit the static parts
+    staticNestedRules.push({
+      selector: rule.selector,
+      styles: stripMetadata(rule.styles) // Static parts will be compiled
+    });
+  }
+
+  // Recursively partition at-rules
+  const staticAtRules: AtRule[] = [];
+  const dynamicAtRules: Record<string, any> = {};
+  
+  for (const atRule of (styleObject._atRules || [])) {
+    if (atRule.styles) {
+      const atResult = partitionForBuild(atRule.styles, options);
+      if (atResult.hasDynamic) {
+        dynamicAtRules[`@${atRule.type}${atRule.query ? ' ' + atRule.query : ''}`] = atResult.dynamicValues;
+      }
+      staticAtRules.push({
+        ...atRule,
+        styles: stripMetadata(atRule.styles)
+      });
+    } else {
+      // Keyframes, font-face — no nested styles object to recurse into
+      staticAtRules.push(atRule);
+    }
+  }
+
+  // Handle pseudo-classes (&:hover, &:focus, etc.)
+  const staticPseudoStyles: Record<string, any> = {};
+  const dynamicPseudoStyles: Record<string, any> = {};
+  
+  for (const [key, value] of Object.entries(styleObject)) {
+    if (key.startsWith('&:') && typeof value === 'object' && value !== null) {
+      const pseudoResult = partitionStyles(value as Record<string, any>);
+      if (Object.keys(pseudoResult.static).length > 0) {
+        staticPseudoStyles[key] = pseudoResult.static;
+      }
+      if (Object.keys(pseudoResult.dynamic).length > 0) {
+        dynamicPseudoStyles[key] = pseudoResult.dynamic;
+      }
+    }
+  }
+
+  // Build the static StyleObject (what gets compiled to CSS)
   const staticStyleObject: StyleObject = {
-    ...staticProps,
-    _atRules: styleObject._atRules,
-    _nestedRules: styleObject._nestedRules
+    ...topStatic,
+    ...staticPseudoStyles,
+    _atRules: staticAtRules,
+    _nestedRules: staticNestedRules
   };
-  
+
+  // Preserve selectors on the static object
+  if ((styleObject as any).selectors) {
+    (staticStyleObject as any).selectors = (styleObject as any).selectors;
+  }
+
+  // Compile the static portion to CSS
   const css = compileToCSS(staticStyleObject, options);
-  
+
+  // Aggregate all dynamic values (top-level + nested + at-rule + pseudo)
+  const dynamicValues: Record<string, any> = {
+    ...topDynamic,
+    ...dynamicPseudoStyles,
+  };
+
+  if (Object.keys(dynamicNestedRules).length > 0) {
+    dynamicValues._nestedRules = dynamicNestedRules;
+  }
+  if (Object.keys(dynamicAtRules).length > 0) {
+    dynamicValues._atRules = dynamicAtRules;
+  }
+
+  const hasDynamic = Object.keys(dynamicValues).length > 0;
+
   return {
     css,
-    dynamicValues: dynamicProps,
-    hasDynamic: Object.keys(dynamicProps).length > 0
+    dynamicValues,
+    hasDynamic
   };
 }
 
@@ -247,6 +330,10 @@ function stripMetadata(obj: StyleObject): Record<string, any> {
   return cleaned;
 }
 
+/**
+ * Batch compile multiple style objects and concatenate their CSS.
+ * Useful for server-side rendering and testing.
+ */
 export function run(...styleObjects: StyleObject[]): string {
   return styleObjects
     .map(obj => compileToCSS(obj))

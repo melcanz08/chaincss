@@ -1,10 +1,17 @@
-# ChainCSS v2.8 [![npm version](https://badge.fury.io/js/chaincss.svg)](https://www.npmjs.com/package/chaincss)
-[![CI](https://github.com/melcanz08/chaincss/actions/workflows/ci.yml/badge.svg)](https://github.com/melcanz08/chaincss/actions)
-[![codecov](https://codecov.io/gh/melcanz08/chaincss/branch/main/graph/badge.svg)](https://codecov.io/gh/melcanz08/chaincss)
-[![npm downloads](https://img.shields.io/npm/dm/chaincss.svg)](https://www.npmjs.com/package/chaincss)
-[![license](https://img.shields.io/npm/l/chaincss.svg)](LICENSE)
+# ChainCSS v2.8.9 [![npm version](https://badge.fury.io/js/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![npm downloads](https://img.shields.io/npm/dm/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![license](https://img.shields.io/npm/l/chaincss.svg)](LICENSE)
 
-**Zero-runtime CSS-in-JS with a chainable API and build-time optimization.** Static styles compile to plain CSS. Dynamic values resolve at runtime. A 3-stage compiler pipeline normalizes, optimizes, and emits CSS — all with zero runtime cost.
+**The CSS-in-JS library that compiles to zero.** Write styles as a chainable API. Ship static CSS with zero runtime cost. Dynamic values? Only the parts that need to be dynamic stay in JS.
+
+## Why ChainCSS?
+
+| | ChainCSS | Styled Components | Vanilla Extract | Tailwind |
+|:---|:---:|:---:|:---:|:---:|
+| **Runtime cost** | 0KB (static) | ~14KB | 0KB | 0KB |
+| **Dynamic styles** | ✅ Mixed mode | ✅ | ❌ | ❌ |
+| **Build output** | Plain CSS | JS-in-CSS | Plain CSS | Utility CSS |
+| **TypeScript** | ✅ First-class | ✅ | ✅ | Partial |
+| **Atomic CSS** | ✅ Opt-in | ❌ | ❌ | ✅ Built-in |
+| **Bundle size** | 163KB (compiler only) | 14KB (browser) | 0KB | 0KB + CSS |
 
 ```bash
 npm install chaincss
@@ -29,67 +36,14 @@ const btn = chain()
     .transform('translateY(-2px)')
   .end()
   .$el('button');
+
+// btn is a string: 'chain-button'
+// CSS is extracted at build time. Zero runtime.
 ```
 
 ---
 
-## Compiler Pipeline
-
-Every style runs through a 3-stage compiler pipeline at build time. No configuration needed.
-
-| Stage | Pass | What It Does |
-| :--- | :--- | :--- |
-| **Normalize** | Intent Normalizer | Fixes patterns (e.g., `flexbox` → `flex`, `abs` → `absolute`), adds defaults |
-| | Unit Normalizer | Adds `px` to bare numbers, normalizes values |
-| **Optimize** | CSS Compressor | Shortens hex colors (`#ff6633` → `#f63`), minifies values |
-| **Lower** | Intent Resolver | Resolves `intent()` calls to CSS declarations |
-| | Token Resolver | Resolves design tokens to CSS values |
-| | CSS Emitter | Prints final CSS output |
-
-### Opt-in Passes
-
-Additional passes are available as documented imports for projects that want build-time linting or advanced optimization:
-
-| Package | Passes | Description |
-| :--- | :--- | :--- |
-| `@chaincss/lint` | accessibility-validator, conflict-validator, accessibility-optimizer | WCAG 2.2 checks, z-index validation |
-| `@chaincss/analyze` | pattern-detector, responsive-analyzer, layout-analyzer | Pattern clustering, responsive audit |
-| `@chaincss/optimize` | specificity-sorter, dead-code-eliminator, media-query-packer, source-optimizer | Advanced CSS optimization |
-| `@chaincss/atomic` | atomic-extractor | Atomic CSS class extraction |
-
-```ts
-// Example: add linting to your pipeline
-import { accessibilityValidator } from 'chaincss/lint';
-import { createDefaultPipeline } from 'chaincss';
-
-const pipeline = createDefaultPipeline();
-pipeline.addValidation(accessibilityValidator);
-```
-
-### Disable the Pipeline
-
-```ts
-const compiler = new ChainCSSCompiler({ experimental: { enablePipeline: false } });
-```
-
----
-
-## Performance
-
-Benchmarked on Node.js v22, Linux, 4 CPUs, 4GB RAM:
-
-| Scenario | Rules | Declarations | Time | CSS Output | Savings |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Small** | 5 | 20 | 0.25ms | 574B | — |
-| **Medium** | 50 | 400 | 2.0ms | 9.2KB | 7.6% |
-| **Large** | 500 | 5,000 | 21.6ms | 112KB | 10.4% |
-| **X-Large**| 2,000 | 20,000 | 52ms | 450KB | 10.0% |
-
-> **Note:** Cold start: ~21ms | Warm start: ~10ms | Bundle size: 163KB. Full benchmark suite available in the repository.
-
----
-
-## Mixed Mode: `chain.dynamic()`
+## Mixed Mode: Static + Dynamic
 
 Use `chain.dynamic()` for styles that mix static CSS with runtime values. Static properties compile to CSS at build time. Dynamic functions resolve at runtime.
 
@@ -125,6 +79,62 @@ function Button({ isActive }) {
 | `btnClass` | `string` | Static class name (`'chain-btn'`) |
 
 > **Rule:** `chain()` for static-only styles. `chain.dynamic()` when you have functions that need runtime resolution. Strings and numbers are always static. Functions are always dynamic.
+
+---
+
+## Performance
+
+Benchmarked on Node.js v22, Linux, 4 CPUs, 4GB RAM:
+
+| Scenario | Rules | Declarations | Time | CSS Output | Savings |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Small** | 5 | 20 | 0.25ms | 574B | — |
+| **Medium** | 50 | 400 | 2.0ms | 9.2KB | 7.6% |
+| **Large** | 500 | 5,000 | 21.6ms | 112KB | 10.4% |
+| **X-Large**| 2,000 | 20,000 | 52ms | 450KB | 10.0% |
+
+> **Note:** Cold start: ~21ms | Warm start: ~10ms | Compiler only — never ships to browser. Full benchmark suite available in the repository.
+
+---
+
+## Compiler Pipeline (Advanced)
+
+Every style runs through a 3-stage compiler pipeline at build time. No configuration needed.
+
+| Stage | Pass | What It Does |
+| :--- | :--- | :--- |
+| **Normalize** | Intent Normalizer | Fixes patterns (e.g., `flexbox` → `flex`, `abs` → `absolute`), adds defaults |
+| | Unit Normalizer | Adds `px` to bare numbers, normalizes values |
+| **Optimize** | CSS Compressor | Shortens hex colors (`#ff6633` → `#f63`), minifies values |
+| **Lower** | Intent Resolver | Resolves `intent()` calls to CSS declarations |
+| | Token Resolver | Resolves design tokens to CSS values |
+| | CSS Emitter | Prints final CSS output |
+
+### Opt-in Passes
+
+Additional passes are available for projects that want build-time linting or advanced optimization:
+
+| Import | Passes | Description |
+| :--- | :--- | :--- |
+| `chaincss/compiler` | accessibility-validator, conflict-validator, accessibility-optimizer | WCAG 2.2 checks, z-index validation |
+| `chaincss/compiler` | pattern-detector, responsive-analyzer, layout-analyzer | Pattern clustering, responsive audit |
+| `chaincss/compiler` | specificity-sorter, dead-code-eliminator, media-query-packer, source-optimizer | Advanced CSS optimization |
+| `chaincss/compiler` | atomic-extractor | Atomic CSS class extraction |
+
+```ts
+// Example: add linting to your pipeline
+import { accessibilityValidator } from 'chaincss/compiler';
+import { createDefaultPipeline } from 'chaincss';
+
+const pipeline = createDefaultPipeline();
+pipeline.addValidation(accessibilityValidator);
+```
+
+### Disable the Pipeline
+
+```ts
+const compiler = new ChainCSSCompiler({ experimental: { enablePipeline: false } });
+```
 
 ---
 

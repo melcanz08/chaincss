@@ -1,6 +1,6 @@
 // src/compiler/pipeline/analyzers/pattern-detector.ts
 
-import type { StyleIR, IRRule } from '../../style-ir.js';
+import type { StyleIR, IRRule } from '../ir/types.js';
 import type { AnalysisPass, AnalysisResult, AnalysisAnnotation } from '../pipeline-types.js';
 import crypto from 'crypto';
 

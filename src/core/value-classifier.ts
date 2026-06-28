@@ -32,7 +32,7 @@ export function classifyValue(value: any): ValueClass {
     if (value.includes('${')) return 'dynamic';
     
     // Token references: theme.primary, $colors.blue, var(--token)
-    if (/\btheme\.|\$\w|var\(--|props\.|state\.|context\./.test(value)) {
+    if (/\btheme\.|\$\w|props\.|state\.|context\./.test(value)) {
       return 'dynamic';
     }
   }

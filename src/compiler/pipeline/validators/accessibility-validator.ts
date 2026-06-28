@@ -1,6 +1,6 @@
 // src/compiler/pipeline/validators/accessibility-validator.ts
 
-import type { StyleIR, IRRule } from '../../style-ir.js';
+import type { StyleIR, IRRule } from '../ir/types.js';
 import type { ValidationPass, ValidationResult, Diagnostic } from '../pipeline-types.js';
 import { contrastRatio } from '../../tokens/design-orchestrator.js';
 

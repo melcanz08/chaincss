@@ -1,4 +1,4 @@
-// src/runtime/index.ts — fixed Vue stubs
+// src/runtime/index.ts
 
 // Core runtime
 export { compileRuntime as compile, runRuntime as run, styleInjector } from './injector.js';
@@ -20,55 +20,89 @@ export {
   useComputedStyles
 } from './react.js';
 
-// Vue composables — fully inert stubs (never load vue unless Vue is detected)
-const _hasVue = () => {
-  try {
-    return typeof window !== 'undefined' && !!(window as any).__VUE__;
-  } catch { return false; }
-};
+// ==========================================================================
+// Vue — Lazy-loaded via dynamic import (ESM-safe)
+// ==========================================================================
 
-const _vueStub: any = {};
-const _loadVue = async () => {
-  if (!_hasVue()) return _vueStub;
-  try {
-    return await import('./vue.js');
-  } catch { return _vueStub; }
-};
+let _vueModule: any = null;
+let _vueLoadPromise: Promise<any> | null = null;
 
-export const useAtomicClassesVue = (...args: any[]) => _loadVue().then((m: any) => (m.useAtomicClasses || (() => ({})))(...args));
-export const ChainCSSGlobalVue = (...args: any[]) => {};
-export const createStyledVueComponent = (...args: any[]) => () => null;
-export const createStyledVueComponents = (...args: any[]) => ({});
-export const useComputedStylesVue = (...args: any[]) => ({});
-export const provideStyleContext = (...args: any[]) => {};
-export const injectStyleContext = (...args: any[]) => ({});
-
-// Svelte — loaded lazily
-let _svelteExports: any = null;
-function getSvelteExports() {
-  if (!_svelteExports) {
-    try {
-      _svelteExports = require('./svelte.js');
-    } catch(e) {
-      _svelteExports = {};
-    }
+function getVueModule(): Promise<any> {
+  if (_vueModule) return Promise.resolve(_vueModule);
+  if (!_vueLoadPromise) {
+    _vueLoadPromise = (async () => {
+      try {
+        const hasVue = typeof window !== 'undefined' && !!(window as any).__VUE__;
+        if (!hasVue) {
+          _vueModule = {};
+          return _vueModule;
+        }
+        _vueModule = await import('./vue.js');
+        return _vueModule;
+      } catch {
+        _vueModule = {};
+        return _vueModule;
+      }
+    })();
   }
-  return _svelteExports;
+  return _vueLoadPromise;
 }
-export const useAtomicClassesSvelte = (...args: any[]) => getSvelteExports().useAtomicClasses?.(...args);
-export const cxSvelte = (...args: any[]) => getSvelteExports().cx?.(...args);
-export const ChainCSSGlobalSvelte = (props: any) => getSvelteExports().ChainCSSGlobal?.(props);
-export const createStyledSvelteComponent = (...args: any[]) => getSvelteExports().createStyledComponent?.(...args);
-export const createStyledSvelteComponents = (...args: any[]) => getSvelteExports().createStyledComponents?.(...args);
-export const useComputedStylesSvelte = (...args: any[]) => getSvelteExports().useComputedStyles?.(...args);
-export const provideStyleContextSvelte = (...args: any[]) => getSvelteExports().provideStyleContext?.(...args);
-export const injectStyleContextSvelte = (...args: any[]) => getSvelteExports().injectStyleContext?.(...args);
-export const chainStyles = (...args: any[]) => getSvelteExports().chainStyles?.(...args);
 
-// HMR
-// HMR exports moved to plugin packages
+async function callVueExport(name: string, ...args: any[]): Promise<any> {
+  const mod = await getVueModule();
+  const fn = mod[name];
+  return typeof fn === 'function' ? fn(...args) : undefined;
+}
 
+export const useAtomicClassesVue = (...args: any[]) => callVueExport('useAtomicClasses', ...args);
+export const useComputedStylesVue = (...args: any[]) => callVueExport('useComputedStyles', ...args);
+export const provideStyleContext = (...args: any[]) => callVueExport('provideStyleContext', ...args);
+export const injectStyleContext = (...args: any[]) => callVueExport('injectStyleContext', ...args);
+
+// Sync stubs for components (React-style JSX usage)
+export const ChainCSSGlobalVue = (..._args: any[]) => null;
+export const createStyledVueComponent = (..._args: any[]) => () => null;
+export const createStyledVueComponents = (..._args: any[]) => ({});
+
+// ==========================================================================
+// Svelte — Lazy-loaded via dynamic import (ESM-safe)
+// ==========================================================================
+
+let _svelteModule: any = null;
+let _svelteLoadPromise: Promise<any> | null = null;
+
+function getSvelteModule(): Promise<any> {
+  if (_svelteModule) return Promise.resolve(_svelteModule);
+  if (!_svelteLoadPromise) {
+    _svelteLoadPromise = import('./svelte.js')
+      .then(mod => { _svelteModule = mod; return mod; })
+      .catch(() => { _svelteModule = {}; return _svelteModule; });
+  }
+  return _svelteLoadPromise;
+}
+
+async function callSvelteExport(name: string, ...args: any[]): Promise<any> {
+  const mod = await getSvelteModule();
+  const fn = mod[name];
+  return typeof fn === 'function' ? fn(...args) : undefined;
+}
+
+export const useAtomicClassesSvelte = (...args: any[]) => callSvelteExport('useAtomicClasses', ...args);
+export const cxSvelte = (...args: any[]) => callSvelteExport('cx', ...args);
+export const useComputedStylesSvelte = (...args: any[]) => callSvelteExport('useComputedStyles', ...args);
+export const provideStyleContextSvelte = (...args: any[]) => callSvelteExport('provideStyleContext', ...args);
+export const injectStyleContextSvelte = (...args: any[]) => callSvelteExport('injectStyleContext', ...args);
+export const chainStyles = (...args: any[]) => callSvelteExport('chainStyles', ...args);
+
+// Sync stubs for components (React-style JSX usage)
+export const ChainCSSGlobalSvelte = (..._args: any[]) => null;
+export const createStyledSvelteComponent = (..._args: any[]) => () => null;
+export const createStyledSvelteComponents = (..._args: any[]) => ({});
+
+// ==========================================================================
 // Utilities
+// ==========================================================================
+
 export {
   generateStyleId,
   hashString,
@@ -96,39 +130,32 @@ export type {
   ChainCSSDebugger
 } from './types.js';
 
+// ==========================================================================
 // Auto-inject styles into DOM
+// ==========================================================================
+
+/**
+ * Inject styles into the DOM using the unified compileToCSS compiler.
+ * This replaces the old hand-rolled CSS builder that didn't understand
+ * media queries, at-rules, or nested selectors properly.
+ */
 export function injectChainStyles(styles: Record<string, any>) {
+  const { compileToCSS } = require('../core/style-compiler.js');
   let css = '';
 
   for (const [key, obj] of Object.entries(styles)) {
     if (!obj || !obj.selectors) continue;
-    
-    const sel = '.' + obj.selectors[0];
-    css += sel + '{';
-    for (const [k, v] of Object.entries(obj)) {
-      if (['selectors','hover','atRules','nestedRules','_name','_classes'].includes(k)) continue;
-      css += k.replace(/([A-Z])/g,'-$1').toLowerCase() + ':' + v + ';';
-    }
-    css += '}';
-    if (obj.hover) {
-      css += sel + ':hover{';
-      for (const [k, v] of Object.entries(obj.hover)) css += k.replace(/([A-Z])/g,'-$1').toLowerCase() + ':' + v + ';';
-      css += '}';
-    }
-    if (obj.nestedRules) {
-      for (const rule of obj.nestedRules) {
-        css += rule.selector.replace('&', sel) + '{';
-        for (const [k, v] of Object.entries(rule.styles || {})) css += k.replace(/([A-Z])/g,'-$1').toLowerCase() + ':' + v + ';';
-        css += '}';
-      }
-    }
+    css += compileToCSS(obj, { scopeSelector: '.' + obj.selectors[0] }) + '\n';
   }
+
+  if (!css.trim()) return null;
+
   const el = document.createElement('style');
   el.setAttribute('data-chaincss', 'runtime');
   el.textContent = css;
   document.head.appendChild(el);
-  
+
   console.log('⛓️ ChainCSS — ' + Object.keys(styles).length + ' styles injected | CSS: ' + css.length + ' bytes | smartChain auto-detect active');
-  
+
   return el;
 }

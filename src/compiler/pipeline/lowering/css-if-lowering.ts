@@ -1,9 +1,14 @@
-// src/compiler/css-if-transpiler.ts
+// src/compiler/pipeline/lowering/css-if-lowering.ts
+
 /**
  * CSS if() Transpiler
+ * 
  * Detects conditional style patterns and emits:
  *   1. Native CSS if() — Chrome 137+
  *   2. @supports fallback — Firefox, Safari
+ * 
+ * Selector handling: modifier flags are safely appended to the LAST
+ * base class in a complex selector to avoid breaking descendant selectors.
  */
 
 export interface IfCondition {
@@ -20,10 +25,66 @@ export interface DetectedCondition {
   defaultValue: string | number;
 }
 
+// ============================================================================
+// Selector Utilities
+// ============================================================================
+
+/**
+ * Safely append a modifier to a CSS selector.
+ * 
+ * .card              → .card--modifier
+ * .card .title       → .card .title--modifier
+ * .btn:hover         → .btn--modifier:hover
+ * .btn:focus         → .btn--modifier:focus
+ * #app .card.active  → #app .card--modifier.active
+ * ul > li            → ul > li--modifier
+ * .a, .b             → .a--modifier, .b--modifier
+ * 
+ * The modifier is appended to the last base class segment BEFORE
+ * any pseudo-classes or structural selectors.
+ */
+function appendModifierToLastClass(selector: string, modifier: string): string {
+  // Split on commas (multiple selectors)
+  return selector
+    .split(',')
+    .map(s => appendModifierToSingleSelector(s.trim(), modifier))
+    .join(', ');
+}
+
+function appendModifierToSingleSelector(selector: string, modifier: string): string {
+  // Extract pseudo-classes from the end
+  const pseudoMatch = selector.match(/^(.+?)((?::[a-zA-Z-]+(?:\([^)]*\))?)*)$/);
+  
+  if (!pseudoMatch) return selector + modifier;
+  
+  let base = pseudoMatch[1];
+  const pseudos = pseudoMatch[2] || '';
+
+  // Find the last class or element in the base
+  const parts = base.split(/(\s+|\s*>\s*|\s*\+\s*|\s*~\s*)/);
+  
+  // Walk backwards to find the last non-whitespace, non-combinator segment
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const part = parts[i];
+    if (part && !part.match(/^\s*$/) && !part.match(/^\s*[>+~]\s*$/)) {
+      if (part.startsWith('.')) {
+        parts[i] = part + modifier;
+      } else {
+        parts[i] = part + modifier;
+      }
+      break;
+    }
+  }
+
+  return parts.join('') + pseudos;
+}
+
+// ============================================================================
+// Detection
+// ============================================================================
+
 /**
  * Detect conditional patterns from _conditions metadata.
- * When chain.when() branches set the same property to different values,
- * those can be compiled to CSS if().
  */
 export function detectIfPatterns(
   styles: Record<string, any>
@@ -55,9 +116,10 @@ export function detectIfPatterns(
   return conditions;
 }
 
-/**
- * Generate CSS if() output for detected conditions.
- */
+// ============================================================================
+// CSS Emission
+// ============================================================================
+
 export function emitCSSIf(
   selector: string,
   detectedConditions: DetectedCondition[],
@@ -104,9 +166,11 @@ export function emitCSSIf(
   }
   css += '  }\n';
   for (const cond of detectedConditions) {
+    const cleanVar = cond.variable.replace(/^--/, '');
     for (const [condition, val] of Object.entries(cond.conditions)) {
-      const modClass = selector + '--' + cond.variable.replace('--', '') + '-' + condition;
-      css += '  ' + modClass + ' { ' + cond.property + ': ' + val + '; }\n';
+      const modifier = '--' + cleanVar + '-' + condition;
+      const modSelector = appendModifierToLastClass(selector, modifier);
+      css += '  ' + modSelector + ' { ' + cond.property + ': ' + val + '; }\n';
     }
   }
   css += '}\n';

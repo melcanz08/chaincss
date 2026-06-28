@@ -3,8 +3,8 @@
 /**
  * ChainCSS Build Compiler
  * 
- * Orchestrates the build pipeline: scanning, atomic optimization,
- * CSS generation, manifest creation, and the unified 5-stage pipeline.
+ * Orchestrates the build pipeline: CSS generation, manifest creation,
+ * and the unified 5-stage pipeline.
  */
 
 import fs from 'fs';
@@ -14,13 +14,10 @@ import chalk from 'chalk';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { 
   DEFAULT_CONFIG, 
-  NEVER_ATOMIC_PROPERTIES,
-  ALWAYS_ATOMIC_PROPERTIES,
   VERSION,
   PERFORMANCE,
-  MEMORY
 } from './constants.js';
-import { generateClassName, formatCSS, writeFile, getBaseName } from './utils.js';
+import { formatCSS, writeFile, getBaseName } from './utils.js';
 import type { ChainCSSConfig, CompileResult, StyleDefinition } from './types.js';
 
 // Unified compilation pipeline
@@ -28,14 +25,11 @@ import { compileToCSS, partitionForBuild } from './style-compiler.js';
 import type { StyleObject } from './style-collector.js';
 
 // Compiler passes
-import { AtomicOptimizer } from '../compiler/legacy/atomic-optimizer.js';
-import type { AtomicClass } from '../compiler/legacy/atomic-optimizer.js';
 import { ChainCSSPrefixer } from '../compiler/prefixer.js';
 import { StyleGraphCompiler } from '../compiler/style-graph.js';
 import type { GraphCompileOptions } from '../compiler/style-graph.js';
-import { scanFileForStyles } from '../compiler/scanner.js';
 
-// Unified Pipeline (single system, no more PassManager)
+// Unified Pipeline (single system)
 import { Pipeline, createDefaultPipeline } from '../compiler/pipeline/index.js';
 import type { PipelineResult } from '../compiler/pipeline/index.js';
 import { setBreakpoints } from '../compiler/breakpoints.js';
@@ -56,7 +50,6 @@ import type { CompilerEvent, CompilerEventHandler } from '../compiler/services/c
 export class ChainCSSCompiler {
   private config: Required<ChainCSSConfig>;
   private prefixer: ChainCSSPrefixer | null = null;
-  public atomicOptimizer: AtomicOptimizer | null = null;
 
   // Unified pipeline — single system
   private pipeline: Pipeline;
@@ -82,13 +75,10 @@ export class ChainCSSCompiler {
       atomic: {
         ...DEFAULT_CONFIG.atomic,
         ...config.atomic,
-        neverAtomic: [...NEVER_ATOMIC_PROPERTIES, ...(config.atomic?.neverAtomic || [])],
-        alwaysAtomic: [...ALWAYS_ATOMIC_PROPERTIES, ...(config.atomic?.alwaysAtomic || [])]
       }
     } as Required<ChainCSSConfig>;
 
     this.setupCompilerGlobals();
-    this.initOptimizer();
     this.initPrefixer();
 
     // Initialize services
@@ -143,12 +133,6 @@ export class ChainCSSCompiler {
     }
   }
 
-  private initOptimizer(): void {
-    if (this.config.atomic.enabled) {
-      this.atomicOptimizer = new AtomicOptimizer(this.config.atomic);
-    }
-  }
-
   private initPrefixer(): void {
     if (this.config.prefixer.enabled) {
       this.prefixer = new ChainCSSPrefixer(this.config.prefixer);
@@ -174,7 +158,7 @@ export class ChainCSSCompiler {
   /**
    * Compile through the unified 5-stage pipeline.
    */
-    private compileStyleViaPipeline(
+  private compileStyleViaPipeline(
     styleId: string,
     styleDef: StyleDefinition
   ): CompileResult {
@@ -194,7 +178,6 @@ export class ChainCSSCompiler {
 
     // Phase 1: Convert StyleDefinition → StyleObject
     const styleObject = this.styleDefToObject(styleDef, styleId);
-    const hasAtRules = styleObject._atRules && (styleObject._atRules as any[]).length > 0;
 
     // Phase 2: Parse into IR
     const { ir } = compileViaIR(
@@ -207,20 +190,9 @@ export class ChainCSSCompiler {
     const pipelineResult = this.pipeline.executeSync(ir);
 
     // Phase 4: Generate CSS from optimized IR
-    // Use compileToCSS for styles with at-rules (IR pipeline doesn't handle them yet)
-    let finalCSS: string;
-    if (hasAtRules) {
-      finalCSS = compileToCSS(styleObject, {
-        scopeSelector: Array.isArray(selectors) ? selectors.join(', ') : `.${styleId}`,
-        minify: this.config.output.minify,
-        sourceMap: this.config.sourceComments,
-        sourceFile: styleId
-      });
-    } else {
-      finalCSS = generateCSS(pipelineResult.ir, {
-        minify: this.config.output.minify,
-      });
-    }
+    let finalCSS = generateCSS(pipelineResult.ir, {
+      minify: this.config.output.minify,
+    });
 
     // Phase 5: Run through prefixer if enabled
     if (this.prefixer && this.config.prefixer.enabled && finalCSS.trim()) {
@@ -272,7 +244,7 @@ export class ChainCSSCompiler {
    * Direct compilation without the pipeline.
    * Used when pipeline is disabled or as fallback.
    */
-    private compileStyleDirect(
+  private compileStyleDirect(
     styleId: string,
     styleDef: StyleDefinition
   ): CompileResult {
@@ -290,60 +262,27 @@ export class ChainCSSCompiler {
       !s.startsWith('.') && !s.startsWith('#')
     );
 
-    // Build the style object once (used for both at-rule check and partitionForBuild)
+    // Build the style object
     const styleObject = this.styleDefToObject(styleDef, styleId);
-    const hasAtRules = styleObject._atRules && (styleObject._atRules as any[]).length > 0;
 
-    let finalClassName = '';
-    let finalCSS = '';
-    let atomicClasses: AtomicClass[] = [];
-
-    // Phase 1: Atomic Optimization (skip if there are at-rules — atomic doesn't handle them)
-    if (this.atomicOptimizer && this.config.atomic.enabled && !isGlobalSelector && !hasAtRules) {
-      const optimized = this.atomicOptimizer.optimize({ [styleId]: styleDef });
-      
-      if (optimized.map && optimized.map[styleId]) {
-        finalClassName = optimized.map[styleId];
-      }
-      
-      if (optimized.css && optimized.css.trim()) {
-        finalCSS = optimized.css;
-      }
-      
-      const componentMapping = this.atomicOptimizer.getComponentMapEntry(styleId);
-      if (componentMapping?.atomicClasses) {
-        atomicClasses = componentMapping.atomicClasses
-          .map(className => {
-            const allClasses = this.atomicOptimizer?.getAllAtomicClasses?.() || [];
-            const entry = allClasses.find((a: any) => a.className === className);
-            return entry || { className, prop: '', value: '', usageCount: 0, rules: '' };
-          })
-          .filter(Boolean) as AtomicClass[];
-      }
-    }
-
-    // Phase 2: CSS Generation (use compileToCSS when atomic skipped or has at-rules)
-    if (!finalCSS || isGlobalSelector || hasAtRules) {
-      finalCSS = compileToCSS(styleObject, {
-        scopeSelector: Array.isArray(selectors) ? selectors.join(', ') : `.${styleId}`,
-        minify: this.config.output.minify,
-        sourceMap: this.config.sourceComments,
-        sourceFile: styleId
-      });
-      
-      if (isGlobalSelector) {
-        finalClassName = '';
-      } else {
-        finalClassName = finalClassName || generateClassName(styleId, this.config.atomic.naming);
-      }
-    }
+    // Generate CSS directly via compileToCSS
+    const finalCSS = compileToCSS(styleObject, {
+      scopeSelector: Array.isArray(selectors) ? selectors.join(', ') : `.${styleId}`,
+      minify: this.config.output.minify,
+      sourceMap: this.config.sourceComments,
+      sourceFile: styleId
+    });
+    
+    const finalClassName = isGlobalSelector 
+      ? '' 
+      : selectors[0]?.replace(/^\./, '') || `chain-${styleId}`;
 
     const { hasDynamic } = partitionForBuild(styleObject);
 
     const result: CompileResult = {
       css: formatCSS(finalCSS, this.config.output.minify),
       classMap: isGlobalSelector ? {} : { [styleId]: finalClassName },
-      atomicClasses: isGlobalSelector ? [] : atomicClasses,
+      atomicClasses: [],
       stats: this.getStats()
     };
 
@@ -452,7 +391,6 @@ export class ChainCSSCompiler {
         const variants = getAllVariants();
         let css = '';
         const classMap: Record<string, string> = {};
-        let allAtomicClassObjects: AtomicClass[] = [];
         
         for (const variant of variants) {
           const variantKey = Object.entries(variant)
@@ -464,24 +402,13 @@ export class ChainCSSCompiler {
             const result = this.compileStyle(`${recipeId}_${variantKey}`, styleDef);
             css += result.css;
             Object.assign(classMap, result.classMap);
-            
-            if (result.atomicClasses && result.atomicClasses.length > 0) {
-              allAtomicClassObjects.push(...result.atomicClasses);
-            }
           }
         }
-        
-        const seen = new Set<string>();
-        allAtomicClassObjects = allAtomicClassObjects.filter(ac => {
-          if (seen.has(ac.className)) return false;
-          seen.add(ac.className);
-          return true;
-        });
         
         return {
           css: formatCSS(css, this.config.output.minify),
           classMap,
-          atomicClasses: allAtomicClassObjects,
+          atomicClasses: [],
           stats: this.getStats()
         };
       }
@@ -554,16 +481,7 @@ export class ChainCSSCompiler {
   }
 
   /**
-   * Compile source code string (for Vite/Webpack plugins).
-   * Safe wrapper used by plugins for source scanning.
-   */
-  public async compileSource(source: string, id: string): Promise<void> {
-    if (!this.atomicOptimizer || id.includes('\0')) return;
-    // Safe no-op — actual compilation is handled by compileFile() / compileStyle()
-  }
-
-  /**
-   * Main build method — compiles all components and generates output files.
+   * Main build method — compiles all .chain.ts files and generates output files.
    */
   public async compileComponents(components: string[]): Promise<void> {
     if (this.compileInProgress) {
@@ -575,57 +493,10 @@ export class ChainCSSCompiler {
     this.compileInProgress = true;
     
     try {
-      if (this.atomicOptimizer) this.atomicOptimizer.reset();
       this.accumulatedCSS = '';
 
       if (!this.config.silent) {
-        console.log(chalk.blue('\n🔍 Phase 1: Scanning & Usage Analysis...'));
-      }
-
-      const BATCH_SIZE = PERFORMANCE.BATCH_SIZE || 10;
-      const errors: Error[] = [];
-      
-      for (let i = 0; i < components.length; i += BATCH_SIZE) {
-        const batch = components.slice(i, i + BATCH_SIZE);
-        const batchPromises = batch.map(async (file) => {
-          if (typeof file !== 'string' || file.includes('\0') || file.startsWith('virtual:')) {
-            return null;
-          }
-          if (!fs.existsSync(file)) return null;
-
-          try {
-            if (file.endsWith('.tsx') || file.endsWith('.jsx')) {
-              const result = scanFileForStyles(file, this.atomicOptimizer);
-              if (result.errors.length > 0) {
-                errors.push(...result.errors);
-              }
-            } else if (file.endsWith('.chain.js') || file.endsWith('.chain.ts')) {
-              const exports = await this.loader.import(file);
-              const styles = exports.default || exports;
-              const styleArray = Object.values(styles).filter(s => s && typeof s === 'object');
-              this.atomicOptimizer?.trackStyles(styleArray as StyleDefinition[]);
-            }
-          } catch (err) {
-            if (this.config.verbose) {
-              console.warn(chalk.yellow(`  ⚠️  Scanning fallback for ${path.basename(file)}`));
-            }
-            const result = scanFileForStyles(file, this.atomicOptimizer);
-            if (result.errors.length > 0) {
-              errors.push(...result.errors);
-            }
-          }
-          return null;
-        });
-        
-        await Promise.allSettled(batchPromises);
-        
-        if (this.config.verbose && i % (BATCH_SIZE * 5) === 0) {
-          console.log(chalk.gray(`  📊 Processed ${Math.min(i + BATCH_SIZE, components.length)}/${components.length} files`));
-        }
-      }
-
-      if (!this.config.silent) {
-        console.log(chalk.blue('\n🏗️  Phase 2: Generating Component Styles...'));
+        console.log(chalk.blue('\n🏗️  Building Component Styles...'));
       }
 
       let processedComponents = 0;
@@ -664,23 +535,6 @@ export class ChainCSSCompiler {
                   jsBuffer += `export const ${name}Class = '${className}';\n`;
                 } else {
                   jsBuffer += `export const ${name} = '${className}';\n`;
-                }
-                
-                if (result.atomicClasses && result.atomicClasses.length > 0 && this.atomicOptimizer) {
-                  const allEntries = this.atomicOptimizer.getAllAtomicClasses?.() || [];
-                  const entryMap = new Map(allEntries.map((a: any) => [a.className, a]));
-                  const seenAtomic = new Set<string>();
-                  
-                  for (const ac of result.atomicClasses) {
-                    const acName = typeof ac === 'string' ? ac : ac.className;
-                    if (!seenAtomic.has(acName)) {
-                      seenAtomic.add(acName);
-                      const fullEntry: any = entryMap.get(acName);
-                      if (fullEntry?.cssRule) {
-                        cssBuffer += `.${acName} { ${fullEntry.cssRule} }\n`;
-                      }
-                    }
-                  }
                 }
                 
                 cssBuffer += result.css + '\n';
@@ -745,15 +599,15 @@ export class ChainCSSCompiler {
         }
       }
 
-      // Phase 3: Manifest
+      // Manifest
       if (!this.config.silent) {
-        console.log(chalk.blue('\n🌍 Phase 3: Finalizing Global Assets...'));
+        console.log(chalk.blue('\n📋 Finalizing Manifest...'));
       }
 
       this.manifestWriter.write({
         version: VERSION,
         timestamp: new Date().toISOString(),
-        atomicMap: this.atomicOptimizer?.atomicMap || {},
+        atomicMap: {},
         stats: this.getStats(),
         pipelineEnabled: this.pipelineEnabled,
         diagnosticsCount: totalDiagnostics,
@@ -768,17 +622,6 @@ export class ChainCSSCompiler {
         
         if (this.pipelineEnabled) {
           console.log(chalk.cyan(`   🔬 Pipeline: 5-stage pipeline active — ${totalDiagnostics} diagnostics`));
-        }
-
-        if (this.atomicOptimizer) {
-          const stats = this.atomicOptimizer.getStats();
-          console.log(chalk.cyan(`\n📊 Optimization Stats:`));
-          console.log(chalk.gray(`   Atomic Rules: ${stats.atomicStyles}`));
-          console.log(chalk.gray(`   Total Styles: ${stats.totalStyles}`));
-          console.log(chalk.gray(`   Unique Properties: ${stats.uniqueProperties}`));
-          if (stats.savings) {
-            console.log(chalk.green(`   CSS Savings: ${stats.savings}`));
-          }
         }
       }
       
@@ -803,23 +646,20 @@ export class ChainCSSCompiler {
   public clearCSS(): void {
     this.accumulatedCSS = '';
     this.cache.clear();
-    if (this.atomicOptimizer) {
-      this.atomicOptimizer.reset();
-    }
   }
 
   public getStats() {
-    const stats = this.atomicOptimizer?.getStats();
+    // Return pipeline-based stats (no legacy AtomicOptimizer)
+    const lastResult = this.pipeline.getLastResult?.();
+    const rules = lastResult?.ir?.rules?.length || 0;
+    const aliveRules = lastResult?.ir?.rules?.filter((r: any) => !r.isDead).length || 0;
+    
     return {
-      totalStyles: stats?.totalStyles || 0,
-      atomicStyles: stats?.atomicStyles || 0,
-      uniqueProperties: stats?.uniqueProperties || 0,
-      savings: stats?.savings || '0%'
+      totalStyles: rules,
+      atomicStyles: 0,  // Atomic extraction is handled by pipeline passes
+      uniqueProperties: 0,
+      savings: '0%'
     };
-  }
-
-  public getAtomicMap(): Record<string, string> {
-    return this.atomicOptimizer?.getAtomicMap?.() || {};
   }
 
   private generateCSSFile(results: Record<string, CompileResult>, outputPath: string): void {
