@@ -435,7 +435,7 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
         tag: 'link',
         attrs: {
           rel: 'stylesheet',
-          href: '/__chaincss.css',
+          href: '/assets/chaincss.css',
           'data-chaincss': ''
         },
         injectTo: 'head'
