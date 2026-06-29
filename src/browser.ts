@@ -1,4 +1,5 @@
 // chaincss/src/browser.ts
+export { VERSION } from "./index.js";
 
 // Browser-only entry for ChainCSS hybrid mode
 // Zero Node.js dependencies — safe for Vite/webpack browser bundles

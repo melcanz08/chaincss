@@ -7,7 +7,7 @@
 import type { ChainCSSConfig } from './types.js';
 
 // Version
-export const VERSION = '2.0.0';
+export const VERSION = '2.8.13';
 
 // Default CSS properties that should never be atomic
 export const NEVER_ATOMIC_PROPERTIES = [
@@ -106,7 +106,7 @@ export const DEFAULT_TYPES_FILENAME = 'classes.d.ts';
 
 // Cache configuration
 export const DEFAULT_CACHE_PATH = './.chaincss-cache';
-export const CACHE_VERSION = '2.0.0';
+export const CACHE_VERSION = '2.8.13';
 
 // Atomic optimizer thresholds
 export const DEFAULT_ATOMIC_THRESHOLD = 2;
