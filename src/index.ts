@@ -57,7 +57,7 @@ export type { RecipeOptions, Recipe } from './compiler/recipe.js';
 // Version
 // ============================================================================
 
-export const VERSION = "2.8.13";
+export const VERSION = "2.8.15";
 
 // Default export
 export { default } from './core/style-collector.js';
