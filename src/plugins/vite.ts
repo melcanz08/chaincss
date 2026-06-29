@@ -418,8 +418,19 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
       })
     },
 
+    async generateBundle(_opts: any, bundle: any) {
+      // Compile all styles and emit as a static CSS asset
+      const css = await compileAllStyles();
+      if (css && css.trim()) {
+        this.emitFile({
+          type: "asset",
+          fileName: "assets/chaincss.css",
+          source: css,
+        });
+      }
+    },
+
     transformIndexHtml() {
-      if (process.env.NODE_ENV === 'production') return []
       return [{
         tag: 'link',
         attrs: {
@@ -428,7 +439,7 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
           'data-chaincss': ''
         },
         injectTo: 'head'
-      }]
+      }];
     }
   }
 }

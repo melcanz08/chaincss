@@ -99,8 +99,8 @@ export function parseIR(
       }
 
       // Parse at-rules — normalize properties
-      if (styleDef.atRules && Array.isArray(styleDef.atRules)) {
-        for (const atRule of styleDef.atRules) {
+      if ((styleDef.atRules || styleDef._atRules) && Array.isArray(styleDef.atRules || styleDef._atRules)) {
+        for (const atRule of (styleDef.atRules || styleDef._atRules)) {
           const irAtRule: IRAtRule = {
             id: nextId('atrule'),
             type: atRule.type || 'media',

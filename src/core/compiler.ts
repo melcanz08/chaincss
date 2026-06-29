@@ -320,7 +320,7 @@ export class ChainCSSCompiler {
     }
 
     if (atRules && Array.isArray(atRules)) {
-      styleObject._atRules = atRules;
+      styleObject.atRules = atRules;
     }
 
     if (nestedRules && Array.isArray(nestedRules)) {
