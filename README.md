@@ -1,4 +1,4 @@
-# ChainCSS v2.8.9 [![npm version](https://badge.fury.io/js/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![npm downloads](https://img.shields.io/npm/dm/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![license](https://img.shields.io/npm/l/chaincss.svg)](LICENSE)
+# ChainCSS v2.8.13 [![npm version](https://badge.fury.io/js/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![npm downloads](https://img.shields.io/npm/dm/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![license](https://img.shields.io/npm/l/chaincss.svg)](LICENSE)
 
 **The CSS-in-JS library that compiles to zero.** Write styles as a chainable API. Ship static CSS with zero runtime cost. Dynamic values? Only the parts that need to be dynamic stay in JS.
 
