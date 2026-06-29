@@ -431,11 +431,12 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
     },
 
     transformIndexHtml() {
+      const isProd = process.env.NODE_ENV === 'production';
       return [{
         tag: 'link',
         attrs: {
           rel: 'stylesheet',
-          href: '/assets/chaincss.css',
+          href: isProd ? '/assets/chaincss.css' : '/__chaincss.css',
           'data-chaincss': ''
         },
         injectTo: 'head'
