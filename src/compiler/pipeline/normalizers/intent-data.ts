@@ -55,10 +55,47 @@ export const VALUE_CORRECTIONS: Record<string, ValueCorrection[]> = {
 // ============================================================================
 
 export const KNOWN_PROPERTIES = [
-  'display','position','color','background','width','height','font-size',
-  'text-align','cursor','opacity','z-index','overflow','visibility','flex',
-  'flex-direction','justify-content','align-items','gap','grid','transition',
-  'transform','animation','box-shadow','pointer-events','user-select','line-height'
+  // Positioning
+  'display','position','top','right','bottom','left',
+  'inset','inset-block','inset-inline',
+  // Box model
+  'size','width','height','min-width','max-width','min-height','max-height',
+  'margin','margin-top','margin-right','margin-bottom','margin-left',
+  'padding','padding-top','padding-right','padding-bottom','padding-left',
+  'border','border-top','border-right','border-bottom','border-left',
+  'border-width','border-style','border-color','border-radius',
+  'box-sizing','overflow','overflow-x','overflow-y',
+  // Colors & Backgrounds
+  'color','background','background-color','background-image',
+  'background-position','background-size','background-repeat',
+  'background-clip','opacity','box-shadow',
+  // Typography
+  'font-size','font-weight','font-family','font-style',
+  'line-height','letter-spacing','text-align','text-decoration',
+  'text-transform','text-overflow','white-space','word-break',
+  'vertical-align','direction',
+  // Flexbox
+  'flex','flex-direction','flex-wrap','flex-basis','flex-grow','flex-shrink',
+  'justify-content','align-items','align-content','align-self',
+  'order','gap','row-gap','column-gap',
+  // Grid
+  'grid','grid-template-columns','grid-template-rows',
+  'grid-column','grid-row','grid-area',
+  'grid-auto-columns','grid-auto-rows','grid-auto-flow',
+  // Visual effects
+  'visibility','transform','transition','animation',
+  'backdrop-filter','filter','mix-blend-mode',
+  // Interaction
+  'cursor','pointer-events','user-select','appearance',
+  'outline','outline-offset','resize','caret-color',
+  'accent-color','scroll-behavior','overscroll-behavior',
+  // Z-index & stacking
+  'z-index','isolation',
+  // Table
+  'border-collapse','border-spacing','table-layout',
+  // SVG & misc
+  'fill','stroke','stroke-width','object-fit','object-position',
+  'aspect-ratio','content','will-change','contain',
 ];
 
 // ============================================================================
