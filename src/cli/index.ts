@@ -173,6 +173,29 @@ program
   });
 
 // ============================================================================
+// Check Command
+// ============================================================================
+
+program
+  .command('check')
+  .description('Audit styles for accessibility, typos, and design patterns')
+  .option('-c, --config <pattern>', 'Glob pattern for input files')
+  .option('-v, --verbose', 'Verbose output')
+  .option('--fix', 'Auto-fix issues where possible')
+  .action(async (opts) => {
+    try {
+      const { checkCommand } = await import('./commands/check.js');
+      await checkCommand({
+        config: opts.config,
+        verbose: opts.verbose,
+        fix: opts.fix,
+      });
+    } catch (error) {
+      handleError(error, 'check');
+    }
+  });
+
+// ============================================================================
 // Help and Examples
 // ============================================================================
 
@@ -187,6 +210,12 @@ program.on('--help', () => {
   console.log('');
   console.log(chalk.gray('  # Watch for changes'));
   console.log('  $ chaincss watch -c "src/**/*.chain.js"');
+  console.log('');
+  console.log(chalk.gray('  # Audit styles for issues'));
+  console.log('  $ chaincss check');
+  console.log('');
+  console.log(chalk.gray('  # Auto-fix issues'));
+  console.log('  $ chaincss check --fix');
   console.log('');
   console.log(chalk.cyan('Documentation:'));
   console.log('  https://github.com/melcanz08/chaincss');
