@@ -6,20 +6,17 @@ import type {
   PipelineStageResult,
   LoweringPass,
   NormalizationPass,
-  NormalizationResult,
   ValidationPass,
   ValidationResult,
   AnalysisPass,
-  AnalysisResult,
   OptimizationPass,
-  OptimizationResult,
   NormalizationContext,
   ValidationContext,
   AnalysisContext,
   OptimizationContext,
   LoweringContext,
 } from './pipeline-types.js';
-import type { StyleIR } from './ir/types.js';
+import type { StyleIR, ParsedValue, IRDeclaration } from './ir/types.js';
 
 export class Pipeline {
   private normalization: NormalizationPass[];
@@ -28,7 +25,6 @@ export class Pipeline {
   private optimization: OptimizationPass[];
   private lowering: LoweringPass[];
 
-  // Guaranteed non-undefined — initialized inline, never optional
   private normCtx: NormalizationContext;
   private valCtx: ValidationContext;
   private analysisCtx: AnalysisContext;
@@ -50,11 +46,7 @@ export class Pipeline {
     this.lowerCtx = config.contexts?.lowering || {};
   }
 
-  async execute(ir: StyleIR): Promise<PipelineResult> {
-    return this.runSync(ir);
-  }
-
-  executeSync(ir: StyleIR): PipelineResult {
+  execute(ir: StyleIR): PipelineResult {
     return this.runSync(ir);
   }
 
@@ -88,54 +80,56 @@ export class Pipeline {
 
   private detectFeatures(ir: StyleIR): Set<string> {
     const features = new Set<string>();
+
     for (const rule of ir.rules) {
       if (rule.isDead) continue;
-      if (rule.meta._constraints && rule.meta._constraints.length > 0) features.add('constraints');
-      if (rule.meta._semantic && rule.meta._semantic.length > 0) features.add('semantic-tokens');
+
+      if (rule.meta._constraints && (rule.meta._constraints as any[]).length > 0) features.add('constraints');
+      if (rule.meta._semantic && (rule.meta._semantic as any[]).length > 0) features.add('semantic-tokens');
       if (rule.meta._intent) features.add('intents');
       if (rule.atRules.length > 0) features.add('at-rules');
       if (rule.pseudoClasses.length > 0) features.add('pseudo-classes');
-      if (rule.declarations.length > 0) features.add('declarations');
+
       for (const decl of rule.declarations) {
-        if (typeof decl.value === 'string') {
-          if (decl.value.includes('vh') || decl.value.includes('vw')) features.add('viewport-units');
-          const pxMatch = decl.value.match(/^\d+px$/);
-          if (pxMatch && parseInt(decl.value) > 768) features.add('large-fixed');
-          if (decl.property === 'display' && (decl.value === 'flex' || decl.value === 'grid')) features.add('flexbox-grid');
+        features.add('declarations');
+
+        const parsed = decl.meta?.parsed;
+        if (parsed && typeof parsed === 'object' && (parsed as any).kind) {
+          detectFromParsed(parsed as ParsedValue, features);
+        } else {
+          detectFromString(decl, features);
+        }
+
+        if (decl.property.startsWith('--')) {
+          features.add('custom-properties');
+        }
+        if (decl.property === 'animation' || decl.property === 'transition') {
+          features.add('animations');
         }
       }
     }
+
     features.add('core');
     return features;
   }
 
   private shouldRun(passName: string, features: Set<string>): boolean {
-    // Normalization always runs
     if (passName === 'intent-normalizer' || passName === 'unit-normalizer') return true;
-
-    // Validation always runs
     if (passName === 'accessibility-validator' || passName === 'conflict-validator') return true;
-
-    // Analysis: skip if nothing to analyze
     if (passName === 'responsive-analyzer') return features.has('viewport-units') || features.has('large-fixed');
     if (passName === 'layout-analyzer') return features.has('flexbox-grid');
     if (passName === 'pattern-detector') return features.has('declarations');
-
-    // Optimization
-    if (passName === 'specificity-sorter') return true;       // ← ALWAYS runs
-    if (passName === 'dead-code-eliminator') return true;     // ← ALWAYS runs
+    if (passName === 'specificity-sorter') return true;
+    if (passName === 'dead-code-eliminator') return true;
     if (passName === 'accessibility-optimizer') return features.has('declarations');
     if (passName === 'atomic-extractor') return features.has('declarations');
     if (passName === 'media-query-packer') return features.has('at-rules');
     if (passName === 'source-optimizer') return features.has('declarations');
     if (passName === 'css-compressor') return features.has('declarations');
-
-    // Generation: skip if no high-level features
     if (passName === 'token-lowering') return features.has('semantic-tokens');
     if (passName === 'intent-resolver') return features.has('intents');
     if (passName === 'constraint-resolver') return features.has('constraints');
     if (passName === 'css-emitter') return true;
-
     return true;
   }
 
@@ -151,7 +145,6 @@ export class Pipeline {
     ir.meta.dirtyRules = dirtyCount;
     ir.meta.compiledAt = Date.now();
 
-    // Stage 1: Normalize
     for (const pass of this.normalization) {
       if (!this.shouldRun(pass.name, features)) { skipped++; continue; }
       const { result, duration } = this.runPassSafe(
@@ -165,7 +158,6 @@ export class Pipeline {
       }
     }
 
-    // Stage 2: Validate
     for (const pass of this.validation) {
       if (!this.shouldRun(pass.name, features)) { skipped++; continue; }
       const { result, duration } = this.runPassSafe(
@@ -185,7 +177,6 @@ export class Pipeline {
       }
     }
 
-    // Stage 3: Analyze
     for (const pass of this.analysis) {
       if (!this.shouldRun(pass.name, features)) { skipped++; continue; }
       const { result, duration } = this.runPassSafe(
@@ -199,7 +190,6 @@ export class Pipeline {
       }
     }
 
-    // Stage 4: Optimize
     for (const pass of this.optimization) {
       if (!this.shouldRun(pass.name, features)) { skipped++; continue; }
       const { result, duration } = this.runPassSafe(
@@ -213,7 +203,6 @@ export class Pipeline {
       }
     }
 
-    // Stage 5: Generate (Lowering)
     let finalCSS: string | undefined;
     for (const pass of this.lowering) {
       if (!this.shouldRun(pass.name, features)) { skipped++; continue; }
@@ -267,5 +256,66 @@ export class Pipeline {
     }
     lines.push('', '═══════════════════════════════════════════');
     return lines.join('\n');
+  }
+}
+
+// ============================================================================
+// Feature detection helpers — pure functions at module scope
+// ============================================================================
+
+function detectFromParsed(value: ParsedValue, features: Set<string>): void {
+  switch (value.kind) {
+    case 'dimension': {
+      if (value.unit === 'vh' || value.unit === 'vw' ||
+          value.unit === 'vmin' || value.unit === 'vmax') {
+        features.add('viewport-units');
+      }
+      if (value.unit === 'px' && value.value > 768) {
+        features.add('large-fixed');
+      }
+      break;
+    }
+    case 'keyword': {
+      if (value.value === 'flex' || value.value === 'inline-flex') {
+        features.add('flexbox-grid');
+      }
+      if (value.value === 'grid' || value.value === 'inline-grid') {
+        features.add('flexbox-grid');
+        features.add('css-grid');
+      }
+      break;
+    }
+    case 'function': {
+      if (value.name === 'var') {
+        features.add('custom-properties');
+      }
+      for (const arg of value.args) {
+        detectFromParsed(arg, features);
+      }
+      break;
+    }
+    case 'list': {
+      for (const item of value.items) {
+        detectFromParsed(item, features);
+      }
+      break;
+    }
+  }
+}
+
+function detectFromString(decl: IRDeclaration, features: Set<string>): void {
+  const raw = String(decl.value);
+
+  if (/\b\d+(\.\d+)?(vh|vw|vmin|vmax)\b/.test(raw)) {
+    features.add('viewport-units');
+  }
+
+  const pxMatch = raw.match(/^(\d+)px$/);
+  if (pxMatch && parseInt(pxMatch[1]) > 768) {
+    features.add('large-fixed');
+  }
+
+  if (/\bdisplay\s*:\s*(inline-)?(flex|grid)\b/.test(raw)) {
+    features.add('flexbox-grid');
   }
 }

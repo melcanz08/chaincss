@@ -1,4 +1,5 @@
-// chaincss/src/plugins/vite.d.ts
+// src/plugins/vite.d.ts
+
 import { Plugin } from 'vite';
 
 /**

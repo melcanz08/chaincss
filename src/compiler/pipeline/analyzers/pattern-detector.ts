@@ -2,7 +2,6 @@
 
 import type { StyleIR, IRRule } from '../ir/types.js';
 import type { AnalysisPass, AnalysisResult, AnalysisAnnotation } from '../pipeline-types.js';
-import crypto from 'crypto';
 
 interface StyleFingerprint {
   hash: string;
@@ -20,6 +19,19 @@ interface PatternCluster {
   suggestedName: string;
 }
 
+/**
+ * Fast non-crypto hash for style fingerprints.
+ * djb2 — simple, fast, collision-resistant enough for CSS property sets.
+ */
+function hashString(str: string): string {
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) + hash) + str.charCodeAt(i);
+    hash = hash & hash; // 32-bit
+  }
+  return Math.abs(hash).toString(36);
+}
+
 function fingerprintDeclarations(declarations: Array<{ property: string; value: string | number }>): StyleFingerprint {
   const sorted = [...declarations].sort((a, b) => a.property.localeCompare(b.property));
   const properties: Record<string, string | number> = {};
@@ -30,9 +42,11 @@ function fingerprintDeclarations(declarations: Array<{ property: string; value: 
     propertyList.push(`${decl.property}:${decl.value}`);
   }
 
+  const signature = propertyList.join('; ');
+
   return {
-    hash: crypto.createHash('md5').update(propertyList.join('; ')).digest('hex').slice(0, 12),
-    signature: propertyList.join('; '),
+    hash: hashString(signature),
+    signature,
     properties,
     propertyCount: sorted.length,
   };
@@ -46,6 +60,7 @@ function generatePatternName(properties: Record<string, string | number>): strin
   if (keys.includes('backdropFilter')) return 'glass';
   if (keys.includes('overflow') && keys.includes('textOverflow')) return 'truncate';
   if (keys.includes('position') && properties['position'] === 'sticky') return 'stickyElement';
+  if (keys.includes('display') && properties['display'] === 'grid' && keys.includes('gap')) return 'gridLayout';
   return 'pattern-' + keys.slice(0, 3).join('-');
 }
 
@@ -54,8 +69,13 @@ export const patternDetector: AnalysisPass = {
 
   analyze(ir: StyleIR): AnalysisResult {
     const annotations: AnalysisAnnotation[] = [];
-    const groups = new Map<string, { fingerprint: StyleFingerprint; selectors: string[]; files: Set<string> }>();
-    const minProperties = 3;
+    const groups = new Map<string, {
+      fingerprint: StyleFingerprint;
+      selectors: string[];
+      files: Set<string>;
+    }>();
+
+    const minProperties = 2; // 2-property patterns like display:flex + gap:16px matter
     const minFrequency = 2;
 
     for (const rule of ir.rules) {
@@ -76,6 +96,7 @@ export const patternDetector: AnalysisPass = {
       }
     }
 
+    // Build clusters and sort by score (frequency × propertyCount)
     const clusters: PatternCluster[] = [];
     for (const [, group] of groups) {
       if (group.selectors.length < minFrequency) continue;
@@ -91,8 +112,8 @@ export const patternDetector: AnalysisPass = {
 
     clusters.sort((a, b) => b.score - a.score);
 
-    // Report top 5 patterns
-    for (const cluster of clusters.slice(0, 5)) {
+    // Report all patterns (not just top 5) — let the caller filter
+    for (const cluster of clusters) {
       annotations.push({
         nodeId: ir.id,
         type: 'pattern-cluster',
@@ -104,7 +125,7 @@ export const patternDetector: AnalysisPass = {
         id: `pattern-${cluster.fingerprint.hash}`,
         nodeId: ir.rules[0]?.id || ir.id,
         severity: 'info',
-        message: `Pattern "${cluster.suggestedName}" found ${cluster.frequency} times across ${cluster.fileCount} files`,
+        message: `Pattern "${cluster.suggestedName}" found ${cluster.frequency} times across ${cluster.fileCount} file(s)`,
         suggestion: `Consider extracting as chain.recipe('${cluster.suggestedName}', { ... })`,
         pass: 'pattern-detector',
       });

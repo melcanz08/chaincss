@@ -69,6 +69,11 @@ export interface CompileStats {
   savings: string;
   cacheHitRate?: number;
   compileTime?: number;
+  /** Pipeline-specific stats (populated when pipeline is enabled) */
+  deadRulesEliminated?: number;
+  compressionSavings?: string;
+  pipelinePasses?: number;
+  totalDuration?: number;
 }
 
 

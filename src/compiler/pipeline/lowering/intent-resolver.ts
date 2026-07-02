@@ -380,7 +380,7 @@ export const intentResolver: LoweringPass = {
     let generatedNodes = 0;
 
     for (const rule of ir.rules) {
-      const intentName: string = rule.meta._intent;
+      const intentName: string = rule.meta._intent as string;
       if (!intentName) continue;
 
       const resolved = resolveIntent(intentName);

@@ -16,8 +16,8 @@
  *   chain.intent('button-primary') // → accessible blue button
  */
 
-import type { StyleIR, IRRule, IRPass } from '../style-ir.js';
-import { createDeclaration, createRule } from '../style-ir.js';
+import type { StyleIR, IRRule, IRPass } from '../../style-ir.js';
+import { createDeclaration, createRule } from '../../style-ir.js';
 import { resolveSemantic } from './semantic-tokens.js';
 
 // ============================================================================
@@ -436,7 +436,7 @@ export function getIntentDescription(intentName: string): string | null {
  */
 export const intentAPIPass: IRPass = (ir: StyleIR): StyleIR => {
   for (const rule of ir.rules) {
-    const intentName: string = rule.meta._intent;
+    const intentName: string = rule.meta._intent as string;
     if (!intentName) continue;
 
     const resolved = resolveIntent(intentName);

@@ -16,13 +16,51 @@ export interface IRDeclaration {
   id: IRNodeId;
   property: string;
   value: string | number;
+  parsed?: ParsedValue;
   important?: boolean;
   source?: SourceLocation;
   /** Transform history — who modified this and why */
   history: IRTransformRecord[];
   /** Metadata from passes */
-  meta: Record<string, any>;
+  meta: Record<string, unknown>;
 }
+
+// ============================================================================
+// Parsed Value Support (v2.10+)
+// ============================================================================
+
+/**
+ * Structured representation of a CSS declaration value.
+ * Stored in IRDeclaration.meta.parsed by the parser.
+ * Used by Pipeline.detectFeatures() to avoid brittle string matching.
+ */
+export type ParsedValue =
+  | { kind: 'dimension'; value: number; unit: string }
+  | { kind: 'number'; value: number }
+  | { kind: 'keyword'; value: string }
+  | { kind: 'color'; hex: string }
+  | { kind: 'function'; name: string; args: ParsedValue[] }
+  | { kind: 'list'; items: ParsedValue[] }
+  | { kind: 'raw'; value: string };
+
+/**
+ * Features that can be detected from IR structure.
+ * Used by Pipeline.shouldRun() to skip irrelevant passes.
+ */
+export type DetectedFeature =
+  | 'constraints'
+  | 'semantic-tokens'
+  | 'intents'
+  | 'at-rules'
+  | 'pseudo-classes'
+  | 'declarations'
+  | 'viewport-units'
+  | 'large-fixed'
+  | 'flexbox-grid'
+  | 'css-grid'
+  | 'animations'
+  | 'custom-properties'
+  | 'core';
 
 /** A CSS rule (selector + declarations + nested rules) */
 export interface IRRule {
@@ -44,7 +82,7 @@ export interface IRRule {
   hash: string;
   source: SourceLocation;
   history: IRTransformRecord[];
-  meta: Record<string, any>;
+  meta: Record<string, unknown>;
 }
 
 /** Pseudo-class block (hover, focus, etc.) */
@@ -83,7 +121,7 @@ export interface IRTransformRecord {
   pass: string;       // e.g., 'intent-engine', 'math-engine', 'graph-compiler'
   action: string;     // e.g., 'corrected-value', 'resolved-unit', 'eliminated'
   timestamp: number;
-  previous?: any;     // value before transform
+  previous?: unknown;    // value before transform
   reason?: string;    // human-readable explanation
 }
 

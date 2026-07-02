@@ -17,7 +17,6 @@ interface StyleCollectorLike {
   build(selectors?: string[] | string): any;
   explain(): any;
   addClass(name: string): any;
-  componentName(name: string): any;
   enableDebug(): any;
   isMixed(): boolean;
   media(query: string, fn: any): any;
@@ -29,6 +28,13 @@ interface StyleCollectorLike {
   when(condition: boolean, fn: any): any;
   keyframes(name: string, steps: any): any;
   fontFace(props: any): any;
+  focus(): any;
+  active(): any;
+  checked(): any;
+  disabled(): any;
+  before(): any;
+  after(): any;
+  placeholder(): any;
 }
 
 // ============================================================================
@@ -48,11 +54,17 @@ const TERMINAL_HANDLERS: Record<string, ProxyHandler> = {
 
 const CHAINABLE_HANDLERS: Record<string, ProxyHandler> = {
   hover: (target, proxy) => { target.hover(); return proxy; },
+  focus: (target, proxy) => { target.focus(); return proxy; },
+  active: (target, proxy) => { target.active(); return proxy; },
+  checked: (target, proxy) => { target.checked(); return proxy; },
+  disabled: (target, proxy) => { target.disabled(); return proxy; },
+  before: (target, proxy) => { target.before(); return proxy; },
+  after: (target, proxy) => { target.after(); return proxy; },
   end: (target, proxy) => { target.end(); return proxy; },
   debug: (target, proxy) => { target.enableDebug(); return proxy; },
   addClass: (target, proxy, name: string) => { target.addClass(name); return proxy; },
-  componentName: (target, proxy, name: string) => { target.componentName(name); return proxy; },
   isMixed: (target, _proxy) => target.isMixed(),
+  placeholder: (target, proxy) => { target.placeholder(); return proxy; },
 };
 
 const CHILD_BUILDER_HANDLERS: Record<string, ProxyHandler> = {

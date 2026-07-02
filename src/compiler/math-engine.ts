@@ -42,6 +42,13 @@ const UNIT_CATEGORIES: Record<string, CSSUnit[]> = {
   resolution: ['dpi', 'dpcm', 'dppx'],
 };
 
+const UNIT_LOOKUP: Record<string, string> = {};
+for (const [category, units] of Object.entries(UNIT_CATEGORIES)) {
+  for (const unit of units) {
+    UNIT_LOOKUP[unit] = category;
+  }
+}
+
 const PX_CONVERSIONS: Record<string, number> = {
   'cm': 37.795,
   'mm': 3.7795,
@@ -78,10 +85,7 @@ function parseCSSValue(input: string | number): CSSMathValue {
 }
 
 function getUnitCategory(unit: CSSUnit): string {
-  for (const [category, units] of Object.entries(UNIT_CATEGORIES)) {
-    if (units.includes(unit)) return category;
-  }
-  return 'unknown';
+  return UNIT_LOOKUP[unit] || 'unknown';
 }
 
 // ============================================================================
@@ -308,12 +312,40 @@ export const math = {
       const parsed = parseCSSValue(values[0]);
       return createResult(parsed.value, parsed.unit, `${parsed.value}${parsed.unit}`, parsed);
     }
-    
-    let result = this.add(values[0], values[1]);
-    for (let i = 2; i < values.length; i++) {
-      result = this.add(result.expression, values[i]);
+
+    // Collect resolvable values by unit, track unresolvable expressions
+    const pxTotal = { value: 0 };
+    const remTotal = { value: 0 };
+    const unresolved: string[] = [];
+    const ctx: Required<MathContext> = { ...DEFAULT_CONTEXT };
+
+    for (const val of values) {
+      const parsed = parseCSSValue(val);
+      switch (parsed.unit) {
+        case 'px': pxTotal.value += parsed.value; break;
+        case 'rem': remTotal.value += parsed.value; break;
+        default: unresolved.push(`${parsed.value}${parsed.unit}`); break;
+      }
     }
-    return result;
+
+    // If all values resolved to same unit, return directly
+    if (remTotal.value === 0 && unresolved.length === 0) {
+      const total = Math.round(pxTotal.value * 100) / 100;
+      return createResult(total, 'px', `${total}px`, { value: total, unit: 'px' });
+    }
+    if (pxTotal.value === 0 && unresolved.length === 0) {
+      const total = Math.round(remTotal.value * 100) / 100;
+      return createResult(total, 'rem', `${total}rem`, { value: total, unit: 'rem' });
+    }
+
+    // Mixed units — build a clean calc() expression
+    const parts: string[] = [];
+    if (pxTotal.value !== 0) parts.push(`${Math.round(pxTotal.value * 100) / 100}px`);
+    if (remTotal.value !== 0) parts.push(`${Math.round(remTotal.value * 100) / 100}rem`);
+    parts.push(...unresolved);
+
+    const expr = `calc(${parts.join(' + ')})`;
+    return createResult(0, 'calc', expr, null, ['Sum of mixed units']);
   },
 
   /**

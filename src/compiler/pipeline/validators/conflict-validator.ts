@@ -30,7 +30,7 @@ export const conflictValidator: ValidationPass = {
 
       // Check flex properties on non-flex containers
       const display = rule.declarations.find(d => d.property === 'display');
-      const flexProps = ['justifyContent', 'alignItems', 'flexDirection', 'flexWrap', 'flexBasis', 'flexGrow', 'flexShrink'];
+      const flexProps = ['justify-content', 'align-items', 'flex-direction', 'flex-wrap', 'flex-basis', 'flex-grow', 'flex-shrink'];
       const hasFlexProps = rule.declarations.some(d => flexProps.includes(d.property));
 
       if (hasFlexProps && (!display || (display.value !== 'flex' && display.value !== 'inline-flex'))) {
@@ -61,7 +61,7 @@ export const conflictValidator: ValidationPass = {
       }
 
       // Check grid properties on non-grid containers
-      const gridProps = ['gridTemplateColumns', 'gridTemplateRows', 'gridColumn', 'gridRow', 'gridArea'];
+      const gridProps = ['grid-template-columns', 'grid-template-rows', 'grid-column', 'grid-row', 'grid-area'];
       const hasGridProps = rule.declarations.some(d => gridProps.includes(d.property));
 
       if (hasGridProps && (!display || (display.value !== 'grid' && display.value !== 'inline-grid'))) {

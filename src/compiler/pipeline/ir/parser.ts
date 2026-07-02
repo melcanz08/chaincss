@@ -68,34 +68,57 @@ export function parseIR(
 
       // Parse declarations — normalize property to kebab-case
       for (const [prop, value] of Object.entries(styleDef)) {
-        // Skip metadata
+        // Skip metadata keys
         if (prop === 'selectors' || prop === 'selector' || prop.startsWith('_')) continue;
-        // Skip complex sub-objects (handled separately)
-        if (prop === 'hover' || prop === 'atRules' || prop === 'nestedRules' || prop === 'themes') continue;
+        // Skip complex sub-objects handled separately
+        if (prop === 'atRules' || prop === 'nestedRules' || prop === 'themes') continue;
 
+        // ── Generic &:-prefixed pseudo-classes (hover, focus, active, checked, etc.) ──
+        if (prop.startsWith('&:') && typeof value === 'object' && value !== null) {
+          const pseudoName = prop.substring(2);
+          const pc: IRPseudoClass = {
+            id: nextId(pseudoName),
+            name: pseudoName,
+            declarations: [],
+            source: rule.source,
+            history: [record('parser', 'created', undefined, `Parsed ${pseudoName} pseudo-class`)],
+          };
+          for (const [p, v] of Object.entries(value as Record<string, any>)) {
+            if (typeof v === 'string' || typeof v === 'number') {
+              pc.declarations.push(createDeclaration(normalizeProperty(p), v, rule.source));
+            }
+          }
+          if (pc.declarations.length > 0) {
+            rule.pseudoClasses.push(pc);
+          }
+          continue;
+        }
+
+        // ── Legacy `hover` key (non-&: prefixed) ──
+        if (prop === 'hover' && typeof value === 'object' && value !== null && !styleDef['&:hover']) {
+          const pc: IRPseudoClass = {
+            id: nextId('hover'),
+            name: 'hover',
+            declarations: [],
+            source: rule.source,
+            history: [record('parser', 'created', undefined, 'Parsed hover block')],
+          };
+          for (const [p, v] of Object.entries(value as Record<string, any>)) {
+            if (typeof v === 'string' || typeof v === 'number') {
+              pc.declarations.push(createDeclaration(normalizeProperty(p), v, rule.source));
+            }
+          }
+          if (pc.declarations.length > 0) {
+            rule.pseudoClasses.push(pc);
+          }
+          continue;
+        }
+
+        // ── Regular CSS declarations (string or number values) ──
         if (typeof value === 'string' || typeof value === 'number') {
           const normalizedProp = normalizeProperty(prop);
           rule.declarations.push(createDeclaration(normalizedProp, value, rule.source));
         }
-      }
-
-      // Parse hover pseudo-class — normalize properties
-      const hoverStyles = styleDef.hover || styleDef['&:hover'];
-      if (hoverStyles && typeof hoverStyles === 'object') {
-        const pc: IRPseudoClass = {
-          id: nextId('hover'),
-          name: 'hover',
-          declarations: [],
-          source: rule.source,
-          history: [record('parser', 'created', undefined, 'Parsed hover block')],
-        };
-        for (const [prop, value] of Object.entries(hoverStyles)) {
-          if (typeof value === 'string' || typeof value === 'number') {
-            const normalizedProp = normalizeProperty(prop);
-            pc.declarations.push(createDeclaration(normalizedProp, value, rule.source));
-          }
-        }
-        rule.pseudoClasses.push(pc);
       }
 
       // Parse at-rules — normalize properties

@@ -3,7 +3,7 @@
 import type { Plugin, ViteDevServer } from 'vite'
 import path from 'path'
 import fs from 'fs'
-import { chain } from 'chaincss'
+import { promises as fsp } from 'fs'
 import { ChainCSSCompiler } from '../core/compiler.js'
 import { formatCSS, ensureDir } from '../core/utils.js'
 import { DEFAULT_CONFIG, ENVIRONMENT_PRESETS } from '../core/constants.js'
@@ -20,7 +20,6 @@ interface ChainCSSPluginOptions {
   pipelineReport?: boolean
   silent?: boolean
   disablePipeline?: boolean
-  useNewPipeline?: boolean
   atomic?: boolean
   breakpoints?: Record<string, string>
   tokens?: ChainCSSConfig['tokens']
@@ -38,12 +37,13 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
   const pipelineReport = options.pipelineReport ?? verbose
   const silent = options.silent ?? false
   const disablePipeline = options.disablePipeline ?? false
-  const useNewPipeline = options.useNewPipeline ?? false
   const atomic = options.atomic ?? true
 
   let compiler: ChainCSSCompiler
   let root: string = ''
+  let isProduction = false
   let cssCache = ''
+  const cssFileCache = new Map<string, string>()
   let totalDiagnostics = 0
   let totalAutoFixes = 0
 
@@ -67,61 +67,30 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
 
   // ── Compilation ──────────────────────────────────────────
 
-  /**
-   * Compile a .chain.js file by reading its source, evaluating chain() calls
-   * with the plugin's own chain reference, and compiling each style export.
-   * 
-   * Does NOT use ModuleLoader.import() — avoids ESM bundling Proxy issues.
-   */
   async function compileFile(chainPath: string): Promise<{
     css: string
     classMap: Record<string, string>
     diagnostics: any[]
   }> {
-    const source = fs.readFileSync(chainPath, 'utf8')
-    const capturedExports: Record<string, any> = {}
-
-    // Strip import statements, convert "export const X =" to "capturedExports.X ="
-    const processedSource = source
-      .replace(/import\s+\{.*\}\s+from\s+['"]chaincss['"];?\s*/g, '')
-      .replace(/export\s+const\s+(\w+)\s*=\s*/g, 'capturedExports.$1 = ')
-      .trim()
-
-    // Evaluate with chain() from this module's import (works reliably)
-    const fn = new Function('chain', 'capturedExports', processedSource)
-    fn(chain, capturedExports)
-
+    const results = await compiler.compileFile(chainPath)
     let css = ''
     const classMap: Record<string, string> = {}
     const allDiagnostics: any[] = []
 
-    for (const [name, styleDef] of Object.entries(capturedExports)) {
-      if (styleDef && typeof styleDef === 'object' && styleDef.selectors) {
-        const compileResult = compiler.compileStyle(name, styleDef)
-
-        if ((compileResult as any)._diagnostics) {
-          for (const d of (compileResult as any)._diagnostics) {
-            allDiagnostics.push({ ...d, styleName: name })
-          }
+    for (const [name, compileResult] of Object.entries(results)) {
+      if ((compileResult as any)._diagnostics) {
+        for (const d of (compileResult as any)._diagnostics) {
+          allDiagnostics.push({ ...d, styleName: name })
         }
+      }
 
-        if (compileResult.css) {
-          let fileCss = compileResult.css
-          const className = Object.values(compileResult.classMap)[0]
+      if (compileResult.css) {
+        css += compileResult.css + '\n'
+      }
 
-          if (className) {
-            classMap[name] = className
-            const firstSelector = fileCss.match(/^\.([a-zA-Z0-9_-]+)/)?.[1]
-            if (firstSelector && firstSelector !== className) {
-              fileCss = fileCss.replace(
-                new RegExp('\\.' + firstSelector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
-                '.' + className
-              )
-            }
-          }
-
-          css += fileCss + '\n'
-        }
+      const className = Object.values(compileResult.classMap)[0]
+      if (className) {
+        classMap[name] = className
       }
     }
 
@@ -168,6 +137,7 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
 
     totalDiagnostics = 0
     totalAutoFixes = 0
+    cssFileCache.clear()
 
     const chainFiles: string[] = []
     function walk(dir: string) {
@@ -201,14 +171,15 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
 
         if (css.trim()) {
           allCSS += `\n/* ${path.relative(root, file)} */\n${css}`
+          cssFileCache.set(file, css)
         }
 
-        // Write .css
+        // Write .css (async)
         const cssPath = file.replace(CHAIN_FILE_RE, '.css')
         ensureDir(path.dirname(cssPath))
-        fs.writeFileSync(cssPath, formatCSS(css, false), 'utf8')
+        fsp.writeFile(cssPath, formatCSS(css, false), 'utf8').catch(() => {})
 
-        // Write .class.js
+        // Write .class.js (async)
         const source = fs.readFileSync(file, 'utf8')
         const hasDynamic = source.includes('chain.dynamic()')
 
@@ -233,14 +204,14 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
 
         if (classLines.length > 2) {
           ensureDir(path.dirname(classPath))
-          fs.writeFileSync(classPath, classLines.join('\n'), 'utf8')
+          fsp.writeFile(classPath, classLines.join('\n'), 'utf8').catch(() => {})
         }
 
         if (verbose && !silent) {
           const classCount = Object.keys(classMap).length
           const cssSize = css.length
-          const mode = hasDynamic ? 'mixed' : 'static'
-          console.log(`[ChainCSS]   ✓ ${fileName} → ${classCount} class${classCount !== 1 ? 'es' : ''}, ${cssSize}B CSS [${mode}]`)
+          const modeLabel = hasDynamic ? 'mixed' : 'static'
+          console.log(`[ChainCSS]   ✓ ${fileName} → ${classCount} class${classCount !== 1 ? 'es' : ''}, ${cssSize}B CSS [${modeLabel}]`)
         }
 
         printDiagnostics(diagnostics, fileName)
@@ -281,12 +252,12 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
     enforce: 'pre',
 
     resolveId(id) {
-      if (id === 'vue') return '\0virtual:vue-shim'
+      if (id === 'virtual:chaincss-vue-shim') return '\0virtual:chaincss-vue-shim'
       return null
     },
 
     load(id) {
-      if (id === '\0virtual:vue-shim') {
+      if (id === '\0virtual:chaincss-vue-shim') {
         return `
           export const ref = (v) => ({ value: v });
           export const computed = (fn) => ({ get value() { return fn(); } });
@@ -305,7 +276,7 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
 
     configResolved(config) {
       root = config.root
-      const isProduction = config.mode === 'production'
+      isProduction = config.mode === 'production'
       const preset = isProduction ? ENVIRONMENT_PRESETS.production : ENVIRONMENT_PRESETS.development
 
       compiler = new ChainCSSCompiler({
@@ -341,32 +312,15 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
       if (!CHAIN_FILE_RE.test(id)) return null
 
       try {
-        const { classMap } = await compileFile(id)
-        if (Object.keys(classMap).length === 0) return null
+        const results = await compiler.compileFile(id)
+        if (Object.keys(results).length === 0) return null
 
         const hasDynamic = code.includes('chain.dynamic()')
+        const classMap: Record<string, string> = {}
 
-        if (hasDynamic) {
-          const suffix = Object.entries(classMap)
-            .map(([name, className]) => `export const ${name}Class = '${className}'`)
-            .join('\n')
-
-          const classPath = id.replace(CHAIN_FILE_RE, '.class.js')
-          ensureDir(path.dirname(classPath))
-
-          const classLines = [
-            '/** ChainCSS Generated — DO NOT EDIT */',
-            ''
-          ]
-          for (const [name, className] of Object.entries(classMap)) {
-            classLines.push(`export const ${name}Class = '${className}'`)
-          }
-          fs.writeFileSync(classPath, classLines.join('\n'), 'utf8')
-
-          return {
-            code: code + '\n\n// ChainCSS auto-generated class names\n' + suffix,
-            map: null
-          }
+        for (const [name, result] of Object.entries(results)) {
+          const className = Object.values(result.classMap)[0]
+          if (className) classMap[name] = className
         }
 
         const lines: string[] = [
@@ -375,12 +329,17 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
           ''
         ]
         for (const [name, className] of Object.entries(classMap)) {
-          lines.push(`export const ${name} = '${className}'`)
+          if (hasDynamic) {
+            lines.push(`export const ${name}Class = '${className}'`)
+          } else {
+            lines.push(`export const ${name} = '${className}'`)
+          }
         }
 
+        // Write .class.js asynchronously for IDE support
         const classPath = id.replace(CHAIN_FILE_RE, '.class.js')
         ensureDir(path.dirname(classPath))
-        fs.writeFileSync(classPath, lines.join('\n'), 'utf8')
+        fsp.writeFile(classPath, lines.join('\n'), 'utf8').catch(() => {})
 
         return { code: lines.join('\n'), map: null }
       } catch (err) {
@@ -407,19 +366,27 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
       devServer.watcher.on('change', async (filePath: string) => {
         if (CHAIN_FILE_RE.test(filePath)) {
           log(`Change detected: ${path.basename(filePath)}`)
-          await compileFile(filePath)
-          cssCache = await compileAllStyles()
+          try {
+            const { css } = await compileFile(filePath)
+            cssFileCache.set(filePath, css)
+            cssCache = Array.from(cssFileCache.values()).join('\n')
+
+            // Background: update the full CSS file
+            compileAllStyles().then(fullCSS => {
+              cssCache = fullCSS
+            }).catch(() => {})
+          } catch (err) {
+            error(`Recompile failed: ${(err as Error).message}`)
+          }
 
           const mod = devServer.moduleGraph.getModuleById(filePath)
           if (mod) devServer.moduleGraph.invalidateModule(mod)
-
           devServer.ws.send({ type: 'full-reload' })
         }
       })
     },
 
     async generateBundle(_opts: any, bundle: any) {
-      // Compile all styles and emit as a static CSS asset
       const css = await compileAllStyles();
       if (css && css.trim()) {
         this.emitFile({
@@ -431,12 +398,11 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
     },
 
     transformIndexHtml() {
-      const isProd = process.env.NODE_ENV === 'production';
       return [{
         tag: 'link',
         attrs: {
           rel: 'stylesheet',
-          href: isProd ? '/assets/chaincss.css' : '/__chaincss.css',
+          href: isProduction ? '/assets/chaincss.css' : '/__chaincss.css',
           'data-chaincss': ''
         },
         injectTo: 'head'

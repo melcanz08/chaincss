@@ -66,13 +66,18 @@ export class StyleCollector {
   // State
   private hoverStore: PropertyStore | null = null;
   private classes: string[] = [];
-  private componentName_: string = '';
   private _mixed: boolean = false;
 
-  constructor(options?: { debug?: boolean }) {
+  private classPrefix: string;
+
+  private pseudoStore: PropertyStore | null = null;
+  private pseudoName: string = '';
+
+  constructor(options?: { debug?: boolean; classPrefix?: string }) {
     this.props = new PropertyStore();
     this.rules = new RuleBuilder();
     this.debugger = new DebugCollector(options?.debug ?? false);
+     this.classPrefix = options?.classPrefix || 'chain-';
   }
 
   // ========================================================================
@@ -93,10 +98,9 @@ export class StyleCollector {
   // ========================================================================
 
   set(prop: string, value: any): this {
-    const target = this.hoverStore || this.props;
+    const target = this.pseudoStore || this.props;
     const entry: PropertyStoreEntry = target.set(prop, value);
-
-    this.debugger.log(prop, entry, value, this.hoverStore ? 'hover' : 'root');
+    this.debugger.log(prop, entry, value, this.pseudoStore ? this.pseudoName : 'root');
     return this;
   }
 
@@ -104,16 +108,27 @@ export class StyleCollector {
   // Context Management (hover)
   // ========================================================================
 
-  hover(): this {
-    this.hoverStore = new PropertyStore();
+  hover(): this { return this.pseudo('hover'); }
+  focus(): this { return this.pseudo('focus'); }
+  active(): this { return this.pseudo('active'); }
+  checked(): this { return this.pseudo('checked'); }
+  disabled(): this { return this.pseudo('disabled'); }
+  before(): this { return this.pseudo('before'); }
+  after(): this { return this.pseudo('after'); }
+  placeholder(): this { return this.pseudo(':placeholder'); }
+
+  private pseudo(name: string): this {
+    this.pseudoStore = new PropertyStore();
+    this.pseudoName = name;
     return this;
   }
 
   end(): this {
-    if (this.hoverStore && !this.hoverStore.isEmpty()) {
-      const hoverProps = this.hoverStore.getAll();
-      this.props.set('&:hover', hoverProps);
-      this.hoverStore = null;
+    if (this.pseudoStore && !this.pseudoStore.isEmpty()) {
+      const pseudoProps = this.pseudoStore.getAll();
+      this.props.set(`&:${this.pseudoName}`, pseudoProps);
+      this.pseudoStore = null;
+      this.pseudoName = '';
     }
     return this;
   }
@@ -170,8 +185,8 @@ export class StyleCollector {
     if (condition) {
       const childResult = this.rules.buildChild(fn, createStyleProxyForChild, this.debugger.isEnabled());
       for (const [key, value] of Object.entries(childResult)) {
-        if (key !== 'selectors' && key !== '_atRules' && key !== '_nestedRules') {
-          (this.hoverStore || this.props).set(key, value);
+        if (key !== 'selectors' && key !== '_atRules' && key !== '_nestedRules' && !key.startsWith('_')) {
+          this.set(key, value);
         }
       }
     }
@@ -186,11 +201,6 @@ export class StyleCollector {
     if (!this.classes.includes(className)) {
       this.classes.push(className);
     }
-    return this;
-  }
-
-  componentName(name: string): this {
-    this.componentName_ = name;
     return this;
   }
 
@@ -212,6 +222,9 @@ export class StyleCollector {
   // ========================================================================
 
   build(selectors?: string[] | string): StyleObject & { selectors?: string[] } {
+    if (this.pseudoStore && !this.pseudoStore.isEmpty()) {
+      this.end();
+    }
     // Collect all properties (including any pending hover)
     if (this.hoverStore && !this.hoverStore.isEmpty()) {
       this.end();
@@ -251,7 +264,7 @@ export class StyleCollector {
           if (typeof s !== 'string') return String(s);
           if (!s.startsWith('.') && !s.startsWith('#') &&
               !s.startsWith('[') && !s.startsWith(':') && s !== '*') {
-            return '.chain-' + s;
+            return '.' + this.classPrefix + s;  // NEW
           }
           return s;
         });
@@ -285,10 +298,9 @@ export class StyleCollector {
     this.props.reset();
     this.rules.reset();
     this.debugger.reset();
-    this.hoverStore = null;
+    this.pseudoStore = null;
+    this.pseudoName = '';
     this.classes = [];
-    this.componentName_ = '';
-    // Note: _mixed is NOT reset — set once per chain
   }
 }
 
@@ -305,12 +317,12 @@ function createStyleProxyForChild(debug: boolean): StyleCollector & Record<strin
 // Public API
 // ============================================================================
 
-export function chain(options?: { debug?: boolean }): StyleCollector & Record<string, any> {
+export function chain(options?: { debug?: boolean; classPrefix?: string }): StyleCollector & Record<string, any> {
   const collector = new StyleCollector(options);
   return createStyleProxy(collector, macroRegistry as Record<string, Function>) as any;
 }
 
-chain.dynamic = function (options?: { debug?: boolean }): StyleCollector & Record<string, any> {
+chain.dynamic = function (options?: { debug?: boolean; classPrefix?: string }): StyleCollector & Record<string, any> {
   const collector = new StyleCollector(options);
   collector.markMixed();
   return createStyleProxy(collector, macroRegistry as Record<string, Function>) as any;

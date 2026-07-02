@@ -28,7 +28,11 @@ export const SEMANTIC_INTENTS: Array<{
   { pattern: /^flexbox$/i, handler: (v: string, ctx: any) => ({ original: v, property: ctx.property||'display', corrected: 'flex', defaults: { display: 'flex', justifyContent: 'center', alignItems: 'center' }, confidence: 0.95, intent: 'flexbox-centering', explanation: '"flexbox" mapped to display: flex with centering defaults.' }), description: 'flexbox -> flex + centering' },
   { pattern: /^(absolutely|abs)$/i, handler: (v: string, ctx: any) => ({ original: v, property: ctx.property||'position', corrected: 'absolute', defaults: { position: 'absolute' }, confidence: 0.9, intent: 'absolute-position', explanation: '"abs/absolutely" -> position: absolute' }), description: 'abs -> absolute' },
   { pattern: /^(rel|relatively)$/i, handler: (v: string, ctx: any) => ({ original: v, property: ctx.property||'position', corrected: 'relative', defaults: { position: 'relative' }, confidence: 0.9, intent: 'relative-position', explanation: '"rel/relatively" -> position: relative' }), description: 'rel -> relative' },
-  { pattern: /^(hidden|invisible)$/i, handler: (v: string, ctx: any) => ({ original: v, property: ctx.property||'visibility', corrected: v.toLowerCase()==='invisible'?'hidden':v.toLowerCase(), defaults: { visibility: 'hidden' }, confidence: 0.9, intent: 'visibility-toggle', explanation: '"' + v + '" -> visibility: hidden' }), description: 'invisible -> hidden' },
+  { pattern: /^(hidden|invisible)$/i, handler: (v: string, ctx: any) => {
+    // Don't trigger on overflow: hidden — that's a valid overflow value, not a visibility toggle
+    if (ctx.property === 'overflow') return null;
+    return { original: v, property: ctx.property||'visibility', corrected: v.toLowerCase()==='invisible'?'hidden':v.toLowerCase(), defaults: { visibility: 'hidden' }, confidence: 0.9, intent: 'visibility-toggle', explanation: '"' + v + '" -> visibility: hidden' };
+  }, description: 'invisible -> hidden' },
   { pattern: /^(full|fullscreen|full-screen)$/i, handler: (v: string, ctx: any) => ({ original: v, property: ctx.property||'size', corrected: '100%', defaults: { width: '100%', height: '100%' }, confidence: 0.85, intent: 'full-size', explanation: '"full/fullscreen" -> width/height: 100%' }), description: 'full -> 100%' },
   { pattern: /^(rounded|round)$/i, handler: (v: string, ctx: any) => ({ original: v, property: ctx.property||'border-radius', corrected: '9999px', defaults: { borderRadius: '9999px' }, confidence: 0.8, intent: 'rounded-pill', explanation: '"rounded" -> border-radius: 9999px (pill)' }), description: 'rounded -> pill' },
 ];
@@ -71,13 +75,23 @@ export function levenshtein(a: string, b: string): number {
   return m[b.length][a.length];
 }
 
+const propertyCache = new Map<string, string | null>();
+
 export function findClosestProperty(prop: string): string | null {
   const lp = prop.toLowerCase();
-  let best: string | null = null, bestDist = Infinity;
+  
+  // Cache hit — most properties repeat many times in a stylesheet
+  const cached = propertyCache.get(lp);
+  if (cached !== undefined) return cached;
+  
+  let best: string | null = null;
+  let bestDist = Infinity;
   for (const k of KNOWN_PROPERTIES) {
     const d = levenshtein(lp, k);
     if (d < bestDist && d <= 3) { bestDist = d; best = k; }
   }
+  
+  propertyCache.set(lp, best);
   return best;
 }
 

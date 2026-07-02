@@ -4,22 +4,21 @@
  * Unified Pipeline — Single source of truth for all CSS compilation passes.
  * 
  * Presets:
- *   default    — core 6 passes (normalize + compress + lower)
+ *   default    — core passes (normalize + compress + lower)
  *   production — default + specificity + dead-code + media-query + source
- *   analysis   — full validation + analysis + optimization
+ *   ci         — full validation + analysis + optimization (use in CI/linting)
  *   lint       — normalize + all validators + css emit (no optimization)
  *   atomic     — normalize + atomic extractor + css emit
  * 
- * All passes are stateless. Each createPipeline() call returns a fresh
- * Pipeline instance — no global singletons that could bleed state between
- * concurrent compilations.
+ * Token lowering runs in the Optimization stage (before cssCompressor)
+ * so that resolved design tokens get compressed/minified properly.
  */
 
 import { Pipeline } from './pipeline.js';
-import type { PipelineConfig, PipelineResult } from './pipeline-types.js';
+import type { PipelineConfig, PipelineResult, OptimizationPass, OptimizationResult } from './pipeline-types.js';
 import type { StyleIR } from './ir/types.js';
 
-// Core passes (always run)
+// Core passes
 import { intentNormalizer } from './normalizers/intent-normalizer.js';
 import { unitNormalizer } from './normalizers/unit-normalizer.js';
 import { cssCompressor } from './optimizers/css-compressor.js';
@@ -36,60 +35,85 @@ import { deadCodeEliminator } from './optimizers/dead-code-eliminator.js';
 import { mediaQueryPacker } from './optimizers/media-query-packer.js';
 import { sourceOptimizer } from './optimizers/source-optimizer.js';
 import { atomicExtractor } from './optimizers/atomic-extractor.js';
+import { duplicateDeclarationDetector } from './optimizers/duplicate-declaration-detector.js';
 import { responsiveAnalyzer } from './analyzers/responsive-analyzer.js';
 import { layoutAnalyzer } from './analyzers/layout-analyzer.js';
 import { patternDetector } from './analyzers/pattern-detector.js';
 
 // ============================================================================
+// Shared base — every preset includes these
+// ============================================================================
+
+const tokenOptimizer: OptimizationPass = {
+  name: tokenLowering.name,
+  cost: 'cheap',
+  requiredFor: ['css'],
+  optimize(ir: StyleIR): OptimizationResult {
+    const result = tokenLowering.generate(ir, {});
+    return {
+      ir: result.ir,
+      savings: { rulesEliminated: 0, declarationsEliminated: 0, bytesSaved: 0 },
+      changes: result.generatedNodes,
+    };
+  },
+};
+
+const BASE_NORMALIZATION = [intentNormalizer, unitNormalizer];
+// Token lowering runs in optimization so cssCompressor can minify resolved tokens
+const BASE_OPTIMIZATION = [tokenOptimizer, cssCompressor];
+const BASE_LOWERING = [intentResolver, cssEmitter];
+
+// ============================================================================
 // Presets
 // ============================================================================
 
-export type PipelinePreset = 'default' | 'production' | 'analysis' | 'lint' | 'atomic';
+export type PipelinePreset = 'default' | 'production' | 'ci' | 'lint' | 'atomic';
 
 const PRESETS: Record<PipelinePreset, Partial<PipelineConfig>> = {
-  /** Core 6 passes — fast, zero-config. The default for everyday use. */
+  /** Core passes — fast, zero-config. The default for everyday use. */
   default: {
-    normalization: [intentNormalizer, unitNormalizer],
+    normalization: BASE_NORMALIZATION,
     validation: [],
     analysis: [],
-    optimization: [cssCompressor],
-    lowering: [intentResolver, tokenLowering, cssEmitter],
+    optimization: BASE_OPTIMIZATION,
+    lowering: BASE_LOWERING,
   },
 
-  /** Production-grade optimization without analysis overhead. */
+  /** Production-grade optimization. */
   production: {
-    normalization: [intentNormalizer, unitNormalizer],
+    normalization: BASE_NORMALIZATION,
     validation: [],
     analysis: [],
     optimization: [
       specificitySorter,
       deadCodeEliminator,
-      cssCompressor,
+      ...BASE_OPTIMIZATION,
       mediaQueryPacker,
       sourceOptimizer,
     ],
-    lowering: [intentResolver, tokenLowering, cssEmitter],
+    lowering: BASE_LOWERING,
   },
 
-  /** Full pipeline — validation + analysis + optimization. Use for CI/linting. */
-  analysis: {
-    normalization: [intentNormalizer, unitNormalizer],
+  /** Full pipeline — validation + analysis + optimization. Use in CI. */
+  ci: {
+    normalization: BASE_NORMALIZATION,
     validation: [accessibilityValidator, conflictValidator],
     analysis: [responsiveAnalyzer, layoutAnalyzer, patternDetector],
     optimization: [
+      duplicateDeclarationDetector,
       specificitySorter,
       deadCodeEliminator,
-      cssCompressor,
+      ...BASE_OPTIMIZATION,
       mediaQueryPacker,
       sourceOptimizer,
       accessibilityOptimizer,
     ],
-    lowering: [intentResolver, tokenLowering, cssEmitter],
+    lowering: BASE_LOWERING,
   },
 
   /** Validation only — no optimization. Use in dev for fast feedback. */
   lint: {
-    normalization: [intentNormalizer, unitNormalizer],
+    normalization: BASE_NORMALIZATION,
     validation: [accessibilityValidator, conflictValidator],
     analysis: [],
     optimization: [],
@@ -98,10 +122,10 @@ const PRESETS: Record<PipelinePreset, Partial<PipelineConfig>> = {
 
   /** Atomic CSS extraction. Emits utility classes instead of component CSS. */
   atomic: {
-    normalization: [intentNormalizer, unitNormalizer],
+    normalization: BASE_NORMALIZATION,
     validation: [],
     analysis: [],
-    optimization: [atomicExtractor, cssCompressor],
+    optimization: [atomicExtractor, ...BASE_OPTIMIZATION],
     lowering: [cssEmitter],
   },
 };
@@ -112,17 +136,7 @@ const PRESETS: Record<PipelinePreset, Partial<PipelineConfig>> = {
 
 /**
  * Create a fresh Pipeline instance from a named preset.
- * 
- * Each call returns a NEW pipeline — no shared state, no singletons.
- * Safe for concurrent use in SSR, dev servers, and parallel builds.
- * 
- * @example
- * import { createPipeline } from 'chaincss';
- * 
- * const pipeline = createPipeline('production');
- * const pipeline = createPipeline('lint', {
- *   contexts: { validation: { wcagLevel: 'AA' } }
- * });
+ * Each call returns a new pipeline — safe for concurrent use.
  */
 export function createPipeline(
   preset: PipelinePreset = 'default',
@@ -135,24 +149,21 @@ export function createPipeline(
       `Valid presets: ${Object.keys(PRESETS).join(', ')}`
     );
   }
-  // Create a fresh instance every time — no global singleton
   return new Pipeline({ ...config, ...overrides });
 }
 
 /**
  * @deprecated Use createPipeline('default', overrides) instead.
- * Each call creates a fresh pipeline instance.
  */
 export function createDefaultPipeline(overrides?: Partial<PipelineConfig>): Pipeline {
   return createPipeline('default', overrides);
 }
 
 /**
- * @deprecated Use createPipeline('analysis', overrides) instead.
- * Each call creates a fresh pipeline instance.
+ * @deprecated Use createPipeline('ci', overrides) instead.
  */
 export function createFullPipeline(overrides?: Partial<PipelineConfig>): Pipeline {
-  return createPipeline('analysis', overrides);
+  return createPipeline('ci', overrides);
 }
 
 // ============================================================================

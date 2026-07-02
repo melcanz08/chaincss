@@ -28,6 +28,28 @@ export interface CompileResult {
 }
 
 // ============================================================================
+// Cached camelCase → kebab-case conversion
+// ============================================================================
+
+const kebabCache = new Map<string, string>();
+
+function camelToKebab(str: string): string {
+  const cached = kebabCache.get(str);
+  if (cached !== undefined) return cached;
+  const result = str.replace(/([A-Z])/g, '-$1').toLowerCase();
+  kebabCache.set(str, result);
+  return result;
+}
+
+// ============================================================================
+// Safe indentation — avoids corrupting newlines inside CSS string values
+// ============================================================================
+
+function safeIndent(cssText: string, indent: string): string {
+  return cssText.split('\n').map(line => line ? indent + line : line).join('\n');
+}
+
+// ============================================================================
 // CSS String Generation
 // ============================================================================
 
@@ -48,6 +70,8 @@ export function compileToCSS(
     _name,
     _mixed,
     selectors,
+    nestedRules: _explicitNestedRules,
+    atRules: _explicitAtRules,
     ...properties
   } = styleObject as any;
   
@@ -108,6 +132,10 @@ export function compileToCSS(
   return parts.join(options.minify ? '' : '\n\n');
 }
 
+// ============================================================================
+// Declaration Compilation — single pass, no filter/map allocations
+// ============================================================================
+
 function compileDeclarations(
   properties: Record<string, any>,
   indent: string,
@@ -117,16 +145,22 @@ function compileDeclarations(
   
   for (const [prop, value] of Object.entries(properties)) {
     if (prop.startsWith('_')) continue;
-    if (typeof value === 'function') continue;
+    if (typeof value === 'function') {
+      lines.push(`${indent}${camelToKebab(prop)}: var(--chain-dynamic-${prop}, initial);`);
+      continue;
+    }
     if (prop === 'nestedRules' || prop === 'atRules') continue;
     if (typeof value === 'object' && value !== null && !Array.isArray(value)) continue;
     
-    const cssProp = camelToKebab(prop);
-    lines.push(`${indent}${cssProp}: ${value};`);
+    lines.push(`${indent}${camelToKebab(prop)}: ${value};`);
   }
   
   return lines;
 }
+
+// ============================================================================
+// At-Rule Compilation — uses safeIndent to avoid newline corruption
+// ============================================================================
 
 function compileAtRule(
   rule: AtRule,
@@ -142,7 +176,7 @@ function compileAtRule(
         scopeSelector: parentSelector
       });
       if (!inner.trim()) return '';
-      return `@media ${rule.query} {${newline}${indent}${inner.replace(/\n/g, `\n${indent}`)}${newline}}`;
+      return `@media ${rule.query} {${newline}${safeIndent(inner, indent)}${newline}}`;
     }
     
     case 'keyframes': {
@@ -173,7 +207,7 @@ function compileAtRule(
         scopeSelector: parentSelector
       });
       if (!inner.trim()) return '';
-      return `@supports (${rule.condition}) {${newline}${indent}${inner.replace(/\n/g, `\n${indent}`)}${newline}}`;
+      return `@supports (${rule.condition}) {${newline}${safeIndent(inner, indent)}${newline}}`;
     }
     
     case 'container': {
@@ -182,7 +216,7 @@ function compileAtRule(
         scopeSelector: parentSelector
       });
       if (!inner.trim()) return '';
-      return `@container ${rule.condition || ''} {${newline}${indent}${inner.replace(/\n/g, `\n${indent}`)}${newline}}`.replace('@container ', '@container ');
+      return `@container ${rule.condition || ''} {${newline}${safeIndent(inner, indent)}${newline}}`;
     }
     
     case 'layer': {
@@ -191,7 +225,7 @@ function compileAtRule(
         scopeSelector: parentSelector
       });
       if (!inner.trim()) return '';
-      return `@layer ${rule.name || ''} {${newline}${indent}${inner.replace(/\n/g, `\n${indent}`)}${newline}}`;
+      return `@layer ${rule.name || ''} {${newline}${safeIndent(inner, indent)}${newline}}`;
     }
     
     default:
@@ -208,6 +242,9 @@ function compileAtRule(
  * Recursively processes nested rules and at-rules so dynamic values
  * inside @media queries, hover states, and nested selectors are 
  * properly detected.
+ * 
+ * Preserves structural keys (_nestedRules, _atRules) in child contexts
+ * so deeply nested layouts are not silently erased.
  */
 export function partitionForBuild(
   styleObject: StyleObject,
@@ -231,10 +268,14 @@ export function partitionForBuild(
     if (nestedResult.hasDynamic) {
       dynamicNestedRules[rule.selector] = nestedResult.dynamicValues;
     }
-    // Even if the nested rule has dynamic values, we still emit the static parts
+    // Preserve structural keys so deeply nested layouts survive
     staticNestedRules.push({
       selector: rule.selector,
-      styles: stripMetadata(rule.styles) // Static parts will be compiled
+      styles: {
+        ...stripMetadata(rule.styles),
+        _nestedRules: rule.styles._nestedRules,
+        _atRules: rule.styles._atRules,
+      }
     });
   }
 
@@ -250,10 +291,13 @@ export function partitionForBuild(
       }
       staticAtRules.push({
         ...atRule,
-        styles: stripMetadata(atRule.styles)
+        styles: {
+          ...stripMetadata(atRule.styles),
+          _nestedRules: atRule.styles._nestedRules,
+          _atRules: atRule.styles._atRules,
+        }
       });
     } else {
-      // Keyframes, font-face — no nested styles object to recurse into
       staticAtRules.push(atRule);
     }
   }
@@ -274,7 +318,7 @@ export function partitionForBuild(
     }
   }
 
-  // Build the static StyleObject (what gets compiled to CSS)
+  // Build the static StyleObject
   const staticStyleObject: StyleObject = {
     ...topStatic,
     ...staticPseudoStyles,
@@ -282,15 +326,12 @@ export function partitionForBuild(
     _nestedRules: staticNestedRules
   };
 
-  // Preserve selectors on the static object
   if ((styleObject as any).selectors) {
     (staticStyleObject as any).selectors = (styleObject as any).selectors;
   }
 
-  // Compile the static portion to CSS
   const css = compileToCSS(staticStyleObject, options);
 
-  // Aggregate all dynamic values (top-level + nested + at-rule + pseudo)
   const dynamicValues: Record<string, any> = {
     ...topDynamic,
     ...dynamicPseudoStyles,
@@ -316,10 +357,6 @@ export function partitionForBuild(
 // Helpers
 // ============================================================================
 
-function camelToKebab(str: string): string {
-  return str.replace(/([A-Z])/g, '-$1').toLowerCase();
-}
-
 function stripMetadata(obj: StyleObject): Record<string, any> {
   const cleaned: Record<string, any> = {};
   for (const [key, value] of Object.entries(obj)) {
@@ -332,7 +369,6 @@ function stripMetadata(obj: StyleObject): Record<string, any> {
 
 /**
  * Batch compile multiple style objects and concatenate their CSS.
- * Useful for server-side rendering and testing.
  */
 export function run(...styleObjects: StyleObject[]): string {
   return styleObjects

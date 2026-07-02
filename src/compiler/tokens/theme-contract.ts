@@ -135,7 +135,7 @@ export function validateTheme(
   validate(contract, theme, path);
   
   if (errors.length > 0) {
-    throw new Error(`Theme Contract Validation Failed:\n${errors.join('\n')}`);
+    throw new Error(`Theme Contract Validation Failed (${errors.length} errors):\n${errors.join('\n')}`);
   }
   
   return true;

@@ -17,7 +17,7 @@ export interface DebugEntry {
   originalValue: any;
   resolvedValue: any;
   classification: ValueClass;
-  context: 'root' | 'hover';
+  context: string;
 }
 
 export interface Explanation {
@@ -59,7 +59,7 @@ export class DebugCollector {
     prop: string,
     entry: PropertyStoreEntry,
     originalValue: any,
-    context: 'root' | 'hover'
+    context: string 
   ): void {
     if (!this.enabled) return;
 
@@ -134,7 +134,7 @@ export class DebugCollector {
 
     for (const e of this.entries) {
       const icon = e.classification === 'static' ? '📦' : '🏃';
-      const ctx = e.context === 'hover' ? ' (hover)' : '';
+      const ctx = e.context && e.context !== 'root' ? ` (${e.context})` : '';
       let val = typeof e.originalValue === 'function'
         ? '<function>'
         : typeof e.originalValue === 'string' && e.originalValue.length > 22

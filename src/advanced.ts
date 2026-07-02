@@ -42,7 +42,7 @@ export {
   compileViaIR,
   countNodes,
   debugIR,
-} from './compiler/style-ir.js';
+} from './style-ir.js';
 export type {
   StyleIR,
   IRRule,
@@ -53,7 +53,7 @@ export type {
   IRDiagnostic,
   IRNodeId,
   IRPass,
-} from './compiler/style-ir.js';
+} from './style-ir.js';
 
 // Style Graph
 export { StyleGraphCompiler, compileGraph } from './compiler/style-graph.js';

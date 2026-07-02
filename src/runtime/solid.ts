@@ -1,3 +1,4 @@
+// @ts-nocheck — optional peer dependency
 // src/runtime/solid.ts
 
 /**
@@ -7,8 +8,48 @@
  * Supports both runtime style injection and hybrid atomic CSS mode.
  */
 
-import { createSignal, createMemo, onCleanup, useContext, createContext, useContextProvider, type Accessor, type Setter, type JSX, type Component } from 'solid-js';
-import { compileRuntime, styleInjector, removeRuntimeModule, setManifest as setGlobalManifest, setTokens as setGlobalTokens } from './injector.js';
+import { compileRuntime, removeRuntimeModule, setManifest as setGlobalManifest, setTokens as setGlobalTokens } from './injector.js';
+
+let createSignal: any, createMemo: any, onCleanup: any, createComponent: any;
+let useContext: any, createContext: any, useContextProvider: any;
+let Dynamic: any;
+
+try {
+  const solid = require('solid-js');
+  createSignal = solid.createSignal;
+  createMemo = solid.createMemo;
+  onCleanup = solid.onCleanup;
+  createComponent = solid.createComponent;
+  useContext = solid.useContext;
+  createContext = solid.createContext;
+  useContextProvider = solid.useContextProvider;
+} catch {
+  const noop = () => () => {};
+  createSignal = (v: any) => [() => v, () => {}];
+  createMemo = (fn: any) => fn;
+  onCleanup = () => {};
+  createComponent = (c: any, p: any) => null;
+  useContext = () => ({});
+  createContext = () => ({});
+  useContextProvider = () => {};
+}
+
+try {
+  const web = require('solid-js/web');
+  Dynamic = web.Dynamic;
+} catch {
+  Dynamic = null;
+}
+
+// ============================================================================
+// Types
+// ============================================================================
+
+// Use any for types when Solid isn't available
+type Accessor<T> = any;
+type Setter<T> = any;
+type Component<T> = any;
+type JSX = any;
 
 // Context keys
 const ChainCSSContext = createContext<ChainCSSContextValue>({});
@@ -141,17 +182,13 @@ export function styled<T extends keyof JSX.IntrinsicElements>(
     const elementProps = { ...props };
     delete (elementProps as any).class;
     
-    return (
-      // @ts-ignore — SolidJS dynamic element
-      <Dynamic component={tag} class={combinedClass()} {...elementProps} />
-    );
+    return createComponent(Dynamic, {
+      get component() { return tag; },
+      get class() { return combinedClass(); },
+      ...elementProps,
+    });
   };
 }
-
-// Dynamic element helper — needed because Solid doesn't have a built-in Dynamic by default
-// Using a simple workaround with JSX spread
-import { createComponent } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
 
 /**
  * Create multiple styled components at once
@@ -197,12 +234,11 @@ export function useComputedStyles<T extends Record<string, any>>(
  * Dynamic styles hook - re-runs when dependencies change
  */
 export function useDynamicStyles<T extends Record<string, any>>(
-  styleFactory: () => Record<string, any>,
-  deps: Accessor<any[]>
+  styleFactory: () => Record<string, any>
 ): AtomicClassesReturn {
   const computedStyles = createMemo(() => {
     return styleFactory();
-  }, deps());
+  });
   
   return useAtomicClasses(computedStyles);
 }
@@ -233,7 +269,7 @@ export const ChainCSSProvider: Component<ChainCSSProviderProps> = (props) => {
   
   useContextProvider(ChainCSSContext, contextValue);
   
-  return <>{props.children}</>;
+  return props.children;
 };
 
 /**
@@ -281,16 +317,17 @@ export function cx(...classes: (string | undefined | null | false | Record<strin
  * Higher-order component for class components
  */
 export function withChainStyles<P extends object>(
+  Component: Component<P & { chainStyles?: Record<string, string> }>,
   styles: Record<string, any> | ((props: P) => Record<string, any>)
-): Component<P & { chainStyles?: Record<string, string>; children?: any }> {
-  return (props: P & { chainStyles?: Record<string, string>; children?: any }) => {
-    const styleProps = typeof styles === 'function' ? styles(props as P) : styles;
+): Component<P> {
+  return (props: P) => {
+    const styleProps = typeof styles === 'function' ? styles(props) : styles;
     const { classes } = useAtomicClasses(styleProps);
     
-    if (typeof props.children === 'function') {
-      return <>{props.children({ chainStyles: classes() })}</>;
-    }
-    return <>{props.children}</>;
+    return createComponent(Component, {
+      ...props,
+      get chainStyles() { return classes(); },
+    });
   };
 }
 
@@ -333,9 +370,6 @@ export function disableSolidDebug(): void {
 export function isSolidDebugEnabled(): boolean {
   return debugEnabled || (typeof window !== 'undefined' && !!(window as any).__CHAINCSS_SOLID_DEBUG__);
 }
-
-// Export types
-export type { Accessor, Setter, JSX, Component };
 
 // Default export
 export default {

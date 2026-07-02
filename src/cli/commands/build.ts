@@ -96,7 +96,7 @@ export async function buildCommand(options: BuildOptions): Promise<void> {
         'Total styles': stats.totalStyles,
         'Atomic styles': stats.atomicStyles,
         'Standard styles': (stats as any).standardStyles || 0,
-        'CSS savings': stats.savings || '0%'
+        'CSS savings': (stats as any).compressionSavings || stats.savings || '0%'
       });
     }
     

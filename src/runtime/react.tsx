@@ -1,8 +1,7 @@
-// src/runtime/react.tsx (fixed version)
+// src/runtime/react.tsx (fixed)
 
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { compileRuntime, setTokens as setGlobalTokens, removeRuntimeModule } from './injector.js';
-import { chain } from '../core/style-collector.js';
 
 export interface UseChainStylesOptions {
   cache?: boolean;
@@ -12,20 +11,36 @@ export interface UseChainStylesOptions {
   ssr?: boolean;
 }
 
-// Better hash function with lower collision risk
+/**
+ * Deterministic hash for style objects.
+ * Sorts keys before serialization to guarantee same output
+ * regardless of object key insertion order (critical for SSR hydration).
+ */
 function hashStyleObject(obj: Record<string, any>): string {
-  const str = JSON.stringify(obj);
+  // Sort keys for deterministic serialization across server/client
+  const sorted: Record<string, any> = {};
+  for (const key of Object.keys(obj).sort()) {
+    const val = obj[key];
+    // Serialize nested objects deterministically too
+    sorted[key] = val && typeof val === 'object' && !Array.isArray(val)
+      ? hashStyleObject(val)
+      : val;
+  }
+  const str = JSON.stringify(sorted);
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
     hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32-bit integer
+    hash = hash & hash;
   }
   return Math.abs(hash).toString(36);
 }
 
 /**
- * React hook for ChainCSS runtime styles
+ * React hook for ChainCSS runtime styles.
+ * 
+ * Class name computation happens in useMemo (pure).
+ * Style injection happens in useEffect (side effect safe, SSR-safe).
  */
 export function useChainStyles(
   styles: Record<string, any>,
@@ -35,7 +50,58 @@ export function useChainStyles(
   const { namespace = 'c', debug = false, ssr = false } = options;
   const instanceId = useRef(Math.random().toString(36).substring(2, 7));
   const moduleId = useRef(`chaincss-module-${instanceId.current}`);
-  const [forceUpdate, setForceUpdate] = useState(0);
+  const [, setRenderCount] = useState(0);
+
+  // Step 1: Compute class names (pure — safe in useMemo)
+  const { finalClassMap, injectionBundle } = useMemo(() => {
+    const classMap: Record<string, string> = {};
+    const bundle: Record<string, any> = {};
+
+    for (const [key, styleDef] of Object.entries(styles)) {
+      let styleObject: Record<string, any> = {};
+
+      if (styleDef && typeof (styleDef as any).$el === 'function') {
+        styleObject = (styleDef as any).$el();
+        if (debug) {
+          console.log(`[ChainCSS] Processing style: ${key}`, styleObject);
+        }
+      } else if (styleDef && typeof styleDef === 'object') {
+        styleObject = { ...styleDef };
+      }
+
+      const staticClasses = Array.isArray(styleObject._classes) ? styleObject._classes : [];
+      const internalKeys = ['catcher', 'proxy', 'useTokens', 'componentName', '_isChain', '_classes', '_name'];
+      internalKeys.forEach(k => delete styleObject[k]);
+
+      const hash = hashStyleObject(styleObject);
+      const dynamicClassName = `${namespace}-${key}-${hash}`;
+      const hasStyles = Object.keys(styleObject).length > 0;
+
+      if (!ssr && hasStyles) {
+        bundle[dynamicClassName] = styleObject;
+      }
+
+      const classParts = [...staticClasses];
+      if (hasStyles) {
+        classParts.push(dynamicClassName);
+      }
+      classMap[key] = classParts.join(' ').trim();
+    }
+
+    return { finalClassMap: classMap, injectionBundle: bundle };
+  }, [styles, namespace, ssr, debug, ...deps]);
+
+  // Step 2: Inject styles as a side effect (safe in useEffect, skipped during SSR)
+  useEffect(() => {
+    if (!ssr && Object.keys(injectionBundle).length > 0) {
+      compileRuntime(injectionBundle, moduleId.current);
+      if (debug) {
+        console.log(
+          `[ChainCSS] Injected ${Object.keys(injectionBundle).length} styles for module ${moduleId.current}`
+        );
+      }
+    }
+  }, [injectionBundle, ssr, debug]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -47,62 +113,13 @@ export function useChainStyles(
         }
       }
     };
-  }, [ssr]);
+  }, [ssr, debug]);
 
-  return useMemo(() => {
-    const finalClassMap: Record<string, string> = {};
-    const injectionBundle: Record<string, any> = {};
-
-    for (const [key, styleDef] of Object.entries(styles)) {
-      let styleObject: Record<string, any> = {};
-      
-      if (styleDef && typeof (styleDef as any).$el === 'function') {
-        styleObject = (styleDef as any).$el();
-        if (debug) {
-          console.log(`[ChainCSS] Processing style: ${key}`, styleObject);
-        }
-      } else if (styleDef && typeof styleDef === 'object') {
-        styleObject = { ...styleDef };
-      }
-
-      // Remove internal keys
-      const staticClasses = Array.isArray(styleObject._classes) ? styleObject._classes : [];
-      const internalKeys = ['catcher', 'proxy', 'useTokens', 'componentName', '_isChain', '_classes', '_name'];
-      internalKeys.forEach(k => delete styleObject[k]);
-
-      // Generate stable hash
-      const hash = hashStyleObject(styleObject);
-      const dynamicClassName = `${namespace}-${key}-${hash}`;
-
-      // Check if there are actual styles
-      const hasStyles = Object.keys(styleObject).length > 0;
-      
-      if (!ssr && hasStyles) {
-        injectionBundle[dynamicClassName] = styleObject;
-      }
-
-      // Combine static and dynamic classes
-      const classParts = [...staticClasses];
-      if (hasStyles) {
-        classParts.push(dynamicClassName);
-      }
-      finalClassMap[key] = classParts.join(' ').trim();
-    }
-
-    // Inject all styles at once
-    if (!ssr && Object.keys(injectionBundle).length > 0) {
-      compileRuntime(injectionBundle, moduleId.current);
-      if (debug) {
-        console.log(`[ChainCSS] Injected ${Object.keys(injectionBundle).length} styles for module ${moduleId.current}`);
-      }
-    }
-
-    return finalClassMap;
-  }, [forceUpdate, ...deps]);
+  return finalClassMap;
 }
 
 /**
- * Dynamic styles hook - re-runs when deps change
+ * Dynamic styles hook — re-runs when deps change
  */
 export function useDynamicChainStyles(
   styleFactory: () => Record<string, any>,
@@ -131,19 +148,19 @@ export function useThemeChainStyles(
 /**
  * Global style injection component
  */
-export function ChainCSSGlobal({ styles, tokens, children }: { 
-  styles?: Record<string, any>; 
+export function ChainCSSGlobal({ styles, tokens, children }: {
+  styles?: Record<string, any>;
   tokens?: any;
   children?: React.ReactNode;
 }) {
   if (tokens) {
     setGlobalTokens(tokens);
   }
-  
+
   if (styles) {
     useChainStyles(styles, [], { watch: true });
   }
-  
+
   return <>{children}</>;
 }
 
@@ -152,7 +169,7 @@ export function ChainCSSGlobal({ styles, tokens, children }: {
  */
 export function cx(...classes: (string | undefined | null | false | Record<string, boolean>)[]): string {
   const result: string[] = [];
-  
+
   for (const cls of classes) {
     if (!cls) continue;
     if (typeof cls === 'string') {
@@ -163,23 +180,25 @@ export function cx(...classes: (string | undefined | null | false | Record<strin
       }
     }
   }
-  
+
   return result.join(' ');
 }
 
 /**
- * HOC for class components
+ * HOC for class components — fixed: component is a proper parameter, not a magic prop
  */
 export function withChainStyles<P extends object>(
+  Component: React.ComponentType<P & { chainStyles?: Record<string, string> }>,
   styles: Record<string, any> | ((props: P) => Record<string, any>),
   options?: UseChainStylesOptions
 ) {
-  return function WrappedComponent(props: P & { chainStyles?: Record<string, string> }) {
+  const WrappedComponent: React.FC<P> = (props) => {
     const styleProps = typeof styles === 'function' ? styles(props) : styles;
     const classNames = useChainStyles(styleProps, [], options);
-    const Component = (props as any).component || (props as any).wrappedComponent;
     return <Component {...props} chainStyles={classNames} />;
   };
+  WrappedComponent.displayName = `withChainStyles(${Component.displayName || Component.name || 'Component'})`;
+  return WrappedComponent;
 }
 
 /**
@@ -194,18 +213,20 @@ export function createStyledComponent<T extends keyof React.JSX.IntrinsicElement
     const { className: additionalClassName, ...rest } = props;
     const styleDef = typeof styles === 'function' ? styles() : styles;
     const classNames = useChainStyles({ root: styleDef }, [], options);
-    
+
     const combinedClassName = cx(classNames.root, additionalClassName);
-    
+
     return React.createElement(elementType, {
       ...rest,
       className: combinedClassName
     });
   };
-  
-  const displayName = typeof elementType === 'string' ? elementType : (elementType as any).displayName || 'Component';
+
+  const displayName = typeof elementType === 'string'
+    ? elementType
+    : (elementType as any).displayName || 'Component';
   StyledComponent.displayName = `ChainCSS.${displayName}`;
-  
+
   return StyledComponent;
 }
 
@@ -214,12 +235,12 @@ export function createStyledComponent<T extends keyof React.JSX.IntrinsicElement
  */
 export function createStyledComponents(components: Record<string, any>): Record<string, React.FC> {
   const result: Record<string, React.FC> = {};
-  
+
   for (const [name, config] of Object.entries(components)) {
     const { element = 'div', styles, options } = config as any;
     result[name] = createStyledComponent(element, styles, options);
   }
-  
+
   return result;
 }
 

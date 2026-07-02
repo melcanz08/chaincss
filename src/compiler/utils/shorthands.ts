@@ -1,6 +1,4 @@
-// chaincss/src/compiler/shorthands.ts
-
-import { chain } from '../../core/style-collector.js';
+// chaincss/src/compiler/utils/shorthands.ts
 
 /**
  * 1. THE DICTIONARY (Simple 1-to-1 Swaps)
@@ -13,7 +11,7 @@ export const shorthandMap: Record<string, string> = {
   'objFit': 'objectFit', 'objPos': 'objectPosition',
   'd': 'display', 'pos': 'position', 'w': 'width', 'h': 'height', 
   'minW': 'minWidth', 'maxW': 'maxWidth', 'minH': 'minHeight', 'maxH': 'maxHeight', 
-  'bg': 'backgroundColor', 'bgImg': 'backgroundImage', 'bgPos': 'backgroundPosition', 'bgSize': 'backgroundSize',
+  'bg': 'background', 'bgc': 'backgroundColor', 'bgImg': 'backgroundImage', 'bgPos': 'backgroundPosition', 'bgSize': 'backgroundSize',
   'c': 'color', 
   'flexDir': 'flexDirection', 'flexWrap': 'flexWrap', 'justify': 'justifyContent', 
   'items': 'alignItems', 'self': 'alignSelf', 'content': 'alignContent',
@@ -38,9 +36,100 @@ export const shorthandMap: Record<string, string> = {
 // Type for macro handler
 type MacroHandler = (value: any, catcher: Record<string, any>, useTokens: boolean) => void;
 
+// ============================================================================
+// Keyframe Deduplication — shared across all macro calls
+// ============================================================================
+
+const emittedKeyframes = new Set<string>();
+
+function emitKeyframeOnce(catcher: Record<string, any>, name: string, steps: Record<string, any>): void {
+  if (emittedKeyframes.has(name)) return;
+  emittedKeyframes.add(name);
+
+  if (!catcher.atRules) catcher.atRules = [];
+  catcher.atRules.push({
+    type: 'keyframes',
+    name,
+    steps,
+  });
+}
+
 /**
- * 2. THE MACRO REGISTRY (Complex Logic)
+ * Clear the keyframe deduplication cache.
+ * Call between builds to prevent stale state.
  */
+export function clearKeyframeCache(): void {
+  emittedKeyframes.clear();
+}
+
+// ============================================================================
+// Lightweight Sub-Styles — no full StyleCollector allocation
+// ============================================================================
+
+/**
+ * Collect styles from a callback without spinning up a full StyleCollector.
+ * Uses a minimal Proxy + accumulator instead of chain() — avoids
+ * PropertyStore, RuleBuilder, DebugCollector, and Proxy allocations.
+ */
+function getSubStyles(callback: (c: any) => void, _useTokens: boolean): Record<string, any> {
+  const accumulator: Record<string, any> = {};
+
+  const proxy = new Proxy(accumulator, {
+    get(_target, prop) {
+      if (prop === '$el' || prop === 'build') {
+        return () => accumulator;
+      }
+      return (value: any) => {
+        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+          Object.assign(accumulator, value);
+        } else {
+          accumulator[prop as string] = value;
+        }
+        return proxy;
+      };
+    },
+    set(_target, prop, value) {
+      accumulator[prop as string] = value;
+      return true;
+    },
+  });
+
+  callback(proxy);
+  return accumulator;
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+function handlePosition(type: string, v: any, c: any): void {
+  c.position = type;
+  if (v && typeof v === 'object') {
+    if (v.top !== undefined) c.top = v.top;
+    if (v.right !== undefined) c.right = v.right;
+    if (v.bottom !== undefined) c.bottom = v.bottom;
+    if (v.left !== undefined) c.left = v.left;
+  } else if (v !== undefined && typeof v !== 'boolean') {
+    c.top = v;
+    c.right = v;
+    c.bottom = v;
+    c.left = v;
+  }
+}
+
+function handleTheme(cb: any, c: any, mode: string, useTokens: boolean): void {
+  if (!c.atRules) c.atRules = [];
+  c.atRules.push({ 
+    type: 'media', 
+    query: `(prefers-color-scheme: ${mode})`, 
+    styles: getSubStyles(cb, useTokens) 
+  });
+}
+
+// ============================================================================
+// THE MACRO REGISTRY
+// ============================================================================
+
 export const macros: Record<string, MacroHandler> = {
   // --- Spacing & Sizing ---
   mx: (v, c) => { 
@@ -86,13 +175,13 @@ export const macros: Record<string, MacroHandler> = {
     c.display = 'flex'; 
     if (v && v !== true && typeof v === 'string') c.flex = v; 
   },
-  inlineFlex: (v, c) => { c.display = 'inline-flex'; },
+  inlineFlex: (_v, c) => { c.display = 'inline-flex'; },
   grid: (v, c) => { 
     c.display = 'grid'; 
     if (v && v !== true && typeof v === 'string') c.grid = v; 
   },
-  inlineGrid: (v, c) => { c.display = 'inline-grid'; },
-  block: (v, c) => { c.display = 'block'; },
+  inlineGrid: (_v, c) => { c.display = 'inline-grid'; },
+  block: (_v, c) => { c.display = 'block'; },
   cols: (v, c) => { 
     c.gridTemplateColumns = typeof v === 'number' ? `repeat(${v}, minmax(0, 1fr))` : v; 
   },
@@ -110,7 +199,7 @@ export const macros: Record<string, MacroHandler> = {
     c.justifyContent = 'center';
     if (v === 'col' || v === 'column') c.flexDirection = 'column';
   },
-  gridCenter: (v, c) => { 
+  gridCenter: (_v, c) => { 
     c.display = 'grid'; 
     c.placeItems = 'center'; 
   },
@@ -134,17 +223,17 @@ export const macros: Record<string, MacroHandler> = {
   },
 
   // --- Visibility & Behavior ---
-  hide: (v, c) => { 
+  hide: (_v, c) => { 
     c.opacity = 0; 
     c.visibility = 'hidden'; 
     c.pointerEvents = 'none'; 
   },
-  show: (v, c) => { 
+  show: (_v, c) => { 
     c.opacity = 1; 
     c.visibility = 'visible'; 
     c.pointerEvents = 'auto'; 
   },
-  unselectable: (v, c) => {
+  unselectable: (_v, c) => {
     c.userSelect = 'none'; 
     c.WebkitUserSelect = 'none';
     c.MozUserSelect = 'none'; 
@@ -189,7 +278,7 @@ export const macros: Record<string, MacroHandler> = {
     c.alignItems = 'center'; 
     c.justifyContent = 'center';
   },
-  truncate: (v, c) => {
+  truncate: (_v, c) => {
     c.overflow = 'hidden'; 
     c.textOverflow = 'ellipsis'; 
     c.whiteSpace = 'nowrap';
@@ -279,14 +368,9 @@ export const macros: Record<string, MacroHandler> = {
     c.backgroundSize = '200% 100%'; 
     c.animation = 'skeleton-loading 1.5s infinite linear';
     
-    if (!c.atRules) c.atRules = [];
-    c.atRules.push({ 
-      type: 'keyframes', 
-      name: 'skeleton-loading', 
-      steps: { 
-        '0%': { backgroundPosition: '200% 0' }, 
-        '100%': { backgroundPosition: '-200% 0' } 
-      } 
+    emitKeyframeOnce(c, 'skeleton-loading', {
+      '0%': { backgroundPosition: '200% 0' },
+      '100%': { backgroundPosition: '-200% 0' },
     });
   },
   fluidText: (v, c) => {
@@ -342,7 +426,7 @@ export const macros: Record<string, MacroHandler> = {
   light: (v, c, useTokens) => handleTheme(v, c, 'light', useTokens),
 
   // --- Utility Macros ---
-  pill: (v, c) => { 
+  pill: (_v, c) => { 
     c.borderRadius = '9999px'; 
     c.padding = '8px 20px'; 
     c.display = 'inline-flex'; 
@@ -352,7 +436,6 @@ export const macros: Record<string, MacroHandler> = {
   containerMacro: (v, c) => { 
     c.width = '100%'; 
     c.maxWidth = typeof v === 'number' ? `${v}px` : v || '1200px';
-    // Use the mx and px macros
     macros.mx('auto', c, false);
     macros.px('20px', c, false);
   },
@@ -361,22 +444,17 @@ export const macros: Record<string, MacroHandler> = {
     c.top = 0; c.right = 0; c.bottom = 0; c.left = 0;
     c.zIndex = typeof v === 'number' ? v : 9999; 
   },
-  shimmer: (v, c) => {
+  shimmer: (_v, c) => {
     c.backgroundImage = 'linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)';
     c.backgroundSize = '200% 100%';
     c.animation = 'shimmer 2s infinite linear';
-    if (!c.atRules) c.atRules = [];
-    c.atRules.push({ 
-      type: 'keyframes', 
-      name: 'shimmer', 
-      steps: { 
-        '0%': { backgroundPosition: '-200% 0' }, 
-        '100%': { backgroundPosition: '200% 0' } 
-      } 
+    
+    emitKeyframeOnce(c, 'shimmer', {
+      '0%': { backgroundPosition: '-200% 0' },
+      '100%': { backgroundPosition: '200% 0' },
     });
   },
   bento: (v, c, useTokens) => {
-    // Setup the Grid Container
     c.display = 'grid';
     
     if (typeof v === 'number') {
@@ -387,7 +465,6 @@ export const macros: Record<string, MacroHandler> = {
       c.gap = typeof v.gap === 'number' ? `${v.gap}px` : v.gap || '16px';
     }
     
-    // Setup the Children
     if (!c.nestedRules) c.nestedRules = [];
     
     const childStyles = typeof v?.children === 'function' 
@@ -409,7 +486,6 @@ export const macros: Record<string, MacroHandler> = {
     c.WebkitUserSelect = 'none';
     c.MozUserSelect = 'none'; 
     c.msUserSelect = 'none';
-    // Don't call unselectable — it overrides cursor
     macros.clickScale(v, c, useTokens);
     if (!c.nestedRules) c.nestedRules = [];
     c.nestedRules.push({ 
@@ -417,11 +493,10 @@ export const macros: Record<string, MacroHandler> = {
       styles: { opacity: 0.8 } 
     });
   },
-  focusRing: (v, c, useTokens) => { 
+  focusRing: (v, _c, _useTokens) => { 
     const ringColor = typeof v === 'string' ? v : '#3b82f6';
-    // Use onInteracting to handle focus styles
-    if (!c.nestedRules) c.nestedRules = [];
-    c.nestedRules.push({ 
+    if (!_c.nestedRules) _c.nestedRules = [];
+    _c.nestedRules.push({ 
       selector: '&:focus-visible', 
       styles: { 
         outline: `2px solid ${ringColor}`,
@@ -429,7 +504,7 @@ export const macros: Record<string, MacroHandler> = {
       } 
     });
   },
-  outlineDebug: (v, c) => {
+  outlineDebug: (_v, c) => {
     c.border = '1px solid red';
     if (!c.nestedRules) c.nestedRules = [];
     c.nestedRules.push({ 
@@ -469,7 +544,7 @@ export const macros: Record<string, MacroHandler> = {
     c.gridTemplateColumns = 'repeat(auto-fit, minmax(280px, 1fr))';
     c.gap = typeof v === 'number' ? `${v}px` : v || '24px';
   },
-  hero: (v, c) => {
+  hero: (_v, c) => {
     c.display = 'flex';
     c.flexDirection = 'column';
     c.justifyContent = 'center';
@@ -480,45 +555,13 @@ export const macros: Record<string, MacroHandler> = {
   },
 };
 
-/**
- * HELPERS
- */
-function handlePosition(type: string, v: any, c: any): void {
-  c.position = type;
-  if (v && typeof v === 'object') {
-    if (v.top !== undefined) c.top = v.top;
-    if (v.right !== undefined) c.right = v.right;
-    if (v.bottom !== undefined) c.bottom = v.bottom;
-    if (v.left !== undefined) c.left = v.left;
-  } else if (v !== undefined && typeof v !== 'boolean') {
-    // If a single value is provided, apply to all sides
-    c.top = v;
-    c.right = v;
-    c.bottom = v;
-    c.left = v;
-  }
-}
-
-function getSubStyles(callback: any, useTokens: boolean): Record<string, any> {
-  const sub = chain();
-  callback(sub);
-  const result = sub.$el();
-  const { selectors, atRules, nestedRules, ...pure } = result;
-  return pure;
-}
-
-function handleTheme(cb: any, c: any, mode: string, useTokens: boolean): void {
-  if (!c.atRules) c.atRules = [];
-  c.atRules.push({ 
-    type: 'media', 
-    query: `(prefers-color-scheme: ${mode})`, 
-    styles: getSubStyles(cb, useTokens) 
-  });
-}
+// ============================================================================
+// Public API
+// ============================================================================
 
 /**
- * Main handler for shorthand processing
- * Returns true if the shorthand was handled, false otherwise
+ * Main handler for shorthand processing.
+ * Returns true if the shorthand was handled, false otherwise.
  */
 export function handleShorthand(
   prop: string, 
@@ -526,20 +569,17 @@ export function handleShorthand(
   catcher: Record<string, any>, 
   useTokens: boolean = true
 ): boolean {
-  // Check if it's a macro
   if (macros[prop]) { 
     macros[prop](value, catcher, useTokens); 
     return true; 
   }
   
-  // Handle transform properties
   if (['scale', 'rotate', 'skew'].includes(prop)) {
     if (!catcher._transforms) catcher._transforms = {};
     catcher._transforms[prop] = value;
     return true;
   }
   
-  // Handle translate X/Y
   if (prop === 'x') {
     if (!catcher._transforms) catcher._transforms = {};
     catcher._transforms.translateX = value;
@@ -555,23 +595,14 @@ export function handleShorthand(
   return false;
 }
 
-/**
- * Utility to check if a property is a registered shorthand
- */
 export function isShorthand(prop: string): boolean {
   return prop in shorthandMap || prop in macros;
 }
 
-/**
- * Get the expanded property name for a shorthand
- */
 export function expandShorthand(prop: string): string | null {
   return shorthandMap[prop] || null;
 }
 
-/**
- * Get all available shorthands
- */
 export function getAvailableShorthands(): string[] {
   return [...Object.keys(shorthandMap), ...Object.keys(macros)];
 }

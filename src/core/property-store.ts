@@ -43,10 +43,11 @@ export class PropertyStore {
    * Set a CSS property value. Handles macros, shorthands, tokens, and units.
    * Returns metadata about what was set (for debug tracking).
    */
+  
   set(prop: string, value: any): PropertyStoreEntry {
     const valueClass = classifyValue(value);
 
-    // 1. Macros (multi-property operations)
+    // 1. Macros
     if (macros[prop]) {
       macros[prop](value, this.properties, true);
       return {
@@ -56,10 +57,9 @@ export class PropertyStore {
       };
     }
 
-    // 2. Transform properties — skip if dynamic (functions leak as strings)
+    // 2. Transform properties
     if (['scale', 'rotate', 'skew', 'x', 'y'].includes(prop)) {
       if (valueClass === 'dynamic') {
-        // Do NOT store — partitionForBuild will pick it up from the original
         return {
           realProp: 'transform',
           value: value,
@@ -70,7 +70,7 @@ export class PropertyStore {
       return {
         realProp: 'transform',
         value: this.buildTransformString(),
-        classification: 'static'
+        classification: valueClass
       };
     }
 
@@ -80,8 +80,9 @@ export class PropertyStore {
     // 4. Token resolution
     const resolvedValue = this.resolveValue(value);
 
-    // 5. Unit normalization (add px to bare numbers)
-    const finalValue = this.addUnit(resolvedValue, realProp);
+    // 5. Unit normalization — normalize prop to camelCase for UNITLESS lookup
+    const normalizedProp = realProp.replace(/-([a-z])/g, (_: string, c: string) => c.toUpperCase());
+    const finalValue = UNITLESS.has(normalizedProp) ? resolvedValue : this.addUnit(resolvedValue, realProp);
 
     // 6. Store
     this.properties[realProp] = finalValue;
@@ -89,7 +90,7 @@ export class PropertyStore {
     return {
       realProp,
       value: finalValue,
-      classification: classifyValue(value)
+      classification: valueClass
     };
   }
 
@@ -165,7 +166,8 @@ export class PropertyStore {
 
   private addUnit(value: any, prop: string): any {
     if (typeof value !== 'number') return value;
-    if (UNITLESS.has(prop)) return value;
+    const normalized = prop.replace(/-([a-z])/g, (_: string, c: string) => c.toUpperCase());
+    if (UNITLESS.has(normalized)) return value;
     return `${value}px`;
   }
 }

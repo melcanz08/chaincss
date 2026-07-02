@@ -6,6 +6,7 @@ import type { LoweringPass, LoweringResult } from '../pipeline-types.js';
 import { createDeclaration } from '../ir/factory.js';
 import { resolveSemantic } from '../../legacy/semantic-tokens.js';
 
+
 export const tokenLowering: LoweringPass = {
   name: 'token-resolver',
 
@@ -14,7 +15,7 @@ export const tokenLowering: LoweringPass = {
 
     for (const rule of ir.rules) {
       const semanticIntents: Array<{ category: string; intent: string; theme?: any }> =
-        rule.meta._semantic || [];
+  (rule.meta._semantic as Array<{ category: string; intent: string; theme?: any }>) || [];
 
       for (const { category, intent, theme } of semanticIntents) {
         const resolved = resolveSemantic(category as any, intent, theme);

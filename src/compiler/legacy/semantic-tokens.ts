@@ -19,8 +19,8 @@
  *   chain.spacing('comfortable')  // → maps to padding
  */
 
-import type { StyleIR, IRRule, IRPass } from '../style-ir.js';
-import { createDeclaration } from '../style-ir.js';
+import type { StyleIR, IRRule, IRPass, IRPseudoClass} from '../../style-ir.js';
+import { createDeclaration } from '../../style-ir.js';
 
 // ============================================================================
 // Types
@@ -417,7 +417,7 @@ export function getSemanticDescription(
 export const semanticTokensPass: IRPass = (ir: StyleIR): StyleIR => {
   for (const rule of ir.rules) {
     const semanticIntents: Array<{ category: string; intent: string; theme?: ThemeContext }> =
-      rule.meta._semantic || [];
+  (rule.meta._semantic || []) as Array<{ category: string; intent: string; theme?: ThemeContext }>;
 
     for (const { category, intent, theme } of semanticIntents) {
       const resolved = resolveSemantic(category as any, intent, theme);
@@ -435,7 +435,7 @@ export const semanticTokensPass: IRPass = (ir: StyleIR): StyleIR => {
 
         if (resolved.pseudoClass) {
           // Add as pseudo-class
-          let pc = rule.pseudoClasses.find(p => p.name === resolved.pseudoClass);
+          let pc = rule.pseudoClasses.find((p: IRPseudoClass) => p.name === resolved.pseudoClass);
           if (!pc) {
             pc = {
               id: 'semantic-pc-' + Date.now(),

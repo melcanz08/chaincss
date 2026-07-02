@@ -17,7 +17,7 @@ export type ValueClass = 'static' | 'dynamic';
  * 
  * Rules (in order):
  * 1. Functions → dynamic (need runtime execution)
- * 2. Strings containing template literals, theme/props/state references → dynamic
+ * 2. Strings with template literals or anchored runtime references → dynamic
  * 3. Everything else → static (safe to compile to CSS)
  */
 export function classifyValue(value: any): ValueClass {
@@ -31,10 +31,15 @@ export function classifyValue(value: any): ValueClass {
     // Template literals: `${props.color}`
     if (value.includes('${')) return 'dynamic';
     
-    // Token references: theme.primary, $colors.blue, var(--token)
-    if (/\btheme\.|\$\w|props\.|state\.|context\./.test(value)) {
-      return 'dynamic';
-    }
+    // Token references that start with $ — e.g., $colors.primary
+    if (value.startsWith('$')) return 'dynamic';
+    
+    // CSS custom property references — var(--token)
+    if (value.includes('var(--')) return 'dynamic';
+    
+    // Anchored runtime references — must START with these, not appear mid-string
+    // e.g., props.color is dynamic; "some props.color text" is static
+    if (/^(theme|props|state|context)\./.test(value)) return 'dynamic';
   }
   
   // Numbers, booleans, plain strings, null, undefined → static
@@ -53,7 +58,6 @@ export function partitionStyles(styles: Record<string, any>): {
   const dynamicStyles: Record<string, any> = {};
   
   for (const [prop, value] of Object.entries(styles)) {
-    // Skip internal metadata keys
     if (prop.startsWith('_')) continue;
     
     if (classifyValue(value) === 'dynamic') {

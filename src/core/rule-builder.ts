@@ -16,6 +16,22 @@ export interface RuleContext {
   nestedRules: NestedRule[];
 }
 
+function cloneAtRule(rule: AtRule): AtRule {
+  return {
+    ...rule,
+    styles: rule.styles ? { ...rule.styles } : undefined,
+    steps: rule.steps ? { ...rule.steps } : undefined,
+    properties: rule.properties ? { ...rule.properties } : undefined,
+  };
+}
+
+function cloneNestedRule(rule: NestedRule): NestedRule {
+  return {
+    selector: rule.selector,
+    styles: { ...rule.styles },
+  };
+}
+
 export class RuleBuilder {
   private atRules: AtRule[] = [];
   private nestedRules: NestedRule[] = [];
@@ -68,14 +84,14 @@ export class RuleBuilder {
     this.atRules.push({ type: 'font-face', properties });
   }
 
-  /** Get all collected at-rules. */
+  /** Get all collected at-rules — deep cloned to prevent downstream mutation. */
   getAtRules(): AtRule[] {
-    return [...this.atRules];
+    return this.atRules.map(cloneAtRule);
   }
 
-  /** Get all collected nested rules. */
+  /** Get all collected nested rules — deep cloned to prevent downstream mutation. */
   getNestedRules(): NestedRule[] {
-    return [...this.nestedRules];
+    return this.nestedRules.map(cloneNestedRule);
   }
 
   /** Check if there are any rules. */

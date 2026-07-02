@@ -83,6 +83,41 @@ const LAYOUT_PATTERNS: LayoutPattern[] = [
     required: { backdropFilter: 'blur(16px)' },
     minMatches: 1,
   },
+    {
+    name: 'grid-list',
+    description: 'Auto-fit responsive grid',
+    macro: 'gridList()',
+    required: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' },
+    minMatches: 2,
+  },
+  {
+    name: 'sidebar-layout',
+    description: 'Sidebar + main content',
+    macro: 'sidebar()',
+    required: { display: 'grid', minHeight: '100vh' },
+    minMatches: 2,
+  },
+  {
+    name: 'pill-element',
+    description: 'Fully rounded pill',
+    macro: 'pill()',
+    required: { borderRadius: '9999px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' },
+    minMatches: 2,
+  },
+  {
+    name: 'sr-only',
+    description: 'Screen-reader only',
+    macro: 'srOnly()',
+    required: { position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', clip: 'rect(0, 0, 0, 0)' },
+    minMatches: 1,
+  },
+  {
+    name: 'container-responsive',
+    description: 'Responsive container',
+    macro: 'container()',
+    required: { width: '100%', maxWidth: '1200px', marginLeft: 'auto', marginRight: 'auto' },
+    minMatches: 2,
+  },
 ];
 
 function matchPattern(rule: IRRule, pattern: LayoutPattern): { confidence: number; matchedProperties: string[] } | null {

@@ -51,8 +51,8 @@
  *  18. Diagnostics Export     — collect, deduplicate, organize all diagnostics
  */
 
-import type { StyleIR, IRPass, IRRule, IRDeclaration } from './style-ir.js';
-import { applyPass, countNodes, debugIR } from './style-ir.js';
+import type { StyleIR, IRPass, IRRule, IRDeclaration } from '../style-ir.js';
+import { applyPass, countNodes, debugIR } from '../style-ir.js';
 
 
 // ============================================================================
@@ -133,8 +133,8 @@ export const intentRecoveryPass: IRPass = (ir: StyleIR): StyleIR => {
           reason: 'flexbox → flex',
         });
         // Add centering defaults
-        const hasJustify = rule.declarations.some(d => d.property === 'justifyContent');
-        const hasAlign = rule.declarations.some(d => d.property === 'alignItems');
+        const hasJustify = rule.declarations.some((d: IRDeclaration) => d.property === 'justifyContent');
+        const hasAlign = rule.declarations.some((d: IRDeclaration) => d.property === 'alignItems');
         if (!hasJustify) {
           rule.declarations.push({
             id: 'ir-auto-' + Date.now(),
@@ -214,8 +214,8 @@ export const unitResolutionPass: IRPass = (ir: StyleIR): StyleIR => {
  */
 export const validationPass: IRPass = (ir: StyleIR): StyleIR => {
   for (const rule of ir.rules) {
-    const position = rule.declarations.find(d => d.property === 'position');
-    const zIndex = rule.declarations.find(d => d.property === 'zIndex' || d.property === 'z-index');
+    const position = rule.declarations.find((d: IRDeclaration) => d.property === 'position');
+    const zIndex = rule.declarations.find((d: IRDeclaration) => d.property === 'zIndex' || d.property === 'z-index');
 
     if (position && position.value === 'static' && zIndex) {
       ir.diagnostics.push({
@@ -229,8 +229,8 @@ export const validationPass: IRPass = (ir: StyleIR): StyleIR => {
     }
 
     // Check for flex properties on non-flex containers
-    const display = rule.declarations.find(d => d.property === 'display');
-    const hasFlexProps = rule.declarations.some(d =>
+    const display = rule.declarations.find((d: IRDeclaration) => d.property === 'display');
+    const hasFlexProps = rule.declarations.some((d: IRDeclaration) =>
       ['justifyContent', 'alignItems', 'flexDirection', 'flexWrap'].includes(d.property)
     );
     if (hasFlexProps && (!display || (display.value !== 'flex' && display.value !== 'inline-flex'))) {
@@ -267,7 +267,7 @@ export const specificitySortPass: IRPass = (ir: StyleIR): StyleIR => {
   }
 
   // Sort by specificity (lowest first for proper cascade)
-  ir.rules.sort((a, b) => a.specificity - b.specificity);
+  ir.rules.sort((a: IRRule, b: IRRule) => a.specificity - b.specificity);
   return ir;
 };
 
@@ -277,7 +277,7 @@ export const specificitySortPass: IRPass = (ir: StyleIR): StyleIR => {
  */
 export const deadEliminationPass: IRPass = (ir: StyleIR): StyleIR => {
   const before = ir.rules.length;
-  ir.rules = ir.rules.filter(r => !r.isDead);
+  ir.rules = ir.rules.filter((r: IRRule) => !r.isDead);
   const eliminated = before - ir.rules.length;
 
   if (eliminated > 0) {

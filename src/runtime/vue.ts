@@ -1,11 +1,14 @@
 // @ts-nocheck — optional peer dependency
-// src/runtime/vue.ts (fixed version)
+// src/runtime/vue.ts
 
-import { ref, computed, watch, onMounted, onUnmounted, inject, provide, reactive, h, Ref } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted, inject, provide, reactive, h, type Ref, type Component } from 'vue';
 import { compileRuntime, removeRuntimeModule, styleInjector } from './injector.js';
-import { chain } from '../core/style-collector.js';
 
 const CHAIN_CSS_KEY = Symbol('chaincss');
+
+// ============================================================================
+// Types
+// ============================================================================
 
 export interface UseAtomicClassesOptions {
   atomic?: boolean;
@@ -20,66 +23,106 @@ export interface AtomicClassesReturn {
   inject: (styles: Record<string, any>) => void;
 }
 
+// ============================================================================
+// Helpers
+// ============================================================================
+
+function generateId(): string {
+  return `chain-${Math.random().toString(36).substring(2, 11)}`;
+}
+
+/**
+ * Resolve styles from various input formats.
+ * Accepts: plain object, Ref<object>, () => object
+ */
+function resolveStyles(styles: any): Record<string, any> | null {
+  if (typeof styles === 'function') return styles();
+  if (styles && typeof styles === 'object') {
+    // Check for Ref — unwrap .value
+    return 'value' in styles ? styles.value : styles;
+  }
+  return null;
+}
+
+// ============================================================================
+// useAtomicClasses
+// ============================================================================
+
 export function useAtomicClasses(
-  styles: any,
+  styles: Record<string, any> | Ref<Record<string, any>> | (() => Record<string, any>),
   options: UseAtomicClassesOptions = {}
 ): AtomicClassesReturn {
-  const { atomic = true, global = false, debug = false } = options;
-  // Fixed: use substring instead of deprecated substr
-  const id = `chain-${Math.random().toString(36).substring(2, 11)}`;
-  const moduleId = `chaincss-vue-module-${id}`;
-  
+  const { debug = false } = options;
+  const moduleId = `chaincss-vue-${generateId()}`;
   const classMap = ref<Record<string, string>>({});
-  
+  let isMounted = false;
+
+  // Compile styles and inject into DOM — must happen after mount
+  const compileStyles = (sourceStyles: Record<string, any>) => {
+    if (!sourceStyles || Object.keys(sourceStyles).length === 0) return;
+
+    const compiledStyles: Record<string, any> = {};
+    const classNames: Record<string, string> = {};
+
+    for (const [key, styleDef] of Object.entries(sourceStyles)) {
+      const className = `${key}-${moduleId}`;
+      const styleObj = typeof styleDef === 'function' ? styleDef() : styleDef;
+      classNames[key] = className;
+      compiledStyles[`${key}_${moduleId}`] = {
+        selectors: [`.${className}`],
+        ...styleObj,
+      };
+    }
+
+    // Only inject if mounted — avoids DOM manipulation before Vue app is ready
+    if (isMounted) {
+      compileRuntime(compiledStyles, moduleId);
+    }
+
+    classMap.value = classNames;
+
+    if (debug) {
+      console.log(`[ChainCSS Vue] Compiled ${Object.keys(classNames).length} styles for ${moduleId}`);
+    }
+  };
+
+  // Track previous styles to avoid recompiling unchanged objects
+  let prevStyles: Record<string, any> | null = null;
+
+  // Watch for changes — uses shallow comparison to avoid deep-watch overhead
+  const sourceRef = computed(() => resolveStyles(styles));
+
+  watch(
+    sourceRef,
+    (newStyles) => {
+      // Skip if identical reference (shallow) — prevents recompiles on parent re-renders
+      if (newStyles === prevStyles) return;
+      prevStyles = newStyles;
+      if (newStyles) {
+        compileStyles(newStyles);
+      }
+    },
+    { immediate: false } // Don't run before mount
+  );
+
+  // Initial compile on mount
+  onMounted(() => {
+    isMounted = true;
+    const initialStyles = resolveStyles(styles);
+    if (initialStyles) {
+      compileStyles(initialStyles);
+    }
+  });
+
   // Cleanup on unmount
   onUnmounted(() => {
+    isMounted = false;
     removeRuntimeModule(moduleId);
     if (debug) {
       console.log(`[ChainCSS Vue] Cleaned up module: ${moduleId}`);
     }
   });
-  
-  const compileStyles = () => {
-    const resolvedStyles = typeof styles === 'function' 
-      ? styles() 
-      : (styles?.value || styles);
-    
-    if (!resolvedStyles) return {};
-    
-    const compiledStyles: Record<string, any> = {};
-    const classNames: Record<string, string> = {};
-    
-    for (const [key, styleDef] of Object.entries(resolvedStyles)) {
-      const className = `${key}-${id}`;
-      const styleObj = typeof styleDef === 'function' ? styleDef() : styleDef;
-      
-      classNames[key] = className;
-      compiledStyles[`${key}_${id}`] = {
-        selectors: [`.${className}`],
-        ...styleObj
-      };
-    }
-    
-    const result = compileRuntime(compiledStyles, moduleId);
-    
-    if (debug) {
-      console.log(`[ChainCSS Vue] Compiled ${Object.keys(classNames).length} styles for module ${moduleId}`);
-    }
-    
-    classMap.value = classNames;
-    return result;
-  };
-  
-  // Watch for changes if styles is reactive
-  if (typeof styles === 'object' && styles !== null && 'value' in styles) {
-    watch(styles, () => {
-      compileStyles();
-    }, { deep: true });
-  }
-  
-  // Initial compile
-  compileStyles();
-  
+
   return {
     classes: computed(() => classMap.value),
     cx: (name: string) => classMap.value[name] || '',
@@ -90,115 +133,129 @@ export function useAtomicClasses(
       if (debug) {
         console.log(`[ChainCSS Vue] Injected additional styles: ${injectedId}`);
       }
-    }
+    },
   };
 }
 
-// ChainCSS Global component for Vue
-export const ChainCSSGlobal = {
+// ============================================================================
+// ChainCSSGlobal — inject global styles and tokens
+// ============================================================================
+
+export const ChainCSSGlobal: Component = {
   name: 'ChainCSSGlobal',
   props: {
-    styles: {
-      type: Object,
-      required: false,
-      default: () => ({})
-    },
-    tokens: {
-      type: Object,
-      required: false,
-      default: () => ({})
-    },
-    debug: {
-      type: Boolean,
-      default: false
-    }
+    styles: { type: Object, required: false, default: () => ({}) },
+    tokens: { type: Object, required: false, default: () => ({}) },
+    debug: { type: Boolean, default: false },
   },
   setup(props: any) {
     if (props.tokens && Object.keys(props.tokens).length > 0) {
       styleInjector.setTokens(props.tokens);
     }
-    
+
     if (props.styles && Object.keys(props.styles).length > 0) {
       useAtomicClasses(props.styles, { debug: props.debug });
     }
-    
+
     return () => null;
-  }
+  },
 };
 
-/**
- * Create a styled Vue component
- */
+// ============================================================================
+// createStyledComponent — returns a proper Vue component with ref forwarding
+// ============================================================================
+
 export function createStyledComponent(
   styles: Record<string, any> | (() => Record<string, any>),
   tag: string = 'div',
   options: UseAtomicClassesOptions = {}
-) {
+): Component {
   return {
     name: 'ChainCSSStyledComponent',
     props: {
-      className: { type: String, default: '' },
-      as: { type: String, default: tag }
+      class: { type: String, default: '' },
+      as: { type: String, default: tag },
     },
-    setup(props: any, { slots, attrs }: any) {
+    setup(props: any, { slots, attrs, expose }: any) {
       const resolvedStyles = typeof styles === 'function' ? styles() : styles;
       const { classes } = useAtomicClasses({ root: resolvedStyles }, options);
-      
+
       const combinedClass = computed(() => {
         const rootClass = classes.value?.root || '';
-        return [rootClass, props.className].filter(Boolean).join(' ');
+        return [rootClass, props.class].filter(Boolean).join(' ');
       });
-      
+
+      // Forward the root element ref so parent components can access the DOM node
+      const rootRef = ref<HTMLElement | null>(null);
+      expose({ rootRef });
+
       return () => {
-        return h(props.as || tag, {
-          class: combinedClass.value,
-          ...attrs
-        }, slots.default?.());
+        return h(
+          props.as || tag,
+          {
+            ref: rootRef,
+            class: combinedClass.value,
+            ...attrs,
+          },
+          slots.default?.()
+        );
       };
-    }
+    },
   };
 }
 
-/**
- * Create multiple styled Vue components at once
- */
+// ============================================================================
+// createStyledComponents — batch create multiple styled components
+// ============================================================================
+
 export function createStyledComponents(
   components: Record<string, any>,
   options?: UseAtomicClassesOptions
-): Record<string, any> {
-  const result: Record<string, any> = {};
-  
+): Record<string, Component> {
+  const result: Record<string, Component> = {};
+
   for (const [name, config] of Object.entries(components)) {
     const { element = 'div', styles } = config as any;
     result[name] = createStyledComponent(styles, element, options);
   }
-  
+
   return result;
 }
 
-/**
- * CSS-in-JS with computed props (Vue)
- */
+// ============================================================================
+// useComputedStyles — CSS-in-JS with computed props
+// ============================================================================
+
 export function useComputedStyles<T extends Record<string, any>>(
-  styles: (props: T) => Record<string, any>,
-  props: T,
+  stylesFactory: (props: T) => Record<string, any>,
+  props: T | Ref<T>,
   options?: UseAtomicClassesOptions
 ): {
   classes: Ref<Record<string, string>>;
   rootClass: Ref<string>;
 } {
-  const computedStyles = computed(() => ({ root: styles(props) }));
+  const resolvedProps = computed(() =>
+    props && typeof props === 'object' && 'value' in props
+      ? (props as Ref<T>).value
+      : (props as T)
+  );
+
+  const computedStyles = computed(() => ({
+    root: stylesFactory(resolvedProps.value),
+  }));
+
   const { classes } = useAtomicClasses(computedStyles, options);
-  
+
   return {
     classes,
-    rootClass: computed(() => classes.value?.root || '')
+    rootClass: computed(() => classes.value?.root || ''),
   };
 }
 
-/**
- * Style provider for theme/context (Vue)
- */
+// ============================================================================
+// Style context — provide/inject for theme tokens
+// ============================================================================
+
 export function provideStyleContext(theme: any): Ref<any> {
   const themeRef = ref(theme);
   provide(CHAIN_CSS_KEY, themeRef);
@@ -209,9 +266,10 @@ export function injectStyleContext(): Ref<any> {
   return inject<Ref<any>>(CHAIN_CSS_KEY, ref({}));
 }
 
-/**
- * Debug utilities for Vue
- */
+// ============================================================================
+// Debug utilities
+// ============================================================================
+
 export function enableVueDebug(): void {
   if (typeof window !== 'undefined') {
     (window as any).__CHAINCSS_VUE_DEBUG__ = true;

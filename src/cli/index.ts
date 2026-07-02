@@ -1,9 +1,9 @@
 // src/cli/index.ts
+
 import { Command } from 'commander';
-import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import { glob } from 'glob';
 import chalk from 'chalk';
 import { loadConfig } from './utils/config-loader.js';
 
@@ -41,15 +41,6 @@ program
   .helpOption('-h, --help', 'Display help for command');
 
 // ============================================================================
-// Dynamic Import for Compiler (avoids bundling top-level await)
-// ============================================================================
-
-const getCompiler = async (config?: any) => {
-  const { ChainCSSCompiler } = await import('../core/compiler.js');
-  return new ChainCSSCompiler(config);
-};
-
-// ============================================================================
 // Error Handling
 // ============================================================================
 
@@ -68,9 +59,6 @@ const handleError = (error: unknown, command: string): void => {
 // Init Command
 // ============================================================================
 
-// ============================================================================
-// Init Command (Generates the NEW Object-based config)
-// ============================================================================
 program
   .command('init')
   .description('Initialize ChainCSS configuration file')
@@ -82,7 +70,7 @@ program
         console.log(chalk.yellow('Config file already exists. Use --force to overwrite.'));
         return;
       }
-      
+
       const config = `export default {
   inputs: ['src/**/*.chain.{js,ts}', 'src/**/*.tsx'],
   output: {
@@ -98,7 +86,7 @@ program
   },
   verbose: true
 };`;
-      writeFileSync(configPath, config); 
+      writeFileSync(configPath, config);
       console.log(chalk.green('✓ Created chaincss.config.js with Object-based output.'));
     } catch (error) {
       handleError(error, 'init');
@@ -106,59 +94,48 @@ program
   });
 
 // ============================================================================
-// Build Command
+// Build Command — delegates to commands/build.ts
 // ============================================================================
+
 program
   .command('build')
+  .description('Compile ChainCSS styles to CSS')
   .option('-c, --config <pattern>', 'Glob pattern for input files')
   .option('-v, --verbose', 'Verbose output')
+  .option('-w, --watch', 'Watch for changes and recompile')
+  .option('--minify', 'Minify output CSS')
+  .option('--atomic', 'Enable atomic CSS extraction')
   .action(async (opts) => {
     try {
-      const config = await loadConfig();
-      const compiler = await getCompiler(config);
-      
-      console.log(chalk.blue('🚀 Starting ChainCSS Build...'));
-
-      const patterns = opts.config 
-        ? [opts.config] 
-        : config.inputs || ['src/**/*.chain.{js,ts}', 'src/**/*.tsx'];
-      const files = await glob(patterns);
-      
-      // The compiler handles the logic we wrote earlier:
-      // 1. Component CSS in src/components/<Name>/style/
-      // 2. Global CSS in public/
-      // 3. Manifest in src/manifest/
-      await compiler.compileComponents(files);
-
-      const stats = compiler.getStats();
-      console.log(chalk.green(`\n✅ Build Complete!`));
-      console.log(chalk.cyan(`📊 Atomic Rules: ${stats.atomicStyles}`));
+      const { buildCommand } = await import('./commands/build.js');
+      await buildCommand({
+        config: opts.config,
+        verbose: opts.verbose,
+        watch: opts.watch,
+        minify: opts.minify,
+        atomic: opts.atomic,
+      });
     } catch (error) {
       handleError(error, 'build');
     }
   });
 
 // ============================================================================
-// Watch Command
+// Watch Command — delegates to commands/build.ts with watch: true
 // ============================================================================
+
 program
   .command('watch')
   .description('Watch and automatically recompile styles')
-  .action(async () => {
+  .option('-c, --config <pattern>', 'Glob pattern for input files')
+  .option('-v, --verbose', 'Verbose output')
+  .action(async (opts) => {
     try {
-      const config = await loadConfig();
-      const compiler = await getCompiler(config);
-      const chokidar = await import('chokidar');
-      
-      const patterns = config.inputs || ['src/**/*.chain.{js,ts}', 'src/**/*.tsx'];
-      const watcher = chokidar.watch(patterns, { ignored: '**/node_modules/**' });
-
-      console.log(chalk.blue('📡 Watching for changes...'));
-
-      watcher.on('change', async (filePath) => {
-        console.log(chalk.yellow(`\r🔄 Change detected: ${path.basename(filePath)}`));
-        const files = await glob(patterns);
-        await compiler.compileComponents(files);
+      const { buildCommand } = await import('./commands/build.js');
+      await buildCommand({
+        config: opts.config,
+        verbose: opts.verbose,
+        watch: true,
       });
     } catch (error) {
       handleError(error, 'watch');
@@ -166,7 +143,7 @@ program
   });
 
 // ============================================================================
-// Timeline
+// Timeline Command
 // ============================================================================
 
 program
@@ -179,6 +156,20 @@ program
   .action(async (action, options) => {
     const { timelineCommand } = await import('./commands/timeline.js');
     await timelineCommand(action, options);
+  });
+
+// ============================================================================
+// Cache Command
+// ============================================================================
+
+program
+  .command('cache')
+  .description('Manage persistent cache')
+  .argument('<action>', 'Action: clear, stats, prune')
+  .option('-v, --verbose', 'Verbose output')
+  .action(async (action, options) => {
+    const { cacheCommand } = await import('./commands/cache.js');
+    await cacheCommand(action, options);
   });
 
 // ============================================================================
@@ -203,20 +194,6 @@ program.on('--help', () => {
 });
 
 // ============================================================================
-// Cache
-// ============================================================================
-
-program
-  .command('cache')
-  .description('Manage persistent cache')
-  .argument('<action>', 'Action: clear, stats, prune')
-  .option('-v, --verbose', 'Verbose output')
-  .action(async (action, options) => {
-    const { cacheCommand } = await import('./commands/cache.js');
-    await cacheCommand(action, options);
-  });
-
-// ============================================================================
 // Parse Arguments
 // ============================================================================
 
@@ -226,4 +203,3 @@ if (process.argv.length === 2) {
 }
 
 program.parse(process.argv);
-

@@ -34,8 +34,8 @@ import { Pipeline, createDefaultPipeline } from '../compiler/pipeline/index.js';
 import type { PipelineResult } from '../compiler/pipeline/index.js';
 import { setBreakpoints } from '../compiler/breakpoints.js';
 
-// IR
-import { createIR, compileViaIR, generateCSS, type StyleIR } from '../compiler/style-ir.js';
+// IR — parse directly, no wasted CSS generation
+import { createIR, parseIR, generateCSS, type StyleIR } from '../style-ir.js';
 
 // Services (extracted from this class)
 import { ModuleLoader } from '../compiler/services/module-loader.js';
@@ -67,6 +67,14 @@ export class ChainCSSCompiler {
   private accumulatedCSS: string = '';
   private compileInProgress: boolean = false;
   private compileQueue: Array<{ resolve: () => void; reject: (error: Error) => void }> = [];
+
+  private aggregatedStats = {
+  totalStyles: 0,
+  atomicStyles: 0,
+  deadRulesEliminated: 0,
+  pipelinePasses: 0,
+  filesProcessed: 0,
+};
   
   constructor(config: ChainCSSConfig) {
     this.config = {
@@ -94,6 +102,8 @@ export class ChainCSSCompiler {
       }
     });
   }
+
+  
 
   // ==========================================================================
   // Event System
@@ -157,6 +167,7 @@ export class ChainCSSCompiler {
 
   /**
    * Compile through the unified 5-stage pipeline.
+   * Parses directly into IR — no wasted CSS generation from legacy path.
    */
   private compileStyleViaPipeline(
     styleId: string,
@@ -179,20 +190,40 @@ export class ChainCSSCompiler {
     // Phase 1: Convert StyleDefinition → StyleObject
     const styleObject = this.styleDefToObject(styleDef, styleId);
 
-    // Phase 2: Parse into IR
-    const { ir } = compileViaIR(
+    // Phase 2: Parse directly into IR (single parse, no wasted CSS generation)
+    const ir = parseIR(
       { [styleId]: styleObject as any },
-      [],
-      { sourceFile: styleId }
+      styleId
     );
 
-    // Phase 3: Run through unified pipeline (single system)
-    const pipelineResult = this.pipeline.executeSync(ir);
+    // Phase 3: Run through unified pipeline
+    const pipelineResult = this.pipeline.execute(ir);
+
+    // Collect stats from the pipeline result
+    const totalRules = pipelineResult.ir.rules.length;
+    const aliveRules = pipelineResult.ir.rules.filter(r => !r.isDead).length;
+    const deadRules = totalRules - aliveRules;
+    const atomicRules = pipelineResult.ir.rules.filter(
+      r => r.meta?.atomic === true
+    ).length;
 
     // Phase 4: Generate CSS from optimized IR
-    let finalCSS = generateCSS(pipelineResult.ir, {
-      minify: this.config.output.minify,
+    const rawCSS = generateCSS(pipelineResult.ir, {
+      minify: false,
     });
+
+    const minifiedCSS = this.config.output.minify
+      ? generateCSS(pipelineResult.ir, { minify: true })
+      : rawCSS;
+
+    let finalCSS = minifiedCSS;
+
+    // Calculate compression savings
+    const rawBytes = new TextEncoder().encode(rawCSS).length;
+    const minBytes = new TextEncoder().encode(finalCSS).length;
+    const savingsPercent = rawBytes > 0
+      ? Math.round((1 - minBytes / rawBytes) * 100)
+      : 0;
 
     // Phase 5: Run through prefixer if enabled
     if (this.prefixer && this.config.prefixer.enabled && finalCSS.trim()) {
@@ -225,7 +256,16 @@ export class ChainCSSCompiler {
       css: formatCSS(finalCSS, this.config.output.minify),
       classMap: isGlobalSelector ? {} : { [styleId]: finalClassName },
       atomicClasses: [],
-      stats: this.getStats()
+      stats: {
+        totalStyles: totalRules,
+        atomicStyles: atomicRules,
+        uniqueProperties: 0,
+        savings: deadRules > 0 ? `${deadRules} rules eliminated` : '0%',
+        deadRulesEliminated: deadRules,
+        compressionSavings: `${savingsPercent}%`,
+        pipelinePasses: pipelineResult.timeline.length,
+        totalDuration: pipelineResult.totalDuration,
+      }
     };
 
     // Attach pipeline diagnostics if verbose
@@ -294,6 +334,7 @@ export class ChainCSSCompiler {
 
   /**
    * Convert a StyleDefinition to the unified StyleObject format.
+   * Handles nested pseudo-classes, at-rules, and nested selectors.
    */
   private styleDefToObject(styleDef: StyleDefinition, id: string): StyleObject {
     const {
@@ -311,22 +352,27 @@ export class ChainCSSCompiler {
 
     const styleObject: StyleObject = { ...properties };
 
+    // Restore selectors (they were destructured out of properties)
     if (selectors && Array.isArray(selectors)) {
       (styleObject as any).selectors = selectors;
     }
 
+    // Handle hover pseudo-class
     if (hover && typeof hover === 'object') {
       styleObject['&:hover'] = hover;
     }
 
+    // Handle at-rules (media queries, etc.)
     if (atRules && Array.isArray(atRules)) {
       styleObject.atRules = atRules;
     }
 
+    // Handle nested rules
     if (nestedRules && Array.isArray(nestedRules)) {
       styleObject._nestedRules = nestedRules;
     }
 
+    // Handle arbitrary nested selectors (& prefix, .class, etc.)
     for (const key of Object.keys(styleDef)) {
       if (key.startsWith('&') || key.startsWith('.')) {
         styleObject[key] = (styleDef as any)[key];
@@ -489,6 +535,14 @@ export class ChainCSSCompiler {
         this.compileQueue.push({ resolve, reject });
       });
     }
+
+    this.aggregatedStats = {
+      totalStyles: 0,
+      atomicStyles: 0,
+      deadRulesEliminated: 0,
+      pipelinePasses: 0,
+      filesProcessed: 0,
+    };
     
     this.compileInProgress = true;
     
@@ -504,99 +558,22 @@ export class ChainCSSCompiler {
       let totalDiagnostics = 0;
       
       for (const file of components) {
-        if (!file.endsWith('.chain.js') && !file.endsWith('.chain.ts')) continue;
+        // Match the default glob pattern: .chain.js, .chain.ts, .chain.jsx, .chain.tsx
+        if (!file.endsWith('.chain.js') && !file.endsWith('.chain.ts') &&
+            !file.endsWith('.chain.jsx') && !file.endsWith('.chain.tsx')) continue;
 
-        const baseName = path.basename(file).replace(/\.chain\.(js|ts)$/, '');
+        const baseName = path.basename(file).replace(/\.chain\.(js|ts|jsx|tsx)$/, '');
         const sourceDir = path.dirname(file);
-        let hasContent = false;
-        let jsBuffer = `/** 
- * ChainCSS Generated Class Map 
- * Source: ${path.relative(process.cwd(), file)}
- * Generated: ${new Date().toISOString()}
- * DO NOT EDIT MANUALLY
- */\n\n`;
-        let cssBuffer = '';
 
         let sourceCode = '';
         try { sourceCode = fs.readFileSync(file, 'utf8'); } catch {}
         const hasDynamic = sourceCode.includes('chain.dynamic()');
 
-        try {
-          const rawExports = await this.loader.import(file);
-          const styles = rawExports.default || rawExports;
-          
-          for (const [name, style] of Object.entries(styles)) {
-            if (style && typeof style === 'object' && (style as any).selectors) {
-              const result = this.compileStyle(name, style as StyleDefinition);
-              const className = Object.values(result.classMap)[0];
-              
-              if (className) {
-                if (hasDynamic) {
-                  jsBuffer += `export const ${name}Class = '${className}';\n`;
-                } else {
-                  jsBuffer += `export const ${name} = '${className}';\n`;
-                }
-                
-                cssBuffer += result.css + '\n';
-                hasContent = true;
-              } else {
-                hasContent = true;
-                cssBuffer += result.css + '\n';
-              }
-
-              if ((result as any)._diagnostics) {
-                totalDiagnostics += (result as any)._diagnostics.length;
-              }
-            }
-          }
-
-          if (hasContent) {
-            const targetDir = sourceDir;
-            if (!fs.existsSync(targetDir)) {
-              fs.mkdirSync(targetDir, { recursive: true });
-            }
-            
-            const classFilePath = path.join(targetDir, `${baseName}.class.js`);
-            fs.writeFileSync(classFilePath, jsBuffer);
-            generatedClassFiles.push(classFilePath);
-            
-            if (cssBuffer.trim()) {
-              const cssFilePath = path.join(targetDir, `${baseName}.css`);
-              let finalCSS = cssBuffer;
-              
-              if (this.prefixer && this.config.prefixer.enabled) {
-                try {
-                  const prefixed = await this.prefixer.process(finalCSS);
-                  finalCSS = prefixed.css || finalCSS;
-                } catch (e) {
-                  this.emit({
-                    type: 'warning',
-                    code: 'PREFIXER_BATCH_FAILED',
-                    message: `CSS prefixing failed for "${baseName}", using unprefixed output`,
-                    sourceFile: file,
-                    originalError: e instanceof Error ? e : new Error(String(e)),
-                  });
-                }
-              }
-              
-              fs.writeFileSync(cssFilePath, formatCSS(finalCSS, false));
-            }
-            
-            processedComponents++;
-            
-            if (this.config.verbose) {
-              console.log(chalk.green(`   ✨ ${baseName} → ${path.relative(process.cwd(), classFilePath)}`));
-            }
-          }
-        } catch (error) {
-          this.emit({
-            type: 'error',
-            code: 'FILE_PROCESS_FAILED',
-            message: `Failed to process ${baseName}: ${(error as Error).message}`,
-            sourceFile: file,
-            originalError: error instanceof Error ? error : new Error(String(error)),
-          });
-        }
+        const diags = await this.compileOneComponent(
+          file, baseName, sourceDir, hasDynamic, generatedClassFiles
+        );
+        totalDiagnostics += diags;
+        processedComponents++;
       }
 
       // Manifest
@@ -608,7 +585,7 @@ export class ChainCSSCompiler {
         version: VERSION,
         timestamp: new Date().toISOString(),
         atomicMap: {},
-        stats: this.getStats(),
+        stats: this.getAggregatedStats(),
         pipelineEnabled: this.pipelineEnabled,
         diagnosticsCount: totalDiagnostics,
         classFiles: generatedClassFiles.map(f => path.relative(process.cwd(), f))
@@ -631,6 +608,117 @@ export class ChainCSSCompiler {
     }
   }
 
+  /**
+   * Compile a single component file and write its outputs.
+   * Returns the count of diagnostics generated during compilation.
+   */
+  private async compileOneComponent(
+    file: string,
+    baseName: string,
+    sourceDir: string,
+    hasDynamic: boolean,
+    generatedClassFiles: string[]
+  ): Promise<number> {
+    let diagnosticsCount = 0;
+
+    try {
+      const rawExports = await this.loader.import(file);
+      const styles = rawExports.default || rawExports;
+      let jsBuffer = this.generateClassFileHeader(file);
+      let cssBuffer = '';
+
+      for (const [name, style] of Object.entries(styles)) {
+        if (!style || typeof style !== 'object' || !(style as any).selectors) continue;
+
+        const result = this.compileStyle(name, style as StyleDefinition);
+        const className = Object.values(result.classMap)[0];
+
+        if (className) {
+          jsBuffer += hasDynamic
+            ? `export const ${name}Class = '${className}';\n`
+            : `export const ${name} = '${className}';\n`;
+        }
+
+        cssBuffer += result.css + '\n';
+
+        if ((result as any)._diagnostics) {
+          diagnosticsCount += (result as any)._diagnostics.length;
+        }
+      }
+
+      if (cssBuffer.trim() || jsBuffer.includes('export const')) {
+        await this.writeComponentOutput(sourceDir, baseName, jsBuffer, cssBuffer, generatedClassFiles);
+      }
+    } catch (error) {
+      this.emit({
+        type: 'error',
+        code: 'FILE_PROCESS_FAILED',
+        message: `Failed to process ${baseName}: ${(error as Error).message}`,
+        sourceFile: file,
+        originalError: error instanceof Error ? error : new Error(String(error)),
+      });
+    }
+
+    return diagnosticsCount;
+  }
+
+  /**
+   * Generate the header comment for a generated class file.
+   */
+  private generateClassFileHeader(file: string): string {
+    return `/** 
+ * ChainCSS Generated Class Map 
+ * Source: ${path.relative(process.cwd(), file)}
+ * Generated: ${new Date().toISOString()}
+ * DO NOT EDIT MANUALLY
+ */\n\n`;
+  }
+
+  /**
+   * Write the compiled output files (.class.js and .css) for a component.
+   */
+  private async writeComponentOutput(
+    sourceDir: string,
+    baseName: string,
+    jsBuffer: string,
+    cssBuffer: string,
+    generatedClassFiles: string[]
+  ): Promise<void> {
+    if (!fs.existsSync(sourceDir)) {
+      fs.mkdirSync(sourceDir, { recursive: true });
+    }
+
+    const classFilePath = path.join(sourceDir, `${baseName}.class.js`);
+    fs.writeFileSync(classFilePath, jsBuffer);
+    generatedClassFiles.push(classFilePath);
+
+    if (cssBuffer.trim()) {
+      let finalCSS = cssBuffer;
+
+      if (this.prefixer && this.config.prefixer.enabled) {
+        try {
+          const prefixed = await this.prefixer.process(finalCSS);
+          finalCSS = prefixed.css || finalCSS;
+        } catch (e) {
+          this.emit({
+            type: 'warning',
+            code: 'PREFIXER_BATCH_FAILED',
+            message: `CSS prefixing failed for "${baseName}", using unprefixed output`,
+            sourceFile: classFilePath,
+            originalError: e instanceof Error ? e : new Error(String(e)),
+          });
+        }
+      }
+
+      const cssFilePath = path.join(sourceDir, `${baseName}.css`);
+      fs.writeFileSync(cssFilePath, formatCSS(finalCSS, false));
+    }
+
+    if (this.config.verbose) {
+      console.log(chalk.green(`   ✨ ${baseName} → ${path.relative(process.cwd(), classFilePath)}`));
+    }
+  }
+
   // ==========================================================================
   // Utilities
   // ==========================================================================
@@ -649,16 +737,43 @@ export class ChainCSSCompiler {
   }
 
   public getStats() {
-    // Return pipeline-based stats (no legacy AtomicOptimizer)
     const lastResult = this.pipeline.getLastResult?.();
-    const rules = lastResult?.ir?.rules?.length || 0;
-    const aliveRules = lastResult?.ir?.rules?.filter((r: any) => !r.isDead).length || 0;
-    
+    const rules = lastResult?.ir?.rules || [];
+    const totalRules = rules.length;
+    const aliveRules = rules.filter((r: any) => !r.isDead).length;
+    const atomicRules = rules.filter((r: any) => r.meta?.atomic === true).length;
+    const deadRules = totalRules - aliveRules;
+
+    this.aggregatedStats.totalStyles += totalRules;
+    this.aggregatedStats.atomicStyles += atomicRules;
+    this.aggregatedStats.deadRulesEliminated += deadRules;
+    this.aggregatedStats.pipelinePasses = Math.max(
+      this.aggregatedStats.pipelinePasses,
+      lastResult?.timeline?.length || 0
+    );
+    this.aggregatedStats.filesProcessed++;
+
     return {
-      totalStyles: rules,
-      atomicStyles: 0,  // Atomic extraction is handled by pipeline passes
+      totalStyles: totalRules,
+      atomicStyles: atomicRules,
       uniqueProperties: 0,
-      savings: '0%'
+      savings: deadRules > 0 ? `${deadRules} rules eliminated` : '0%',
+      deadRulesEliminated: deadRules,
+      pipelinePasses: lastResult?.timeline?.length || 0,
+    };
+  }
+
+  public getAggregatedStats() {
+    return {
+      totalStyles: this.aggregatedStats.totalStyles,
+      atomicStyles: this.aggregatedStats.atomicStyles,
+      uniqueProperties: 0,
+      savings: this.aggregatedStats.deadRulesEliminated > 0
+        ? `${this.aggregatedStats.deadRulesEliminated} rules eliminated`
+        : '0%',
+      deadRulesEliminated: this.aggregatedStats.deadRulesEliminated,
+      pipelinePasses: this.aggregatedStats.pipelinePasses,
+      filesProcessed: this.aggregatedStats.filesProcessed,
     };
   }
 
@@ -680,8 +795,17 @@ export class ChainCSSCompiler {
 
   private hashStyleDef(styleDef: StyleDefinition): string {
     const { _componentName, _generateComponent, _framework, _propsDefinition, ...relevant } = styleDef as any;
+
+    // Sort keys for deterministic serialization — property order in source
+    // shouldn't change the cache key if the values are identical
+    const sortedKeys = Object.keys(relevant).sort();
+    const sortedObj: Record<string, any> = {};
+    for (const key of sortedKeys) {
+      sortedObj[key] = relevant[key];
+    }
+
     return crypto.createHash('sha256')
-      .update(JSON.stringify(relevant))
+      .update(JSON.stringify(sortedObj))
       .digest('hex')
       .slice(0, 16);
   }

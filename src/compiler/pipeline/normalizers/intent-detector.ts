@@ -31,34 +31,72 @@ import {
   autoContrast,
 } from './layout-macros.js';
 
+// Split cache: separate keys for property corrections vs value corrections
+const correctionCache = new Map<string, CorrectionResult | null>();
+
 // ============================================================================
 // Core Intent Object
 // ============================================================================
 
 export const intent = {
   correct(property: string, value: string, context?: IntentContext): CorrectionResult | null {
-    const ctx = { property, value, ...context };
-    const si = detectIntent(value, ctx);
-    if (si) return si;
-    if (VALUE_CORRECTIONS[property]) {
-      const c = VALUE_CORRECTIONS[property].find(c => c.wrong === value.toLowerCase());
-      if (c) return {
-        original: value, property, corrected: c.correct,
-        defaults: { [property]: c.correct }, confidence: c.confidence,
-        intent: 'value-correction',
-        explanation: `"${value}" is not valid for ${property}. Did you mean "${c.correct}"?`
-      };
-    }
+    // ── Step 1: Property name correction FIRST ──
+    // Run before semantic/value checks so misspelled properties aren't
+    // short-circuited by a value matching a semantic intent pattern.
+    const normalizedProp = property.toLowerCase();
     const pc = findClosestProperty(property);
-    if (pc && pc !== property.toLowerCase()) {
-      const d = levenshtein(property.toLowerCase(), pc);
-      return {
-        original: property, property, corrected: pc, defaults: {},
+
+    if (pc && pc !== normalizedProp) {
+      const cacheKey = `prop-err:${normalizedProp}`;
+      const cached = correctionCache.get(cacheKey);
+      if (cached !== undefined) return cached;
+
+      const d = levenshtein(normalizedProp, pc);
+      const result: CorrectionResult = {
+        original: property,
+        property,
+        corrected: pc,
+        defaults: {},
         confidence: Math.max(0, 1 - d / Math.max(property.length, pc.length)),
         intent: 'property-correction',
         explanation: `Unknown property "${property}". Did you mean "${pc}"?`
       };
+
+      correctionCache.set(cacheKey, result);
+      return result;
     }
+
+    // ── Step 2: Value/intent checks for valid properties ──
+    const cacheKey = `val-err:${property}:${value}`;
+    const cached = correctionCache.get(cacheKey);
+    if (cached !== undefined) return cached;
+
+    const ctx = { property, value, ...context };
+
+    // Semantic intent detection
+    const si = detectIntent(value, ctx);
+    if (si) {
+      correctionCache.set(cacheKey, si);
+      return si;
+    }
+
+    // Value correction table
+    if (VALUE_CORRECTIONS[property]) {
+      const c = VALUE_CORRECTIONS[property].find(c => c.wrong === value.toLowerCase());
+      if (c) {
+        const result: CorrectionResult = {
+          original: value, property, corrected: c.correct,
+          defaults: { [property]: c.correct }, confidence: c.confidence,
+          intent: 'value-correction',
+          explanation: `"${value}" is not valid for ${property}. Did you mean "${c.correct}"?`
+        };
+        correctionCache.set(cacheKey, result);
+        return result;
+      }
+    }
+
+    // Cache the null result too — don't recompute known-good values
+    correctionCache.set(cacheKey, null);
     return null;
   },
 
@@ -125,8 +163,12 @@ export const intent = {
   applyMacro(name: string, overrides?: Record<string, any>): Record<string, any> | null {
     const macro = expandLayoutMacro(name);
     if (!macro) return null;
-    if (!overrides) return macro;
-    const merged = { ...macro };
+
+    // Deep clone to prevent shared memory mutations — downstream passes
+    // must not corrupt the master macro object.
+    const merged = JSON.parse(JSON.stringify(macro));
+    if (!overrides) return merged;
+
     for (const [key, value] of Object.entries(overrides)) {
       if (key === 'atRules' && Array.isArray(value) && Array.isArray(merged.atRules)) {
         merged.atRules = [...merged.atRules, ...value];
