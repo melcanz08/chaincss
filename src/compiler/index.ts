@@ -2,6 +2,9 @@
 
 export { ChainCSSCompiler } from '../core/compiler.js';
 
+export { createPipeline, createDefaultPipeline, createFullPipeline } from './pipeline/unified-pipeline.js';
+export type { PipelinePreset } from './pipeline/unified-pipeline.js';
+
 // Export all compiler modules
 export {
   enableTimeline,
@@ -59,8 +62,7 @@ export { getSuggestion, getSuggestions, getPropertySuggestion, getShorthandSugge
 
 // Export new Pipeline architecture (v2.7+)
 export {
-  Pipeline,
-  createDefaultPipeline,
+  Pipeline
 } from './pipeline/index.js';
 export type {
   PipelineConfig,
