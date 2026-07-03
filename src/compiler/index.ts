@@ -1,5 +1,7 @@
 // src/compiler/index.ts
 
+export { ChainCSSCompiler } from '../core/compiler.js';
+
 // Export all compiler modules
 export {
   enableTimeline,
