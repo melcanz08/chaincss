@@ -1,4 +1,5 @@
 // chaincss/src/compiler/prefixer.ts
+
 // Dynamic imports for optional dependencies
 import type { ProcessOptions, Result } from 'postcss';
 

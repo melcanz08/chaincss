@@ -26,8 +26,8 @@ function normalizeProperty(prop: string): string {
   
   // Handle vendor prefixes: WebkitAppearance → -webkit-appearance
   if (/^[A-Z]/.test(prop)) {
-    return '-' + prop.replace(/([A-Z])/g, '-$1').toLowerCase();
-  }
+    return prop.replace(/([A-Z])/g, '-$1').toLowerCase();
+}
   
   // Standard camelCase → kebab-case
   return prop.replace(/([A-Z])/g, '-$1').toLowerCase();

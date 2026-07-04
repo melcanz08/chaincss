@@ -9,6 +9,8 @@ import { formatCSS, ensureDir } from '../core/utils.js'
 import { DEFAULT_CONFIG, ENVIRONMENT_PRESETS } from '../core/constants.js'
 import type { ChainCSSConfig } from '../core/types.js'
 
+import { createPipeline } from '../compiler/pipeline/unified-pipeline.js';
+
 const CHAIN_FILE_RE = /\.chain\.(ts|js)x?$/
 
 // ============================================================================
@@ -44,6 +46,7 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
   let isProduction = false
   let cssCache = ''
   const cssFileCache = new Map<string, string>()
+  let accumulatedIRRules: any[] = [];
   let totalDiagnostics = 0
   let totalAutoFixes = 0
 
@@ -92,6 +95,74 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
       if (className) {
         classMap[name] = className
       }
+
+      // Collect IR data for the inspector
+      const ir = (compileResult as any)._ir;
+      const diags = (compileResult as any)._diagnostics || [];
+      
+      if (ir) {
+        for (const rule of ir.rules) {
+          if (!rule.isDead) {
+            accumulatedIRRules.push({
+              selector: rule.selector,
+
+              source: {
+                file: chainPath,
+                component: rule.source?.component || name,
+              },
+
+              diagnostics: diags
+                .filter((d: any) => !d.message?.includes('Skipped') || !d.message?.includes('pass(es)'))
+                .map((d: any) => ({
+                  severity: d.severity,
+                  category: d.category || '',
+                  message: d.message || '',
+                  suggestion: d.suggestion || '',
+                  wcag: d.wcagCriterion || '',
+                  autoFixable: d.autoFixable || false,
+                })),
+
+              declarations: rule.declarations.map((d: any) => ({
+                property: d.property,
+                value: d.value,
+                sourceFile: chainPath,
+                history: d.history.map((h: any) => ({
+                  pass: h.pass,
+                  action: h.action,
+                  reason: h.reason,
+                  previous: h.previous,
+                })),
+              })),
+
+              stats: {
+                declarationCount: rule.declarations.length,
+                estimatedBytes: rule.declarations.reduce((sum: number, d: any) => 
+                  sum + String(d.property).length + String(d.value).length + 4, 0),
+                pipelinePasses: (compileResult as any)._pipelineReport?.length || 0,
+                hasHover: rule.declarations.some((d: any) => 
+                  d.history?.some((h: any) => h.reason?.includes('hover'))),
+              },
+
+              pipeline: ((compileResult as any)._pipelineReport || []).map((entry: any) => ({
+                stage: entry.stage,
+                pass: entry.pass,
+                duration: entry.duration || 0,
+                changes: entry.result?.changes || 0,
+                hasError: entry.result?.diagnostics?.some((d: any) => d.severity === 'error'),
+              })),
+
+              suggestions: diags
+                .filter((d: any) => d.pass === 'pattern-detector' || d.pass === 'layout-analyzer')
+                .map((d: any) => ({
+                  message: d.message || '',
+                  suggestion: d.suggestion || '',
+                })),
+
+            });
+          }
+        }
+      }
+
     }
 
     return { css, classMap, diagnostics: allDiagnostics }
@@ -138,6 +209,7 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
     totalDiagnostics = 0
     totalAutoFixes = 0
     cssFileCache.clear()
+    accumulatedIRRules = [];
 
     const chainFiles: string[] = []
     function walk(dir: string) {
@@ -243,6 +315,11 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
     return allCSS
   }
 
+  function exportIRData() {
+    if (accumulatedIRRules.length === 0) return null;
+    return { rules: accumulatedIRRules, version: '1.0' };
+  }
+
   // =========================================================================
   // Plugin Hooks
   // =========================================================================
@@ -297,11 +374,14 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
         silent
       })
 
-      if (disablePipeline) compiler.setPipelineEnabled(false)
+      // Replace with CI pipeline for full validation + analysis + accessibility checks
+      const ciPipeline = createPipeline('ci');
+      (compiler as any).pipeline = ciPipeline;
+      compiler.setPipelineEnabled(true);
 
       if (!silent) {
         const features: string[] = []
-        if (!disablePipeline) features.push('5-stage pipeline')
+        features.push('5-stage CI pipeline')
         if (atomic) features.push('atomic CSS')
         if (options.tokens) features.push('design tokens')
         summary(`Initialized (${features.join(', ') || 'basic compilation'})`)
@@ -384,6 +464,14 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
           devServer.ws.send({ type: 'full-reload' })
         }
       })
+
+      devServer.middlewares.use('/__chaincss-ir.json', (_req, res) => {
+        const irData = exportIRData();
+        res.setHeader('Content-Type', 'application/json')
+        res.setHeader('Cache-Control', 'no-cache')
+        res.end(JSON.stringify(irData || {}))
+      })
+
     },
 
     async generateBundle(_opts: any, bundle: any) {
@@ -393,6 +481,16 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
           type: "asset",
           fileName: "assets/chaincss.css",
           source: css,
+        });
+      }
+
+      // Export IR history for the inspector
+      const irData = exportIRData();
+      if (irData) {
+        this.emitFile({
+          type: "asset",
+          fileName: "assets/chaincss-ir.json",
+          source: JSON.stringify(irData),
         });
       }
     },

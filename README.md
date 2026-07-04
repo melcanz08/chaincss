@@ -1,4 +1,4 @@
-# ChainCSS v2.9.2 [![npm version](https://badge.fury.io/js/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![npm downloads](https://img.shields.io/npm/dm/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![license](https://img.shields.io/npm/l/chaincss.svg)](LICENSE)
+# ChainCSS v2.9 [![npm version](https://badge.fury.io/js/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![npm downloads](https://img.shields.io/npm/dm/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![license](https://img.shields.io/npm/l/chaincss.svg)](LICENSE)
 
 **Write styles with a fluent TypeScript API. ChainCSS compiles them into static CSS at build time, leaving zero styling runtime in production. When you need runtime values, only those values stay in JavaScript.**
 

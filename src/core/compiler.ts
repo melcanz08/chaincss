@@ -228,10 +228,9 @@ export class ChainCSSCompiler {
     // Phase 5: Run through prefixer if enabled
     if (this.prefixer && this.config.prefixer.enabled && finalCSS.trim()) {
       try {
-        const prefixed = (this.prefixer as any).processSync
-          ? (this.prefixer as any).processSync(finalCSS)
-          : finalCSS;
-        finalCSS = prefixed?.css || finalCSS;
+        // Use lightweight prefixer directly (sync, no dependencies)
+        const prefixed = (this.prefixer as any).lightweightPrefix(finalCSS);
+        finalCSS = prefixed || finalCSS;
       } catch (e) {
         this.emit({
           type: 'warning',
@@ -267,6 +266,8 @@ export class ChainCSSCompiler {
         totalDuration: pipelineResult.totalDuration,
       }
     };
+
+    (result as any)._ir = pipelineResult.ir;
 
     // Attach pipeline diagnostics if verbose
     if (this.config.verbose) {
