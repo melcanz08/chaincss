@@ -4,10 +4,16 @@
  * Shared constants used across the codebase
  */
 
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import path from 'path';
+
 import type { ChainCSSConfig } from './types.js';
 
 // Version
-export const VERSION = '2.8.13';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const pkg = JSON.parse(readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
+export const VERSION = pkg.version;
 
 // Default CSS properties that should never be atomic
 export const NEVER_ATOMIC_PROPERTIES = [

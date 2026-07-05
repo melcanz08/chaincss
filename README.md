@@ -1,6 +1,8 @@
-# ChainCSS v2.9 [![npm version](https://badge.fury.io/js/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![npm downloads](https://img.shields.io/npm/dm/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![license](https://img.shields.io/npm/l/chaincss.svg)](LICENSE)
+# ChainCSS
 
-**Write styles with a fluent TypeScript API. ChainCSS compiles them into static CSS at build time, leaving zero styling runtime in production. When you need runtime values, only those values stay in JavaScript.**
+[![npm version](https://badge.fury.io/js/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![npm downloads](https://img.shields.io/npm/dm/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![license](https://img.shields.io/npm/l/chaincss.svg)](LICENSE)
+
+**The CSS compiler that understands your styles.** Write styles with a fluent TypeScript API. ChainCSS compiles them into static CSS at build time with zero runtime overhead. Dynamic values stay in JS. Built-in accessibility auditing, live compiler inspector, and step-through replay show exactly how every style was generated.
 
 ```bash
 npm install chaincss
@@ -44,6 +46,8 @@ Nothing ships to the browser. No runtime. No overhead.
 | **Dynamic styles** | ✅ Mixed mode | ✅ | ❌ | ❌ |
 | **TypeScript** | ✅ First-class | ✅ | ✅ | Partial |
 | **Atomic CSS** | ✅ Opt-in | ❌ | ❌ | ✅ |
+| **Accessibility audit** | ✅ Built-in | ❌ | ❌ | ❌ |
+| **Compiler inspector** | ✅ Live | ❌ | ❌ | ❌ |
 
 ---
 
@@ -73,6 +77,42 @@ function Button({ isActive }) {
   return <button className={`${btnClass} ${classes.btn}`}>Click</button>
 }
 ```
+
+---
+
+## Compiler Intelligence
+
+ChainCSS doesn't just generate CSS — it understands it. Every style runs through a 5-stage CI pipeline that validates, analyzes, and optimizes at build time.
+
+### Accessibility Audit
+
+```bash
+npx chaincss check
+```
+
+Built-in WCAG 2.2 checks for contrast, font-size minimums, touch target sizing, focus indicators, and motion preferences. No other CSS-in-JS library does this.
+
+### Live Inspector
+
+Press `Ctrl+Shift+I` on any ChainCSS-powered site to open the compiler inspector. Hover over any element to see its full compiler history — every pass, every transformation, before/after diffs, and a step-through replay of how the CSS was generated.
+
+### Design Tokens with Validation
+
+```ts
+import { createThemeContract, createTheme } from 'chaincss'
+
+const contract = createThemeContract({
+  colors: { primary: '', background: '' },
+  spacing: { sm: '', md: '', lg: '' }
+})
+
+const lightTheme = createTheme(contract, {
+  colors: { primary: '#6366f1', background: '#ffffff' },
+  spacing: { sm: '8px', md: '16px', lg: '24px' }
+})
+```
+
+Theme contracts validate that every theme matches the expected shape at build time.
 
 ---
 
@@ -112,16 +152,18 @@ function Button() {
 }
 ```
 
-The plugin handles file discovery, compilation, CSS generation, and HMR automatically.
+The plugin handles file discovery, compilation, CSS generation, HMR, and the live inspector automatically.
 
 ---
 
 ## CLI
 
 ```bash
-npx chaincss init     # Create config
-npx chaincss build    # Build once
-npx chaincss watch    # Watch for changes
+npx chaincss init       # Create config
+npx chaincss build      # Build once
+npx chaincss watch      # Watch for changes
+npx chaincss check      # Audit accessibility
+npx chaincss check --fix  # Auto-fix issues
 ```
 
 ---
@@ -134,7 +176,8 @@ Every CSS property is a chainable method. Shorthands keep things concise:
 
 ```ts
 chain()
-  .bg('#6366f1')       // background-color
+  .bg('#6366f1')       // background (gradients work too)
+  .bgc('#6366f1')      // background-color (solid colors)
   .fs(16)               // font-size (px added automatically)
   .fw(600)              // font-weight
   .rounded(8)           // border-radius
@@ -155,14 +198,17 @@ One method, multiple declarations:
 | `skeleton()` | Loading skeleton animation |
 | `clickScale()` | Scale down on press |
 
-[See all macros →](#api-reference)
+[See all macros →](https://chaincss.dev/docs)
 
-### States & Nesting
+### States & Pseudo-classes
 
 ```ts
 chain()
   .hover().bg('red').end()
   .focus().outline('2px solid blue').end()
+  .active().transform('scale(0.98)').end()
+  .checked().bg('#6366f1').end()
+  .placeholder().color('#a1a1aa').end()
   .nest('.child', (c) => c.color('blue'))
   .media('(min-width: 768px)', (c) => c.flexDirection('row'))
 ```
@@ -181,20 +227,6 @@ Benchmarked on Node.js v22, Linux, 4 CPUs, 4GB RAM with realistic CSS fixtures:
 | X-Large | 2,000 | 127ms | 530KB |
 
 Cold start: ~61ms. Compiler never ships to the browser.
-
----
-
-## What Happens Under the Hood
-
-ChainCSS runs your styles through a build-time compiler that:
-
-- **Fixes common mistakes** — `flexbox` → `flex`, `hand` → `pointer`, typos in property names
-- **Produces smaller CSS** — shortens hex colors, removes redundant values
-- **Checks accessibility** — flags low contrast, missing focus indicators, small touch targets
-- **Suggests patterns** — detects repeated styles and recommends extracting them as recipes
-- **Extracts atomic classes** — optionally converts repeated declarations into utility classes
-
-All of this happens at build time. Your users see none of it.
 
 ---
 
@@ -219,29 +251,6 @@ React, Vue, Svelte, and SolidJS are optional peer dependencies.
 
 ---
 
-## Debug Mode
-
-```ts
-const debugChain = chain({ debug: true })
-  .bg('red')
-  .padding(16);
-
-console.log(debugChain.explain().visualization);
-```
-
-```
-┌──────────────────────────────────────────────────────────┐
-│              ChainCSS Style Explanation                  │
-├──────────────────────────────────────────────────────────┤
-│ 📦 bg         → red        (static)                     │
-│ 📦 padding    → 16         (static)                     │
-├──────────────────────────────────────────────────────────┤
-│ Static: 2 | Dynamic: 0                                  │
-└──────────────────────────────────────────────────────────┘
-```
-
----
-
 ## API Reference
 
 | Export | Description |
@@ -252,8 +261,10 @@ console.log(debugChain.explain().visualization);
 | `partitionForBuild(obj)` | Split static CSS from dynamic values |
 | `useChainStyles(styles, deps)` | React hook for dynamic styles |
 | `ChainCSSCompiler` | Full build compiler with pipeline control |
+| `createThemeContract(shape)` | Define the expected shape of themes |
+| `createTheme(contract, values)` | Create a validated theme |
 
-[Full documentation →](https://github.com/melcanz08/chaincss)
+[Full documentation →](https://chaincss.dev/docs)
 
 ---
 

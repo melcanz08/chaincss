@@ -267,7 +267,11 @@ export class ChainCSSCompiler {
       }
     };
 
-    (result as any)._ir = pipelineResult.ir;
+    result.inspector = {
+      ir: pipelineResult.ir,
+      pipelineReport: pipelineResult.timeline,
+      diagnostics: pipelineResult.ir.diagnostics,
+    };
 
     // Attach pipeline diagnostics if verbose
     if (this.config.verbose) {

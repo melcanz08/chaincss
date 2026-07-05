@@ -15,6 +15,8 @@
  *   import { ... } from 'chaincss/compiler'
  */
 
+import { readFileSync } from 'fs';
+
 // ============================================================================
 // Core API — The only exports most users need
 // ============================================================================
@@ -57,7 +59,8 @@ export type { RecipeOptions, Recipe } from './compiler/recipe.js';
 // Version
 // ============================================================================
 
-export const VERSION = "2.9.6";
+const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+export const VERSION = pkg.version;
 
 // Default export
 export { default } from './core/style-collector.js';

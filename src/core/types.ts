@@ -60,6 +60,11 @@ export interface CompileResult {
   stats: CompileStats;
   warnings?: string[];
   errors?: string[];
+  inspector?: {
+    ir: any;
+    pipelineReport: any[];
+    diagnostics: any[];
+  };
 }
 
 export interface CompileStats {

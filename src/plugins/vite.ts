@@ -8,8 +8,9 @@ import { ChainCSSCompiler } from '../core/compiler.js'
 import { formatCSS, ensureDir } from '../core/utils.js'
 import { DEFAULT_CONFIG, ENVIRONMENT_PRESETS } from '../core/constants.js'
 import type { ChainCSSConfig } from '../core/types.js'
-
 import { createPipeline } from '../compiler/pipeline/unified-pipeline.js';
+import { serializeForInspector } from '../compiler/pipeline/inspector-serializer.js';
+import type { InspectorExport } from '../compiler/pipeline/inspector-types.js';
 
 const CHAIN_FILE_RE = /\.chain\.(ts|js)x?$/
 
@@ -46,7 +47,7 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
   let isProduction = false
   let cssCache = ''
   const cssFileCache = new Map<string, string>()
-  let accumulatedIRRules: any[] = [];
+  let accumulatedIRRules = new Map<string, any>();
   let totalDiagnostics = 0
   let totalAutoFixes = 0
 
@@ -81,8 +82,9 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
     const allDiagnostics: any[] = []
 
     for (const [name, compileResult] of Object.entries(results)) {
-      if ((compileResult as any)._diagnostics) {
-        for (const d of (compileResult as any)._diagnostics) {
+      const diags = compileResult.inspector?.diagnostics || [];
+      if (diags.length > 0) {
+        for (const d of diags) {
           allDiagnostics.push({ ...d, styleName: name })
         }
       }
@@ -96,86 +98,19 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
         classMap[name] = className
       }
 
-      // Collect IR data for the inspector
-      const ir = (compileResult as any)._ir;
-      const diags = (compileResult as any)._diagnostics || [];
-      
-      if (ir) {
-        for (const rule of ir.rules) {
-          if (!rule.isDead) {
-            accumulatedIRRules.push({
-              selector: rule.selector,
-
-              source: {
-                file: chainPath,
-                component: rule.source?.component || name,
-              },
-
-              diagnostics: diags
-                .filter((d: any) => !d.message?.includes('Skipped') || !d.message?.includes('pass(es)'))
-                .map((d: any) => ({
-                  severity: d.severity,
-                  category: d.category || '',
-                  message: d.message || '',
-                  suggestion: d.suggestion || '',
-                  wcag: d.wcagCriterion || '',
-                  autoFixable: d.autoFixable || false,
-                })),
-
-              declarations: rule.declarations.map((d: any) => ({
-                property: d.property,
-                value: d.value,
-                sourceFile: chainPath,
-                history: d.history.map((h: any) => ({
-                  pass: h.pass,
-                  action: h.action,
-                  reason: h.reason,
-                  previous: h.previous,
-                })),
-              })),
-
-              stats: {
-                declarationCount: rule.declarations.length,
-                estimatedBytes: rule.declarations.reduce((sum: number, d: any) => 
-                  sum + String(d.property).length + String(d.value).length + 4, 0),
-                pipelinePasses: (compileResult as any)._pipelineReport?.length || 0,
-                hasHover: rule.declarations.some((d: any) => 
-                  d.history?.some((h: any) => h.reason?.includes('hover'))),
-              },
-
-              pipeline: ((compileResult as any)._pipelineReport || []).map((entry: any) => ({
-                stage: entry.stage,
-                pass: entry.pass,
-                duration: entry.duration || 0,
-                changes: entry.result?.changes || 0,
-                hasError: entry.result?.diagnostics?.some((d: any) => d.severity === 'error'),
-                affectedDeclarations: rule.declarations
-                  .filter((d: any) => d.history?.some((h: any) => h.pass === entry.pass))
-                  .map((d: any) => {
-                    const relevantHistory = d.history?.filter((h: any) => h.pass === entry.pass) || [];
-                    const firstTouch = relevantHistory[0];
-                    const lastTouch = relevantHistory[relevantHistory.length - 1];
-                    return {
-                      property: d.property,
-                      before: firstTouch?.previous !== undefined ? String(firstTouch.previous) : String(d.value),
-                      after: String(d.value),
-                      reason: lastTouch?.reason || '',
-                    };
-                  }),
-                })),
-
-              suggestions: diags
-                .filter((d: any) => d.pass === 'pattern-detector' || d.pass === 'layout-analyzer')
-                .map((d: any) => ({
-                  message: d.message || '',
-                  suggestion: d.suggestion || '',
-                })),
-
-            });
-          }
+      const inspector = compileResult.inspector;
+      if (inspector?.ir) {
+        const rules = serializeForInspector(
+          inspector.ir,
+          inspector.pipelineReport || [],
+          inspector.diagnostics || [],
+          chainPath,
+          name
+        );
+        for (const rule of rules) {
+          accumulatedIRRules.set(rule.id, rule);
         }
       }
-
     }
 
     return { css, classMap, diagnostics: allDiagnostics }
@@ -222,7 +157,7 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
     totalDiagnostics = 0
     totalAutoFixes = 0
     cssFileCache.clear()
-    accumulatedIRRules = [];
+    accumulatedIRRules.clear();
 
     const chainFiles: string[] = []
     function walk(dir: string) {
@@ -259,12 +194,10 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
           cssFileCache.set(file, css)
         }
 
-        // Write .css (async)
         const cssPath = file.replace(CHAIN_FILE_RE, '.css')
         ensureDir(path.dirname(cssPath))
         fsp.writeFile(cssPath, formatCSS(css, false), 'utf8').catch(() => {})
 
-        // Write .class.js (async)
         const source = fs.readFileSync(file, 'utf8')
         const hasDynamic = source.includes('chain.dynamic()')
 
@@ -328,9 +261,15 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
     return allCSS
   }
 
-  function exportIRData() {
-    if (accumulatedIRRules.length === 0) return null;
-    return { rules: accumulatedIRRules, version: '1.0' };
+  function exportIRData(): InspectorExport | null {
+    if (accumulatedIRRules.size === 0) return null;
+    return {
+      schemaVersion: 1,
+      compilerVersion: '2.10.0',
+      pipeline: 'ci',
+      generatedAt: new Date().toISOString(),
+      rules: Array.from(accumulatedIRRules.values()),
+    };
   }
 
   // =========================================================================
@@ -387,7 +326,6 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
         silent
       })
 
-      // Replace with CI pipeline for full validation + analysis + accessibility checks
       const ciPipeline = createPipeline('ci');
       (compiler as any).pipeline = ciPipeline;
       compiler.setPipelineEnabled(true);
@@ -429,7 +367,6 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
           }
         }
 
-        // Write .class.js asynchronously for IDE support
         const classPath = id.replace(CHAIN_FILE_RE, '.class.js')
         ensureDir(path.dirname(classPath))
         fsp.writeFile(classPath, lines.join('\n'), 'utf8').catch(() => {})
@@ -464,7 +401,6 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
             cssFileCache.set(filePath, css)
             cssCache = Array.from(cssFileCache.values()).join('\n')
 
-            // Background: update the full CSS file
             compileAllStyles().then(fullCSS => {
               cssCache = fullCSS
             }).catch(() => {})
@@ -484,7 +420,6 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
         res.setHeader('Cache-Control', 'no-cache')
         res.end(JSON.stringify(irData || {}))
       })
-
     },
 
     async generateBundle(_opts: any, bundle: any) {
@@ -497,7 +432,6 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
         });
       }
 
-      // Export IR history for the inspector
       const irData = exportIRData();
       if (irData) {
         this.emitFile({
