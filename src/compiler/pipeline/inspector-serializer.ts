@@ -2,7 +2,7 @@
 // Strips compiler IR down to only what the inspector needs.
 // Uses proper types — no `any`.
 
-import type { StyleIR, IRRule, IRDeclaration } from './ir/types.js';
+import type { StyleIR, IRRule } from './ir/types.js';
 import type {
   InspectorRule,
   InspectorDiagnostic,
@@ -14,6 +14,7 @@ import type {
   InspectorSnapshot,
   InspectorSuggestion,
 } from './inspector-types.js';
+import { computeStats } from './inspector-metrics.js';
 
 interface PipelineReportEntry {
   stage: string;
@@ -49,7 +50,6 @@ export function serializeForInspector(
 
     const ruleId = `${sourceFile}::${rule.selector}`;
 
-    // Serialize diagnostics
     const serializedDiagnostics: InspectorDiagnostic[] = diagnostics
       .filter(d => !d.message?.includes('Skipped') || !d.message?.includes('pass(es)'))
       .map(d => ({
@@ -61,7 +61,6 @@ export function serializeForInspector(
         autoFixable: d.autoFixable || false,
       }));
 
-    // Serialize declarations
     const serializedDeclarations: InspectorDeclaration[] = rule.declarations.map(d => ({
       property: d.property,
       value: d.value,
@@ -73,19 +72,8 @@ export function serializeForInspector(
       })) as InspectorHistoryEntry[],
     }));
 
-    // Serialize stats
-    const serializedStats: InspectorStats = {
-      declarationCount: rule.declarations.length,
-      estimatedBytes: rule.declarations.reduce(
-        (sum, d) => sum + String(d.property).length + String(d.value).length + 4, 0
-      ),
-      pipelinePasses: pipelineReport?.length || 0,
-      hasHover: rule.declarations.some(d =>
-        d.history?.some(h => h.reason?.includes('hover'))
-      ),
-    };
+    const serializedStats: InspectorStats = computeStats(rule, pipelineReport?.length || 0);
 
-    // Serialize pipeline entries
     const serializedPipeline: InspectorPipelineEntry[] = (pipelineReport || []).map(entry => ({
       stage: entry.stage,
       pass: entry.pass,
@@ -95,16 +83,13 @@ export function serializeForInspector(
       affectedDeclarations: getAffectedDeclarations(rule, entry),
     }));
 
-    // Serialize snapshots with cumulative delta application
     const serializedSnapshots: InspectorSnapshot[] = (pipelineReport || []).map((entry, index) => {
       const declMap = new Map<string, string>();
 
-      // Start with current values
       for (const d of rule.declarations) {
         declMap.set(d.property, String(d.value));
       }
 
-      // Apply changes from passes 0..index to build cumulative state
       for (let i = 0; i <= index; i++) {
         const passEntry = pipelineReport[i];
         const affected = getAffectedDeclarations(rule, passEntry);
@@ -123,7 +108,6 @@ export function serializeForInspector(
       };
     });
 
-    // Serialize suggestions
     const serializedSuggestions: InspectorSuggestion[] = diagnostics
       .filter(d => d.pass === 'pattern-detector' || d.pass === 'layout-analyzer')
       .map(d => ({

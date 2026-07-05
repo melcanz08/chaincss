@@ -10,7 +10,7 @@ import { DEFAULT_CONFIG, ENVIRONMENT_PRESETS } from '../core/constants.js'
 import type { ChainCSSConfig } from '../core/types.js'
 import { createPipeline } from '../compiler/pipeline/unified-pipeline.js';
 import { serializeForInspector } from '../compiler/pipeline/inspector-serializer.js';
-import type { InspectorExport } from '../compiler/pipeline/inspector-types.js';
+import type { InspectorExport, InspectorRule, InspectorDiagnostic } from '../compiler/pipeline/inspector-types.js';
 
 const CHAIN_FILE_RE = /\.chain\.(ts|js)x?$/
 
@@ -47,7 +47,7 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
   let isProduction = false
   let cssCache = ''
   const cssFileCache = new Map<string, string>()
-  let accumulatedIRRules = new Map<string, any>();
+  let accumulatedIRRules = new Map<string, InspectorRule>();
   let totalDiagnostics = 0
   let totalAutoFixes = 0
 
@@ -74,18 +74,18 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
   async function compileFile(chainPath: string): Promise<{
     css: string
     classMap: Record<string, string>
-    diagnostics: any[]
+    diagnostics: InspectorDiagnostic[]
   }> {
     const results = await compiler.compileFile(chainPath)
     let css = ''
     const classMap: Record<string, string> = {}
-    const allDiagnostics: any[] = []
+    const allDiagnostics: InspectorDiagnostic[] = []
 
     for (const [name, compileResult] of Object.entries(results)) {
-      const diags = compileResult.inspector?.diagnostics || [];
+      const diags = (compileResult.inspector?.diagnostics || []) as InspectorDiagnostic[];
       if (diags.length > 0) {
         for (const d of diags) {
-          allDiagnostics.push({ ...d, styleName: name })
+          allDiagnostics.push({ ...d, styleName: name } as InspectorDiagnostic)
         }
       }
 
@@ -116,7 +116,7 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
     return { css, classMap, diagnostics: allDiagnostics }
   }
 
-  function printDiagnostics(diagnostics: any[], fileName: string) {
+  function printDiagnostics(diagnostics: InspectorDiagnostic[], fileName: string) {
     if (!verbose || silent) return
 
     const errors = diagnostics.filter(d => d.severity === 'error')
@@ -265,7 +265,7 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
     if (accumulatedIRRules.size === 0) return null;
     return {
       schemaVersion: 1,
-      compilerVersion: '2.10.0',
+      compilerVersion: '2.10.2',
       pipeline: 'ci',
       generatedAt: new Date().toISOString(),
       rules: Array.from(accumulatedIRRules.values()),
