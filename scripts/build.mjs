@@ -5,12 +5,13 @@
 /**
  * Unified ChainCSS build script.
  * Replaces 7 separate esbuild commands with a single orchestrator.
+ * Injects VERSION from package.json at build time.
  * 
  * Usage: node scripts/build.mjs [--watch]
  */
 
 import { build, context } from 'esbuild';
-import { writeFileSync, mkdirSync, chmodSync, rmSync } from 'fs';
+import { writeFileSync, mkdirSync, chmodSync, rmSync, readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -19,6 +20,12 @@ const root = resolve(__dirname, '..');
 const dist = resolve(root, 'dist');
 
 const isWatch = process.argv.includes('--watch');
+
+// Read version from package.json at build time
+const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
+const __VERSION__ = pkg.version;
+
+console.log(`📦 Building ChainCSS v${__VERSION__}\n`);
 
 // ============================================================================
 // Build Targets
@@ -161,7 +168,7 @@ async function run() {
   rmSync(dist, { recursive: true, force: true });
   mkdirSync(dist, { recursive: true });
 
-  console.log('\uD83D\uDD28 Building ChainCSS...\n');
+  console.log('🔨 Building ChainCSS...\n');
 
   if (isWatch) {
     // Watch mode: create contexts for incremental rebuilds
@@ -176,13 +183,16 @@ async function run() {
           external: target.external || [],
           packages: target.packages || undefined,
           banner: target.banner,
+          define: {
+            '__CHAINCSS_VERSION__': JSON.stringify(__VERSION__),
+          },
           logLevel: 'info',
         });
         await ctx.watch();
         return ctx;
       })
     );
-    console.log('\uD83D\uDC40 Watching for changes...\n');
+    console.log('👀 Watching for changes...\n');
   } else {
     // Single build
     for (const target of targets) {
@@ -199,6 +209,9 @@ async function run() {
           external: target.external || [],
           packages: target.packages || undefined,
           banner: target.banner,
+          define: {
+            '__CHAINCSS_VERSION__': JSON.stringify(__VERSION__),
+          },
           logLevel: 'warning',
         });
 
@@ -207,14 +220,14 @@ async function run() {
           chmodSync(outfile, target.chmod);
         }
 
-        console.log(`  \u2705 ${target.name.padEnd(20)} \u2192 ${target.outfile}`);
+        console.log(`  ✅ ${target.name.padEnd(20)} → ${target.outfile}`);
       } catch (err) {
-        console.error(`  \u274C ${target.name.padEnd(20)} \u2192 ${err.message}`);
+        console.error(`  ❌ ${target.name.padEnd(20)} → ${err.message}`);
         if (!isWatch) process.exit(1);
       }
     }
 
-    console.log(`\n\u2728 Build complete! ${targets.length} targets built.`);
+    console.log(`\n✨ Build complete! ${targets.length} targets built.`);
   }
 }
 

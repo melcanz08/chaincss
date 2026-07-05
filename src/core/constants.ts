@@ -5,8 +5,9 @@
  */
 
 import type { ChainCSSConfig } from './types.js';
-// Version — update with each release
-export const VERSION = "2.10.0";
+
+declare const __CHAINCSS_VERSION__: string;
+export const VERSION: string = typeof __CHAINCSS_VERSION__ !== 'undefined' ? __CHAINCSS_VERSION__ : '0.0.0';
 
 // Default CSS properties that should never be atomic
 export const NEVER_ATOMIC_PROPERTIES = [

@@ -1,8 +1,8 @@
 // src/compiler/pipeline/inspector-metrics.ts
 // Computes derived metrics for the inspector
 
-import type { IRRule } from './ir/types.js';
-import type { InspectorStats } from './inspector-types.js';
+import type { IRRule } from '../ir/types.js';
+import type { InspectorStats } from './types.js';
 
 export function computeStats(rule: IRRule, pipelineReportLength: number): InspectorStats {
   return {

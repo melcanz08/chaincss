@@ -57,7 +57,8 @@ export type { RecipeOptions, Recipe } from './compiler/recipe.js';
 // Version
 // ============================================================================
 
-export { VERSION } from './core/constants.js';
+declare const __CHAINCSS_VERSION__: string;
+export const VERSION: string = typeof __CHAINCSS_VERSION__ !== 'undefined' ? __CHAINCSS_VERSION__ : '0.0.0';
 
 // Default export
 export { default } from './core/style-collector.js';

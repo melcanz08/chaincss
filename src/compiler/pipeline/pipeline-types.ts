@@ -218,4 +218,27 @@ export interface PassResult {
   generatedOutput?: string;
   changes?: number;
 }
+
 // ============================================================================
+// Inspector Types — shared across pipeline, serializer, and plugin
+// ============================================================================
+
+export interface PipelineReportEntry {
+  stage: string;
+  pass: string;
+  duration: number;
+  result?: {
+    changes?: number;
+    diagnostics?: Array<{ severity: string }>;
+  };
+}
+
+export interface PipelineDiagnostic {
+  severity: string;
+  category?: string;
+  message?: string;
+  suggestion?: string;
+  wcagCriterion?: string;
+  autoFixable?: boolean;
+  pass?: string;
+}
