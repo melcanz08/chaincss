@@ -1,4 +1,4 @@
-// src/plugins/vite.ts
+// chaincss/src/plugins/vite.ts
 
 import type { Plugin, ViteDevServer } from 'vite'
 import path from 'path'
@@ -149,7 +149,20 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
                 duration: entry.duration || 0,
                 changes: entry.result?.changes || 0,
                 hasError: entry.result?.diagnostics?.some((d: any) => d.severity === 'error'),
-              })),
+                affectedDeclarations: rule.declarations
+                  .filter((d: any) => d.history?.some((h: any) => h.pass === entry.pass))
+                  .map((d: any) => {
+                    const relevantHistory = d.history?.filter((h: any) => h.pass === entry.pass) || [];
+                    const firstTouch = relevantHistory[0];
+                    const lastTouch = relevantHistory[relevantHistory.length - 1];
+                    return {
+                      property: d.property,
+                      before: firstTouch?.previous !== undefined ? String(firstTouch.previous) : String(d.value),
+                      after: String(d.value),
+                      reason: lastTouch?.reason || '',
+                    };
+                  }),
+                })),
 
               suggestions: diags
                 .filter((d: any) => d.pass === 'pattern-detector' || d.pass === 'layout-analyzer')
