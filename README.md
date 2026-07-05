@@ -1,12 +1,53 @@
-# ChainCSS
+# ChainCSS v2.10 [![npm version](https://badge.fury.io/js/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![npm downloads](https://img.shields.io/npm/dm/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![license](https://img.shields.io/npm/l/chaincss.svg)](LICENSE)
 
-[![npm version](https://badge.fury.io/js/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![npm downloads](https://img.shields.io/npm/dm/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![license](https://img.shields.io/npm/l/chaincss.svg)](LICENSE)
-
-**The CSS compiler that understands your styles.** Write styles with a fluent TypeScript API. ChainCSS compiles them into static CSS at build time with zero runtime overhead. Dynamic values stay in JS. Built-in accessibility auditing, live compiler inspector, and step-through replay show exactly how every style was generated.
+**The CSS compiler that understands your styles.** Write styles with a fluent TypeScript API. ChainCSS compiles them into static CSS at build time. Nothing ships to the browser. No runtime. No overhead. When you need dynamic values, only those values stay in JavaScript.
 
 ```bash
 npm install chaincss
 ```
+
+---
+
+## Quick Start
+
+```bash
+npm install chaincss
+```
+
+```ts
+// vite.config.ts
+import chaincss from 'chaincss/plugin/vite'
+
+export default defineConfig({
+  plugins: [chaincss(), react()]
+})
+```
+
+Create `src/styles/button.chain.ts`:
+
+```ts
+import { chain } from 'chaincss'
+
+export const btn = chain()
+  .bg('#6366f1')
+  .color('#ffffff')
+  .padding('12px 24px')
+  .rounded(8)
+  .hover().bg('#4f46e5').end()
+  .$el('button')
+```
+
+Use it in your component — it's a plain string:
+
+```tsx
+import { btn } from './styles/button.chain'
+
+function Button() {
+  return <button className={btn}>Click me</button>
+}
+```
+
+Run `npm run dev` and you're done. The Vite plugin handles file discovery, compilation, CSS generation, and HMR automatically.
 
 ---
 
@@ -40,9 +81,11 @@ Your users get this:
 
 Nothing ships to the browser. No runtime. No overhead.
 
+> *Static styles generate zero runtime code. Mixed Mode includes only the dynamic expressions required at runtime.*
+
 | | ChainCSS | Styled Components | Vanilla Extract | Tailwind |
 |:---|:---:|:---:|:---:|:---:|
-| **Runtime cost** | 0KB | ~14KB | 0KB | 0KB |
+| **Runtime cost** | 0KB* | ~14KB | 0KB | 0KB |
 | **Dynamic styles** | ✅ Mixed mode | ✅ | ❌ | ❌ |
 | **TypeScript** | ✅ First-class | ✅ | ✅ | Partial |
 | **Atomic CSS** | ✅ Opt-in | ❌ | ❌ | ✅ |
@@ -82,7 +125,7 @@ function Button({ isActive }) {
 
 ## Compiler Intelligence
 
-ChainCSS doesn't just generate CSS — it understands it. Every style runs through a 5-stage CI pipeline that validates, analyzes, and optimizes at build time.
+ChainCSS runs your styles through a 5-stage CI pipeline that validates, analyzes, and optimizes at build time.
 
 ### Accessibility Audit
 
@@ -90,11 +133,11 @@ ChainCSS doesn't just generate CSS — it understands it. Every style runs throu
 npx chaincss check
 ```
 
-Built-in WCAG 2.2 checks for contrast, font-size minimums, touch target sizing, focus indicators, and motion preferences. No other CSS-in-JS library does this.
+Accessibility auditing is integrated into the build pipeline rather than requiring a separate tool. ChainCSS checks WCAG 2.2 contrast ratios, font-size minimums, touch target sizing, focus indicators, and motion preferences.
 
 ### Live Inspector
 
-Press `Ctrl+Shift+I` on any ChainCSS-powered site to open the compiler inspector. Hover over any element to see its full compiler history — every pass, every transformation, before/after diffs, and a step-through replay of how the CSS was generated.
+Press `Ctrl+Shift+I` on [chaincss.dev](https://chaincss.dev) to try the live inspector. Hover over any element to see its full compiler history — every pass, every transformation, before/after diffs, and a step-through replay of how the CSS was generated. The inspector is available on any site built with ChainCSS. Hover over any element to see its full compiler history — every pass, every transformation, before/after diffs, and a step-through replay of how the CSS was generated.
 
 ### Design Tokens with Validation
 
@@ -116,43 +159,19 @@ Theme contracts validate that every theme matches the expected shape at build ti
 
 ---
 
-## Quick Start: Vite
+## When to Use ChainCSS
 
-```ts
-// vite.config.ts
-import chaincss from 'chaincss/plugin/vite'
+**ChainCSS is a good fit if:**
+- You want compile-time CSS with zero runtime overhead
+- You prefer writing styles in TypeScript with full type safety
+- You want built-in accessibility auditing and compiler diagnostics
+- You need optional runtime dynamic styles without switching libraries
+- You value understanding what your styles compile to
 
-export default defineConfig({
-  plugins: [chaincss(), react()]
-})
-```
-
-Create a style file anywhere in `src/`:
-
-```ts
-// src/styles/button.chain.ts
-import { chain } from 'chaincss'
-
-export const btn = chain()
-  .bg('#6366f1')
-  .color('#ffffff')
-  .padding('12px 24px')
-  .rounded(8)
-  .hover().bg('#4f46e5').end()
-  .$el('button')
-```
-
-Import and use — it's a plain string:
-
-```tsx
-import { btn } from '../styles/button.chain'
-
-function Button() {
-  return <button className={btn}>Click me</button>
-}
-```
-
-The plugin handles file discovery, compilation, CSS generation, HMR, and the live inspector automatically.
+**ChainCSS might not be the best fit if:**
+- You prefer utility-first workflows (consider Tailwind)
+- You already have a large Tailwind or Styled Components codebase
+- You need fully runtime-generated styles for every component
 
 ---
 
@@ -217,7 +236,7 @@ chain()
 
 ## Performance
 
-Benchmarked on Node.js v22, Linux, 4 CPUs, 4GB RAM with realistic CSS fixtures:
+Benchmarks were run on Node.js 22 using the benchmark suite in `/benchmarks`. Results may vary by hardware and project size.
 
 | Scenario | Rules | Time | Output |
 |:---|:---|:---|:---|
@@ -251,20 +270,14 @@ React, Vue, Svelte, and SolidJS are optional peer dependencies.
 
 ---
 
-## API Reference
+## Documentation
 
-| Export | Description |
-|:---|:---|
-| `chain(options?)` | Create a style chain |
-| `chain.dynamic(options?)` | Create a mixed-mode chain (static + dynamic) |
-| `compileToCSS(obj, opts?)` | Compile style object to CSS string |
-| `partitionForBuild(obj)` | Split static CSS from dynamic values |
-| `useChainStyles(styles, deps)` | React hook for dynamic styles |
-| `ChainCSSCompiler` | Full build compiler with pipeline control |
-| `createThemeContract(shape)` | Define the expected shape of themes |
-| `createTheme(contract, values)` | Create a validated theme |
-
-[Full documentation →](https://chaincss.dev/docs)
+- [Getting Started →](https://chaincss.dev/docs/getting-started)
+- [API Reference →](https://chaincss.dev/docs/api)
+- [Compiler Pipeline →](https://chaincss.dev/docs/pipeline)
+- [CLI →](https://chaincss.dev/docs/cli)
+- [Inspector →](https://chaincss.dev/audit)
+- [GitHub →](https://github.com/melcanz08/chaincss)
 
 ---
 
