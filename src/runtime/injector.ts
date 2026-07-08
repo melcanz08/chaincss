@@ -201,6 +201,53 @@ class StyleInjector {
 
     return result;
   }
+
+  /**
+   * Inject a single class with CSS content.
+   * Used by useChainStyles() for dynamic style injection.
+   */
+  inject(className: string, css: string, debug: boolean = false): void {
+    if (!this.styleElement?.sheet) return;
+
+    const contentHash = hashString(css);
+    if (this.contentHashes.has(contentHash)) {
+      this.injectedIds.add(className);
+      if (debug) console.log("[ChainCSS] Deduplicated: " + className);
+      return;
+    }
+
+    try {
+      const rules = css.split(/\}(?=\s*\.|@)/);
+      for (const rule of rules) {
+        const trimmed = rule.trim();
+        if (!trimmed) continue;
+        const fullRule = trimmed.endsWith("}") ? trimmed : trimmed + "}";
+        this.styleElement.sheet!.insertRule(fullRule, this.styleElement.sheet!.cssRules.length);
+      }
+      this.injectedIds.add(className);
+      this.contentHashes.add(contentHash);
+      if (debug) console.log("[ChainCSS] Injected: " + className);
+    } catch (e) {
+      this.styleElement.textContent += css + "\n";
+      this.injectedIds.add(className);
+      this.contentHashes.add(contentHash);
+    }
+  }
+
+  /**
+   * Remove a single injected class from the sheet.
+   */
+  remove(className: string): void {
+    const sheet = this.styleElement?.sheet;
+    if (!sheet) return;
+    for (let i = sheet.cssRules.length - 1; i >= 0; i--) {
+      const rule = sheet.cssRules[i] as CSSStyleRule;
+      if (rule.selectorText?.includes(className)) {
+        try { sheet.deleteRule(i); } catch {}
+      }
+    }
+    this.injectedIds.delete(className);
+  }
   
   private resolveStyleTokens(style: StyleObject): StyleObject {
     const resolved: StyleObject = { ...style };
