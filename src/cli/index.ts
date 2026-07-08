@@ -5,7 +5,12 @@ import { readFileSync, existsSync, writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import chalk from 'chalk';
-import { loadConfig } from './utils/config-loader.js';
+
+import { buildCommand } from './commands/build.js';
+import { timelineCommand } from './commands/timeline.js';
+import { devCommand } from './commands/dev.js';
+import { cacheCommand } from './commands/cache.js';
+import { checkCommand } from './commands/check.js';
 
 // ============================================================================
 // Path Resolution
@@ -28,19 +33,6 @@ const packageJsonPath = findPackageJson(__dirname);
 const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
 
 // ============================================================================
-// CLI Setup
-// ============================================================================
-
-const program = new Command();
-
-program
-  .name('chaincss')
-  .description('ChainCSS - Zero-runtime CSS-in-JS Compiler')
-  .version(packageJson.version, '-V, --version')
-  .usage('[command] [options]')
-  .helpOption('-h, --help', 'Display help for command');
-
-// ============================================================================
 // Error Handling
 // ============================================================================
 
@@ -54,6 +46,19 @@ const handleError = (error: unknown, command: string): void => {
   }
   process.exit(1);
 };
+
+// ============================================================================
+// CLI Setup
+// ============================================================================
+
+const program = new Command();
+
+program
+  .name('chaincss')
+  .description('ChainCSS - Zero-runtime CSS-in-JS Compiler')
+  .version(packageJson.version, '-V, --version')
+  .usage('[command] [options]')
+  .helpOption('-h, --help', 'Display help for command');
 
 // ============================================================================
 // Init Command
@@ -107,7 +112,6 @@ program
   .option('--atomic', 'Enable atomic CSS extraction')
   .action(async (opts) => {
     try {
-      const { buildCommand } = await import('./commands/build.js');
       await buildCommand({
         config: opts.config,
         verbose: opts.verbose,
@@ -131,7 +135,6 @@ program
   .option('-v, --verbose', 'Verbose output')
   .action(async (opts) => {
     try {
-      const { buildCommand } = await import('./commands/build.js');
       await buildCommand({
         config: opts.config,
         verbose: opts.verbose,
@@ -154,9 +157,30 @@ program
   .option('--snapshot2 <id>', 'Second snapshot ID or selector for diff')
   .option('-o, --output <path>', 'Output file for export')
   .action(async (action, options) => {
-    const { timelineCommand } = await import('./commands/timeline.js');
     await timelineCommand(action, options);
   });
+
+// ============================================================================
+// Dev Command
+// ============================================================================
+
+program
+  .command('dev')
+  .description('Start development server with live reload')
+  .option('-c, --config <path>', 'Path to config file')
+  .option('-p, --port <port>', 'Port to use', '3000')
+  .action(async (options) => {
+    try {
+      await devCommand({
+        config: options.config,
+        port: parseInt(options.port)
+      });
+    } catch (err) {
+      console.error(chalk.red('Dev server failed:'), (err as Error).message);
+      process.exit(1);
+    }
+  });
+
 
 // ============================================================================
 // Cache Command
@@ -168,7 +192,6 @@ program
   .argument('<action>', 'Action: clear, stats, prune')
   .option('-v, --verbose', 'Verbose output')
   .action(async (action, options) => {
-    const { cacheCommand } = await import('./commands/cache.js');
     await cacheCommand(action, options);
   });
 
@@ -184,7 +207,6 @@ program
   .option('--fix', 'Auto-fix issues where possible')
   .action(async (opts) => {
     try {
-      const { checkCommand } = await import('./commands/check.js');
       await checkCommand({
         config: opts.config,
         verbose: opts.verbose,

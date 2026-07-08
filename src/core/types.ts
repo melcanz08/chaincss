@@ -143,6 +143,11 @@ export interface ChainCSSConfig {
   sourceMap?: boolean;
   watch?: boolean;
   hmr?: boolean;
+
+  dev?: {         
+    port?: number;
+    publicDir?: string;
+  };
   
   breakpoints?: Record<string, string>;
   

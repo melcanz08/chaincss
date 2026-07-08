@@ -98,3 +98,8 @@ export interface BuildResult {
     cssSize: number;
   };
 }
+
+export interface DevOptions {
+  config?: string;
+  port?: number;
+}

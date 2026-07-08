@@ -5,20 +5,40 @@ export { compileRuntime as compile, runRuntime as run, styleInjector } from './i
 export { chain, chain as $ } from '../core/style-collector.js';
 export { setManifest } from './injector.js';
 
-// React hooks
-export {
-  useChainStyles,
-  useDynamicChainStyles,
-  useThemeChainStyles,
-  ChainCSSGlobal,
-  cx,
-  withChainStyles,
-  enableChainCSSDebug,
-  disableChainCSSDebug,
-  isDebugEnabled,
-  createStyledComponent,
-  useComputedStyles
-} from './react.js';
+// ==========================================================================
+// React — Lazy-loaded via dynamic import (ESM-safe)
+// ==========================================================================
+
+let _reactModule: any = null;
+let _reactLoadPromise: Promise<any> | null = null;
+
+function getReactModule(): Promise<any> {
+  if (_reactModule) return Promise.resolve(_reactModule);
+  if (!_reactLoadPromise) {
+    _reactLoadPromise = import('./react.js')
+      .then(mod => { _reactModule = mod; return mod; })
+      .catch(() => { _reactModule = {}; return _reactModule; });
+  }
+  return _reactLoadPromise;
+}
+
+async function callReactExport(name: string, ...args: any[]): Promise<any> {
+  const mod = await getReactModule();
+  const fn = mod[name];
+  return typeof fn === 'function' ? fn(...args) : undefined;
+}
+
+export const useChainStyles = (...args: any[]) => callReactExport('useChainStyles', ...args);
+export const useDynamicChainStyles = (...args: any[]) => callReactExport('useDynamicChainStyles', ...args);
+export const useThemeChainStyles = (...args: any[]) => callReactExport('useThemeChainStyles', ...args);
+export const ChainCSSGlobal = (...args: any[]) => callReactExport('ChainCSSGlobal', ...args);
+export const cx = (...args: any[]) => callReactExport('cx', ...args);
+export const withChainStyles = (...args: any[]) => callReactExport('withChainStyles', ...args);
+export const enableChainCSSDebug = (...args: any[]) => callReactExport('enableChainCSSDebug', ...args);
+export const disableChainCSSDebug = (...args: any[]) => callReactExport('disableChainCSSDebug', ...args);
+export const isDebugEnabled = (...args: any[]) => callReactExport('isDebugEnabled', ...args);
+export const createStyledComponent = (...args: any[]) => callReactExport('createStyledComponent', ...args);
+export const useComputedStyles = (...args: any[]) => callReactExport('useComputedStyles', ...args);
 
 // ==========================================================================
 // Vue — Lazy-loaded via dynamic import (ESM-safe)
@@ -30,20 +50,9 @@ let _vueLoadPromise: Promise<any> | null = null;
 function getVueModule(): Promise<any> {
   if (_vueModule) return Promise.resolve(_vueModule);
   if (!_vueLoadPromise) {
-    _vueLoadPromise = (async () => {
-      try {
-        const hasVue = typeof window !== 'undefined' && !!(window as any).__VUE__;
-        if (!hasVue) {
-          _vueModule = {};
-          return _vueModule;
-        }
-        _vueModule = await import('./vue.js');
-        return _vueModule;
-      } catch {
-        _vueModule = {};
-        return _vueModule;
-      }
-    })();
+    _vueLoadPromise = import('./vue.js')
+      .then(mod => { _vueModule = mod; return mod; })
+      .catch(() => { _vueModule = {}; return _vueModule; });
   }
   return _vueLoadPromise;
 }
@@ -59,7 +68,7 @@ export const useComputedStylesVue = (...args: any[]) => callVueExport('useComput
 export const provideStyleContext = (...args: any[]) => callVueExport('provideStyleContext', ...args);
 export const injectStyleContext = (...args: any[]) => callVueExport('injectStyleContext', ...args);
 
-// Sync stubs for components (React-style JSX usage)
+// Sync stubs
 export const ChainCSSGlobalVue = (..._args: any[]) => null;
 export const createStyledVueComponent = (..._args: any[]) => () => null;
 export const createStyledVueComponents = (..._args: any[]) => ({});
@@ -94,10 +103,39 @@ export const provideStyleContextSvelte = (...args: any[]) => callSvelteExport('p
 export const injectStyleContextSvelte = (...args: any[]) => callSvelteExport('injectStyleContext', ...args);
 export const chainStyles = (...args: any[]) => callSvelteExport('chainStyles', ...args);
 
-// Sync stubs for components (React-style JSX usage)
+// Sync stubs
 export const ChainCSSGlobalSvelte = (..._args: any[]) => null;
 export const createStyledSvelteComponent = (..._args: any[]) => () => null;
 export const createStyledSvelteComponents = (..._args: any[]) => ({});
+
+// ==========================================================================
+// SolidJS — Lazy-loaded via dynamic import (ESM-safe)
+// ==========================================================================
+
+let _solidModule: any = null;
+let _solidLoadPromise: Promise<any> | null = null;
+
+function getSolidModule(): Promise<any> {
+  if (_solidModule) return Promise.resolve(_solidModule);
+  if (!_solidLoadPromise) {
+    _solidLoadPromise = import('./solid.js')
+      .then(mod => { _solidModule = mod; return mod; })
+      .catch(() => { _solidModule = {}; return _solidModule; });
+  }
+  return _solidLoadPromise;
+}
+
+async function callSolidExport(name: string, ...args: any[]): Promise<any> {
+  const mod = await getSolidModule();
+  const fn = mod[name];
+  return typeof fn === 'function' ? fn(...args) : undefined;
+}
+
+export const useChainStylesSolid = (...args: any[]) => callSolidExport('useChainStyles', ...args);
+export const useComputedStylesSolid = (...args: any[]) => callSolidExport('useComputedStyles', ...args);
+export const createStyledComponentSolid = (...args: any[]) => callSolidExport('createStyledComponent', ...args);
+export const cxSolid = (...args: any[]) => callSolidExport('cxSolid', ...args);
+export const createStyleContext = (...args: any[]) => callSolidExport('createStyleContext', ...args);
 
 // ==========================================================================
 // Utilities
@@ -134,11 +172,6 @@ export type {
 // Auto-inject styles into DOM
 // ==========================================================================
 
-/**
- * Inject styles into the DOM using the unified compileToCSS compiler.
- * This replaces the old hand-rolled CSS builder that didn't understand
- * media queries, at-rules, or nested selectors properly.
- */
 export function injectChainStyles(styles: Record<string, any>) {
   const { compileToCSS } = require('../core/style-compiler.js');
   let css = '';
