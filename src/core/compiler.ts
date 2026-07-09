@@ -254,6 +254,7 @@ export class ChainCSSCompiler {
     const result: CompileResult = {
       css: formatCSS(finalCSS, this.config.output.minify),
       classMap: isGlobalSelector ? {} : { [styleId]: finalClassName },
+      dynamic: hasDynamic ? dynamicValues : undefined,
       atomicClasses: [],
       stats: {
         totalStyles: totalRules,
@@ -322,11 +323,12 @@ export class ChainCSSCompiler {
       ? '' 
       : selectors[0]?.replace(/^\./, '') || `chain-${styleId}`;
 
-    const { hasDynamic } = partitionForBuild(styleObject);
+    const { hasDynamic, dynamicValues } = partitionForBuild(styleObject);
 
     const result: CompileResult = {
       css: formatCSS(finalCSS, this.config.output.minify),
       classMap: isGlobalSelector ? {} : { [styleId]: finalClassName },
+      dynamic: hasDynamic ? dynamicValues : undefined,
       atomicClasses: [],
       stats: this.getStats()
     };
@@ -628,20 +630,44 @@ export class ChainCSSCompiler {
 
     try {
       const rawExports = await this.loader.import(file);
+      console.log(`[DEBUG] compileOneComponent called for: ${file}`);
+      console.log(`[DEBUG] rawExports keys:`, Object.keys(rawExports || {}));
+      console.log(`[DEBUG] hasDynamic flag:`, hasDynamic);
       const styles = rawExports.default || rawExports;
       let jsBuffer = this.generateClassFileHeader(file);
       let cssBuffer = '';
 
       for (const [name, style] of Object.entries(styles)) {
+        // DEBUG
+        console.log(`[DEBUG] Style "${name}":`, JSON.stringify({
+          hasSelectors: !!(style as any).selectors,
+          hasDynamic: !!(style as any).dynamic,
+          dynamicKeys: (style as any).dynamic ? Object.keys((style as any).dynamic) : [],
+          keys: Object.keys(style as any).filter(k => !k.startsWith('_')).slice(0, 10)
+        }));
         if (!style || typeof style !== 'object' || !(style as any).selectors) continue;
 
         const result = this.compileStyle(name, style as StyleDefinition);
+        // DEBUG: Log dynamic styles
+        if ((style as any).dynamic) {
+          console.log(`[DEBUG] Style "${name}" has dynamic:`, Object.keys((style as any).dynamic));
+        }
         const className = Object.values(result.classMap)[0];
 
         if (className) {
-          jsBuffer += hasDynamic
-            ? `export const ${name}Class = '${className}';\n`
-            : `export const ${name} = '${className}';\n`;
+          // Check if THIS specific style has dynamic functions from compile result
+          const styleHasDynamic = result.dynamic && Object.keys(result.dynamic).length > 0;
+          
+          if (styleHasDynamic) {
+            // Preserve dynamic functions for runtime useChainStyles()
+            const dynamicFns: Record<string, string> = {};
+            for (const [prop, fn] of Object.entries(result.dynamic!)) {
+              dynamicFns[prop] = (fn as Function).toString();
+            }
+            jsBuffer += `export const ${name} = { className: '${className}', dynamic: ${JSON.stringify(dynamicFns)} };\n`;
+          } else {
+            jsBuffer += `export const ${name} = '${className}';\n`;
+          }
         }
 
         cssBuffer += result.css + '\n';

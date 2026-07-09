@@ -66,18 +66,33 @@ class StyleInjector {
   }
   
   constructor() {
-    if (typeof document !== 'undefined') {
-      const existing = document.getElementById('chaincss-runtime');
-      if (existing) {
-        this.styleElement = existing as HTMLStyleElement;
-      } else {
-        const el = document.createElement('style');
-        el.id = 'chaincss-runtime';
-        el.setAttribute('data-chaincss', 'runtime');
-        document.head.appendChild(el);
-        this.styleElement = el;
-      }
+    // Lazy initialization: DOM element created on first use, not on import.
+    // This prevents "document is not defined" in SSR and avoids relying
+    // on import side-effects for critical DOM nodes.
+  }
+
+  /**
+   * Lazy-safe element accessor. Creates the style element on first call.
+   * Safe for SSR (no document access until browser runtime).
+   */
+  private ensureElement(): HTMLStyleElement {
+    if (this.styleElement) return this.styleElement;
+
+    if (typeof document === 'undefined') {
+      throw new Error('[ChainCSS] Cannot access DOM in this environment');
     }
+
+    const existing = document.getElementById('chaincss-runtime') as HTMLStyleElement;
+    if (existing) {
+      this.styleElement = existing;
+    } else {
+      const el = document.createElement('style');
+      el.id = 'chaincss-runtime';
+      el.setAttribute('data-chaincss', 'runtime');
+      document.head.appendChild(el);
+      this.styleElement = el;
+    }
+    return this.styleElement || (typeof document !== 'undefined' ? document.getElementById('chaincss-runtime') as HTMLStyleElement : null);
   }
   
   enableDebug(enable: boolean = true): void {
@@ -127,9 +142,8 @@ class StyleInjector {
     moduleId?: string
   ): Record<string, string> {
     const result: Record<string, string> = {};
-    if (!this.styleElement?.sheet) return result;
-
-    const sheet = this.styleElement.sheet;
+    const sheet = this.ensureElement().sheet;
+    if (!sheet) return result;
     const indices: number[] = [];
     const moduleClasses = new Set<string>();
 
@@ -184,7 +198,7 @@ class StyleInjector {
         if (this.debugMode) {
           console.error(`[ChainCSS] insertRule failed for ${className}, falling back to textContent`, e);
         }
-        this.styleElement.textContent += css + '\n';
+        this.ensureElement().textContent += css + '\n';
         this.injectedIds.add(className);
         this.contentHashes.add(contentHash);
       }
@@ -207,7 +221,8 @@ class StyleInjector {
    * Used by useChainStyles() for dynamic style injection.
    */
   inject(className: string, css: string, debug: boolean = false): void {
-    if (!this.styleElement?.sheet) return;
+    const sheet = this.ensureElement().sheet;
+    if (!sheet) return;
 
     const contentHash = hashString(css);
     if (this.contentHashes.has(contentHash)) {
@@ -222,13 +237,14 @@ class StyleInjector {
         const trimmed = rule.trim();
         if (!trimmed) continue;
         const fullRule = trimmed.endsWith("}") ? trimmed : trimmed + "}";
-        this.styleElement.sheet!.insertRule(fullRule, this.styleElement.sheet!.cssRules.length);
+        const s = this.ensureElement().sheet;
+        if (s) s.insertRule(fullRule, s.cssRules.length);
       }
       this.injectedIds.add(className);
       this.contentHashes.add(contentHash);
       if (debug) console.log("[ChainCSS] Injected: " + className);
     } catch (e) {
-      this.styleElement.textContent += css + "\n";
+      this.ensureElement().textContent += css + "\n";
       this.injectedIds.add(className);
       this.contentHashes.add(contentHash);
     }
@@ -238,7 +254,7 @@ class StyleInjector {
    * Remove a single injected class from the sheet.
    */
   remove(className: string): void {
-    const sheet = this.styleElement?.sheet;
+    const sheet = this.ensureElement().sheet;
     if (!sheet) return;
     for (let i = sheet.cssRules.length - 1; i >= 0; i--) {
       const rule = sheet.cssRules[i] as CSSStyleRule;
@@ -276,7 +292,7 @@ class StyleInjector {
    */
 
   removeModule(moduleId: string): void {
-    const sheet = this.styleElement?.sheet;
+    const sheet = this.ensureElement().sheet;
     if (!sheet) return;
 
     // Fast path: use tracked indices for O(1) deletion
@@ -336,7 +352,7 @@ class StyleInjector {
   
   removeAll(): void {
     if (this.styleElement) {
-      this.styleElement.textContent = '';
+      this.ensureElement().textContent = '';
       this.injectedIds.clear();
       this.contentHashes.clear();
       this.moduleMap.clear();
@@ -346,7 +362,7 @@ class StyleInjector {
 
   
   getStyleElement(): HTMLStyleElement | null {
-    return this.styleElement;
+    return this.styleElement || (typeof document !== 'undefined' ? document.getElementById('chaincss-runtime') as HTMLStyleElement : null);
   }
   
   getStats(): { injectedStyles: number; modules: number; deduplicatedHashes: number } {

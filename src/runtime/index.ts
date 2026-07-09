@@ -6,39 +6,22 @@ export { chain, chain as $ } from '../core/style-collector.js';
 export { setManifest } from './injector.js';
 
 // ==========================================================================
-// React — Lazy-loaded via dynamic import (ESM-safe)
+// React — Direct re-export (synchronous for React hooks)
 // ==========================================================================
 
-let _reactModule: any = null;
-let _reactLoadPromise: Promise<any> | null = null;
-
-function getReactModule(): Promise<any> {
-  if (_reactModule) return Promise.resolve(_reactModule);
-  if (!_reactLoadPromise) {
-    _reactLoadPromise = import('./react.js')
-      .then(mod => { _reactModule = mod; return mod; })
-      .catch(() => { _reactModule = {}; return _reactModule; });
-  }
-  return _reactLoadPromise;
-}
-
-async function callReactExport(name: string, ...args: any[]): Promise<any> {
-  const mod = await getReactModule();
-  const fn = mod[name];
-  return typeof fn === 'function' ? fn(...args) : undefined;
-}
-
-export const useChainStyles = (...args: any[]) => callReactExport('useChainStyles', ...args);
-export const useDynamicChainStyles = (...args: any[]) => callReactExport('useDynamicChainStyles', ...args);
-export const useThemeChainStyles = (...args: any[]) => callReactExport('useThemeChainStyles', ...args);
-export const ChainCSSGlobal = (...args: any[]) => callReactExport('ChainCSSGlobal', ...args);
-export const cx = (...args: any[]) => callReactExport('cx', ...args);
-export const withChainStyles = (...args: any[]) => callReactExport('withChainStyles', ...args);
-export const enableChainCSSDebug = (...args: any[]) => callReactExport('enableChainCSSDebug', ...args);
-export const disableChainCSSDebug = (...args: any[]) => callReactExport('disableChainCSSDebug', ...args);
-export const isDebugEnabled = (...args: any[]) => callReactExport('isDebugEnabled', ...args);
-export const createStyledComponent = (...args: any[]) => callReactExport('createStyledComponent', ...args);
-export const useComputedStyles = (...args: any[]) => callReactExport('useComputedStyles', ...args);
+export {
+  useChainStyles,
+  useDynamicChainStyles,
+  useThemeChainStyles,
+  ChainCSSGlobal,
+  cx,
+  withChainStyles,
+  enableChainCSSDebug,
+  disableChainCSSDebug,
+  isDebugEnabled,
+  createStyledComponent,
+  useComputedStyles
+} from './react.js';
 
 // ==========================================================================
 // Vue — Lazy-loaded via dynamic import (ESM-safe)

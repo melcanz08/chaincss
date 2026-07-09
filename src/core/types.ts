@@ -58,6 +58,7 @@ export interface CompileResult {
   classMap: Record<string, string>;
   atomicClasses: AtomicClass[];
   stats: CompileStats;
+  dynamic?: Record<string, () => any>;  // Dynamic values preserved for runtime
   warnings?: string[];
   errors?: string[];
   inspector?: {

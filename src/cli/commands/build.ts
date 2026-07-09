@@ -131,7 +131,18 @@ export async function buildCommand(options: BuildOptions): Promise<void> {
             ''
           ];
           for (const [name, className] of Object.entries(classMap)) {
-            classLines.push(`export const ${name} = '${className}';`);
+            // Check if this style has dynamic functions from compile result
+            const result = results[name];
+            if (result?.dynamic && Object.keys(result.dynamic).length > 0) {
+              // Emit actual executable functions, not JSON strings
+              const fnEntries: string[] = [];
+              for (const [prop, fn] of Object.entries(result.dynamic)) {
+                fnEntries.push(`${prop}: ${(fn as Function).toString()}`);
+              }
+              classLines.push(`export const ${name} = { className: '${className}', dynamic: { ${fnEntries.join(', ')} } };`);
+            } else {
+              classLines.push(`export const ${name} = '${className}';`);
+            }
           }
           ensureDirectory(path.dirname(classFilePath));
           fs.writeFileSync(classFilePath, classLines.join('\n'), 'utf8');
@@ -221,7 +232,16 @@ export async function buildCommand(options: BuildOptions): Promise<void> {
             const classFilePath = path.join(path.dirname(filePath), `${baseName}.class.js`);
             const classLines = ['/** ChainCSS Generated — DO NOT EDIT */', ''];
             for (const [name, className] of Object.entries(classMap)) {
-              classLines.push(`export const ${name} = '${className}';`);
+              const result = results[name];
+              if (result?.dynamic && Object.keys(result.dynamic).length > 0) {
+                const fnEntries: string[] = [];
+                for (const [prop, fn] of Object.entries(result.dynamic)) {
+                  fnEntries.push(`${prop}: ${(fn as Function).toString()}`);
+                }
+                classLines.push(`export const ${name} = { className: '${className}', dynamic: { ${fnEntries.join(', ')} } };`);
+              } else {
+                classLines.push(`export const ${name} = '${className}';`);
+              }
             }
             ensureDirectory(path.dirname(classFilePath));
             fs.writeFileSync(classFilePath, classLines.join('\n'), 'utf8');
