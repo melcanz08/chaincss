@@ -118,6 +118,10 @@ export class StyleCollector {
   placeholder(): this { return this.pseudo(':placeholder'); }
 
   private pseudo(name: string): this {
+    // Auto-close any open pseudo before switching to prevent silent data loss
+    if (this.pseudoStore && !this.pseudoStore.isEmpty()) {
+      this.end();
+    }
     this.pseudoStore = new PropertyStore();
     this.pseudoName = name;
     return this;

@@ -13,6 +13,8 @@ import { createRule, createDeclaration } from '../ir/factory.js';
 import type { StyleIR, IRRule } from '../ir/types.js';
 import type { OptimizationPass, OptimizationResult } from '../pipeline-types.js';
 
+let diagnosticCounter = 0;
+
 export const atomicExtractor: OptimizationPass = {
   name: 'atomic-extractor',
   cost: 'moderate',
@@ -24,8 +26,13 @@ export const atomicExtractor: OptimizationPass = {
 
     for (const rule of ir.rules) {
       if (rule.isDead) continue;
+      // Include pseudo + media scope to prevent base/hover specificity clashes
+      const scope = [
+        rule.meta?.pseudo || 'root',
+        rule.meta?.mediaQuery || 'all'
+      ].join('::');
       for (const decl of rule.declarations) {
-        const key = decl.property + ':' + String(decl.value);
+        const key = scope + '::' + decl.property + ':' + String(decl.value);
         const existing = usageMap.get(key);
         if (existing) {
           existing.count++;
@@ -82,7 +89,11 @@ export const atomicExtractor: OptimizationPass = {
 
       // Filter out declarations that have been extracted to atomic classes
       rule.declarations = rule.declarations.filter(decl => {
-        const key = decl.property + ':' + String(decl.value);
+        const scope = [
+          rule.meta?.pseudo || 'root',
+          rule.meta?.mediaQuery || 'all'
+        ].join('::');
+        const key = scope + '::' + decl.property + ':' + String(decl.value);
         const className = atomicClassMap.get(key);
 
         if (className) {
@@ -129,7 +140,7 @@ export const atomicExtractor: OptimizationPass = {
     // ── Diagnostics ──
     if (atomicRules.length > 0) {
       ir.diagnostics.push({
-        id: 'atomic-extract-' + Date.now(),
+        id: 'atomic-extract-' + (++diagnosticCounter),
         nodeId: ir.id,
         severity: 'info',
         message: `Extracted ${atomicRules.length} atomic utility classes from ${declarationsReplaced} repeated declarations`,

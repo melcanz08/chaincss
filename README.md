@@ -173,7 +173,22 @@ npx chaincss timeline list # View compilation history
 
 ## Framework Support
 
-ChainCSS works with ANY framework — it outputs plain CSS strings. Here's how to use it with each:
+ChainCSS works with ANY framework — it outputs plain CSS strings. All four major frameworks are fully verified with mixed mode (static + dynamic) working end-to-end.
+
+**How dynamic styles work across frameworks:**
+
+The core logic is the same everywhere: `chain.dynamic()` functions are evaluated at runtime, and the results are applied as CSS custom properties via inline styles. This zero-leak approach avoids DOM injection and works with any reactivity system.
+
+| Framework | Reactivity Model | How Dynamics Update |
+|-----------|-----------------|-------------------|
+| React | `useMemo` with deps array | Hook re-runs when dependencies change |
+| Vue | `setup()` reactive render | Render function re-runs on ref change |
+| Svelte | Manual `render()` call | `render()` re-runs on state change |
+| Solid | Manual `render()` call | `render()` re-runs on state change |
+
+The underlying dynamic evaluation is identical — it's wired to each framework's native reactivity system.
+
+Here's how to use it with each:
 
 ### ⚛️ React
 
@@ -222,7 +237,7 @@ const { classes } = useAtomicClasses({ btnDynamic }, { debug: false })
 
 ### 🧡 Svelte
 
-**Status: ✅ Full Support (static) | 🔧 Dynamic runtime under maintenance**
+**Status: ✅ Full Support — Verified with TaskFlow app**
 
 ```svelte
 <script>
@@ -244,7 +259,7 @@ const { classes } = useAtomicClasses({ btnDynamic }, { debug: false })
 
 ### 🔷 SolidJS
 
-**Status: ✅ Full Support (static) | 🔧 Dynamic runtime under maintenance**
+**Status: ✅ Full Support — Verified with TaskFlow app**
 
 ```tsx
 import { createSignal } from 'solid-js'

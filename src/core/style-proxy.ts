@@ -151,6 +151,12 @@ export function createStyleProxy(
         };
       }
 
+      // Guard against runtime symbol inspection (Symbol.iterator, etc.)
+      if (typeof prop === 'symbol' || (typeof prop === 'string' && prop.startsWith('__'))) {
+        return (target as any)[prop];
+      }
+
+      // Default: treat as CSS property setter
       return (value: any) => {
         target.set(prop, value);
         return proxy;

@@ -187,6 +187,7 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
     for (const file of chainFiles) {
       try {
         const { css, classMap, diagnostics } = await compileFile(file)
+        const compileResults = await compiler.compileFile(file)  // Full results for dynamic inspection
         const fileName = path.basename(file)
 
         if (css.trim()) {
@@ -208,15 +209,18 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
         ]
 
         for (const [name, className] of Object.entries(classMap)) {
-          classLines.push(`export const ${name} = '${className}'`)
-        }
-
-        if (hasDynamic) {
-          classLines.push('')
-          classLines.push('// Mixed mode: style objects for runtime use')
-          classLines.push('// Import { useChainStyles } from "chaincss/runtime" to resolve dynamic values')
-          for (const name of Object.keys(classMap)) {
-            classLines.push(`export { ${name} as ${name}Styles }`)
+          // Check if this style has dynamic functions
+          const compileResult = Object.values(compileResults).find((r: any) => 
+            r.classMap && Object.values(r.classMap)[0] === className
+          );
+          if ((compileResult as any)?.dynamic && Object.keys((compileResult as any).dynamic).length > 0) {
+            const fnEntries: string[] = [];
+            for (const [prop, fn] of Object.entries((compileResult as any).dynamic)) {
+              fnEntries.push(`${prop}: ${(fn as Function).toString()}`);
+            }
+            classLines.push(`export const ${name} = { className: '${className}', dynamic: { ${fnEntries.join(', ')} } };`);
+          } else {
+            classLines.push(`export const ${name} = '${className}'`);
           }
         }
 
@@ -319,8 +323,10 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
         silent
       })
 
-      const ciPipeline = createPipeline('ci');
-      (compiler as any).pipeline = ciPipeline;
+      // Use appropriate pipeline for the environment
+      const presetName = isProduction ? 'production' : 'default';
+      const envPipeline = createPipeline(presetName);
+      (compiler as any).pipeline = envPipeline;
       compiler.setPipelineEnabled(true);
 
       if (!silent) {
@@ -353,10 +359,15 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
           ''
         ]
         for (const [name, className] of Object.entries(classMap)) {
-          if (hasDynamic) {
-            lines.push(`export const ${name}Class = '${className}'`)
+          const result = results[name];
+          if (result?.dynamic && Object.keys(result.dynamic).length > 0) {
+            const fnEntries: string[] = [];
+            for (const [prop, fn] of Object.entries((result as any).dynamic)) {
+              fnEntries.push(`${prop}: ${(fn as Function).toString()}`);
+            }
+            lines.push(`export const ${name} = { className: '${className}', dynamic: { ${fnEntries.join(', ')} } };`);
           } else {
-            lines.push(`export const ${name} = '${className}'`)
+            lines.push(`export const ${name} = '${className}'`);
           }
         }
 
@@ -392,18 +403,22 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
           try {
             const { css } = await compileFile(filePath)
             cssFileCache.set(filePath, css)
+            // Incremental: join cached values instead of re-scanning all files
             cssCache = Array.from(cssFileCache.values()).join('\n')
 
-            compileAllStyles().then(fullCSS => {
-              cssCache = fullCSS
-            }).catch(() => {})
+            // Invalidate Vite's module graph for this file
+            const mod = devServer.moduleGraph.getModuleById(filePath)
+            if (mod) devServer.moduleGraph.invalidateModule(mod)
+
+            // Hot-update CSS without full page reload (preserves app state)
+            devServer.ws.send({
+              type: 'custom',
+              event: 'chaincss-update',
+              data: { url: '/__chaincss.css', timestamp: Date.now() }
+            })
           } catch (err) {
             error(`Recompile failed: ${(err as Error).message}`)
           }
-
-          const mod = devServer.moduleGraph.getModuleById(filePath)
-          if (mod) devServer.moduleGraph.invalidateModule(mod)
-          devServer.ws.send({ type: 'full-reload' })
         }
       })
 
@@ -436,15 +451,31 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
     },
 
     transformIndexHtml() {
-      return [{
-        tag: 'link',
-        attrs: {
-          rel: 'stylesheet',
-          href: isProduction ? '/assets/chaincss.css' : '/__chaincss.css',
-          'data-chaincss': ''
+      return [
+        {
+          tag: 'link',
+          attrs: {
+            rel: 'stylesheet',
+            href: isProduction ? '/assets/chaincss.css' : '/__chaincss.css',
+            'data-chaincss': '',
+            id: 'chaincss-styles'
+          },
+          injectTo: 'head'
         },
-        injectTo: 'head'
-      }];
+        // Client-side HMR: hot-updates CSS without full page reload
+        {
+          tag: 'script',
+          children: `
+            if (import.meta.hot) {
+              import.meta.hot.on('chaincss-update', () => {
+                const link = document.getElementById('chaincss-styles');
+                if (link) link.href = '/__chaincss.css?t=' + Date.now();
+              });
+            }
+          `,
+          injectTo: 'head'
+        }
+      ];
     }
   }
 }
