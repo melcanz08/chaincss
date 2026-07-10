@@ -23,7 +23,6 @@ export { chain, StyleCollector } from './core/style-collector.js';
 export type { StyleObject, Explanation } from './core/style-collector.js';
 
 export { compileToCSS, partitionForBuild } from './core/style-compiler.js';
-export type { CompileOptions, CompileResult } from './core/style-compiler.js';
 
 export { classifyValue, partitionStyles, hasDynamicValues } from './core/value-classifier.js';
 

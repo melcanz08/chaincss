@@ -14,17 +14,24 @@ export const cssEmitter: LoweringPass = {
     let css: string;
 
     if (sourceMap && !minify) {
-      // Per-rule source mapping — each rule gets its own source comment.
-      // Avoids selector collision from multiple files sharing the same selector.
-      const parts: string[] = [];
-      for (const rule of ir.rules) {
-        if (rule.isDead) continue;
-        if (rule.source?.file) {
-          parts.push(`/* source: ${rule.source.file} */`);
+      // Generate CSS once, then inject source comments before each rule's selector.
+      // Single generateCSS call instead of O(n) — significant for large projects.
+      css = generateCSS(ir, { minify });
+      const rules = ir.rules.filter(r => !r.isDead && r.source?.file);
+      if (rules.length > 0) {
+        const lines = css.split('\n');
+        const result: string[] = [];
+        let ruleIdx = 0;
+        for (const line of lines) {
+          // Insert source comment before lines that start a new rule (non-indented, contains {)
+          if (ruleIdx < rules.length && /^[^\s].*\{/.test(line)) {
+            result.push(`/* source: ${rules[ruleIdx].source!.file} */`);
+            ruleIdx++;
+          }
+          result.push(line);
         }
-        parts.push(generateCSS({ ...ir, rules: [rule] }, { minify }));
+        css = result.join('\n');
       }
-      css = parts.join('\n');
     } else {
       css = generateCSS(ir, { minify });
     }
@@ -32,7 +39,10 @@ export const cssEmitter: LoweringPass = {
     return {
       ir,
       generatedOutput: css.trim(),
-      generatedNodes: ir.rules.filter(r => !r.isDead).length,
+      // Count actual CSS rules: each pseudo-class generates an additional selector
+      generatedNodes: ir.rules
+        .filter(r => !r.isDead)
+        .reduce((sum, r) => sum + 1 + r.pseudoClasses.filter(p => p.declarations.length > 0).length, 0),
     };
   },
 };

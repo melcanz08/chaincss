@@ -15,6 +15,7 @@
  */
 
 import { Pipeline } from './pipeline.js';
+import type { OptimizationContext } from './pipeline-types.js';
 import type { PipelineConfig, PipelineResult, OptimizationPass, OptimizationResult } from './pipeline-types.js';
 import type { StyleIR } from './ir/types.js';
 
@@ -48,8 +49,8 @@ const tokenOptimizer: OptimizationPass = {
   name: tokenLowering.name,
   cost: 'cheap',
   requiredFor: ['css'],
-  optimize(ir: StyleIR): OptimizationResult {
-    const result = tokenLowering.generate(ir, {});
+  optimize(ir: StyleIR, context: OptimizationContext = {} as OptimizationContext): OptimizationResult {
+    const result = tokenLowering.generate(ir, context || {});
     return {
       ir: result.ir,
       savings: { rulesEliminated: 0, declarationsEliminated: 0, bytesSaved: 0 },
@@ -125,6 +126,11 @@ const PRESETS: Record<PipelinePreset, Partial<PipelineConfig>> = {
     normalization: BASE_NORMALIZATION,
     validation: [],
     analysis: [],
+    contexts: {
+      optimization: {
+        // atomicUsageMap created fresh per createPipeline() call
+      }
+    },
     optimization: [atomicExtractor, ...BASE_OPTIMIZATION],
     lowering: [cssEmitter],
   },
@@ -149,11 +155,34 @@ export function createPipeline(
       `Valid presets: ${Object.keys(PRESETS).join(', ')}`
     );
   }
-  return new Pipeline({ ...config, ...overrides });
+  // Deep-clone config so atomic preset gets a fresh atomicUsageMap per pipeline.
+  // Prevents cross-compilation contamination in parallel builds.
+  const clonedConfig = { ...config };
+  if (preset === 'atomic' && clonedConfig.contexts?.optimization) {
+    clonedConfig.contexts = {
+      ...clonedConfig.contexts,
+      optimization: {
+        ...clonedConfig.contexts.optimization,
+        atomicUsageMap: new Map<string, number>(),
+      },
+    };
+  }
+    // Fresh Map for atomic preset
+  if (preset === 'atomic' && clonedConfig.contexts?.optimization) {
+    clonedConfig.contexts = {
+      ...clonedConfig.contexts,
+      optimization: {
+        ...clonedConfig.contexts.optimization,
+        atomicUsageMap: new Map<string, number>(),
+      },
+    };
+  }
+  return new Pipeline({ ...clonedConfig, ...overrides });
 }
 
 /**
  * @deprecated Use createPipeline('default', overrides) instead.
+ * Will be removed in v4.0.
  */
 export function createDefaultPipeline(overrides?: Partial<PipelineConfig>): Pipeline {
   return createPipeline('default', overrides);
@@ -161,6 +190,7 @@ export function createDefaultPipeline(overrides?: Partial<PipelineConfig>): Pipe
 
 /**
  * @deprecated Use createPipeline('ci', overrides) instead.
+ * Will be removed in v4.0.
  */
 export function createFullPipeline(overrides?: Partial<PipelineConfig>): Pipeline {
   return createPipeline('ci', overrides);
@@ -172,3 +202,11 @@ export function createFullPipeline(overrides?: Partial<PipelineConfig>): Pipelin
 
 export { Pipeline } from './pipeline.js';
 export type { PipelineResult, PipelineConfig, PipelineStageResult } from './pipeline-types.js';
+
+/**
+ * Type guard to check if a string is a valid pipeline preset.
+ * Useful for validating user-provided config values.
+ */
+export function isValidPreset(value: string): value is PipelinePreset {
+  return value in PRESETS;
+}

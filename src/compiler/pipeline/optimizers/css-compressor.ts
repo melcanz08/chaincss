@@ -15,6 +15,13 @@ export const cssCompressor: OptimizationPass = {
 
   optimize(ir: StyleIR): OptimizationResult {
     let changes = 0;
+    let bytesSaved = 0;
+
+    // Use Buffer.byteLength when available (Node), fallback to string length in browser
+    const byteLen = (s: string): number => {
+      // @ts-ignore - Buffer may not exist in browser build, but this pass only runs in Node
+      return typeof Buffer !== 'undefined' ? Buffer.byteLength(s, 'utf8') : s.length;
+    };
 
     for (const rule of ir.rules) {
       if (rule.isDead) continue;
@@ -38,12 +45,12 @@ export const cssCompressor: OptimizationPass = {
 
         // ── Leading zero removal (global scanner) ──
         // 0.5rem → .5rem, 0.25 → .25
-        value = value.replace(/\b0(\.\d+)/g, (_match, suffix: string) => suffix);
+        value = value.replace(/(?<!\d)0(\.\d+)/g, (_match, suffix: string) => suffix);
 
         // ── Redundant zero units ──
         // 0px → 0, 0rem → 0 (but NOT 0s or 0ms — those are valid durations)
         value = value.replace(
-          /\b0(px|em|rem|%|vh|vw|vmin|vmax|ch|ex|cm|mm|in|pt|pc)\b/g,
+          /(?<!\d)0(?:px|em|rem|%|vh|vw|vmin|vmax|ch|ex|cm|mm|in|pt|pc)\b/g,
           () => '0'
         );
 
@@ -73,10 +80,19 @@ export const cssCompressor: OptimizationPass = {
           else if (parts.length === 4 && parts[0] === parts[2] && parts[1] === parts[3]) {
             value = parts[0] + ' ' + parts[1];
           }
+          // NEW: margin: 10px 10px → 10px
+          else if (parts.length === 2 && parts[0] === parts[1]) {
+            value = parts[0];
+          }
+          // NEW: margin: 0 0 0 → 0
+          else if (parts.length === 3 && parts[0] === parts[1] && parts[1] === parts[2]) {
+            value = parts[0];
+          }
         }
 
         // Track changes
         if (value !== original) {
+          bytesSaved += Math.max(0, byteLen(original) - byteLen(value));
           recordHistory(decl, 'css-compressor', 'compressed', original, `Compressed: "${original}" → "${value}"`);
           changes++;
         }
@@ -90,7 +106,7 @@ export const cssCompressor: OptimizationPass = {
       savings: {
         rulesEliminated: 0,
         declarationsEliminated: 0,
-        bytesSaved: changes * 3, // Conservative estimate
+        bytesSaved, // accurate byte diff, not estimate
       },
       changes,
     };

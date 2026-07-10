@@ -2,6 +2,7 @@
 
 // Core runtime
 export { compileRuntime as compile, runRuntime as run, styleInjector } from './injector.js';
+import { compileToCSS } from '../core/style-compiler.js';
 export { chain, chain as $ } from '../core/style-collector.js';
 export { setManifest } from './injector.js';
 
@@ -156,7 +157,6 @@ export type {
 // ==========================================================================
 
 export function injectChainStyles(styles: Record<string, any>) {
-  const { compileToCSS } = require('../core/style-compiler.js');
   let css = '';
 
   for (const [key, obj] of Object.entries(styles)) {

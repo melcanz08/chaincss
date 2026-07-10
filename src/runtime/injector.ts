@@ -10,8 +10,8 @@
  * Multiple components sharing the same styles share a single <style> entry.
  */
 
-import { compileToCSS, type CompileOptions } from '../core/style-compiler.js';
-import type { StyleObject } from '../core/style-collector.js';
+import { compileToCSS } from '../core/style-compiler.js';
+import type { StyleObject } from '../core/types.js';
 import { partitionStyles } from '../core/value-classifier.js';
 
 const TOKEN_KEY = '__CHAINCSS_TOKENS__';
@@ -270,9 +270,9 @@ class StyleInjector {
     
     for (const [key, value] of Object.entries(resolved)) {
       if (typeof value === 'string') {
-        resolved[key] = this.resolveTokens(value);
-      } else if (typeof value === 'object' && value !== null && !key.startsWith('_')) {
-        resolved[key] = this.resolveStyleTokens(value);
+        (resolved as any)[key] = this.resolveTokens(value);
+      } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !key.startsWith('_') && !key.startsWith('&')) {
+        (resolved as any)[key] = this.resolveStyleTokens(value as any);
       }
     }
     

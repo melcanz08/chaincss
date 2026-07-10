@@ -1,7 +1,8 @@
 // src/compiler/pipeline/default-pipeline.ts
 //
 // Core pipeline: 6 passes across 3 stages.
-// Normalize → Optimize → Emit
+// Normalize → Optimize (incl. token resolution) → Emit
+// Token lowering runs in optimization so resolved values get compressed.
 //
 // Optional linters/analyzers available as opt-in plugins:
 //   import { patternDetector } from './analyzers/pattern-detector.js';
@@ -13,7 +14,8 @@
 //   import { sourceOptimizer } from './optimizers/source-optimizer.js';
 
 import { Pipeline } from './pipeline.js';
-import type { PipelineConfig } from './pipeline-types.js';
+import type { PipelineConfig, OptimizationResult, GenerationTarget } from './pipeline-types.js';
+import type { StyleIR } from './ir/types.js';
 
 // Core passes — always run
 import { intentNormalizer } from './normalizers/intent-normalizer.js';
@@ -22,6 +24,23 @@ import { cssCompressor } from './optimizers/css-compressor.js';
 import { cssEmitter } from './lowering/css-emitter.js';
 import { intentResolver } from './lowering/intent-resolver.js';
 import { tokenLowering } from './lowering/token-lowering.js';
+
+
+// Adapter: wrap tokenLowering as an OptimizationPass so it runs before cssCompressor.
+// This ensures resolved $token values get compressed/minified.
+const tokenOptimizer = {
+  name: tokenLowering.name,
+  cost: 'cheap' as const,
+  requiredFor: ['css'] as GenerationTarget[],
+  optimize(ir: any, context?: any): any {
+    const result = tokenLowering.generate(ir, context || {});
+    return {
+      ir: result.ir,
+      savings: { rulesEliminated: 0, declarationsEliminated: 0, bytesSaved: 0 },
+      changes: result.generatedNodes,
+    };
+  },
+};
 
 export function createDefaultPipeline(): Pipeline {
   const config: PipelineConfig = {
@@ -39,6 +58,7 @@ export function createDefaultPipeline(): Pipeline {
       // patternDetector,           // opt-in: @chaincss/analyze
     ],
     optimization: [
+      tokenOptimizer,
       cssCompressor,
       // accessibilityOptimizer,    // opt-in: @chaincss/lint
       // specificitySorter,         // opt-in: @chaincss/optimize
@@ -48,7 +68,6 @@ export function createDefaultPipeline(): Pipeline {
     ],
     lowering: [
       intentResolver,
-      tokenLowering,
       // constraintResolver,        // opt-in: @chaincss/resolve
       cssEmitter,
     ],

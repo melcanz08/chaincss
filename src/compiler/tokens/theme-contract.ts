@@ -1,4 +1,5 @@
 // src/compiler/theme-contract.ts
+
 /**
  * Theme Contract System for ChainCSS
  * Validates that themes match the expected shape

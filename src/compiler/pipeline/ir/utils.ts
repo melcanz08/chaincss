@@ -26,7 +26,49 @@ export function findRule(ir: StyleIR, selector: string): IRRule | undefined {
 
 /** Clone an IR (deep copy) */
 export function cloneIR(ir: StyleIR): StyleIR {
-  return JSON.parse(JSON.stringify(ir));
+  // Deep clone that preserves Map objects, arrays, and nested structures.
+  // JSON.parse(JSON.stringify()) strips prototypes and Map entries.
+  return {
+    ...ir,
+    id: ir.id,
+    rules: ir.rules.map(rule => ({
+      ...rule,
+      declarations: rule.declarations.map(decl => ({
+        ...decl,
+        history: [...decl.history],
+        meta: decl.meta ? { ...decl.meta } : {},
+      })),
+      pseudoClasses: rule.pseudoClasses.map(pc => ({
+        ...pc,
+        declarations: pc.declarations.map(decl => ({
+          ...decl,
+          history: [...decl.history],
+          meta: decl.meta ? { ...decl.meta } : {},
+        })),
+        history: [...pc.history],
+      })),
+      atRules: rule.atRules.map(atRule => ({
+        ...atRule,
+        declarations: atRule.declarations.map(decl => ({
+          ...decl,
+          history: [...decl.history],
+          meta: decl.meta ? { ...decl.meta } : {},
+        })),
+        nestedRules: atRule.nestedRules.map(nr => ({ ...nr })),
+        history: [...atRule.history],
+      })),
+      nestedRules: rule.nestedRules.map(nr => ({ ...nr })),
+      conditions: rule.conditions.map(cond => ({ ...cond })),
+      history: [...rule.history],
+      meta: rule.meta ? { ...rule.meta } : {},
+    })),
+    diagnostics: ir.diagnostics.map(diag => ({ ...diag })),
+    meta: {
+      ...ir.meta,
+      passes: [...ir.meta.passes],
+      sourceFiles: [...ir.meta.sourceFiles],
+    },
+  };
 }
 
 /** Debug: print IR summary */

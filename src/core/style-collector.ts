@@ -24,34 +24,22 @@ import { createStyleProxy } from './style-proxy.js';
 import { classifyValue } from './value-classifier.js';
 
 // ============================================================================
-// Types
+// Types — Re-export from canonical source to eliminate duplicates
 // ============================================================================
 
 export type { Explanation } from './debug-collector.js';
 
-export interface StyleObject {
-  [property: string]: any;
-  _classes?: string[];
-  _transforms?: Record<string, any>;
-  _atRules?: AtRule[];
-  _nestedRules?: NestedRule[];
-  _mixed?: boolean;
-}
+// Import canonical types from types.ts
+import type { 
+  StyleObject as _StyleObject, 
+  AtRule as _AtRule, 
+  NestedRule as _NestedRule 
+} from './types.js';
 
-export interface AtRule {
-  type: 'media' | 'keyframes' | 'font-face' | 'supports' | 'container' | 'layer';
-  query?: string;
-  name?: string;
-  condition?: string;
-  styles?: Record<string, any>;
-  steps?: Record<string, any>;
-  properties?: Record<string, string>;
-}
-
-export interface NestedRule {
-  selector: string;
-  styles: Record<string, any>;
-}
+// Re-export so existing consumers still work
+export type StyleObject = _StyleObject;
+export type AtRule = _AtRule;
+export type NestedRule = _NestedRule;
 
 // ============================================================================
 // StyleCollector
@@ -64,7 +52,6 @@ export class StyleCollector {
   private debugger: DebugCollector;
 
   // State
-  private hoverStore: PropertyStore | null = null;
   private classes: string[] = [];
   private _mixed: boolean = false;
 
@@ -73,8 +60,8 @@ export class StyleCollector {
   private pseudoStore: PropertyStore | null = null;
   private pseudoName: string = '';
 
-  constructor(options?: { debug?: boolean; classPrefix?: string }) {
-    this.props = new PropertyStore();
+  constructor(private options?: { debug?: boolean; classPrefix?: string; tokens?: any }) {
+    this.props = new PropertyStore(options?.tokens);
     this.rules = new RuleBuilder();
     this.debugger = new DebugCollector(options?.debug ?? false);
      this.classPrefix = options?.classPrefix || 'chain-';
@@ -122,7 +109,7 @@ export class StyleCollector {
     if (this.pseudoStore && !this.pseudoStore.isEmpty()) {
       this.end();
     }
-    this.pseudoStore = new PropertyStore();
+    this.pseudoStore = new PropertyStore(this.options?.tokens);  // Forward tokens to pseudo
     this.pseudoName = name;
     return this;
   }
@@ -142,31 +129,31 @@ export class StyleCollector {
   // ========================================================================
 
   media(query: string, fn: (c: any) => void): this {
-    const childResult = this.rules.buildChild(fn, createStyleProxyForChild, this.debugger.isEnabled());
+    const childResult = this.rules.buildChild(fn, () => createStyleProxyForChild({ debug: this.debugger.isEnabled(), classPrefix: this.classPrefix, tokens: this.options?.tokens }), this.debugger.isEnabled());
     this.rules.addMedia(query, childResult);
     return this;
   }
 
   supports(condition: string, fn: (c: any) => void): this {
-    const childResult = this.rules.buildChild(fn, createStyleProxyForChild, this.debugger.isEnabled());
+    const childResult = this.rules.buildChild(fn, () => createStyleProxyForChild({ debug: this.debugger.isEnabled(), classPrefix: this.classPrefix, tokens: this.options?.tokens }), this.debugger.isEnabled());
     this.rules.addSupports(condition, childResult);
     return this;
   }
 
   container(query: string, fn: (c: any) => void): this {
-    const childResult = this.rules.buildChild(fn, createStyleProxyForChild, this.debugger.isEnabled());
+    const childResult = this.rules.buildChild(fn, () => createStyleProxyForChild({ debug: this.debugger.isEnabled(), classPrefix: this.classPrefix, tokens: this.options?.tokens }), this.debugger.isEnabled());
     this.rules.addContainer(query, childResult);
     return this;
   }
 
   layer(name: string, fn: (c: any) => void): this {
-    const childResult = this.rules.buildChild(fn, createStyleProxyForChild, this.debugger.isEnabled());
+    const childResult = this.rules.buildChild(fn, () => createStyleProxyForChild({ debug: this.debugger.isEnabled(), classPrefix: this.classPrefix, tokens: this.options?.tokens }), this.debugger.isEnabled());
     this.rules.addLayer(name, childResult);
     return this;
   }
 
   nest(selector: string, fn: (c: any) => void): this {
-    const childResult = this.rules.buildChild(fn, createStyleProxyForChild, this.debugger.isEnabled());
+    const childResult = this.rules.buildChild(fn, () => createStyleProxyForChild({ debug: this.debugger.isEnabled(), classPrefix: this.classPrefix, tokens: this.options?.tokens }), this.debugger.isEnabled());
     this.rules.addNested(selector, childResult);
     return this;
   }
@@ -187,7 +174,7 @@ export class StyleCollector {
 
   when(condition: boolean, fn: (c: any) => void): this {
     if (condition) {
-      const childResult = this.rules.buildChild(fn, createStyleProxyForChild, this.debugger.isEnabled());
+      const childResult = this.rules.buildChild(fn, () => createStyleProxyForChild({ debug: this.debugger.isEnabled(), classPrefix: this.classPrefix, tokens: this.options?.tokens }), this.debugger.isEnabled());
       for (const [key, value] of Object.entries(childResult)) {
         if (key !== 'selectors' && key !== '_atRules' && key !== '_nestedRules' && !key.startsWith('_')) {
           this.set(key, value);
@@ -227,10 +214,6 @@ export class StyleCollector {
 
   build(selectors?: string[] | string): StyleObject & { selectors?: string[] } {
     if (this.pseudoStore && !this.pseudoStore.isEmpty()) {
-      this.end();
-    }
-    // Collect all properties (including any pending hover)
-    if (this.hoverStore && !this.hoverStore.isEmpty()) {
       this.end();
     }
 
@@ -312,8 +295,8 @@ export class StyleCollector {
 // Proxy Creation Helper (used internally for child builders)
 // ============================================================================
 
-function createStyleProxyForChild(debug: boolean): StyleCollector & Record<string, any> {
-  const collector = new StyleCollector({ debug });
+function createStyleProxyForChild(opts: { debug: boolean; classPrefix?: string; tokens?: any }): StyleCollector & Record<string, any> {
+  const collector = new StyleCollector(opts);
   return createStyleProxy(collector, macroRegistry as Record<string, Function>) as any;
 }
 
@@ -321,12 +304,12 @@ function createStyleProxyForChild(debug: boolean): StyleCollector & Record<strin
 // Public API
 // ============================================================================
 
-export function chain(options?: { debug?: boolean; classPrefix?: string }): StyleCollector & Record<string, any> {
+export function chain(options?: { debug?: boolean; classPrefix?: string; tokens?: any }): StyleCollector & Record<string, any> {
   const collector = new StyleCollector(options);
   return createStyleProxy(collector, macroRegistry as Record<string, Function>) as any;
 }
 
-chain.dynamic = function (options?: { debug?: boolean; classPrefix?: string }): StyleCollector & Record<string, any> {
+chain.dynamic = function (options?: { debug?: boolean; classPrefix?: string; tokens?: any }): StyleCollector & Record<string, any> {
   const collector = new StyleCollector(options);
   collector.markMixed();
   return createStyleProxy(collector, macroRegistry as Record<string, Function>) as any;

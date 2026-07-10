@@ -14,8 +14,7 @@
     },
     "./advanced": {
       "types": "./dist/advanced.d.ts",
-      "import": "./dist/advanced.js",
-      "require": "./dist/advanced.cjs"
+      "import": "./dist/advanced.js"
     },
     "./runtime": {
       "types": "./dist/runtime/index.d.ts",
@@ -39,12 +38,21 @@
     },
     "./plugin/webpack": {
       "types": "./dist/plugins/webpack.d.ts",
+      "import": "./dist/plugins/webpack.js"
+    },
+    "./vite": {
+      "types": "./dist/plugins/vite.d.ts",
+      "import": "./dist/plugins/vite.js",
+      "require": "./dist/plugins/vite.cjs"
+    },
+    "./webpack": {
+      "types": "./dist/plugins/webpack.d.ts",
       "import": "./dist/plugins/webpack.js",
       "require": "./dist/plugins/webpack.cjs"
     }
   },
   "scripts": {
-    "build": "npm run build:clean && npm run build:types && node scripts/build.mjs",
+    "build_test": "npm run build:clean && npm run build:types && node scripts/build.mjs && vitest run",
     "build:watch": "npm run build:clean && npm run build:types && node scripts/build.mjs --watch",
     "build:clean": "rm -rf dist",
     "build:types": "tsc -p tsconfig.build.json",
@@ -55,8 +63,7 @@
     "build:browser": "esbuild src/browser.ts --bundle --platform=browser --format=esm --outfile=dist/browser.js --external:react --external:react-dom --external:vue --external:svelte --external:url",
     "build:compiler": "esbuild src/compiler/index.ts --bundle --platform=node --format=esm --outfile=dist/compiler/index.js --packages=external",
     "dev": "tsc -w",
-    "prepublishOnly": "npm run build",
-    "test": "vitest run",
+    "prepublishOnly": "npm run build:clean && npm run build:types && node scripts/build.mjs",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:verbose": "CHAINCSS_TEST_VERBOSE=1 vitest run",
@@ -64,7 +71,8 @@
     "test:integration": "vitest run __tests__/integration",
     "bench:baseline": "node --expose-gc --import tsx benchmarks/save-baseline.js",
     "bench:check": "node --expose-gc --import tsx benchmarks/check-regression.js",
-    "bench:ci": "npm run bench:check"
+    "bench:ci": "npm run bench:check",
+    "build": "npm run build:clean && npm run build:types && node scripts/build.mjs"
   },
   "peerDependencies": {
     "react": ">=16.8.0",
@@ -135,5 +143,8 @@
   "browser": "./dist/browser.js",
   "bin": {
     "chaincss": "./dist/cli/index.js"
-  }
+  },
+  "files": [
+    "dist"
+  ]
 }

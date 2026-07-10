@@ -1,5 +1,5 @@
 // chaincss/src/browser.ts
-export { VERSION } from "./index.js";
+export { VERSION } from "./core/constants.js";
 
 // Browser-only entry for ChainCSS hybrid mode
 // Zero Node.js dependencies — safe for Vite/webpack browser bundles
@@ -34,5 +34,3 @@ export { intent, correct, heal } from './compiler/pipeline/normalizers/intent-de
 
 // Animations
 export { animationPresets, createAnimation, getAnimationPreset, getAnimationPresetNames } from './compiler/animations.js';
-
-// Types

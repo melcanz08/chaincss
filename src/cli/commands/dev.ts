@@ -107,14 +107,49 @@ export async function devCommand(options: DevOptions): Promise<void> {
     poll();
   });
 
+  // Check if esbuild is available (local or global)
+  let esbuildAvailable = false;
+  try {
+    require.resolve('esbuild');
+    esbuildAvailable = true;
+  } catch {
+    try {
+      // Check if npx can find it
+      const check = spawn('npx', ['esbuild', '--version'], { stdio: 'pipe', shell: true });
+      check.on('close', (code) => { esbuildAvailable = code === 0; });
+    } catch { esbuildAvailable = false; }
+  }
+
   let jsBuilt = false;
+  let jsBuildError: string | null = null;
+
   function buildJS() {
-    if (jsBuilt || !entryFile || !jsBundlePath) return;
+    if (!entryFile || !jsBundlePath) return;
+    if (!esbuildAvailable) {
+      logger.warn('⚠️  esbuild not found — skipping JS bundle. Install with: npm install esbuild');
+      return;
+    }
     jsBuilt = true;
+    jsBuildError = null;
     const args = getBundlerArgs(entryFile, jsBundlePath, deps);
     logger.info(`📦 Building: ${entryFile} → ${jsBundlePath}`);
-    const p = spawn('npx', args, { stdio: 'inherit', shell: true, env: { ...process.env, NODE_ENV: 'development' } });
-    p.on('close', code => { if (code === 0) logger.info('✅ JS bundle built'); else logger.error(`JS build failed (exit code ${code})`); });
+    const p = spawn('npx', args, { stdio: 'pipe', shell: true, env: { ...process.env, NODE_ENV: 'development' } });
+    let stderr = '';
+    p.stderr?.on('data', (d: Buffer) => { stderr += d.toString(); });
+    p.on('close', code => {
+      if (code === 0) {
+        logger.info('✅ JS bundle built');
+        jsBuildError = null;
+      } else {
+        jsBuildError = stderr || `JS build failed (exit code ${code})`;
+        logger.error(jsBuildError!);
+      }
+    });
+  }
+
+  function rebuildJS() {
+    jsBuilt = false;
+    buildJS();
   }
 
   cssReady.then(() => buildJS());
@@ -128,7 +163,11 @@ export async function devCommand(options: DevOptions): Promise<void> {
   cssWatcher.stdout?.on('data', (d: Buffer) => {
     const o = d.toString(); process.stdout.write(o);
     if (o.includes('Watching for changes...')) setTimeout(() => { watchPhase = true; }, 1000);
-    if (watchPhase && o.includes('Complete!')) debouncer.schedule(() => notify());
+    if (watchPhase && o.includes('Complete!')) {
+      // Rebuild JS when CSS changes (class mappings may have updated)
+      rebuildJS();
+      debouncer.schedule(() => notify());
+    }
   });
   cssWatcher.stderr?.on('data', (d: Buffer) => process.stderr.write(d.toString()));
 
@@ -137,6 +176,12 @@ export async function devCommand(options: DevOptions): Promise<void> {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
       reloadClients.push(res);
       req.on('close', () => { reloadClients = reloadClients.filter(c => c !== res); });
+      // Aggressive cleanup: remove after 30s idle to prevent zombie accumulation
+      const cleanupTimer = setTimeout(() => {
+        reloadClients = reloadClients.filter(c => c !== res);
+        try { res.end(); } catch {}
+      }, 30000);
+      req.on('close', () => clearTimeout(cleanupTimer));
       return;
     }
     let url = req.url || '/'; if (url === '/') url = '/index.html';
@@ -146,7 +191,17 @@ export async function devCommand(options: DevOptions): Promise<void> {
     const ext = path.extname(fp);
     try {
       let c = fs.readFileSync(fp);
-      if (ext === '.html') c = Buffer.from(c.toString().replace('</body>', `${LIVE_RELOAD_SCRIPT}</body>`));
+      if (ext === '.html') {
+        let html = c.toString();
+        // Inject live reload script
+        html = html.replace('</body>', `${LIVE_RELOAD_SCRIPT}</body>`);
+        // Inject build error banner if JS build failed
+        if (jsBuildError) {
+          const errorBanner = `<div style="position:fixed;top:0;left:0;right:0;background:#dc2626;color:white;padding:12px 24px;font-family:monospace;font-size:14px;z-index:99999;white-space:pre-wrap;">⚠️ JS Build Error: ${jsBuildError.replace(/</g, '&lt;')}</div>`;
+          html = html.replace('<body>', `<body>${errorBanner}`);
+        }
+        c = Buffer.from(html);
+      }
       res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] || 'application/octet-stream' });
       res.end(c);
     } catch { res.writeHead(500); res.end(); }

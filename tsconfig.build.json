@@ -1,41 +1,25 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "paths": {
-      "autoprefixer": ["./node_modules/autoprefixer/index.js"],
-      "svelte": ["./node_modules/svelte/index.js"],
-      "svelte/store": ["./node_modules/svelte/store/index.js"],
-      "vue": ["./node_modules/vue/index.js"]
-    },
     "outDir": "./dist",
     "emitDeclarationOnly": true,
     "noEmit": false,
     "declaration": true,
     "declarationMap": false,
     "sourceMap": false,
-    "types":[
-
-        "vite/client",
-        "node",
-        // "svelte" - optional peer, not required for build
-    ]
+    "skipLibCheck": true,
+    "types": ["vite/client", "node"]
   },
   "include": [
     "src/index.ts",
+    "src/browser.ts",
+    "src/advanced.ts",
+    "src/utils.ts",
+    "src/core/**/*",
     "src/compiler/**/*",
     "src/cli/**/*",
     "src/plugins/**/*",
-    "src/runtime/index.ts",
-    "src/runtime/injector.ts",
-    "src/runtime/Chain.ts"
+    "src/runtime/**/*"
   ],
-  "exclude": [
-    "src/runtime/react.ts",
-    "src/runtime/vue.ts",
-    "src/runtime/svelte.ts",
-    "node_modules",
-    "dist",
-    "tests",
-    "examples"
-  ]
+  "exclude": ["node_modules", "dist", "__tests__", "benchmarks", "examples"]
 }

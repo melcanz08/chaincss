@@ -1,5 +1,8 @@
 // src/runtime/auto-vue.ts
 
+// @ts-ignore - vue is an optional peer dependency
+declare module 'vue' { export { ref, watch, onUnmounted, Ref }; }
+// @ts-expect-error — vue is an optional peer dependency
 import { ref, watch, onUnmounted, type Ref } from 'vue';
 import { chain } from '../core/style-collector.js';
 import { styleInjector, compileRuntime } from './injector.js';

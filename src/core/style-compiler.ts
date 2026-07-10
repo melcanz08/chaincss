@@ -7,24 +7,25 @@
  * used by the build pipeline, CLI, runtime injector, and plugins.
  */
 
-import type { StyleObject, AtRule, NestedRule } from './style-collector.js';
-import { partitionStyles, classifyValue } from './value-classifier.js';
+import type { 
+  StyleObject, 
+  CSSProperties, 
+  PseudoStyles, 
+  PseudoClasses,
+  AtRule, 
+  NestedRule,
+  CSSPrimitiveValue,
+  CompileResult as CoreCompileResult
+} from './types';
+import { parseStyleObject, isCSSPrimitiveValue, isDynamicValue } from './types';
+import { partitionStyles } from './value-classifier';
 
-// ============================================================================
-// Types
-// ============================================================================
-
-export interface CompileOptions {
+// Internal extended options (scopeSelector/sourceFile are internal, not public API)
+interface InternalCompileOptions {
   minify?: boolean;
   sourceMap?: boolean;
   scopeSelector?: string;
   sourceFile?: string;
-}
-
-export interface CompileResult {
-  css: string;
-  dynamicValues: Record<string, any>;
-  hasDynamic: boolean;
 }
 
 // ============================================================================
@@ -50,44 +51,85 @@ function safeIndent(cssText: string, indent: string): string {
 }
 
 // ============================================================================
+// CSS Value Sanitization — prevents injection via user input
+// ============================================================================
+
+/**
+ * Sanitize a CSS value to prevent injection attacks.
+ * Escapes characters that could break out of CSS context.
+ */
+function sanitizeCSSValue(value: string): string {
+  return value
+    .replace(/\\/g, '\\\\')       // Escape backslashes
+    .replace(/<\//g, '<\\/')       // Prevent </style> injection
+    .replace(/\n/g, '\\n')         // Escape newlines
+    .replace(/\r/g, '\\r');        // Escape carriage returns
+}
+
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+function getEffectiveSelector(selectors: string | string[] | undefined, fallback: string): string {
+  if (Array.isArray(selectors)) return selectors.join(', ');
+  return selectors || fallback;
+}
+
+function resolveNestedSelector(parent: string, child: string): string {
+  if (!parent) return child;
+  if (child.startsWith('&')) return `${parent}${child.slice(1)}`;
+  return `${parent} ${child}`;
+}
+
+function buildAtRuleKey(atRule: AtRule): string {
+  const parts: string[] = [`@${atRule.type}`];
+  if (atRule.query) parts.push(atRule.query);
+  if (atRule.condition) parts.push(atRule.condition);
+  if (atRule.name) parts.push(atRule.name);
+  return parts.join(' ');
+}
+
+function stripMetadata(obj: StyleObject): StyleObject {
+  const cleaned: StyleObject = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (!key.startsWith('_')) {
+      (cleaned as Record<string, unknown>)[key] = value;
+    }
+  }
+  return cleaned;
+}
+
+function preserveStructure(obj: StyleObject): StyleObject {
+  const cleaned = stripMetadata(obj);
+  if (obj._nestedRules && obj._nestedRules.length > 0) {
+    cleaned._nestedRules = obj._nestedRules;
+  }
+  if (obj._atRules && obj._atRules.length > 0) {
+    cleaned._atRules = obj._atRules;
+  }
+  return cleaned;
+}
+
+// ============================================================================
 // CSS String Generation
 // ============================================================================
 
 export function compileToCSS(
   styleObject: StyleObject,
-  options: CompileOptions = {}
+  options: InternalCompileOptions = {}
 ): string {
+  try {
+  const parsed = parseStyleObject(styleObject as Record<string, unknown>);
   const parts: string[] = [];
   const scope = options.scopeSelector || '';
   const indent = options.minify ? '' : '  ';
   const newline = options.minify ? '' : '\n';
   
-  const {
-    _classes,
-    _transforms,
-    _atRules = [],
-    _nestedRules = [],
-    _name,
-    _mixed,
-    selectors,
-    nestedRules: _explicitNestedRules,
-    atRules: _explicitAtRules,
-    ...properties
-  } = styleObject as any;
+  const effectiveSelector = getEffectiveSelector(parsed.selectors, scope);
   
-  const effectiveSelector = Array.isArray(selectors) ? selectors.join(', ') : (typeof selectors === 'string' ? selectors : scope);
-  
-  const pseudoClasses: Record<string, Record<string, any>> = {};
-  const regularProps: Record<string, any> = {};
-  for (const [key, value] of Object.entries(properties)) {
-    if (key.startsWith('&:')) {
-      pseudoClasses[key.substring(1)] = value as Record<string, any>;
-    } else if (!key.startsWith('_')) {
-      regularProps[key] = value;
-    }
-  }
-  
-  const mainDeclarations = compileDeclarations(regularProps, indent, options);
+  // Compile main declarations
+  const mainDeclarations = compileDeclarations(parsed.regularProps, indent);
   
   if (mainDeclarations.length > 0 && effectiveSelector) {
     const source = options.sourceMap && options.sourceFile
@@ -96,40 +138,60 @@ export function compileToCSS(
     parts.push(`${source}${effectiveSelector} {${newline}${mainDeclarations.join(newline)}${newline}}`);
   }
   
-  for (const [pseudo, pseudoStyles] of Object.entries(pseudoClasses)) {
-    const pseudoSelector = `${effectiveSelector}${pseudo}`;
-    const pseudoDeclarations = compileDeclarations(pseudoStyles, indent, options);
-    if (pseudoDeclarations.length > 0) {
-      parts.push(`${pseudoSelector} {${newline}${pseudoDeclarations.join(newline)}${newline}}`);
-    }
+  // Compile pseudo-classes
+  for (const [pseudo, pseudoStyles] of Object.entries(parsed.pseudoClasses)) {
+    const pseudoCSS = compilePseudoClass(effectiveSelector, pseudo, pseudoStyles, indent, newline);
+    if (pseudoCSS) parts.push(pseudoCSS);
   }
   
-  // Process nested rules
-  const allNestedRules = [
-    ...(_nestedRules || []),
-    ...(Array.isArray(properties.nestedRules) ? properties.nestedRules : [])
-  ];
-  for (const rule of allNestedRules) {
-    const nestedScope = effectiveSelector
-      ? rule.selector.startsWith('&') 
-        ? `${effectiveSelector}${rule.selector.slice(1)}`
-        : `${effectiveSelector} ${rule.selector}`
-      : rule.selector;
-    
-    const nestedCSS = compileToCSS(rule.styles, {
-      ...options,
-      scopeSelector: nestedScope
-    });
+  // Compile nested rules
+  for (const rule of parsed.nestedRules) {
+    const nestedCSS = compileNestedRule(effectiveSelector, rule, options);
     if (nestedCSS) parts.push(nestedCSS);
   }
   
-  // Process at-rules (media queries, keyframes, supports, etc.)
-  for (const rule of _atRules) {
+  // Compile at-rules
+  for (const rule of parsed.atRules) {
     const atRuleCSS = compileAtRule(rule, effectiveSelector, indent, newline, options);
     if (atRuleCSS) parts.push(atRuleCSS);
   }
   
   return parts.join(options.minify ? '' : '\n\n');
+  } catch (error) {
+    const context = options.sourceFile || options.scopeSelector || 'unknown';
+    throw new Error(`[ChainCSS] Failed to compile style for "${context}": ${(error as Error).message}`);
+  }
+}
+
+// ============================================================================
+// Specialized Compilation Functions
+// ============================================================================
+
+function compilePseudoClass(
+  parentSelector: string,
+  pseudoClass: string,
+  styles: PseudoStyles,
+  indent: string,
+  newline: string
+): string | null {
+  const declarations = compileDeclarations(styles, indent);
+  if (declarations.length === 0) return null;
+  
+  const selector = resolveNestedSelector(parentSelector, pseudoClass);
+  return `${selector} {${newline}${declarations.join(newline)}${newline}}`;
+}
+
+function compileNestedRule(
+  parentSelector: string,
+  rule: NestedRule,
+  options: InternalCompileOptions
+): string | null {
+  const nestedSelector = resolveNestedSelector(parentSelector, rule.selector);
+  const css = compileToCSS(rule.styles as StyleObject, {
+    ...options,
+    scopeSelector: nestedSelector
+  });
+  return css || null;
 }
 
 // ============================================================================
@@ -137,22 +199,24 @@ export function compileToCSS(
 // ============================================================================
 
 function compileDeclarations(
-  properties: Record<string, any>,
-  indent: string,
-  options: CompileOptions
+  properties: CSSProperties,
+  indent: string
 ): string[] {
   const lines: string[] = [];
   
   for (const [prop, value] of Object.entries(properties)) {
-    if (prop.startsWith('_')) continue;
-    if (typeof value === 'function') {
+    // Handle dynamic values (functions)
+    if (isDynamicValue(value)) {
       lines.push(`${indent}${camelToKebab(prop)}: var(--chain-dynamic-${prop}, initial);`);
       continue;
     }
-    if (prop === 'nestedRules' || prop === 'atRules') continue;
-    if (typeof value === 'object' && value !== null && !Array.isArray(value)) continue;
     
-    lines.push(`${indent}${camelToKebab(prop)}: ${value};`);
+    // Handle static values
+    if (isCSSPrimitiveValue(value)) {
+      lines.push(`${indent}${camelToKebab(prop)}: ${sanitizeCSSValue(String(value))};`);
+    }
+    // Objects, arrays, and other non-primitive values are silently skipped
+    // (they don't belong in CSS declarations)
   }
   
   return lines;
@@ -167,11 +231,12 @@ function compileAtRule(
   parentSelector: string,
   indent: string,
   newline: string,
-  options: CompileOptions
+  options: InternalCompileOptions
 ): string {
   switch (rule.type) {
     case 'media': {
-      const inner = compileToCSS(rule.styles || {}, {
+      if (!rule.styles) return '';
+      const inner = compileToCSS(rule.styles as StyleObject, {
         ...options,
         scopeSelector: parentSelector
       });
@@ -183,8 +248,8 @@ function compileAtRule(
       let kf = `@keyframes ${rule.name} {${newline}`;
       for (const [step, props] of Object.entries(rule.steps || {})) {
         kf += `${indent}${step} {${newline}`;
-        for (const [p, v] of Object.entries(props as Record<string, any>)) {
-          kf += `${indent}${indent}${camelToKebab(p)}: ${v};${newline}`;
+        for (const [p, v] of Object.entries(props as Record<string, CSSPrimitiveValue>)) {
+          kf += `${indent}${indent}${camelToKebab(p)}: ${sanitizeCSSValue(String(v))};${newline}`;
         }
         kf += `${indent}}${newline}`;
       }
@@ -195,14 +260,15 @@ function compileAtRule(
     case 'font-face': {
       let ff = '@font-face {' + newline;
       for (const [p, v] of Object.entries(rule.properties || {})) {
-        ff += `${indent}${camelToKebab(p)}: ${v};${newline}`;
+        ff += `${indent}${camelToKebab(p)}: ${sanitizeCSSValue(String(v))};${newline}`;
       }
       ff += '}';
       return ff;
     }
     
     case 'supports': {
-      const inner = compileToCSS(rule.styles || {}, {
+      if (!rule.styles) return '';
+      const inner = compileToCSS(rule.styles as StyleObject, {
         ...options,
         scopeSelector: parentSelector
       });
@@ -211,7 +277,8 @@ function compileAtRule(
     }
     
     case 'container': {
-      const inner = compileToCSS(rule.styles || {}, {
+      if (!rule.styles) return '';
+      const inner = compileToCSS(rule.styles as StyleObject, {
         ...options,
         scopeSelector: parentSelector
       });
@@ -220,7 +287,8 @@ function compileAtRule(
     }
     
     case 'layer': {
-      const inner = compileToCSS(rule.styles || {}, {
+      if (!rule.styles) return '';
+      const inner = compileToCSS(rule.styles as StyleObject, {
         ...options,
         scopeSelector: parentSelector
       });
@@ -248,54 +316,44 @@ function compileAtRule(
  */
 export function partitionForBuild(
   styleObject: StyleObject,
-  options: CompileOptions = {}
-): CompileResult {
-  const { static: topStatic, dynamic: topDynamic } = partitionStyles(
-    stripMetadata(styleObject)
-  );
+  options: InternalCompileOptions = {}
+): { css: string; dynamicValues: Record<string, any>; hasDynamic: boolean; staticObject: StyleObject } {
+  try {
+  const parsed = parseStyleObject(styleObject as Record<string, unknown>);
+
+  // Partition top-level properties
+  const { static: topStatic, dynamic: topDynamic } = partitionStyles(parsed.regularProps);
 
   // Recursively partition nested rules
   const staticNestedRules: NestedRule[] = [];
   const dynamicNestedRules: Record<string, any> = {};
-  
-  const allNested = [
-    ...(styleObject._nestedRules || []),
-    ...(Array.isArray((styleObject as any).nestedRules) ? (styleObject as any).nestedRules : [])
-  ];
-  
-  for (const rule of allNested) {
-    const nestedResult = partitionForBuild(rule.styles, options);
+
+  for (const rule of parsed.nestedRules) {
+    const nestedResult = partitionForBuild(rule.styles as StyleObject, options);
     if (nestedResult.hasDynamic) {
       dynamicNestedRules[rule.selector] = nestedResult.dynamicValues;
     }
     // Preserve structural keys so deeply nested layouts survive
     staticNestedRules.push({
       selector: rule.selector,
-      styles: {
-        ...stripMetadata(rule.styles),
-        _nestedRules: rule.styles._nestedRules,
-        _atRules: rule.styles._atRules,
-      }
+      styles: preserveStructure(rule.styles as StyleObject),
     });
   }
 
   // Recursively partition at-rules
   const staticAtRules: AtRule[] = [];
   const dynamicAtRules: Record<string, any> = {};
-  
-  for (const atRule of (styleObject._atRules || [])) {
+
+  for (const atRule of parsed.atRules) {
     if (atRule.styles) {
-      const atResult = partitionForBuild(atRule.styles, options);
+      const atResult = partitionForBuild(atRule.styles as StyleObject, options);
       if (atResult.hasDynamic) {
-        dynamicAtRules[`@${atRule.type}${atRule.query ? ' ' + atRule.query : ''}`] = atResult.dynamicValues;
+        const key = buildAtRuleKey(atRule);
+        dynamicAtRules[key] = atResult.dynamicValues;
       }
       staticAtRules.push({
         ...atRule,
-        styles: {
-          ...stripMetadata(atRule.styles),
-          _nestedRules: atRule.styles._nestedRules,
-          _atRules: atRule.styles._atRules,
-        }
+        styles: preserveStructure(atRule.styles as StyleObject),
       });
     } else {
       staticAtRules.push(atRule);
@@ -303,38 +361,40 @@ export function partitionForBuild(
   }
 
   // Handle pseudo-classes (&:hover, &:focus, etc.)
-  const staticPseudoStyles: Record<string, any> = {};
-  const dynamicPseudoStyles: Record<string, any> = {};
-  
-  for (const [key, value] of Object.entries(styleObject)) {
-    if (key.startsWith('&:') && typeof value === 'object' && value !== null) {
-      const pseudoResult = partitionStyles(value as Record<string, any>);
-      if (Object.keys(pseudoResult.static).length > 0) {
-        staticPseudoStyles[key] = pseudoResult.static;
-      }
-      if (Object.keys(pseudoResult.dynamic).length > 0) {
-        dynamicPseudoStyles[key] = pseudoResult.dynamic;
-      }
+  const staticPseudoClasses: PseudoClasses = {};
+  const dynamicPseudoClasses: Record<string, any> = {};
+
+  for (const [pseudo, styles] of Object.entries(parsed.pseudoClasses)) {
+    const { static: s, dynamic: d } = partitionStyles(styles as CSSProperties);
+    
+    if (Object.keys(s).length > 0) {
+      staticPseudoClasses[pseudo as `&:${string}`] = s as PseudoStyles;
+    }
+    if (Object.keys(d).length > 0) {
+      dynamicPseudoClasses[pseudo] = d;
     }
   }
 
   // Build the static StyleObject
   const staticStyleObject: StyleObject = {
     ...topStatic,
-    ...staticPseudoStyles,
+    ...staticPseudoClasses,
     _atRules: staticAtRules,
-    _nestedRules: staticNestedRules
+    _nestedRules: staticNestedRules,
   };
 
-  if ((styleObject as any).selectors) {
-    (staticStyleObject as any).selectors = (styleObject as any).selectors;
+  // Preserve selectors if they exist
+  if (parsed.selectors) {
+    staticStyleObject.selectors = parsed.selectors;
   }
 
+  // Compile static CSS
   const css = compileToCSS(staticStyleObject, options);
 
+  // Aggregate dynamic values
   const dynamicValues: Record<string, any> = {
     ...topDynamic,
-    ...dynamicPseudoStyles,
+    ...dynamicPseudoClasses,
   };
 
   if (Object.keys(dynamicNestedRules).length > 0) {
@@ -348,24 +408,19 @@ export function partitionForBuild(
 
   return {
     css,
-    dynamicValues,
-    hasDynamic
+    dynamicValues: dynamicValues as Record<string, any>,
+    hasDynamic,
+    staticObject: staticStyleObject,
   };
-}
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-function stripMetadata(obj: StyleObject): Record<string, any> {
-  const cleaned: Record<string, any> = {};
-  for (const [key, value] of Object.entries(obj)) {
-    if (!key.startsWith('_')) {
-      cleaned[key] = value;
-    }
+  } catch (error) {
+    const context = options.sourceFile || options.scopeSelector || 'unknown';
+    throw new Error(`[ChainCSS] Failed to partition style for "${context}": ${(error as Error).message}`);
   }
-  return cleaned;
 }
+
+// ============================================================================
+// Batch Compilation
+// ============================================================================
 
 /**
  * Batch compile multiple style objects and concatenate their CSS.

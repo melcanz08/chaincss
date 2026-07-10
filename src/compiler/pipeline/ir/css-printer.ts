@@ -241,7 +241,12 @@ function emitKeyframes(
   const steps = new Map<string, IRDeclaration[]>();
 
   for (const decl of declarations) {
-    const step = (decl.meta?._keyframeStep as string) || '50%';
+    // Normalize step values: trim whitespace, handle multi-stop syntax like '0%, 100%'
+    const rawStep = (decl.meta?._keyframeStep as string) || '50%';
+    // Split combined steps ('0%, 100%') into individual stops for grouping,
+    // then rejoin normalized so '0%,100%' and '0%, 100%' map to the same key.
+    const stepParts = rawStep.split(',').map(s => s.trim()).filter(Boolean);
+    const step = stepParts.join(', ');
     if (!steps.has(step)) steps.set(step, []);
     steps.get(step)!.push(decl);
   }
@@ -297,7 +302,10 @@ function emitConditions(
         }
       }
       result += `${space}else${space}${cond.defaultValue}`;
-      result += ');'.repeat(entries.length);
+      // Close parentheses per-entry, not at end.
+  // if(cond: val) else if(cond: val2) else default → if(cond: val) else if(cond: val2) else default)
+  // Each if()/else if() branch closes its own paren, the final else closes after defaultValue.
+  result += ')'.repeat(entries.length);
       parts.push(result);
     }
   }

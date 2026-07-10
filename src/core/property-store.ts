@@ -8,7 +8,6 @@
  */
 
 import { shorthandMap, macros } from '../compiler/utils/shorthands.js';
-import { resolveToken, TokenResolver } from '../compiler/tokens/token-resolver.js';
 import { classifyValue, type ValueClass } from './value-classifier.js';
 
 export interface PropertyStoreEntry {
@@ -30,13 +29,10 @@ const UNITLESS = new Set([
 export class PropertyStore {
   private properties: Record<string, any> = {};
   private transforms: Record<string, string> = {};
-  private tokenResolver: any = null;  // TokenResolver instance
+  // TokenResolver removed — $token resolution moved to pipeline token-lowering pass
 
   constructor(tokens?: any) {
-    if (tokens) {
-      // Lazy-import TokenResolver to avoid circular deps
-      this.tokenResolver = new TokenResolver(tokens);
-    }
+    // TokenResolver removed — $token values stored raw, resolved in pipeline
   }
 
   /**
@@ -146,17 +142,7 @@ export class PropertyStore {
   }
 
   private resolveValue(value: any): any {
-    if (typeof value === 'function') return value;
-    if (typeof value === 'string' && this.isTokenReference(value)) {
-      // Use per-instance TokenResolver if available (avoids global state)
-      if (this.tokenResolver) {
-        const resolved = this.tokenResolver.resolve(value);
-        if (resolved !== undefined && resolved !== null && resolved !== value) return resolved;
-      } else {
-        const resolved = resolveToken(value, true, null);
-        if (resolved !== undefined && resolved !== null) return resolved;
-      }
-    }
+    // $token values stored raw — resolved in pipeline token-lowering pass
     return value;
   }
 

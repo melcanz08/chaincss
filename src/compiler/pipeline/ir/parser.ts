@@ -21,16 +21,17 @@ import type { IRPseudoClass, IRAtRule, IRCondition, StyleIR } from './types.js';
  * WebkitAppearance → -webkit-appearance
  */
 function normalizeProperty(prop: string): string {
-  // Already kebab-case
+  // Already kebab-case (no uppercase letters at all)
   if (!/[A-Z]/.test(prop)) return prop;
   
-  // Handle vendor prefixes: WebkitAppearance → -webkit-appearance
-  if (/^[A-Z]/.test(prop)) {
-    return prop.replace(/([A-Z])/g, '-$1').toLowerCase();
-}
+  // Handle vendor prefixes:
+  //   WebkitAppearance → -webkit-appearance  (starts with capital)
+  //   MozTransform     → -moz-transform      (starts with capital)
+  //   msTransform      → -ms-transform       (starts with lowercase 'ms' + capital)
+  const needsLeadingDash = /^[A-Z]/.test(prop) || /^ms[A-Z]/.test(prop);
+  const kebabed = prop.replace(/([A-Z])/g, '-$1').toLowerCase();
   
-  // Standard camelCase → kebab-case
-  return prop.replace(/([A-Z])/g, '-$1').toLowerCase();
+  return needsLeadingDash ? (kebabed.startsWith('-') ? kebabed : '-' + kebabed) : kebabed;
 }
 
 // ============================================================================
@@ -56,7 +57,7 @@ export function parseIR(
 
     const selectors = Array.isArray(styleDef.selectors)
       ? styleDef.selectors
-      : styleDef.selector
+      : styleDef.selector  // @deprecated Use 'selectors' (plural) instead
         ? [styleDef.selector]
         : ['.' + componentName];
 
@@ -121,48 +122,73 @@ export function parseIR(
         }
       }
 
-      // Parse at-rules — normalize properties
-      if ((styleDef.atRules || styleDef._atRules) && Array.isArray(styleDef.atRules || styleDef._atRules)) {
-        for (const atRule of (styleDef.atRules || styleDef._atRules)) {
-          const irAtRule: IRAtRule = {
-            id: nextId('atrule'),
-            type: atRule.type || 'media',
-            query: atRule.query,
-            name: atRule.name,
-            declarations: [],
-            nestedRules: [],
-            source: rule.source,
-            history: [record('parser', 'created', undefined, 'Parsed at-rule')],
-          };
+      ir.rules.push(rule);
+    }
 
-          if (atRule.styles && typeof atRule.styles === 'object') {
-            for (const [prop, value] of Object.entries(atRule.styles)) {
-              if (typeof value === 'string' || typeof value === 'number') {
-                const normalizedProp = normalizeProperty(prop);
-                irAtRule.declarations.push(createDeclaration(normalizedProp, value, rule.source));
-              }
+    // ── Parse at-rules and if() conditions ONCE per styleDef ──
+    // These are shared across all selectors. Processing inside the selectors loop
+    // causes unnecessary duplication and potential cross-contamination.
+    // Standardize: _atRules is canonical; atRules (no underscore) is a deprecated alias
+    const allAtRules = styleDef._atRules || styleDef.atRules;
+    if (allAtRules && Array.isArray(allAtRules)) {
+      for (const atRule of allAtRules) {
+        // Create a template IRAtRule — clone it for each selector rule
+        const templateAtRule: IRAtRule = {
+          id: nextId('atrule'),
+          type: atRule.type || 'media',
+          query: atRule.query,
+          name: atRule.name,
+          declarations: [],
+          nestedRules: [],
+          source: { file: sourceFile, component: componentName },
+          history: [record('parser', 'created', undefined, 'Parsed at-rule')],
+        };
+
+        if (atRule.styles && typeof atRule.styles === 'object') {
+          for (const [prop, value] of Object.entries(atRule.styles)) {
+            if (typeof value === 'string' || typeof value === 'number') {
+              templateAtRule.declarations.push(
+                createDeclaration(normalizeProperty(prop), value, templateAtRule.source)
+              );
             }
           }
+        }
 
-          rule.atRules.push(irAtRule);
+        // Attach to all rules for this component
+        for (const rule of ir.rules) {
+          if (rule.source?.component === componentName) {
+            rule.atRules.push({ ...templateAtRule, id: nextId('atrule') });
+          }
         }
       }
+    }
 
-      // Parse CSS if() conditions — normalize property
-      if (styleDef._ifConditions && Array.isArray(styleDef._ifConditions)) {
-        for (const cond of styleDef._ifConditions) {
-          rule.conditions.push({
-            id: nextId('cond'),
-            property: normalizeProperty(cond.property),
-            variable: cond.variable,
-            conditions: cond.conditions || {},
-            defaultValue: cond.defaultValue || '',
-            source: rule.source,
+    // Parse CSS if() conditions — once per styleDef, attach to all rules
+    if (styleDef._ifConditions && Array.isArray(styleDef._ifConditions)) {
+      for (const cond of styleDef._ifConditions) {
+        if (!cond.property || !cond.variable) {
+          ir.diagnostics.push({
+            id: nextId('diag'), nodeId: ir.id, severity: 'warning',
+            message: `Skipping malformed if() condition in ${componentName}: missing property or variable`,
+            pass: 'parser',
           });
+          continue;
+        }
+        const templateCond = {
+          id: nextId('cond'),
+          property: normalizeProperty(cond.property),
+          variable: cond.variable,
+          conditions: cond.conditions || {},
+          defaultValue: cond.defaultValue || '',
+          source: { file: sourceFile, component: componentName },
+        };
+        // Attach to all rules for this component
+        for (const rule of ir.rules) {
+          if (rule.source?.component === componentName) {
+            rule.conditions.push({ ...templateCond, id: nextId('cond') });
+          }
         }
       }
-
-      ir.rules.push(rule);
     }
   }
 

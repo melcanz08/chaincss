@@ -1,4 +1,5 @@
 // src/core/types.ts
+
 /**
  * Core ChainCSS Types - Build-Time Only
  * These types are for the compiler and never ship to browser
@@ -25,15 +26,15 @@ export interface AtRule {
   query?: string;
   condition?: string;
   name?: string;
-  styles?: any;
-  steps?: Record<string, Record<string, string>>;
+  styles?: StyleObject;
+  steps?: Record<string, Record<string, CSSPrimitiveValue>>;
   properties?: Record<string, string>;
   descriptors?: Record<string, string>;
 }
 
 export interface NestedRule {
   selector: string;
-  styles: Record<string, string | number>;
+  styles: StyleObject;
 }
 
 export interface ThemeBlock {
@@ -59,6 +60,8 @@ export interface CompileResult {
   atomicClasses: AtomicClass[];
   stats: CompileStats;
   dynamic?: Record<string, () => any>;  // Dynamic values preserved for runtime
+  dynamicValues?: Record<string, any>;
+  hasDynamic?: boolean;
   warnings?: string[];
   errors?: string[];
   inspector?: {
@@ -237,6 +240,86 @@ export type RequiredKeys<T, K extends keyof T> = T & Required<Pick<T, K>>;
 export type OptionalKeys<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
 
 // ============================================================================
+// 🆕 Strict Style Types — Eliminates `any` from style-compiler.ts
+// ============================================================================
+
+/**
+ * Primitive CSS value — what actually ends up in a CSS property.
+ * Functions indicate dynamic values that need runtime resolution.
+ */
+export type CSSPrimitiveValue = string | number;
+
+/**
+ * A collection of CSS property-value pairs (no nesting, no pseudos)
+ */
+export interface CSSProperties {
+  [property: string]: CSSPrimitiveValue | ((...args: any[]) => string);
+}
+
+/**
+ * Pseudo-class styles (e.g., { backgroundColor: 'red' } inside &:hover)
+ */
+export interface PseudoStyles {
+  [cssProperty: string]: CSSPrimitiveValue;
+}
+
+/**
+ * Map of pseudo-class selectors to their styles
+ * Example: { '&:hover': { color: 'blue' }, '&:focus': { outline: 'none' } }
+ */
+export interface PseudoClasses {
+  [pseudoSelector: `&:${string}`]: PseudoStyles;
+}
+
+/**
+ * The canonical style object that flows through the compiler.
+ * Separates concerns: properties, pseudos, at-rules, nested rules.
+ * 
+ * NOTE: String index signature must be last and union with all explicit property types
+ * to satisfy TypeScript's index signature constraints.
+ */
+export interface StyleObject {
+  /** Pseudo-class selectors */
+  [pseudo: `&:${string}`]: PseudoStyles | undefined;
+  
+  /** Selector(s) for this style block */
+  selectors?: string | string[];
+  
+  /** At-rules wrapping this style block */
+  _atRules?: AtRule[];
+  
+  /** Nested child rules */
+  _nestedRules?: NestedRule[];
+  
+  /** Explicit nested rules (alternative placement) */
+  nestedRules?: NestedRule[];
+  
+  /** Explicit at-rules (alternative placement) */
+  atRules?: AtRule[];
+  
+  /** Internal metadata — not serialized to CSS */
+  _classes?: string[];
+  _transforms?: Array<{ type: string; [key: string]: unknown }>;
+  _name?: string;
+  _mixed?: boolean;
+  
+  /** Top-level CSS properties */
+  [property: string]: CSSPrimitiveValue | PseudoStyles | AtRule[] | NestedRule[] | string | string[] | Array<{ type: string; [key: string]: unknown }> | boolean | undefined;
+}
+
+/**
+ * Structured result of parsing a StyleObject.
+ * Used internally by the compiler to avoid repeated type-checking.
+ */
+export interface ParsedStyleObject {
+  regularProps: CSSProperties;
+  pseudoClasses: PseudoClasses;
+  atRules: AtRule[];
+  nestedRules: NestedRule[];
+  selectors?: string | string[];
+}
+
+// ============================================================================
 // Type Guards
 // ============================================================================
 
@@ -260,6 +343,123 @@ export function isCompileResult(value: any): value is CompileResult {
     typeof value.css === 'string' &&
     typeof value.classMap === 'object' &&
     typeof value.stats === 'object';
+}
+
+// ============================================================================
+// 🆕 Type Guards for strict style types
+// ============================================================================
+
+/**
+ * Check if a value is a valid CSS property value (primitive or function)
+ */
+export function isCSSPrimitiveValue(value: unknown): value is CSSPrimitiveValue {
+  return typeof value === 'string' || typeof value === 'number';
+}
+
+/**
+ * Check if a value is a dynamic CSS value (function)
+ */
+export function isDynamicValue(value: unknown): value is ((...args: any[]) => string) {
+  return typeof value === 'function';
+}
+
+/**
+ * Check if a value is a pseudo-styles object
+ */
+export function isPseudoStyles(value: unknown): value is PseudoStyles {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+  // All values must be primitive CSS values
+  return Object.values(value as Record<string, unknown>).every(v => isCSSPrimitiveValue(v));
+}
+
+/**
+ * Check if a value is a valid nested rule
+ */
+export function isNestedRuleV2(value: unknown): value is NestedRule {
+  if (typeof value !== 'object' || value === null) return false;
+  const obj = value as Record<string, unknown>;
+  return typeof obj.selector === 'string' && 
+         typeof obj.styles === 'object' && 
+         obj.styles !== null;
+}
+
+/**
+ * Check if a value is a valid at-rule
+ */
+export function isAtRuleV2(value: unknown): value is AtRule {
+  if (typeof value !== 'object' || value === null) return false;
+  const obj = value as Record<string, unknown>;
+  return typeof obj.type === 'string';
+}
+
+/**
+ * Parse a raw object into a structured ParsedStyleObject.
+ * Centralizes all the type-checking in one place.
+ */
+export function parseStyleObject(obj: Record<string, unknown>): ParsedStyleObject {
+  const regularProps: CSSProperties = {};
+  const pseudoClasses: PseudoClasses = {};
+  const atRules: AtRule[] = [];
+  const nestedRules: NestedRule[] = [];
+  let selectors: string | string[] | undefined;
+
+  for (const [key, value] of Object.entries(obj)) {
+    // Skip internal metadata (_classes, _name, _mixed, _transforms).
+    // _atRules and _nestedRules are handled explicitly below via their
+    // underscore-less aliases (atRules, nestedRules) or direct _prefixed checks.
+    if (key.startsWith('_')) continue;
+
+    // Extract selectors
+    if (key === 'selectors') {
+      if (typeof value === 'string' || (Array.isArray(value) && value.every(v => typeof v === 'string'))) {
+        selectors = value as string | string[];
+      }
+      continue;
+    }
+
+    // Handle pseudo-classes (&:hover, &:focus, etc.)
+    if (key.startsWith('&:')) {
+      if (isPseudoStyles(value)) {
+        pseudoClasses[key as `&:${string}`] = value;
+      }
+      continue;
+    }
+
+    // Handle explicit nested rules array
+    if (key === 'nestedRules' && Array.isArray(value)) {
+      for (const rule of value) {
+        if (isNestedRuleV2(rule)) {
+          nestedRules.push({ selector: rule.selector, styles: rule.styles as StyleObject });
+        }
+      }
+      continue;
+    }
+
+    // Handle explicit at-rules array
+    if (key === 'atRules' && Array.isArray(value)) {
+      for (const rule of value) {
+        if (isAtRuleV2(rule)) {
+          atRules.push(rule);
+        }
+      }
+      continue;
+    }
+
+    // Handle CSS properties (primitives and functions)
+    if (isCSSPrimitiveValue(value) || isDynamicValue(value)) {
+      regularProps[key] = value as CSSPrimitiveValue;
+    }
+  }
+
+  return {
+    regularProps,
+    pseudoClasses,
+    atRules,
+    nestedRules,
+    selectors,
+  };
 }
 
 // ============================================================================
@@ -363,6 +563,8 @@ export interface StyleGraphNode {
   isDead: boolean;
   hash: string;
   sourceComponent?: string;
+  /** Track merged component→selector mappings to prevent classMap loss during identical rule merging */
+  mergedComponents?: Record<string, string>;
 }
 
 export interface StyleGraphEdge {

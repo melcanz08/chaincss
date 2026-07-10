@@ -6,6 +6,7 @@ import { ChainCSSCompiler } from '../../core/compiler.js';
 import { createLogger } from '../utils/logger.js';
 import { loadConfig } from '../utils/config-loader.js';
 import { findInputFiles } from '../utils/file-utils.js';
+import { createPipeline } from '../../compiler/pipeline/unified-pipeline.js';
 import type { BuildOptions } from '../types.js';
 
 interface CheckResult {
@@ -25,10 +26,11 @@ export async function checkCommand(options: BuildOptions & { fix?: boolean }): P
   const config = await loadConfig(
     options.config && !options.config.includes('*') ? options.config : undefined
   );
-  const inputs =
-    options.config && options.config.includes('*')
-      ? [options.config]
-      : config.inputs || ['src/**/*.chain.{js,ts}'];
+  // If config path contains a wildcard, treat it as an input pattern directly
+  const configHasWildcard = options.config && options.config.includes('*');
+  const inputs = configHasWildcard
+    ? [options.config!]
+    : (config.inputs && config.inputs.length > 0 ? config.inputs : ['src/**/*.chain.{js,ts}']);
 
   if (inputs.length === 0) {
     logger.error('No input patterns found in configuration');
@@ -54,9 +56,7 @@ export async function checkCommand(options: BuildOptions & { fix?: boolean }): P
   });
 
   // Use the CI pipeline for full validation + analysis
-  const { createPipeline } = await import('../../compiler/pipeline/unified-pipeline.js');
-  const ciPipeline = createPipeline('ci');
-  compiler['pipeline'] = ciPipeline as any;
+  compiler.setPipeline(createPipeline('ci'));
 
   const startTime = Date.now();
   const results: CheckResult[] = [];
@@ -89,10 +89,19 @@ export async function checkCommand(options: BuildOptions & { fix?: boolean }): P
 
         if (fix && (result as any)._pipelineReport) {
           const report = (result as any)._pipelineReport;
+          let fileChanged = false;
           for (const entry of report) {
             if (entry.result?.changes > 0) {
               totalFixes += entry.result.changes;
+              fileChanged = true;
             }
+          }
+          // Write the fixed CSS back to disk
+          if (fileChanged && result.css) {
+            const cssFile = file.replace(/\.(js|ts|jsx|tsx)$/, '.css');
+            const { writeFileSync } = await import('fs');
+            writeFileSync(cssFile, result.css, 'utf8');
+            logger.success(`Fixed: ${path.relative(process.cwd(), cssFile)}`);
           }
         }
       }
@@ -149,7 +158,7 @@ export async function checkCommand(options: BuildOptions & { fix?: boolean }): P
       console.log(`  ${chalk.cyan(r.file)} ${chalk.gray(`(${label})`)}`);
 
       for (const d of r.diagnostics) {
-        if (d.message?.includes('Skipped') && d.message?.includes('pass(es)')) continue;
+        if (d.id === 'pipeline-skip') continue;
         const icon = d.severity === 'error' ? '❌' :
                d.severity === 'warning' ? '⚠️ ' : 'ℹ️ ';
         const colorFn = d.severity === 'error' ? chalk.red :

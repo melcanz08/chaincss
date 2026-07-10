@@ -113,24 +113,27 @@ export class Pipeline {
     return features;
   }
 
+  // Feature requirements for each pass. Passes not listed here always run.
+  // Passes declare what features they need — no magic strings in logic.
+  private static PASS_FEATURE_REQUIREMENTS: Record<string, string[]> = {
+    'responsive-analyzer': ['viewport-units', 'large-fixed'],
+    'layout-analyzer': ['flexbox-grid'],
+    'pattern-detector': ['declarations'],
+    'accessibility-optimizer': ['declarations'],
+    'atomic-extractor': ['declarations'],
+    'media-query-packer': ['at-rules'],
+    'source-optimizer': ['declarations'],
+    'css-compressor': ['declarations'],
+    'token-lowering': ['semantic-tokens'],
+    'intent-resolver': ['intents'],
+    'constraint-resolver': ['constraints'],
+  };
+
   private shouldRun(passName: string, features: Set<string>): boolean {
-    if (passName === 'intent-normalizer' || passName === 'unit-normalizer') return true;
-    if (passName === 'accessibility-validator' || passName === 'conflict-validator') return true;
-    if (passName === 'responsive-analyzer') return features.has('viewport-units') || features.has('large-fixed');
-    if (passName === 'layout-analyzer') return features.has('flexbox-grid');
-    if (passName === 'pattern-detector') return features.has('declarations');
-    if (passName === 'specificity-sorter') return true;
-    if (passName === 'dead-code-eliminator') return true;
-    if (passName === 'accessibility-optimizer') return features.has('declarations');
-    if (passName === 'atomic-extractor') return features.has('declarations');
-    if (passName === 'media-query-packer') return features.has('at-rules');
-    if (passName === 'source-optimizer') return features.has('declarations');
-    if (passName === 'css-compressor') return features.has('declarations');
-    if (passName === 'token-lowering') return features.has('semantic-tokens');
-    if (passName === 'intent-resolver') return features.has('intents');
-    if (passName === 'constraint-resolver') return features.has('constraints');
-    if (passName === 'css-emitter') return true;
-    return true;
+    const required = Pipeline.PASS_FEATURE_REQUIREMENTS[passName];
+    // No entry = always run
+    if (!required) return true;
+    return required.some(f => features.has(f));
   }
 
   private runSync(ir: StyleIR): PipelineResult {
@@ -249,8 +252,14 @@ export class Pipeline {
       lines.push('    ✓ ' + entry.pass.padEnd(25) + ' ' + String(entry.duration).padStart(4) + 'ms');
       if (entry.stage === 'validation') {
         const vr = entry.result as ValidationResult;
-        if (vr.stats.errors > 0 || vr.stats.warnings > 0) {
-          lines.push('      ⚠ ' + vr.stats.errors + ' errors, ' + vr.stats.warnings + ' warnings');
+        if (vr.stats?.errors > 0 || vr.stats?.warnings > 0) {
+          lines.push('      ⚠ ' + (vr.stats.errors || 0) + ' errors, ' + (vr.stats.warnings || 0) + ' warnings');
+        }
+      }
+      if (entry.stage === 'optimization' && (entry.result as any).savings) {
+        const s = (entry.result as any).savings;
+        if (s.bytesSaved > 0) {
+          lines.push('      📦 Saved ' + s.bytesSaved + ' bytes, ' + (s.rulesEliminated || 0) + ' rules eliminated');
         }
       }
     }

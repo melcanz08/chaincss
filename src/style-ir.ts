@@ -16,6 +16,9 @@ export type { IRPass } from './compiler/legacy/style-ir.js';
 import * as ir from './compiler/pipeline/ir/index.js';
 import * as legacy from './compiler/legacy/style-ir.js';
 
+// WARNING: createIR/parseIR use a module-scoped idCounter in factory.ts.
+// Always import from 'chaincss/ir' or './compiler/pipeline/ir/index.js' directly.
+// The styleIR namespace object is for backward compat only — prefer direct imports.
 export const styleIR = {
   createIR: ir.createIR,
   parseIR: ir.parseIR,

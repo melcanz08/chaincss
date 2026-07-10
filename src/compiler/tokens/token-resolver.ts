@@ -29,7 +29,8 @@ import type { DesignTokens } from './tokens.js';
 export function resolveToken(
   value: any,
   useTokens: boolean = true,
-  tokenContext?: DesignTokens | null
+  tokenContext?: DesignTokens | null,
+  useCSSVariables: boolean = false
 ): any {
   // Early return if tokens are disabled or value is not a string
   if (!useTokens || typeof value !== 'string') return value;
@@ -39,12 +40,15 @@ export function resolveToken(
   if (functionMatch) {
     const tokenPath = functionMatch[1];
     const resolved = resolveTokenPath(tokenPath, tokenContext);
-    return resolved !== undefined ? resolved : value;
+    if (useCSSVariables) {
+        return `var(--theme-${tokenPath.replace(/\./g, '-')})`;
+      }
+      return resolved !== undefined ? resolved : value;
   }
 
   // Handle inline token references within strings
   if (value.includes('$')) {
-    return value.replace(/\$([a-zA-Z0-9.-]+)/g, (match: string, path: string) => {
+    return value.replace(/\$([a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)*)/g, (match: string, path: string) => {
       const resolved = resolveTokenPath(path, tokenContext);
       if (resolved !== undefined && resolved !== null) {
         // Guard: if the resolved value is an object (e.g., $shadows → { sm: '...' }),
@@ -53,9 +57,12 @@ export function resolveToken(
           console.warn(`[ChainCSS] Token "${path}" resolved to an object, cannot inline into string: "${value}"`);
           return match;
         }
+        if (useCSSVariables) {
+          return `var(--theme-${path.replace(/\./g, '-')})`;
+        }
         return String(resolved);
       }
-      // Token not found — warn in development only
+      // Token not found — emit var() fallback if dynamic — warn in development only
       if (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production') {
         console.warn(`[ChainCSS] Token not found: ${path}`);
       }
@@ -117,7 +124,7 @@ export function hasTokenReferences(value: any): boolean {
 
 export function extractTokenPaths(value: string): string[] {
   const paths: string[] = [];
-  const dollarRegex = /\$([a-zA-Z0-9.-]+)/g;
+  const dollarRegex = /\$([a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)*)/g;
   let match;
   while ((match = dollarRegex.exec(value)) !== null) {
     paths.push(match[1]);

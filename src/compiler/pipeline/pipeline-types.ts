@@ -92,9 +92,13 @@ export interface AnalysisPass {
 // Stage 4: Optimization
 // ============================================================================
 export interface OptimizationContext {
+  tokens?: Record<string, any>;  // Design tokens for $token resolution
+  atomicUsageMap?: Map<string, number>;  // Shared atomic usage counter across files
   minify?: boolean;
   atomic?: boolean;
   threshold?: number;
+  /** Allow passthrough of additional context keys for custom passes */
+  [key: string]: unknown;
 }
 
 export interface OptimizationSavings {
@@ -122,6 +126,7 @@ export interface OptimizationPass {
 // Stage 5: Generation / Lowering
 // ============================================================================
 export interface LoweringContext {
+  tokens?: Record<string, any>;  // Design tokens for $token resolution
   target?: GenerationTarget;
   minify?: boolean;
   sourceMap?: boolean;

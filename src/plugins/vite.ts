@@ -77,6 +77,7 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
     css: string
     classMap: Record<string, string>
     diagnostics: InspectorDiagnostic[]
+    rawResults: any
   }> {
     const results = await compiler.compileFile(chainPath)
     let css = ''
@@ -113,7 +114,7 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
       }
     }
 
-    return { css, classMap, diagnostics: allDiagnostics }
+    return { css, classMap, diagnostics: allDiagnostics, rawResults: results }
   }
 
   function printDiagnostics(diagnostics: InspectorDiagnostic[], fileName: string) {
@@ -187,7 +188,7 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
     for (const file of chainFiles) {
       try {
         const { css, classMap, diagnostics } = await compileFile(file)
-        const compileResults = await compiler.compileFile(file)  // Full results for dynamic inspection
+        const rawResults = await compiler.compileFile(file)  // Single compilation — rawResults from compileFile above
         const fileName = path.basename(file)
 
         if (css.trim()) {
@@ -210,7 +211,7 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
 
         for (const [name, className] of Object.entries(classMap)) {
           // Check if this style has dynamic functions
-          const compileResult = Object.values(compileResults).find((r: any) => 
+          const compileResult = Object.values(rawResults).find((r: any) => 
             r.classMap && Object.values(r.classMap)[0] === className
           );
           if ((compileResult as any)?.dynamic && Object.keys((compileResult as any).dynamic).length > 0) {
@@ -273,6 +274,7 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
   // Plugin Hooks
   // =========================================================================
 
+  let base = '/';
   return {
     name: 'chaincss',
     enforce: 'pre',
@@ -431,7 +433,8 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
     },
 
     async generateBundle(_opts: any, bundle: any) {
-      const css = await compileAllStyles();
+      // Stitch CSS from in-memory cache (populated during transform)
+      const css = Array.from(cssFileCache.values()).filter(Boolean).join('\n');
       if (css && css.trim()) {
         this.emitFile({
           type: "asset",
@@ -456,7 +459,7 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
           tag: 'link',
           attrs: {
             rel: 'stylesheet',
-            href: isProduction ? '/assets/chaincss.css' : '/__chaincss.css',
+            href: isProduction ? `${base}assets/chaincss.css` : '/__chaincss.css',
             'data-chaincss': '',
             id: 'chaincss-styles'
           },

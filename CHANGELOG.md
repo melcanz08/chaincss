@@ -1,5 +1,98 @@
 # Changelog
 
+## v2.11.0 (2026-07-10)
+
+### 🚀 Highlights
+- **5 critical bugs fixed** — invalid CSS output, token leaks, ESM crashes, race conditions, and memory leaks resolved
+- **Package exports fixed** — `chaincss/vite` and `chaincss/webpack` now resolve correctly
+- **Type safety** — `StyleObject`, `IRRuleMeta`, `IRDeclarationMeta`, and pipeline types hardened
+- **Performance** — O(n) → O(1) source map generation, accurate byte counting in compressor
+
+### 🐛 Bug Fixes
+
+**Critical (P0)**
+- Fixed pseudo-class selector emitting `.chain-btn&:hover` instead of `.chain-btn:hover`
+- Fixed `partitionForBuild` leaking dynamic functions into static CSS output
+- Fixed atomic preset sharing mutable `atomicUsageMap` across parallel builds
+- Fixed token resolver never reaching `var(--*)` fallback — `$token` leaked as invalid CSS
+- Fixed `require()` crash in ESM browser builds (runtime/index.ts)
+
+**Compiler**
+- Fixed `layout-analyzer` camelCase/kebab-case disconnect — zero patterns matched before
+- Fixed `tokenLowering` running after `cssCompressor` — resolved tokens never got minified
+- Fixed `atomic-extractor` `globalUsage` map never written — zero extractions in single-file mode
+- Fixed `token-resolver` `exec()` with `/g` flag infinite loop on string replacement
+- Fixed `css-compressor` `0` word boundary missing negative values (`-0.5rem`)
+- Fixed `css-compressor` shorthand collapse corrupting `font-family` with commas
+- Fixed `css-printer` `if()` parentheses `.repeat()` closing brackets at wrong position
+- Fixed `value-parser` blind `split(/[,\s]+/)` destroying function nesting
+- Fixed `parser.ts` `msTransform` → `ms-transform` instead of `-ms-transform`
+- Fixed `style-graph.ts` MD5 hashing breaking in FIPS mode
+- Fixed `style-graph.ts` media query blind merging across `@media` boundaries
+- Fixed `style-graph.ts` `mergedComponents` Map not JSON serializable
+- Fixed `cloneIR` using `JSON.parse(JSON.stringify())` stripping prototypes
+- Fixed `animations.ts` shorthand missing `fillMode` — overrode longhand property
+
+**Runtime**
+- Fixed `ChainCSSGlobal` injecting empty `<style>` tag
+- Fixed `useChainStylesApplied` not deduplicating class names
+- Fixed `injector.ts` recursive token resolution on arrays/pseudo-classes
+- Fixed `react.tsx` HOC typed as `any` instead of `React.FC<P>`
+
+**CLI & Plugins**
+- Fixed Vite plugin double-compilation in `generateBundle`
+- Fixed Vite plugin manual watcher instead of `handleHotUpdate`
+- Fixed Vite plugin hardcoded `/assets/chaincss.css` path
+- Fixed `dev.ts` JS bundle never rebuilding on CSS changes
+- Fixed `check.ts` private `pipeline` property hack — added `setPipeline()` public API
+- Fixed `check.ts` `--fix` flag counting fixes but never writing files
+
+**Type System**
+- Added `CSSProperties`, `PseudoStyles`, `PseudoClasses`, `ParsedStyleObject` interfaces
+- Added `IRRuleMeta`, `IRDeclarationMeta` replacing `Record<string, unknown>`
+- Added `OptimizationContext` index signature for custom passes
+- Unified `StyleObject` type across codebase (was duplicated in `style-collector.ts`)
+- Fixed `CompileOptions`/`CompileResult` conflicting across modules
+
+### 🏗️ Improvements
+
+**Pipeline**
+- `shouldRun` refactored from 15-line if-else to data-driven `PASS_FEATURE_REQUIREMENTS` map
+- `tokenLowering` moved to optimization phase — tokens compressed before emission
+- `css-emitter` O(n) → O(1) source map generation
+- `generateBundle` stitches CSS from memory cache instead of re-scanning filesystem
+- `createPipeline('atomic')` creates fresh `atomicUsageMap` per call
+
+**Security**
+- Added `sanitizeCSSValue()` escaping `\`, `</`, `
+`, `` in CSS output
+- Added try/catch error boundaries around `compileToCSS` and `partitionForBuild`
+- Token resolver warns on unresolved tokens instead of silently leaking `$token`
+
+**Performance**
+- `css-compressor` accurate byte counting via `Buffer.byteLength` (was `changes * 3` estimate)
+- New collapse rules: `10px 10px` → `10px`, `0 0 0` → `0`
+- `recipe.ts` returns `StyleDefinition` directly instead of rebuilding via `chain()`
+- `getAllVariants` result cached — no duplicate generation in `compileAll`
+
+**DX**
+- `isValidPreset()` type guard exported from `unified-pipeline.ts`
+- Deprecated functions annotated with "Will be removed in v4.0"
+- `README.md` updated with docs link, FAQ, framework one-liner, performance methodology
+- `basic.chain.ts` fixture includes expected CSS output comments
+
+### ⚠️ Breaking Changes
+- `chaincss/plugin/vite` still works but `chaincss/vite` is now the canonical path
+- `prepublishOnly` script changed — ensure CI uses `npm run build`
+
+### 📦 Package
+- Added `./vite` and `./webpack` exports aliases
+- Added `files: ["dist"]` to `package.json`
+- Fixed `prepublishOnly` to `npm run build:clean && npm run build:types && node scripts/build.mjs`
+- Removed broken `require` conditions for missing CJS artifacts
+- `tsconfig.build.json` includes full `src/runtime/**/*` for proper type generation
+
+
 ## [2.7.0] - 2026-06-26
 
 ### Architecture — 5-Stage Compiler Pipeline

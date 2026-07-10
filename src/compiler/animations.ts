@@ -265,7 +265,8 @@ export function createAnimation(
   } = config;
   
   // Build animation shorthand
-  const animationValue = `${animationName} ${duration} ${timing} ${delay} ${iteration} ${direction} ${playState}`;
+  // CSS animation shorthand: name duration timing-function delay iteration-count direction fill-mode play-state
+  const animationValue = `${animationName} ${duration} ${timing} ${delay} ${iteration} ${direction} ${fillMode} ${playState}`;
   
   return {
     animation: animationValue.trim(),
@@ -301,13 +302,16 @@ export function createKeyframesCSS(
   
   css += `}\n`;
   
-  // Add vendor-prefixed version if needed
+  // Vendor prefixing is handled by the ChainCSS prefixer pass.
+  // Duplicating the entire keyframe block here wastes output size.
+  // Set prefix=false and let the prefixer add -webkit- when needed.
   if (prefix) {
     css += `@-webkit-keyframes ${name} {\n`;
     for (const [keyframe, styles] of Object.entries(steps)) {
       css += `  ${keyframe} {\n`;
       for (const [prop, value] of Object.entries(styles)) {
         const kebabProp = prop.replace(/([A-Z])/g, '-$1').toLowerCase();
+        css += `    -webkit-${kebabProp}: ${value};\n`;
         css += `    ${kebabProp}: ${value};\n`;
       }
       css += `  }\n`;
@@ -367,7 +371,8 @@ export function combineAnimations(
   for (const anim of animations) {
     const duration = anim.duration || '0.3s';
     const delay = anim.delay || '0s';
-    animationList.push(`${anim.name} ${duration} ${delay}`);
+    const timing = (anim as any).timing || 'ease';
+    animationList.push(`${anim.name} ${duration} ${timing} ${delay}`);
   }
   
   combined.animation = animationList.join(', ');
@@ -394,12 +399,15 @@ export function staggerChildren(
 // Helper to parse time string to milliseconds
 function parseTimeToMs(time: string): number {
   if (time.endsWith('ms')) {
-    return parseFloat(time);
+    const val = parseFloat(time);
+    return isNaN(val) ? 0 : val;
   }
   if (time.endsWith('s')) {
-    return parseFloat(time) * 1000;
+    const val = parseFloat(time);
+    return isNaN(val) ? 0 : val * 1000;
   }
-  return parseFloat(time);
+  const val = parseFloat(time);
+  return isNaN(val) ? 0 : val;
 }
 
 // Convert milliseconds to time string
@@ -415,6 +423,7 @@ export interface AnimationStep {
   name: string;
   duration?: string;
   delay?: string;
+  timing?: string;
 }
 
 export function createAnimationSequence(steps: AnimationStep[]): Record<string, any> {

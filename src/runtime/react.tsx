@@ -79,7 +79,7 @@ export function useChainStylesApplied(
   const { classMap, styleVars } = useChainStyles(styles, deps, options);
   
   return {
-    className: Object.values(classMap).filter(Boolean).join(' '),
+    className: [...new Set(Object.values(classMap))].filter(Boolean).join(' '),
     style: styleVars,
   };
 }
@@ -101,7 +101,23 @@ export function ChainCSSGlobal({ styles, tokens, children }: any) {
     if (!styles) return;
     const el = document.createElement('style');
     el.setAttribute('data-chaincss', 'global');
-    // Minimal CSS injection for truly global styles (not per-component dynamic)
+    // Inject global CSS from the styles object
+    if (typeof styles === 'string') {
+      el.textContent = styles;
+    } else if (typeof styles === 'object') {
+      // Build CSS from style definitions
+      el.textContent = Object.entries(styles as Record<string, any>)
+        .map(([name, def]) => {
+          if (!def?.selectors) return '';
+          const props = Object.entries(def)
+            .filter(([k]) => !k.startsWith('_') && k !== 'selectors')
+            .map(([k, v]) => `  ${k}: ${v};`)
+            .join('\n');
+          return `${def.selectors.join(', ')} {\n${props}\n}`;
+        })
+        .filter(Boolean)
+        .join('\n');
+    }
     document.head.appendChild(el);
     return () => el.remove();
   }, [styles]);
@@ -168,13 +184,16 @@ export function createStyledComponents(comps: any): any {
 // withChainStyles HOC
 // ============================================================================
 
-export function withChainStyles<P extends object>(Component: any, styles: any): any {
+export function withChainStyles<P extends object>(
+  Component: React.ComponentType<P>,
+  styles: any
+): React.FC<P> {
   function WrappedComponent(props: P) {
     const { classMap, styleVars } = useChainStyles(styles);
-    return React.createElement(Component, { ...props, classes: classMap, styleVars });
+    return React.createElement(Component, { ...props, classes: classMap, styleVars } as any);
   }
   WrappedComponent.displayName = `withChainStyles(${Component.displayName || Component.name || 'Component'})`;
-  return WrappedComponent;
+  return WrappedComponent as React.FC<P>;
 }
 
 // ============================================================================

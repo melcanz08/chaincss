@@ -7,7 +7,7 @@ interface LayoutPattern {
   name: string;
   description: string;
   macro: string;
-  required: Record<string, string | number>;
+  required: Record<string, string | number | ((val: string) => boolean)>;
   optional?: string[];
   minMatches?: number;
 }
@@ -17,28 +17,28 @@ const LAYOUT_PATTERNS: LayoutPattern[] = [
     name: 'flex-center',
     description: 'Flexbox centering',
     macro: 'center()',
-    required: { display: 'flex', justifyContent: 'center', alignItems: 'center' },
+    required: { display: 'flex', 'justify-content': 'center', 'align-items': 'center' },
     minMatches: 3,
   },
   {
     name: 'stack-vertical',
     description: 'Vertical stack with centering',
     macro: "stack('vertical center')",
-    required: { display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' },
+    required: { display: 'flex', 'flex-direction': 'column', 'justify-content': 'center', 'align-items': 'center' },
     minMatches: 4,
   },
   {
     name: 'flex-between',
     description: 'Flexbox space-between',
     macro: "stack('between')",
-    required: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+    required: { display: 'flex', 'justify-content': 'space-between', 'align-items': 'center' },
     minMatches: 3,
   },
   {
     name: 'grid-center',
     description: 'Grid centering',
     macro: 'gridCenter()',
-    required: { display: 'grid', placeItems: 'center' },
+    required: { display: 'grid', 'place-items': 'center' },
     minMatches: 2,
   },
   {
@@ -52,21 +52,21 @@ const LAYOUT_PATTERNS: LayoutPattern[] = [
     name: 'truncate-text',
     description: 'Text truncation',
     macro: 'truncate()',
-    required: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+    required: { overflow: 'hidden', 'text-overflow': 'ellipsis', 'white-space': 'nowrap' },
     minMatches: 3,
   },
   {
     name: 'card-layout',
     description: 'Card container',
     macro: 'card()',
-    required: { borderRadius: '12px', overflow: 'hidden' },
+    required: { 'border-radius': '12px', overflow: 'hidden' },
     minMatches: 2,
   },
   {
     name: 'hero-section',
     description: 'Hero section',
     macro: 'hero()',
-    required: { display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', width: '100%' },
+    required: { display: 'flex', 'flex-direction': 'column', 'justify-content': 'center', 'align-items': 'center', width: '100%' },
     minMatches: 4,
   },
   {
@@ -80,28 +80,28 @@ const LAYOUT_PATTERNS: LayoutPattern[] = [
     name: 'glass-effect',
     description: 'Frosted glass',
     macro: 'glass()',
-    required: { backdropFilter: 'blur(16px)' },
+    required: { 'backdrop-filter': 'blur(16px)' },
     minMatches: 1,
   },
     {
     name: 'grid-list',
     description: 'Auto-fit responsive grid',
     macro: 'gridList()',
-    required: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' },
+    required: { display: 'grid', 'grid-template-columns': 'repeat(auto-fit, minmax(280px, 1fr))' },
     minMatches: 2,
   },
   {
     name: 'sidebar-layout',
     description: 'Sidebar + main content',
     macro: 'sidebar()',
-    required: { display: 'grid', minHeight: '100vh' },
+    required: { display: 'grid', 'min-height': '100vh' },
     minMatches: 2,
   },
   {
     name: 'pill-element',
     description: 'Fully rounded pill',
     macro: 'pill()',
-    required: { borderRadius: '9999px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' },
+    required: { 'border-radius': '9999px', display: 'inline-flex', 'align-items': 'center', 'justify-content': 'center' },
     minMatches: 2,
   },
   {
@@ -115,7 +115,7 @@ const LAYOUT_PATTERNS: LayoutPattern[] = [
     name: 'container-responsive',
     description: 'Responsive container',
     macro: 'container()',
-    required: { width: '100%', maxWidth: '1200px', marginLeft: 'auto', marginRight: 'auto' },
+    required: { width: '100%', 'max-width': '1200px', 'margin-left': 'auto', 'margin-right': 'auto' },
     minMatches: 2,
   },
 ];
@@ -127,7 +127,10 @@ function matchPattern(rule: IRRule, pattern: LayoutPattern): { confidence: numbe
   const totalRequired = Object.keys(pattern.required).length;
 
   for (const [prop, expected] of Object.entries(pattern.required)) {
-    if (propMap.get(prop) === String(expected)) {
+    const actualValue = propMap.get(prop);
+        if (typeof expected === 'function'
+          ? (expected as (val: string) => boolean)(actualValue || '')
+          : actualValue === String(expected)) {
       matched++;
       matchedProperties.push(prop);
     }
@@ -153,6 +156,7 @@ export const layoutAnalyzer: AnalysisPass = {
     const patternCounts = new Map<string, string[]>();
 
     for (const rule of ir.rules) {
+      const matchingRule = rule;
       if (rule.isDead) continue;
 
       for (const pattern of LAYOUT_PATTERNS) {
@@ -182,9 +186,10 @@ export const layoutAnalyzer: AnalysisPass = {
     for (const [patternName, selectors] of patternCounts) {
       if (selectors.length >= 2) {
         const pattern = LAYOUT_PATTERNS.find(p => p.name === patternName);
+        // Anchor to the first selector that matched this pattern
         ir.diagnostics.push({
           id: `layout-dup-${patternName}`,
-          nodeId: ir.rules[0]?.id || ir.id,
+          nodeId: selectors[0] || ir.id,
           severity: 'info',
           message: `Layout pattern "${patternName}" found ${selectors.length} times: ${selectors.join(', ')}`,
           suggestion: pattern ? `Consider extracting: ${pattern.macro}` : undefined,

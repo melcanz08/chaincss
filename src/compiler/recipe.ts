@@ -2,7 +2,7 @@
 /**
  * Recipe System - Type-safe component variants
  */
-import { chain } from '../core/style-collector.js';
+// chain() import removed — recipe now returns StyleDefinition directly
 import type { StyleDefinition } from '../core/types.js';
 import { run } from '../core/style-compiler.js';
 
@@ -77,34 +77,41 @@ export function recipe<TVariants extends Record<string, Record<string, any>>>(
       if (variantStyle) stylesToMerge.push(variantStyle);
     }
     for (const cv of compoundStyles) {
-      if (Object.entries(cv.condition).every(([key, value]) => selected[key] === value) && cv.style) {
+      // Only match if all condition keys are explicitly set in the selection.
+      // Skip conditions with undefined values to avoid accidental matching.
+      if (cv.style &&
+          Object.keys(cv.condition).length > 0 &&
+          Object.entries(cv.condition).every(([key, value]) =>
+            value !== undefined && selected[key] === value
+          )) {
         stylesToMerge.push(cv.style);
       }
     }
 
     const merged = mergeStyles(...stylesToMerge);
-    let styleBuilder: any = chain();
-
-    for (const [prop, value] of Object.entries(merged)) {
-      if (prop === 'selectors' || prop === 'hover') continue;
-      if (styleBuilder[prop]) styleBuilder = styleBuilder[prop](value);
+    // Return the merged StyleDefinition directly — no need to rebuild via chain().
+    // The style-collector already processed all properties, shorthands, and macros.
+    // Apply class prefix to match chain().$el() behavior (e.g., 'btn' → '.chain-btn')
+    const classPrefix = 'chain-';
+    if (merged.selectors && merged.selectors.length > 0) {
+      merged.selectors = merged.selectors.map(s => {
+        if (s.startsWith('.') || s.startsWith('#') || s.startsWith('[') || s.startsWith(':') || s === '*') {
+          return s;
+        }
+        return '.' + classPrefix + s;
+      });
     }
-    if (merged.hover) {
-      styleBuilder = styleBuilder.hover();
-      for (const [hoverProp, hoverValue] of Object.entries(merged.hover)) {
-        if (styleBuilder[hoverProp]) styleBuilder = styleBuilder[hoverProp](hoverValue);
-      }
-      styleBuilder = styleBuilder.end();
-    }
-
-    return styleBuilder.$el(...(merged.selectors || []));
+    return merged;
   }
 
   (pick as any).variants = variants;
   (pick as any).defaultVariants = defaultVariants;
   (pick as any).base = baseStyle;
 
+  let _allVariantsCache: Array<Partial<Record<keyof TVariants, any>>> | null = null;
+
   (pick as any).getAllVariants = () => {
+    if (_allVariantsCache) return _allVariantsCache;
     const result: Array<Partial<Record<keyof TVariants, any>>> = [];
     const variantKeys = Object.keys(variants) as (keyof TVariants)[];
     function generate(current: Partial<Record<keyof TVariants, any>>, index: number): void {
@@ -115,6 +122,7 @@ export function recipe<TVariants extends Record<string, Record<string, any>>>(
       }
     }
     generate({}, 0);
+    _allVariantsCache = result;
     return result;
   };
 

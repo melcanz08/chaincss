@@ -1,4 +1,5 @@
-// src/compiler/tokens.ts
+// src/compiler/tokens/tokens.ts
+
 // Types
 export interface TokenColors {
   [key: string]: string | Record<string, string>;
@@ -504,11 +505,14 @@ export class DesignTokens {
   // Generate media queries from breakpoints
   toMediaQueries(): Record<string, string> {
     const queries: Record<string, string> = {};
+    // Merge default + custom flattened tokens so breakpoints from
+    // the default config are available even if not redefined in customTokens.
+    const allTokens = { ...this.defaultFlattened, ...this.customFlattened };
     
-    for (const [name, value] of Object.entries(this.customFlattened)) {
+    for (const [name, value] of Object.entries(allTokens)) {
       if (name.startsWith('breakpoints.')) {
         const breakpointName = name.replace('breakpoints.', '');
-        queries[breakpointName] = value;
+        queries[breakpointName] = String(value);
       }
     }
     

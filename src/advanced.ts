@@ -96,4 +96,4 @@ export { intent, correct, heal, validate as validateValue, getIntent } from './c
 
 // Legacy (deprecated)
 /** @deprecated Use Pipeline from './pipeline/index.js' instead. Will be removed in v3.0. */
-export { PassManager, DEFAULT_PIPELINE } from './compiler/pass-manager.js';
+// PassManager removed in v2.10.9 — use createPipeline() from './compiler/pipeline/unified-pipeline.js'

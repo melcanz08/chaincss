@@ -102,8 +102,13 @@ export function nextId(prefix: string = 'ir'): IRNodeId {
   return prefix + '-' + (idCounter++).toString(36) + '-' + Date.now().toString(36);
 }
 
+let _resetCount = 0;
 export function resetIdCounter(): void {
   idCounter = 0;
+  _resetCount++;
+  if (_resetCount > 1 && typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production' && process.env?.NODE_ENV !== 'test') {
+    console.warn('[ChainCSS] resetIdCounter() called multiple times — possible dual-import of factory.ts. Import from a single canonical path.');
+  }
 }
 
 // ============================================================================

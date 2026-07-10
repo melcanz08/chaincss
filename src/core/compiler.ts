@@ -22,7 +22,7 @@ import type { ChainCSSConfig, CompileResult, StyleDefinition } from './types.js'
 
 // Unified compilation pipeline
 import { compileToCSS, partitionForBuild } from './style-compiler.js';
-import type { StyleObject } from './style-collector.js';
+import type { StyleObject } from './types.js';
 
 // Compiler passes
 import { ChainCSSPrefixer } from '../compiler/prefixer.js';
@@ -40,7 +40,9 @@ import { createIR, parseIR, generateCSS, type StyleIR } from '../style-ir.js';
 // Services (extracted from this class)
 import { ModuleLoader } from '../compiler/services/module-loader.js';
 import { CacheStore } from '../compiler/services/cache-store.js';
+import { CacheManager } from '../compiler/cache/cache-manager.js';
 import { ManifestWriter } from '../compiler/services/manifest-writer.js';
+import { CompilerEvents, createEvent } from '../compiler/services/compiler-events.js';
 import type { CompilerEvent, CompilerEventHandler } from '../compiler/services/compiler-events.js';
 
 // ============================================================================
@@ -58,10 +60,13 @@ export class ChainCSSCompiler {
   // Extracted services
   private loader: ModuleLoader;
   private cache: CacheStore<CompileResult>;
+  private persistentCache: CacheManager;  // File-based cache for cross-session persistence
   private manifestWriter: ManifestWriter;
   
   // Event system
   private eventHandlers: CompilerEventHandler[] = [];
+  public readonly events = new CompilerEvents();
+  private _pipelineTokens: Record<string, any> | null = null;
   
   // Build state
   private accumulatedCSS: string = '';
@@ -92,6 +97,17 @@ export class ChainCSSCompiler {
     // Initialize services
     this.loader = new ModuleLoader();
     this.cache = new CacheStore<CompileResult>(PERFORMANCE.CACHE_MAX_ENTRIES || 500);
+    try {
+      this.persistentCache = new CacheManager('.chaincss-cache', {
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxSize: 100 * 1024 * 1024,
+      autoSave: true,
+    });
+    } catch (e) {
+      // Cache directory might not be writable — continue without persistence
+      this.persistentCache = null as any;
+    }
+
     this.manifestWriter = new ManifestWriter();
 
     // Initialize unified pipeline (enabled by default)
@@ -176,10 +192,17 @@ export class ChainCSSCompiler {
     const hash = this.hashStyleDef(styleDef);
     const cacheKey = `pipeline:${styleId}:${hash}`;
 
-    // Check cache
+    // Check in-memory cache first
     const cached = this.cache.get(cacheKey);
-    if (cached) {
-      return cached;
+    if (cached) return cached;
+    
+    // Check persistent cache (cross-session)
+    if (this.persistentCache?.has(cacheKey)) {
+      const persisted = this.persistentCache.get(cacheKey);
+      if (persisted) {
+        this.cache.set(cacheKey, persisted, hash);  // Warm in-memory cache
+        return persisted;
+      }
     }
 
     const selectors = styleDef.selectors || [];
@@ -282,6 +305,7 @@ export class ChainCSSCompiler {
 
     // Cache
     this.cache.set(cacheKey, result, hash);
+    this.persistentCache?.set(cacheKey, result);  // Persist across sessions
 
     return result;
   }
@@ -297,10 +321,17 @@ export class ChainCSSCompiler {
     const hash = this.hashStyleDef(styleDef);
     const cacheKey = `direct:${styleId}:${hash}`;
 
-    // Check cache
+    // Check in-memory cache first
     const cached = this.cache.get(cacheKey);
-    if (cached) {
-      return cached;
+    if (cached) return cached;
+    
+    // Check persistent cache (cross-session)
+    if (this.persistentCache?.has(cacheKey)) {
+      const persisted = this.persistentCache.get(cacheKey);
+      if (persisted) {
+        this.cache.set(cacheKey, persisted, hash);  // Warm in-memory cache
+        return persisted;
+      }
     }
 
     const selectors = styleDef.selectors || [];
@@ -317,7 +348,7 @@ export class ChainCSSCompiler {
       minify: this.config.output.minify,
       sourceMap: this.config.sourceComments,
       sourceFile: styleId
-    });
+    } as any);
     
     const finalClassName = isGlobalSelector 
       ? '' 
@@ -335,6 +366,7 @@ export class ChainCSSCompiler {
 
     // Cache
     this.cache.set(cacheKey, result, hash);
+    this.persistentCache?.set(cacheKey, result);  // Persist across sessions
 
     return result;
   }
@@ -350,6 +382,7 @@ export class ChainCSSCompiler {
       nestedRules,
       hover,
       themes,
+      dynamic,
       _componentName,
       _generateComponent,
       _framework,
@@ -358,6 +391,12 @@ export class ChainCSSCompiler {
     } = styleDef as any;
 
     const styleObject: StyleObject = { ...properties };
+
+    // Preserve dynamic function definitions so the IR parser can track them.
+    // Without this, chain.dynamic() styles lose their runtime executable logic.
+    if (dynamic) {
+      (styleObject as any).dynamic = dynamic;
+    }
 
     // Restore selectors (they were destructured out of properties)
     if (selectors && Array.isArray(selectors)) {
@@ -398,6 +437,16 @@ export class ChainCSSCompiler {
    */
   public setPipelineEnabled(enabled: boolean): this {
     this.pipelineEnabled = enabled;
+    return this;
+  }
+
+  /**
+   * Replace the current pipeline instance.
+   * Useful for switching presets at runtime (e.g., 'ci' for check command).
+   */
+  public setPipeline(pipeline: Pipeline): this {
+    this.pipeline = pipeline;
+    this.pipelineEnabled = true;
     return this;
   }
 
@@ -630,10 +679,24 @@ export class ChainCSSCompiler {
 
     try {
       const rawExports = await this.loader.import(file);
-      console.log(`[DEBUG] compileOneComponent called for: ${file}`);
-      console.log(`[DEBUG] rawExports keys:`, Object.keys(rawExports || {}));
-      console.log(`[DEBUG] hasDynamic flag:`, hasDynamic);
-      const styles = rawExports.default || rawExports;
+      // Gather styles from both default and named exports.
+      // Avoids dropping named exports when a file mixes export default + export const.
+      const styles: Record<string, any> = {};
+      if (rawExports.default && typeof rawExports.default === 'object' && !rawExports.default.selectors) {
+        Object.assign(styles, rawExports.default);
+      }
+      for (const [key, value] of Object.entries(rawExports)) {
+        if (key !== 'default' && key !== '__esModule' && typeof value === 'object' && value !== null) {
+          styles[key] = value;
+        }
+      }
+      if (rawExports.default && rawExports.default.selectors) {
+        styles['default'] = rawExports.default;
+      }
+      // Fallback: if nothing was collected, use rawExports as-is
+      if (Object.keys(styles).length === 0 && typeof rawExports === 'object') {
+        Object.assign(styles, rawExports);
+      }
       let jsBuffer = this.generateClassFileHeader(file);
       let cssBuffer = '';
 

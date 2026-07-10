@@ -20,16 +20,18 @@ export const atomicExtractor: OptimizationPass = {
   cost: 'moderate',
   requiredFor: ['atomic-css'],
 
-  optimize(ir: StyleIR): OptimizationResult {
+  optimize(ir: StyleIR, context?: any): OptimizationResult {
     // ── Phase 1: Count usage of every property:value pair ──
     const usageMap = new Map<string, { count: number; property: string; value: string | number }>();
 
     for (const rule of ir.rules) {
       if (rule.isDead) continue;
-      // Include pseudo + media scope to prevent base/hover specificity clashes
+      // Derive scope from rule structure.
+      // meta.pseudo and meta.mediaQuery are set by parser/pipeline passes.
+      // Fall back to selector-based heuristic for rules without explicit scope.
       const scope = [
-        rule.meta?.pseudo || 'root',
-        rule.meta?.mediaQuery || 'all'
+        rule.meta?.pseudo || (rule.pseudoClasses.length > 0 ? 'has-pseudo' : 'root'),
+        rule.meta?.mediaQuery || (rule.atRules.length > 0 ? 'has-media' : 'all')
       ].join('::');
       for (const decl of rule.declarations) {
         const key = scope + '::' + decl.property + ':' + String(decl.value);
@@ -51,7 +53,12 @@ export const atomicExtractor: OptimizationPass = {
     const atomicClassMap = new Map<string, string>(); // key → class name
 
     for (const [key, data] of usageMap) {
-      if (data.count < 3) continue;
+      const globalUsage = context?.atomicUsageMap || new Map();
+      const globalCount = globalUsage.get(key) || 0;
+      const totalCount = globalCount + data.count;
+      // Update global map so subsequent files benefit from cross-file deduplication
+      globalUsage.set(key, totalCount);
+      if (totalCount < 3) continue;  // Use global count across all files
 
       // Generate a readable class name
       const className = generateAtomicClassName(data.property, data.value);
@@ -102,7 +109,10 @@ export const atomicExtractor: OptimizationPass = {
           declarationsReplaced++;
 
           // Estimate bytes saved: original declaration (~30 bytes) minus class name (~10 bytes)
-          bytesSaved += 20;
+          // Calculate actual bytes saved: original declaration minus class reference
+          const origBytes = decl.property.length + String(decl.value).length + 4; // prop:value;
+          const refBytes = className.length + 1; // .className
+          bytesSaved += Math.max(0, origBytes - refBytes);
 
           recordHistory(
             decl,
@@ -135,7 +145,7 @@ export const atomicExtractor: OptimizationPass = {
 
     // ── Phase 4: Add atomic utility rules to the IR ──
     // Place them at the beginning so component rules can override if needed
-    ir.rules = [...atomicRules, ...ir.rules];
+    const combinedRules = [...atomicRules, ...ir.rules];
 
     // ── Diagnostics ──
     if (atomicRules.length > 0) {
@@ -150,7 +160,7 @@ export const atomicExtractor: OptimizationPass = {
     }
 
     return {
-      ir,
+      ir: { ...ir, rules: combinedRules },
       savings: {
         rulesEliminated: 0,
         declarationsEliminated: declarationsReplaced,
@@ -182,34 +192,34 @@ function generateAtomicClassName(property: string, value: string | number): stri
     'display': '',
     'position': '',
     'color': 'color-',
-    'backgroundColor': 'bg-',
-    'fontSize': 'text-',
-    'fontWeight': 'font-',
+    'background-color': 'bg-',
+    'font-size': 'text-',
+    'font-weight': 'font-',
     'padding': 'p-',
-    'paddingTop': 'pt-',
-    'paddingRight': 'pr-',
-    'paddingBottom': 'pb-',
-    'paddingLeft': 'pl-',
+    'padding-top': 'pt-',
+    'padding-right': 'pr-',
+    'padding-bottom': 'pb-',
+    'padding-left': 'pl-',
     'margin': 'm-',
-    'marginTop': 'mt-',
-    'marginRight': 'mr-',
-    'marginBottom': 'mb-',
-    'marginLeft': 'ml-',
+    'margin-top': 'mt-',
+    'margin-right': 'mr-',
+    'margin-bottom': 'mb-',
+    'margin-left': 'ml-',
     'width': 'w-',
     'height': 'h-',
-    'borderRadius': 'rounded-',
+    'border-radius': 'rounded-',
     'border': 'border-',
     'opacity': 'opacity-',
-    'zIndex': 'z-',
+    'z-index': 'z-',
     'cursor': 'cursor-',
     'overflow': 'overflow-',
-    'textAlign': 'text-',
-    'justifyContent': 'justify-',
-    'alignItems': 'items-',
+    'text-align': 'text-',
+    'justify-content': 'justify-',
+    'align-items': 'items-',
     'gap': 'gap-',
-    'boxShadow': 'shadow-',
+    'box-shadow': 'shadow-',
     'transition': 'transition-',
-    'flexDirection': 'flex-',
+    'flex-direction': 'flex-',
   };
 
   const prefix = abbreviations[property] || property + '-';
