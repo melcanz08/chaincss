@@ -1,6 +1,6 @@
 {
   "name": "chaincss",
-  "version": "2.11.0",
+  "version": "2.11.1",
   "description": "ChainCSS - The first CSS-in-JS library with true auto-detection mixed mode. Zero runtime by default, dynamic when you need it.",
   "type": "module",
   "main": "./dist/index.js",
@@ -64,7 +64,7 @@
     "build:compiler": "esbuild src/compiler/index.ts --bundle --platform=node --format=esm --outfile=dist/compiler/index.js --packages=external",
     "dev": "tsc -w",
     "prepublishOnly": "npm run build:clean && npm run build:types && node scripts/build.mjs",
-    "test" : "vitest run",
+    "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:verbose": "CHAINCSS_TEST_VERBOSE=1 vitest run",
