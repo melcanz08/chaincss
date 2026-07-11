@@ -203,6 +203,13 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
             if (cn) classMap[name] = cn
           }
           const lines: string[] = ['// Auto-generated', '// DO NOT EDIT', '']
+          let collectedCSS = ''
+          for (const [name, r] of Object.entries(results) as [string, any][]) {
+            if (r?.css) collectedCSS += r.css + '\n'
+          }
+          if (collectedCSS.trim()) {
+            updateCSS(id, collectedCSS)
+          }
           for (const [name, cn] of Object.entries(classMap)) {
             const r = results[name] as any
             if (r?.dynamic && Object.keys(r.dynamic).length) {
@@ -219,6 +226,20 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
       } catch (err) {
         logError(`Transform failed ${path.basename(id)}: ${(err as Error).message}`)
         return null
+      }
+    },
+
+    async buildStart() {
+      if (isProduction) {
+        // In production, configureServer never runs, so we need to build CSS cache here
+        // Clear any dev cache and rebuild from src
+        cssFileCache.clear()
+        _cachedCSS = ''
+        try {
+          await compileAllStyles()
+        } catch (e) {
+          logError(`buildStart failed: ${(e as Error).message}`)
+        }
       }
     },
 
