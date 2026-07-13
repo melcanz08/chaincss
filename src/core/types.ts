@@ -5,6 +5,23 @@
  * These types are for the compiler and never ship to browser
  */
 
+export type MacroHandler = (value: any, catcher: Record<string, any>, useTokens: boolean) => void
+export type MacroMap = Record<string, MacroHandler>
+export type ShorthandMap = Record<string, string>
+
+export interface IntentDefinition {
+  name?: string
+  category?: 'layout' | 'component' | 'semantic' | 'interaction' | string
+  description?: string
+  semantics?: Array<{ category: string; intent: string }>
+  properties?: Record<string, string | number>
+  states?: Record<string, Record<string, string | number>>
+  responsive?: Record<string, Record<string, string | number>>
+  a11y?: string[]
+}
+export type IntentMap = Record<string, IntentDefinition>
+
+
 export interface StyleDefinition {
   selectors: string[];
   hover?: Record<string, string | number>;
@@ -85,12 +102,43 @@ export interface CompileStats {
   totalDuration?: number;
 }
 
-
 export interface TokenContext {
   tokens: Record<string, any>;
   prefix: string;
   transform?: (value: any) => any;
 }
+
+// ============================================================================
+// 🆕 Token Entanglement Types (v3.6)
+// ============================================================================
+export type DerivedMethod =
+  | `mix-white ${number}%`
+  | `mix-black ${number}%`
+  | `lighten ${number}`
+  | `darken ${number}`
+  | `alpha ${number}`
+  | `tint ${number}%`
+  | `shade ${number}%`
+  | `saturate ${number}`
+  | `desaturate ${number}`;
+
+export interface DerivedRelationship {
+  type: 'derived';
+  source: string; // dot path: colors.primary.500
+  target: string;
+  method: DerivedMethod;
+}
+
+export interface ContrastRelationship {
+  type: 'contrast';
+  foreground: string;
+  background: string | string[];
+  target?: number; // default 4.5
+  autoFix?: 'auto' | 'darken' | 'lighten';
+  priority?: number;
+}
+
+export type TokenRelationship = DerivedRelationship | ContrastRelationship;
 
 export interface ChainCSSConfig {
   inputs?: string[];
@@ -108,6 +156,7 @@ export interface ChainCSSConfig {
     prefix?: string;
     transform?: (value: any) => any;
     tokens?: Record<string, any>;
+    relationships?: TokenRelationship[]; 
   };
   
   atomic?: {
@@ -166,11 +215,24 @@ export interface ChainCSSConfig {
   classNameGenerator?: (name: string, options?: any) => string;
   
   plugins?: ChainCSSPlugin[];
-  macros?: Record<string, (value: any) => Record<string, any>>;
   
   minifySelectors?: boolean;
   extractCritical?: boolean;
+  minify?: boolean
+  include?: string[]
+  exclude?: string[]
+  // v3.2 extensibility
+  shorthands?: ShorthandMap
+  macros?: MacroMap
+  intents?: IntentMap
+  allowOverride?: boolean
+  presets?: Array<ChainCSSConfig | ((base: ChainCSSConfig) => ChainCSSConfig | Promise<ChainCSSConfig>)>
+
+  [key: string]: any
 }
+
+export type ChainCSSUserConfig = ChainCSSConfig
+export type { ChainCSSConfig as Config }
 
 export interface ChainCSSPlugin {
   name: string;
@@ -226,6 +288,8 @@ export interface BreakpointConfig {
   query: string;
   priority?: number;
 }
+
+
 
 // ============================================================================
 // Utility Types

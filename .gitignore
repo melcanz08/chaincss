@@ -19,3 +19,7 @@ __tests__/
 benchmarks/node_modules/
 benchmarks/package-lock.json
 .chaincss/
+review.md
+.chaincss-cache/
+benchmarks/results/*.json
+benchmarks/results/*.md

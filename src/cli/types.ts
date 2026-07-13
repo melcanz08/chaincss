@@ -103,3 +103,51 @@ export interface DevOptions {
   config?: string;
   port?: number;
 }
+
+// ============================================================================
+// 🆕 Entanglement + Figma + Create (v3.8) — add, don't replace
+// ============================================================================
+
+export interface EntanglementOptions {
+  input?: string;
+  output?: string;
+  watch?: boolean;
+  figma?: boolean;
+  fix?: boolean | string; // commander passes string when --fix='false'
+  debounceMs?: number;
+  verbose?: boolean;
+}
+
+export interface FigmaInitOptions {
+  repo?: string;
+  fileId?: string;
+  branch?: string;
+  path?: string;
+  yes?: boolean;
+  verbose?: boolean;
+}
+
+export interface CreateOptions {
+  template?: 'minimal' | 'entangled' | 'react' | 'vue';
+  pm?: 'npm' | 'pnpm' | 'yarn' | 'bun';
+  install?: boolean;
+  verbose?: boolean;
+}
+
+export interface AuditOptions {
+  theme?: string;
+  contract?: string;
+  failOn?: string;
+  target?: number;
+  json?: string;
+  strict?: boolean;
+  fix?: boolean;
+  write?: boolean;
+  verbose?: boolean;
+}
+
+export interface CheckOptions {
+  config?: string;
+  verbose?: boolean;
+  fix?: boolean;
+}

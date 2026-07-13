@@ -1,4 +1,4 @@
-// src/plugins/vite.ts — ChainCSS Vite Plugin v2.11.1
+// src/plugins/vite.ts
 // Fixed: tmp extension, stale cache, python edits, F5 mismatch
 
 import type { Plugin, ViteDevServer } from 'vite'
@@ -171,14 +171,16 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
       root = config.root
       base = config.base || '/'
       isProduction = config.mode === 'production'
-      const preset = isProduction ? ENVIRONMENT_PRESETS.production : ENVIRONMENT_PRESETS.development
+      const preset = isProduction ? (ENVIRONMENT_PRESETS as any).production : (ENVIRONMENT_PRESETS as any).development
+      const dc = DEFAULT_CONFIG as any
+      const ps = preset as any
       compiler = new ChainCSSCompiler({
-        ...DEFAULT_CONFIG,
-        ...preset,
-        atomic: { ...DEFAULT_CONFIG.atomic, ...preset.atomic, enabled: atomic },
-        tokens: options.tokens || DEFAULT_CONFIG.tokens,
-        output: { ...DEFAULT_CONFIG.output, minify: options.minify !== undefined ? options.minify : isProduction },
-        breakpoints: options.breakpoints || DEFAULT_CONFIG.breakpoints,
+        ...dc,
+        ...ps,
+        atomic: { ...dc.atomic, ...ps.atomic, enabled: atomic },
+        tokens: options.tokens || dc.tokens,
+        output: { ...dc.output, minify: options.minify !== undefined ? options.minify : isProduction },
+        breakpoints: options.breakpoints || dc.breakpoints,
         verbose, silent
       })
       const envPipeline = createPipeline(isProduction ? 'production' : 'default')

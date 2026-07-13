@@ -1,4 +1,4 @@
-// chaincss/src/compiler/content-addressable-cache.ts
+// chaincss/src/compiler/cache/content-addressable-cache.ts
 
 import crypto from 'crypto';
 import fs from 'fs';

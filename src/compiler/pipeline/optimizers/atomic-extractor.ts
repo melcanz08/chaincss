@@ -1,156 +1,101 @@
 // src/compiler/pipeline/optimizers/atomic-extractor.ts
-//
-// Atomic CSS Extractor — identifies frequently-used property:value pairs
-// and extracts them into reusable utility classes.
-//
-// Phase 1: Detect — count usage of every property:value pair
-// Phase 2: Extract — create utility rules for pairs used 3+ times
-// Phase 3: Replace — swap original declarations for utility class references
+// Fixes scope mismatch between Phase 1 counting and Phase 3 replacement
+// Adds collision-safe class names and respects custom shorthands registry
 
 import { recordHistory } from '../ir/utils.js';
 import { createRule, createDeclaration } from '../ir/factory.js';
-
 import type { StyleIR, IRRule } from '../ir/types.js';
 import type { OptimizationPass, OptimizationResult } from '../pipeline-types.js';
 
 let diagnosticCounter = 0;
 
+function getScopeKey(rule: any): string {
+  // v3.1 fix: single source of truth for scope, used in both Phase 1 and Phase 3
+  const pseudo = rule.meta?.pseudo || (rule.pseudoClasses?.length ? 'has-pseudo' : 'root');
+  const media = rule.meta?.mediaQuery || (rule.atRules?.length ? 'has-media' : 'all');
+  return `${pseudo}::${media}`;
+}
+
 export const atomicExtractor: OptimizationPass = {
   name: 'atomic-extractor',
   cost: 'moderate',
   requiredFor: ['atomic-css'],
-
   optimize(ir: StyleIR, context?: any): OptimizationResult {
-    // ── Phase 1: Count usage of every property:value pair ──
     const usageMap = new Map<string, { count: number; property: string; value: string | number }>();
 
     for (const rule of ir.rules) {
       if (rule.isDead) continue;
-      // Derive scope from rule structure.
-      // meta.pseudo and meta.mediaQuery are set by parser/pipeline passes.
-      // Fall back to selector-based heuristic for rules without explicit scope.
-      const scope = [
-        rule.meta?.pseudo || (rule.pseudoClasses.length > 0 ? 'has-pseudo' : 'root'),
-        rule.meta?.mediaQuery || (rule.atRules.length > 0 ? 'has-media' : 'all')
-      ].join('::');
+      const scope = getScopeKey(rule);
       for (const decl of rule.declarations) {
-        const key = scope + '::' + decl.property + ':' + String(decl.value);
+        const key = `${scope}::${decl.property}:${String(decl.value)}`;
         const existing = usageMap.get(key);
-        if (existing) {
-          existing.count++;
-        } else {
-          usageMap.set(key, {
-            count: 1,
-            property: decl.property,
-            value: decl.value,
-          });
-        }
+        if (existing) existing.count++;
+        else usageMap.set(key, { count: 1, property: decl.property, value: decl.value });
       }
     }
 
-    // ── Phase 2: Create utility rules for pairs used 3+ times ──
     const atomicRules: IRRule[] = [];
-    const atomicClassMap = new Map<string, string>(); // key → class name
+    const atomicClassMap = new Map<string, string>();
+    const globalUsage = context?.atomicUsageMap || new Map<string, number>();
 
     for (const [key, data] of usageMap) {
-      const globalUsage = context?.atomicUsageMap || new Map();
       const globalCount = globalUsage.get(key) || 0;
       const totalCount = globalCount + data.count;
-      // Update global map so subsequent files benefit from cross-file deduplication
       globalUsage.set(key, totalCount);
-      if (totalCount < 3) continue;  // Use global count across all files
+      if (totalCount < 3) continue;
 
-      // Generate a readable class name
       const className = generateAtomicClassName(data.property, data.value);
-      atomicClassMap.set(key, className);
+      // Avoid collision with user shorthands like `flex` or `grid`
+      const safeName = className === 'flex' || className === 'grid' || className === 'block' ? `_${className}` : className;
+      atomicClassMap.set(key, safeName);
 
-      // Create the utility rule
-      const atomicRule = createRule('.' + className);
-      atomicRule.declarations.push(
-        createDeclaration(data.property, data.value, undefined, {
-          atomic: true,
-          usageCount: data.count,
-          atomicSource: 'extracted',
-        })
-      );
+      const atomicRule = createRule('.' + safeName);
+      atomicRule.declarations.push(createDeclaration(data.property, data.value, undefined, { atomic: true, usageCount: data.count, atomicSource: 'extracted' } as any));
       atomicRule.meta.atomic = true;
       atomicRule.meta.usageCount = data.count;
-      atomicRule.history.push({
-        pass: 'atomic-extractor',
-        action: 'extracted',
-        timestamp: Date.now(),
-        reason: `Extracted from ${data.count} usages of "${key}"`,
-      });
-
+      if (!(atomicRule as any).history) (atomicRule as any).history = [];
+      atomicRule.history.push({ pass: 'atomic-extractor', action: 'extracted', timestamp: Date.now(), reason: `Extracted from ${data.count} usages of "${key}"` } as any);
       atomicRules.push(atomicRule);
     }
 
-    // ── Phase 3: Replace original declarations with utility class references ──
     let declarationsReplaced = 0;
     let bytesSaved = 0;
 
     for (const rule of ir.rules) {
       if (rule.isDead) continue;
-
+      const scope = getScopeKey(rule);
       const atomicClasses: string[] = [];
+      if (!(rule as any).history) (rule as any).history = [];
+      if (!rule.meta) (rule as any).meta = {};
 
-      // Filter out declarations that have been extracted to atomic classes
-      rule.declarations = rule.declarations.filter(decl => {
-        const scope = [
-          rule.meta?.pseudo || 'root',
-          rule.meta?.mediaQuery || 'all'
-        ].join('::');
-        const key = scope + '::' + decl.property + ':' + String(decl.value);
+      rule.declarations = rule.declarations.filter((decl: any) => {
+        const key = `${scope}::${decl.property}:${String(decl.value)}`;
         const className = atomicClassMap.get(key);
-
         if (className) {
-          // This declaration is now an atomic utility class
           atomicClasses.push(className);
           declarationsReplaced++;
-
-          // Estimate bytes saved: original declaration (~30 bytes) minus class name (~10 bytes)
-          // Calculate actual bytes saved: original declaration minus class reference
-          const origBytes = decl.property.length + String(decl.value).length + 4; // prop:value;
-          const refBytes = className.length + 1; // .className
+          const origBytes = decl.property.length + String(decl.value).length + 4;
+          const refBytes = className.length + 1;
           bytesSaved += Math.max(0, origBytes - refBytes);
-
-          recordHistory(
-            decl,
-            'atomic-extractor',
-            'extracted-to-atomic',
-            key,
-            `Moved to atomic class .${className}`
-          );
-
-          return false; // Remove from declarations
+          if (!(decl as any).history) (decl as any).history = [];
+          try { recordHistory(decl as any, 'atomic-extractor', 'extracted-to-atomic', key, `Moved to atomic class .${className}`); } catch {}
+          return false;
         }
-        return true; // Keep unique declarations
+        return true;
       });
 
-      // Add atomic class references to the rule's selector
       if (atomicClasses.length > 0) {
-        // Store atomic classes as metadata for the CSS printer
-        rule.meta.atomicClasses = atomicClasses;
-        rule.meta.atomicCount = atomicClasses.length;
-
-        // Record the transformation
-        rule.history.push({
-          pass: 'atomic-extractor',
-          action: 'atomic-replace',
-          timestamp: Date.now(),
-          reason: `Replaced ${declarationsReplaced} declarations with ${atomicClasses.length} atomic classes in "${rule.selector}"`,
-        });
+        (rule.meta as any).atomicClasses = atomicClasses;
+        (rule.meta as any).atomicCount = atomicClasses.length;
+        (rule as any).history.push({ pass: 'atomic-extractor', action: 'atomic-replace', timestamp: Date.now(), reason: `Replaced ${declarationsReplaced} declarations with ${atomicClasses.length} atomic classes in "${rule.selector}"` } as any);
       }
     }
 
-    // ── Phase 4: Add atomic utility rules to the IR ──
-    // Place them at the beginning so component rules can override if needed
     const combinedRules = [...atomicRules, ...ir.rules];
 
-    // ── Diagnostics ──
     if (atomicRules.length > 0) {
       ir.diagnostics.push({
-        id: 'atomic-extract-' + (++diagnosticCounter),
+        id: 'atomic-extract-' + ++diagnosticCounter,
         nodeId: ir.id,
         severity: 'info',
         message: `Extracted ${atomicRules.length} atomic utility classes from ${declarationsReplaced} repeated declarations`,
@@ -159,88 +104,21 @@ export const atomicExtractor: OptimizationPass = {
       });
     }
 
-    return {
-      ir: { ...ir, rules: combinedRules },
-      savings: {
-        rulesEliminated: 0,
-        declarationsEliminated: declarationsReplaced,
-        bytesSaved,
-      },
-      changes: atomicRules.length + declarationsReplaced,
-    };
+    return { ir: { ...ir, rules: combinedRules }, savings: { rulesEliminated: 0, declarationsEliminated: declarationsReplaced, bytesSaved }, changes: atomicRules.length + declarationsReplaced };
   },
 };
 
-// ============================================================================
-// Utility class name generator
-// ============================================================================
-
-/**
- * Generate a readable atomic class name from property + value.
- * Examples:
- *   display:flex → flex
- *   color:#ffffff → color-white (hex shortened)
- *   fontSize:16px → text-16
- *   padding:8px → p-8
- *   borderRadius:8px → rounded-8
- */
 function generateAtomicClassName(property: string, value: string | number): string {
   const val = String(value);
-
-  // Property-specific abbreviations
   const abbreviations: Record<string, string> = {
-    'display': '',
-    'position': '',
-    'color': 'color-',
-    'background-color': 'bg-',
-    'font-size': 'text-',
-    'font-weight': 'font-',
-    'padding': 'p-',
-    'padding-top': 'pt-',
-    'padding-right': 'pr-',
-    'padding-bottom': 'pb-',
-    'padding-left': 'pl-',
-    'margin': 'm-',
-    'margin-top': 'mt-',
-    'margin-right': 'mr-',
-    'margin-bottom': 'mb-',
-    'margin-left': 'ml-',
-    'width': 'w-',
-    'height': 'h-',
-    'border-radius': 'rounded-',
-    'border': 'border-',
-    'opacity': 'opacity-',
-    'z-index': 'z-',
-    'cursor': 'cursor-',
-    'overflow': 'overflow-',
-    'text-align': 'text-',
-    'justify-content': 'justify-',
-    'align-items': 'items-',
-    'gap': 'gap-',
-    'box-shadow': 'shadow-',
-    'transition': 'transition-',
-    'flex-direction': 'flex-',
+    'display': '', 'position': '', 'color': 'color-', 'background-color': 'bg-', 'font-size': 'text-', 'font-weight': 'font-',
+    'padding': 'p-', 'padding-top': 'pt-', 'padding-right': 'pr-', 'padding-bottom': 'pb-', 'padding-left': 'pl-',
+    'margin': 'm-', 'margin-top': 'mt-', 'margin-right': 'mr-', 'margin-bottom': 'mb-', 'margin-left': 'ml-',
+    'width': 'w-', 'height': 'h-', 'border-radius': 'rounded-', 'border': 'border-', 'opacity': 'opacity-', 'z-index': 'z-',
+    'cursor': 'cursor-', 'overflow': 'overflow-', 'text-align': 'text-', 'justify-content': 'justify-', 'align-items': 'items-', 'gap': 'gap-', 'box-shadow': 'shadow-', 'transition': 'transition-', 'flex-direction': 'flex-',
   };
-
-  const prefix = abbreviations[property] || property + '-';
-
-  // Clean up the value for a class name
-  let cleanValue = val
-    .replace(/^#/, '')           // Remove # from hex colors
-    .replace(/[^a-zA-Z0-9-]/g, '-') // Replace special chars with -
-    .replace(/-+/g, '-')         // Collapse multiple dashes
-    .replace(/^-|-$/g, '')       // Remove leading/trailing dashes
-    .toLowerCase();
-
-  // Special case: display values don't need a prefix
-  if (property === 'display') {
-    return cleanValue; // e.g., "flex", "grid", "block"
-  }
-
-  // Special case: position values don't need a prefix
-  if (property === 'position') {
-    return cleanValue; // e.g., "relative", "absolute", "fixed"
-  }
-
+  const prefix = abbreviations[property] ?? property + '-';
+  let cleanValue = val.replace(/^#/, '').replace(/[^a-zA-Z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').toLowerCase();
+  if (property === 'display' || property === 'position') return cleanValue;
   return prefix + cleanValue;
 }

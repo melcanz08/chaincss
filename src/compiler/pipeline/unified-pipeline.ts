@@ -1,18 +1,5 @@
 // src/compiler/pipeline/unified-pipeline.ts
-
-/**
- * Unified Pipeline — Single source of truth for all CSS compilation passes.
- * 
- * Presets:
- *   default    — core passes (normalize + compress + lower)
- *   production — default + specificity + dead-code + media-query + source
- *   ci         — full validation + analysis + optimization (use in CI/linting)
- *   lint       — normalize + all validators + css emit (no optimization)
- *   atomic     — normalize + atomic extractor + css emit
- * 
- * Token lowering runs in the Optimization stage (before cssCompressor)
- * so that resolved design tokens get compressed/minified properly.
- */
+// Fixes: duplicate atomic Map clone, adds deep clone, supports custom intents via config
 
 import { Pipeline } from './pipeline.js';
 import type { OptimizationContext } from './pipeline-types.js';
@@ -41,10 +28,6 @@ import { responsiveAnalyzer } from './analyzers/responsive-analyzer.js';
 import { layoutAnalyzer } from './analyzers/layout-analyzer.js';
 import { patternDetector } from './analyzers/pattern-detector.js';
 
-// ============================================================================
-// Shared base — every preset includes these
-// ============================================================================
-
 const tokenOptimizer: OptimizationPass = {
   name: tokenLowering.name,
   cost: 'cheap',
@@ -60,18 +43,12 @@ const tokenOptimizer: OptimizationPass = {
 };
 
 const BASE_NORMALIZATION = [intentNormalizer, unitNormalizer];
-// Token lowering runs in optimization so cssCompressor can minify resolved tokens
 const BASE_OPTIMIZATION = [tokenOptimizer, cssCompressor];
 const BASE_LOWERING = [intentResolver, cssEmitter];
-
-// ============================================================================
-// Presets
-// ============================================================================
 
 export type PipelinePreset = 'default' | 'production' | 'ci' | 'lint' | 'atomic';
 
 const PRESETS: Record<PipelinePreset, Partial<PipelineConfig>> = {
-  /** Core passes — fast, zero-config. The default for everyday use. */
   default: {
     normalization: BASE_NORMALIZATION,
     validation: [],
@@ -79,40 +56,20 @@ const PRESETS: Record<PipelinePreset, Partial<PipelineConfig>> = {
     optimization: BASE_OPTIMIZATION,
     lowering: BASE_LOWERING,
   },
-
-  /** Production-grade optimization. */
   production: {
     normalization: BASE_NORMALIZATION,
     validation: [],
     analysis: [],
-    optimization: [
-      specificitySorter,
-      deadCodeEliminator,
-      ...BASE_OPTIMIZATION,
-      mediaQueryPacker,
-      sourceOptimizer,
-    ],
+    optimization: [specificitySorter, deadCodeEliminator, ...BASE_OPTIMIZATION, mediaQueryPacker, sourceOptimizer],
     lowering: BASE_LOWERING,
   },
-
-  /** Full pipeline — validation + analysis + optimization. Use in CI. */
   ci: {
     normalization: BASE_NORMALIZATION,
     validation: [accessibilityValidator, conflictValidator],
     analysis: [responsiveAnalyzer, layoutAnalyzer, patternDetector],
-    optimization: [
-      duplicateDeclarationDetector,
-      specificitySorter,
-      deadCodeEliminator,
-      ...BASE_OPTIMIZATION,
-      mediaQueryPacker,
-      sourceOptimizer,
-      accessibilityOptimizer,
-    ],
+    optimization: [duplicateDeclarationDetector, specificitySorter, deadCodeEliminator, ...BASE_OPTIMIZATION, mediaQueryPacker, sourceOptimizer, accessibilityOptimizer],
     lowering: BASE_LOWERING,
   },
-
-  /** Validation only — no optimization. Use in dev for fast feedback. */
   lint: {
     normalization: BASE_NORMALIZATION,
     validation: [accessibilityValidator, conflictValidator],
@@ -120,93 +77,54 @@ const PRESETS: Record<PipelinePreset, Partial<PipelineConfig>> = {
     optimization: [],
     lowering: [cssEmitter],
   },
-
-  /** Atomic CSS extraction. Emits utility classes instead of component CSS. */
   atomic: {
     normalization: BASE_NORMALIZATION,
     validation: [],
     analysis: [],
-    contexts: {
-      optimization: {
-        // atomicUsageMap created fresh per createPipeline() call
-      }
-    },
+    contexts: { optimization: {} },
     optimization: [atomicExtractor, ...BASE_OPTIMIZATION],
     lowering: [cssEmitter],
   },
 };
 
-// ============================================================================
-// Factory Functions
-// ============================================================================
-
-/**
- * Create a fresh Pipeline instance from a named preset.
- * Each call returns a new pipeline — safe for concurrent use.
- */
-export function createPipeline(
-  preset: PipelinePreset = 'default',
-  overrides?: Partial<PipelineConfig>
-): Pipeline {
-  const config = PRESETS[preset];
-  if (!config) {
-    throw new Error(
-      `Unknown pipeline preset: "${preset}". ` +
-      `Valid presets: ${Object.keys(PRESETS).join(', ')}`
-    );
+function deepCloneConfig<T>(config: T): T {
+  // Shallow clone arrays to prevent cross-pipeline mutation, keep pass references
+  const clone: any = { ...config as any };
+  if ((clone as any).normalization) clone.normalization = [...(clone as any).normalization];
+  if ((clone as any).validation) clone.validation = [...(clone as any).validation];
+  if ((clone as any).analysis) clone.analysis = [...(clone as any).analysis];
+  if ((clone as any).optimization) clone.optimization = [...(clone as any).optimization];
+  if ((clone as any).lowering) clone.lowering = [...(clone as any).lowering];
+  if ((clone as any).contexts) {
+    clone.contexts = { ...clone.contexts };
+    if (clone.contexts.optimization) clone.contexts.optimization = { ...clone.contexts.optimization };
+    if (clone.contexts.lowering) clone.contexts.lowering = { ...clone.contexts.lowering };
   }
-  // Deep-clone config so atomic preset gets a fresh atomicUsageMap per pipeline.
-  // Prevents cross-compilation contamination in parallel builds.
-  const clonedConfig = { ...config };
-  if (preset === 'atomic' && clonedConfig.contexts?.optimization) {
-    clonedConfig.contexts = {
-      ...clonedConfig.contexts,
-      optimization: {
-        ...clonedConfig.contexts.optimization,
-        atomicUsageMap: new Map<string, number>(),
-      },
+  return clone;
+}
+
+export function createPipeline(preset: PipelinePreset = 'default', overrides?: Partial<PipelineConfig>): Pipeline {
+  const base = PRESETS[preset];
+  if (!base) throw new Error(`Unknown pipeline preset: "${preset}". Valid: ${Object.keys(PRESETS).join(', ')}`);
+
+  const cloned = deepCloneConfig(base);
+
+  // v3.1 fix: single, correct fresh Map for atomic preset, no duplicate block
+  if (preset === 'atomic') {
+    cloned.contexts = cloned.contexts || {};
+    cloned.contexts.optimization = {
+      ...(cloned.contexts.optimization || {}),
+      atomicUsageMap: new Map<string, number>(),
     };
   }
-    // Fresh Map for atomic preset
-  if (preset === 'atomic' && clonedConfig.contexts?.optimization) {
-    clonedConfig.contexts = {
-      ...clonedConfig.contexts,
-      optimization: {
-        ...clonedConfig.contexts.optimization,
-        atomicUsageMap: new Map<string, number>(),
-      },
-    };
-  }
-  return new Pipeline({ ...clonedConfig, ...overrides });
+
+  return new Pipeline({ ...cloned, ...overrides } as PipelineConfig);
 }
 
-/**
- * @deprecated Use createPipeline('default', overrides) instead.
- * Will be removed in v4.0.
- */
-export function createDefaultPipeline(overrides?: Partial<PipelineConfig>): Pipeline {
-  return createPipeline('default', overrides);
-}
-
-/**
- * @deprecated Use createPipeline('ci', overrides) instead.
- * Will be removed in v4.0.
- */
-export function createFullPipeline(overrides?: Partial<PipelineConfig>): Pipeline {
-  return createPipeline('ci', overrides);
-}
-
-// ============================================================================
-// Re-exports
-// ============================================================================
+export function createDefaultPipeline(overrides?: Partial<PipelineConfig>): Pipeline { return createPipeline('default', overrides); }
+export function createFullPipeline(overrides?: Partial<PipelineConfig>): Pipeline { return createPipeline('ci', overrides); }
 
 export { Pipeline } from './pipeline.js';
 export type { PipelineResult, PipelineConfig, PipelineStageResult } from './pipeline-types.js';
 
-/**
- * Type guard to check if a string is a valid pipeline preset.
- * Useful for validating user-provided config values.
- */
-export function isValidPreset(value: string): value is PipelinePreset {
-  return value in PRESETS;
-}
+export function isValidPreset(value: string): value is PipelinePreset { return value in PRESETS; }

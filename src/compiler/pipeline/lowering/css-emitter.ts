@@ -1,4 +1,5 @@
 // src/compiler/pipeline/lowering/css-emitter.ts
+// Fixes source comment injection for nested at-rules and improves node counting
 
 import type { StyleIR } from '../ir/types.js';
 import type { LoweringPass, LoweringResult, LoweringContext } from '../pipeline-types.js';
@@ -8,41 +9,48 @@ export const cssEmitter: LoweringPass = {
   name: 'css-emitter',
 
   generate(ir: StyleIR, context: LoweringContext): LoweringResult {
-    const minify = context.minify || false;
-    const sourceMap = context.sourceMap || false;
+    const minify = !!context.minify;
+    const sourceMap = !!context.sourceMap;
 
-    let css: string;
+    let css = generateCSS(ir, { minify });
 
     if (sourceMap && !minify) {
-      // Generate CSS once, then inject source comments before each rule's selector.
-      // Single generateCSS call instead of O(n) — significant for large projects.
-      css = generateCSS(ir, { minify });
-      const rules = ir.rules.filter(r => !r.isDead && r.source?.file);
-      if (rules.length > 0) {
-        const lines = css.split('\n');
-        const result: string[] = [];
-        let ruleIdx = 0;
-        for (const line of lines) {
-          // Insert source comment before lines that start a new rule (non-indented, contains {)
-          if (ruleIdx < rules.length && /^[^\s].*\{/.test(line)) {
-            result.push(`/* source: ${rules[ruleIdx].source!.file} */`);
-            ruleIdx++;
+      // v3.2 fix: track real rule order from IR, not from generated string regex
+      // This avoids breaking when generateCSS emits @media or @keyframes blocks
+      const liveRules = ir.rules.filter(r => !r.isDead && r.source?.file);
+      if (liveRules.length > 0 && css.includes('{')) {
+        // Build a map of selector -> source file from IR for more robust injection
+        // We still inject comments, but we do it by walking the IR in order and
+        // inserting before the corresponding selector in the CSS output.
+        let injectedCss = css;
+        let offset = 0;
+        for (const rule of liveRules) {
+          const selector = rule.selector;
+          if (!selector) continue;
+          // Find selector in CSS output after current offset
+          const idx = injectedCss.indexOf(selector, offset);
+          if (idx !== -1) {
+            const comment = `/* source: ${rule.source!.file} */\n`;
+            injectedCss = injectedCss.slice(0, idx) + comment + injectedCss.slice(idx);
+            offset = idx + comment.length + selector.length;
           }
-          result.push(line);
         }
-        css = result.join('\n');
+        css = injectedCss;
       }
-    } else {
-      css = generateCSS(ir, { minify });
     }
+
+    // v3.2: count includes atRules and pseudoClasses for accurate metrics
+    const generatedNodes = ir.rules.filter(r => !r.isDead).reduce((sum, r) => {
+      const atRuleCount = (r as any).atRules?.length || 0;
+      const pseudoCount = r.pseudoClasses?.filter((p: any) => p.declarations?.length > 0).length || 0;
+      return sum + 1 + atRuleCount + pseudoCount;
+    }, 0);
 
     return {
       ir,
       generatedOutput: css.trim(),
-      // Count actual CSS rules: each pseudo-class generates an additional selector
-      generatedNodes: ir.rules
-        .filter(r => !r.isDead)
-        .reduce((sum, r) => sum + 1 + r.pseudoClasses.filter(p => p.declarations.length > 0).length, 0),
+      generatedNodes,
     };
   },
 };
+

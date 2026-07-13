@@ -1,4 +1,5 @@
 // src/compiler/pipeline/ir/parser.ts
+
 /** Parse StyleDefinition objects into the IR. */
 
 import type { StyleDefinition } from '../../../core/types.js';

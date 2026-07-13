@@ -1,5 +1,4 @@
-// src/cli/index.ts
-
+// src/cli/index.ts —  with create + figma + entanglement
 import { Command } from 'commander';
 import { readFileSync, existsSync, writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -11,246 +10,47 @@ import { timelineCommand } from './commands/timeline.js';
 import { devCommand } from './commands/dev.js';
 import { cacheCommand } from './commands/cache.js';
 import { checkCommand } from './commands/check.js';
-
-// ============================================================================
-// Path Resolution
-// ============================================================================
+import { auditCommand } from './commands/audit.js';
+import { entanglementCommand } from './commands/entanglement.command.js';
+import { figmaInitCommand } from './commands/figma.js';
+import { createCommand } from './commands/create.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-const findPackageJson = (startDir: string): string => {
-  let currentDir = startDir;
-  while (currentDir !== path.parse(currentDir).root) {
-    const pkgPath = path.join(currentDir, 'package.json');
-    if (existsSync(pkgPath)) return pkgPath;
-    currentDir = path.dirname(currentDir);
-  }
-  throw new Error('Could not find package.json');
-};
-
-const packageJsonPath = findPackageJson(__dirname);
-const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
-
-// ============================================================================
-// Error Handling
-// ============================================================================
-
-const handleError = (error: unknown, command: string): void => {
-  console.error(chalk.red(`\n❌ Error running "${command}":`));
-  if (error instanceof Error) {
-    console.error(chalk.red(`   ${error.message}`));
-    if (process.env.DEBUG) console.error(error.stack);
-  } else {
-    console.error(chalk.red(`   ${String(error)}`));
-  }
-  process.exit(1);
-};
-
-// ============================================================================
-// CLI Setup
-// ============================================================================
+const findPkg = (s:string)=>{ let c=s; while(c!==path.parse(c).root){ const p=path.join(c,'package.json'); if(existsSync(p)) return p; c=path.dirname(c)} throw new Error('No pkg') }
+const pkg = JSON.parse(readFileSync(findPkg(__dirname),'utf8'));
+const err = (e:unknown, cmd:string)=>{ console.error(chalk.red(`\n❌ ${cmd}:`), e instanceof Error?e.message:String(e)); if(process.env.DEBUG && e instanceof Error) console.error(e.stack); process.exit(1) }
 
 const program = new Command();
+program.name('chaincss').description('ChainCSS - Entangled CSS Framework').version(pkg.version,'-V, --version').helpOption('-h, --help','Help');
 
-program
-  .name('chaincss')
-  .description('ChainCSS - Zero-runtime CSS-in-JS Compiler')
-  .version(packageJson.version, '-V, --version')
-  .usage('[command] [options]')
-  .helpOption('-h, --help', 'Display help for command');
+// init
+program.command('init').description('Init config').option('-f, --force','Overwrite').action(async o=>{ try{ const p='chaincss.config.js'; if(existsSync(p)&&!o.force){ console.log(chalk.yellow('Config file already exists. Use --force to overwrite.')); return } const cfg=`import { defineConfig } from 'chaincss'\nexport default defineConfig({\n  inputs: ['src/**/*.chain.{ts,tsx}'],\n  output: { cssFile: 'dist/styles.css' },\n  atomic: { enabled: true },\n  tokens: { relationships: [{ type: 'derived', source: 'colors.primary.500', target: 'colors.primary.100', method: 'mix-white 80%' }, { type: 'contrast', foreground: 'colors.text.onPrimary', background: 'colors.primary.500', target: 4.5, autoFix: 'auto' }] }\n})\n`; writeFileSync(p,cfg); console.log(chalk.green('✓ Created chaincss.config.js')) }catch(e){err(e,'init')} });
 
-// ============================================================================
-// Init Command
-// ============================================================================
+// create — NEW
+const create = program.command('create').description('Create new app');
+create.command('app [name]').description('Create new ChainCSS app').option('-t, --template <t>','minimal|entangled|react','entangled').option('--pm <pm>','npm|pnpm|yarn|bun','npm').option('--no-install','Skip install').option('-v, --verbose','Verbose').action(async (name,o)=>{ try{ await createCommand(name,{template:o.template,pm:o.pm,install:o.install!==false,verbose:o.verbose}) }catch(e){err(e,'create app')} });
 
-program
-  .command('init')
-  .description('Initialize ChainCSS configuration file')
-  .option('-f, --force', 'Overwrite existing config file')
-  .action(async (options) => {
-    try {
-      const configPath = 'chaincss.config.js';
-      if (existsSync(configPath) && !options.force) {
-        console.log(chalk.yellow('Config file already exists. Use --force to overwrite.'));
-        return;
-      }
+// build etc
+program.command('build').option('-c, --config <p>','Glob').option('-v, --verbose','V').option('-w, --watch','Watch').option('--minify','Minify').option('--atomic','Atomic').description('Build').action(async o=>{ try{ await buildCommand(o)}catch(e){err(e,'build')} });
+program.command('watch').option('-c, --config <p>','Glob').option('-v, --verbose','V').description('Watch').action(async o=>{ try{ await buildCommand({...o,watch:true}) }catch(e){err(e,'watch')} });
+program.command('timeline').argument('<action>','list,diff,export,clear').option('-s, --snapshot1 <id>','s1').option('--snapshot2 <id>','s2').option('-o, --output <p>','out').description('Timeline').action(async (a,o)=>{ await timelineCommand(a,o) });
+program.command('dev').option('-c, --config <p>','Config').option('-p, --port <port>','Port','3000').description('Dev').action(async o=>{ try{ await devCommand({config:o.config,port:parseInt(o.port)}) }catch(e){ console.error(chalk.red('Dev failed'),(e as Error).message); process.exit(1)} });
+program.command('cache').argument('<action>','clear,stats,prune').option('-v, --verbose','V').description('Cache').action(async (a,o)=>{ await cacheCommand(a,o) });
+program.command('check').option('-c, --config <p>','Glob').option('-v, --verbose','V').option('--fix','Fix').description('Check').action(async o=>{ try{ await checkCommand(o)}catch(e){err(e,'check')} });
+program.command('audit').option('--theme <p>','Tokens').option('--contract <p>','Contract').option('--fail-on <l>','AA|AAA','AA').option('--target <r>','Ratio','4.5').option('--json <p>','JSON').option('--strict','Strict').option('--fix','Fix').option('--write','Write').option('-v, --verbose','V').description('Audit WCAG').action(async o=>{ try{ await auditCommand({theme:o.theme,contract:o.contract,failOn:o.failOn,target:parseFloat(o.target),json:o.json,strict:o.strict,fix:o.fix,write:o.write,verbose:o.verbose}) }catch(e){err(e,'audit')} });
+program.command('entanglement').alias('entangle').option('-i, --input <p>','Input','tokens.json').option('-o, --output <p>','Output').option('-w, --watch','Watch').option('--figma','Figma format').option('--fix','Fix','true').option('--debounce <ms>','Debounce','150').option('-v, --verbose','V').description('Entanglement engine').action(async o=>{ try{ await entanglementCommand({input:o.input,output:o.output,watch:o.watch,figma:o.figma,fix:o.fix!=='false',debounceMs:parseInt(o.debounce),verbose:o.verbose}) }catch(e){err(e,'entanglement')} });
 
-      const config = `export default {
-  inputs: ['src/**/*.chain.{js,ts}', 'src/**/*.tsx'],
-  output: {
-    cssFile: 'global.css',
-    classMapFile: 'style',
-    minify: false,
-    generateGlobalCSS: true
-  },
-  atomic: {
-    enabled: false,
-    naming: 'readable',
-    mode: 'build'
-  },
-  verbose: true
-};`;
-      writeFileSync(configPath, config);
-      console.log(chalk.green('✓ Created chaincss.config.js with Object-based output.'));
-    } catch (error) {
-      handleError(error, 'init');
-    }
-  });
-
-// ============================================================================
-// Build Command — delegates to commands/build.ts
-// ============================================================================
-
-program
-  .command('build')
-  .description('Compile ChainCSS styles to CSS')
-  .option('-c, --config <pattern>', 'Glob pattern for input files')
-  .option('-v, --verbose', 'Verbose output')
-  .option('-w, --watch', 'Watch for changes and recompile')
-  .option('--minify', 'Minify output CSS')
-  .option('--atomic', 'Enable atomic CSS extraction')
-  .action(async (opts) => {
-    try {
-      await buildCommand({
-        config: opts.config,
-        verbose: opts.verbose,
-        watch: opts.watch,
-        minify: opts.minify,
-        atomic: opts.atomic,
-      });
-    } catch (error) {
-      handleError(error, 'build');
-    }
-  });
-
-// ============================================================================
-// Watch Command — delegates to commands/build.ts with watch: true
-// ============================================================================
-
-program
-  .command('watch')
-  .description('Watch and automatically recompile styles')
-  .option('-c, --config <pattern>', 'Glob pattern for input files')
-  .option('-v, --verbose', 'Verbose output')
-  .action(async (opts) => {
-    try {
-      await buildCommand({
-        config: opts.config,
-        verbose: opts.verbose,
-        watch: true,
-      });
-    } catch (error) {
-      handleError(error, 'watch');
-    }
-  });
-
-// ============================================================================
-// Timeline Command
-// ============================================================================
-
-program
-  .command('timeline')
-  .description('Manage style timeline')
-  .argument('<action>', 'Action: list, diff, export, clear')
-  .option('-s, --snapshot1 <id>', 'First snapshot ID or selector for diff')
-  .option('--snapshot2 <id>', 'Second snapshot ID or selector for diff')
-  .option('-o, --output <path>', 'Output file for export')
-  .action(async (action, options) => {
-    await timelineCommand(action, options);
-  });
-
-// ============================================================================
-// Dev Command
-// ============================================================================
-
-program
-  .command('dev')
-  .description('Start development server with live reload')
-  .option('-c, --config <path>', 'Path to config file')
-  .option('-p, --port <port>', 'Port to use', '3000')
-  .action(async (options) => {
-    try {
-      await devCommand({
-        config: options.config,
-        port: parseInt(options.port)
-      });
-    } catch (err) {
-      console.error(chalk.red('Dev server failed:'), (err as Error).message);
-      process.exit(1);
-    }
-  });
-
-
-// ============================================================================
-// Cache Command
-// ============================================================================
-
-program
-  .command('cache')
-  .description('Manage persistent cache')
-  .argument('<action>', 'Action: clear, stats, prune')
-  .option('-v, --verbose', 'Verbose output')
-  .action(async (action, options) => {
-    await cacheCommand(action, options);
-  });
-
-// ============================================================================
-// Check Command
-// ============================================================================
-
-program
-  .command('check')
-  .description('Audit styles for accessibility, typos, and design patterns')
-  .option('-c, --config <pattern>', 'Glob pattern for input files')
-  .option('-v, --verbose', 'Verbose output')
-  .option('--fix', 'Auto-fix issues where possible')
-  .action(async (opts) => {
-    try {
-      await checkCommand({
-        config: opts.config,
-        verbose: opts.verbose,
-        fix: opts.fix,
-      });
-    } catch (error) {
-      handleError(error, 'check');
-    }
-  });
-
-// ============================================================================
-// Help and Examples
-// ============================================================================
+const figma = program.command('figma').description('Figma integration');
+figma.command('init').option('--repo <org/repo>','GitHub repo').option('--fileId <id>','Figma File ID').option('--branch <b>','Branch','main').option('--path <p>','Tokens path','tokens.json').option('-y, --yes','Skip prompts').option('-v, --verbose','Verbose').description('Init Figma sync').action(async o=>{ try{ await figmaInitCommand({repo:o.repo,fileId:o.fileId,branch:o.branch,path:o.path,yes:o.yes,verbose:o.verbose}) }catch(e){err(e,'figma init')} });
 
 program.on('--help', () => {
-  console.log('');
-  console.log(chalk.cyan('Examples:'));
-  console.log(chalk.gray('  # Initialize a new project'));
-  console.log('  $ chaincss init');
-  console.log('');
-  console.log(chalk.gray('  # Build all styles'));
-  console.log('  $ chaincss build -c "src/**/*.chain.js"');
-  console.log('');
-  console.log(chalk.gray('  # Watch for changes'));
-  console.log('  $ chaincss watch -c "src/**/*.chain.js"');
-  console.log('');
-  console.log(chalk.gray('  # Audit styles for issues'));
-  console.log('  $ chaincss check');
-  console.log('');
-  console.log(chalk.gray('  # Auto-fix issues'));
-  console.log('  $ chaincss check --fix');
-  console.log('');
-  console.log(chalk.cyan('Documentation:'));
-  console.log('  https://github.com/melcanz08/chaincss');
-  console.log('');
+  console.log(''); console.log(chalk.cyan('Examples:'));
+  console.log(chalk.gray('  # Initialize config')); console.log('  $ chaincss init'); console.log('');
+  console.log(chalk.gray('  # Build styles')); console.log('  $ chaincss build'); console.log('');
+  console.log(chalk.gray('  # Audit contrast')); console.log('  $ chaincss audit'); console.log('');
+  console.log(chalk.gray('  # Audit with auto-fix suggestions')); console.log('  $ chaincss audit --fix'); console.log('');
 });
-
-// ============================================================================
-// Parse Arguments
-// ============================================================================
-
-if (process.argv.length === 2) {
-  program.outputHelp();
-  process.exit(0);
-}
-
+if(process.argv.length===2){ program.outputHelp(); process.exit(0) }
 program.parse(process.argv);
+

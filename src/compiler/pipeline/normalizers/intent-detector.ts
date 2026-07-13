@@ -1,16 +1,8 @@
 // src/compiler/pipeline/normalizers/intent-detector.ts
-//
-// Intent engine — corrects common CSS mistakes (typos, wrong values),
-// heals entire style objects, and validates property/value pairs.
-//
-// Data extracted to:
-//   intent-data.ts     — semantic intents, value corrections, known properties
-//   layout-macros.ts   — layout macro definitions and resolvers
+// Adds custom shorthands/macros/intents awareness and safer cache invalidation
 
 import type { CorrectionResult, HealMode, HealResult, IntentContext } from '../../../core/types.js';
 import { detectIfPatterns, emitCSSIf } from '../lowering/css-if-lowering.js';
-
-// Re-export types for backward compatibility
 export type { CorrectionResult, HealMode, HealResult, IntentContext };
 
 import {
@@ -31,56 +23,51 @@ import {
   autoContrast,
 } from './layout-macros.js';
 
-// Split cache: separate keys for property corrections vs value corrections
 const correctionCache = new Map<string, CorrectionResult | null>();
+let customKeys = new Set<string>();
 
-// ============================================================================
-// Core Intent Object
-// ============================================================================
+export function registerCustomIntentKeys(keys: string[]) {
+  for (const k of keys) customKeys.add(k);
+  correctionCache.clear();
+}
+export function clearCustomIntentKeys() {
+  customKeys.clear();
+  correctionCache.clear();
+}
+export function invalidateIntentCache() { correctionCache.clear(); }
 
 export const intent = {
   correct(property: string, value: string, context?: IntentContext): CorrectionResult | null {
-    // ── Step 1: Property name correction FIRST ──
-    // Run before semantic/value checks so misspelled properties aren't
-    // short-circuited by a value matching a semantic intent pattern.
+    // v3.2: never correct user-defined keys — they are intentional
+    if (customKeys.has(property)) return null;
+
     const normalizedProp = property.toLowerCase();
     const pc = findClosestProperty(property);
 
     if (pc && pc !== normalizedProp) {
+      if (customKeys.has(pc)) return null; // don't correct to a custom key either
       const cacheKey = `prop-err:${normalizedProp}`;
       const cached = correctionCache.get(cacheKey);
       if (cached !== undefined) return cached;
-
       const d = levenshtein(normalizedProp, pc);
       const result: CorrectionResult = {
-        original: property,
-        property,
-        corrected: pc,
-        defaults: {},
+        original: property, property, corrected: pc, defaults: {},
         confidence: Math.max(0, 1 - d / Math.max(property.length, pc.length)),
         intent: 'property-correction',
         explanation: `Unknown property "${property}". Did you mean "${pc}"?`
       };
-
       correctionCache.set(cacheKey, result);
       return result;
     }
 
-    // ── Step 2: Value/intent checks for valid properties ──
     const cacheKey = `val-err:${property}:${value}`;
     const cached = correctionCache.get(cacheKey);
     if (cached !== undefined) return cached;
 
     const ctx = { property, value, ...context };
-
-    // Semantic intent detection
     const si = detectIntent(value, ctx);
-    if (si) {
-      correctionCache.set(cacheKey, si);
-      return si;
-    }
+    if (si) { correctionCache.set(cacheKey, si); return si; }
 
-    // Value correction table
     if (VALUE_CORRECTIONS[property]) {
       const c = VALUE_CORRECTIONS[property].find(c => c.wrong === value.toLowerCase());
       if (c) {
@@ -95,7 +82,6 @@ export const intent = {
       }
     }
 
-    // Cache the null result too — don't recompute known-good values
     correctionCache.set(cacheKey, null);
     return null;
   },
@@ -103,10 +89,13 @@ export const intent = {
   heal(styles: Record<string, any>, mode: HealMode = 'smart', context?: IntentContext): HealResult {
     const corrections: CorrectionResult[] = [], warnings: string[] = [], fixed: Record<string, any> = {};
     for (const [prop, value] of Object.entries(styles)) {
-      if (prop.startsWith('_') || prop === 'selectors') { fixed[prop] = value; continue; }
-      if (typeof value === 'object' && value !== null && prop === 'hover') {
-        const hr = this.heal(value as Record<string, any>, mode, { ...context, property: prop });
-        fixed[prop] = hr.fixed; corrections.push(...hr.corrections); warnings.push(...hr.warnings); continue;
+      if (prop.startsWith('_') || prop === 'selectors' || customKeys.has(prop)) { fixed[prop] = value; continue; }
+      // v3.2: handle all nested pseudo/state objects, not just hover
+      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        if (['hover','focus','active','focus-visible','disabled','before','after'].includes(prop) || prop.startsWith(':') || prop.startsWith('&')) {
+          const hr = this.heal(value as Record<string, any>, mode, { ...context, property: prop });
+          fixed[prop] = hr.fixed; corrections.push(...hr.corrections); warnings.push(...hr.warnings); continue;
+        }
       }
       if (typeof value !== 'string' && typeof value !== 'number') { fixed[prop] = value; continue; }
       const sv = String(value), corr = this.correct(prop, sv, { ...context, property: prop, value: sv });
@@ -120,71 +109,47 @@ export const intent = {
     return { fixed, corrections, warnings, mode };
   },
 
-  getIntent(value: string, ctx?: IntentContext): string | null {
-    const r = detectIntent(value, ctx);
-    return r?.intent || null;
-  },
+  getIntent(value: string, ctx?: IntentContext): string | null { const r = detectIntent(value, ctx); return r?.intent || null; },
 
   validate(property: string, value: string): { valid: boolean; suggestion?: string } {
+    if (customKeys.has(property)) return { valid: true };
     if (VALUE_CORRECTIONS[property]) {
       const c = VALUE_CORRECTIONS[property].find(c => c.wrong === value.toLowerCase());
       if (c) return c.confidence < 1 ? { valid: false, suggestion: c.correct } : { valid: true };
     }
     if (!KNOWN_PROPERTIES.includes(property.toLowerCase())) {
       const s = findClosestProperty(property);
-      return s ? { valid: false, suggestion: s } : { valid: false };
+      return s && !customKeys.has(s) ? { valid: false, suggestion: s } : { valid: false };
     }
     return { valid: true };
   },
 
-  getCorrections(property: string): ValueCorrection[] {
-    return VALUE_CORRECTIONS[property] || [];
-  },
-
-  explain(correction: CorrectionResult): string {
-    return correction.explanation;
-  },
-
+  getCorrections(property: string): ValueCorrection[] { return VALUE_CORRECTIONS[property] || []; },
+  explain(correction: CorrectionResult): string { return correction.explanation; },
   cssIf: { detect: detectIfPatterns, emit: emitCSSIf },
+  getIntents() { return SEMANTIC_INTENTS.map(r => ({ pattern: r.pattern.toString(), description: r.description })); },
+  getKnownProperties(): string[] { return [...KNOWN_PROPERTIES, ...Array.from(customKeys)]; },
 
-  getIntents() {
-    return SEMANTIC_INTENTS.map(r => ({ pattern: r.pattern.toString(), description: r.description }));
-  },
-
-  getKnownProperties(): string[] { return [...KNOWN_PROPERTIES]; },
-
-  // Layout Macros
   macro(name: string): Record<string, any> | null { return expandLayoutMacro(name); },
-  getMacros(): string[] { return getAvailableMacros(); },
+  getMacros(): string[] { return [...getAvailableMacros(), ...Array.from(customKeys).filter(k => k.includes('-'))]; },
   autoContrast(bgColor: string): string { return autoContrast(bgColor); },
   getMacroDescription(name: string): string | null { return getMacroDescription(name); },
-  hasMacro(name: string): boolean { return name in LAYOUT_MACROS; },
+  hasMacro(name: string): boolean { return name in LAYOUT_MACROS || customKeys.has(name); },
 
   applyMacro(name: string, overrides?: Record<string, any>): Record<string, any> | null {
     const macro = expandLayoutMacro(name);
     if (!macro) return null;
-
-    // Deep clone to prevent shared memory mutations — downstream passes
-    // must not corrupt the master macro object.
-    const merged = JSON.parse(JSON.stringify(macro));
+    // v3.2: structuredClone if available, fallback to JSON clone
+    const merged = typeof structuredClone === 'function' ? structuredClone(macro) : JSON.parse(JSON.stringify(macro));
     if (!overrides) return merged;
-
     for (const [key, value] of Object.entries(overrides)) {
-      if (key === 'atRules' && Array.isArray(value) && Array.isArray(merged.atRules)) {
-        merged.atRules = [...merged.atRules, ...value];
-      } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-        merged[key] = { ...(merged[key] || {}), ...value };
-      } else {
-        merged[key] = value;
-      }
+      if (key === 'atRules' && Array.isArray(value) && Array.isArray(merged.atRules)) merged.atRules = [...merged.atRules, ...value];
+      else if (typeof value === 'object' && value !== null && !Array.isArray(value)) merged[key] = { ...(merged[key] || {}), ...value };
+      else merged[key] = value;
     }
     return merged;
   },
 };
-
-// ============================================================================
-// Convenience exports (backward compatible)
-// ============================================================================
 
 export const correct = intent.correct.bind(intent);
 export const heal = intent.heal.bind(intent);
@@ -194,5 +159,5 @@ export const macro = intent.macro.bind(intent);
 export const applyMacro = intent.applyMacro.bind(intent);
 export const getMacros = intent.getMacros.bind(intent);
 export const hasMacro = intent.hasMacro.bind(intent);
-
 export default intent;
+
