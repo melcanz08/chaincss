@@ -1,0 +1,532 @@
+// src/core/shorthand-types.ts
+
+// ============================================================================
+// Shorthand Method Types — ChainCSS
+// ============================================================================
+// These types define the options objects for shorthand methods.
+// Each shorthand expands to multiple CSS properties in a single call.
+// ============================================================================
+
+// ----------------------------------------------------------------------------
+// Grid
+// ----------------------------------------------------------------------------
+
+export interface GridOptions {
+  /** grid-template-columns */
+  columns?: string | number;
+  /** grid-template-rows */
+  rows?: string | number;
+  /** gap (applies to both row-gap and column-gap) */
+  gap?: string | number;
+  /** column-gap */
+  columnGap?: string | number;
+  /** row-gap */
+  rowGap?: string | number;
+  /** grid-area */
+  area?: string;
+  /** grid-auto-flow */
+  autoFlow?: 'row' | 'column' | 'dense' | 'row dense' | 'column dense';
+  /** grid-auto-columns */
+  autoColumns?: string | number;
+  /** grid-auto-rows */
+  autoRows?: string | number;
+  /** grid-template (shorthand) */
+  template?: string;
+  // Short aliases
+  /** Alias for columns */
+  c?: string | number;
+  /** Alias for rows */
+  r?: string | number;
+  /** Alias for gap */
+  g?: string | number;
+  /** Alias for area */
+  a?: string;
+}
+
+// ----------------------------------------------------------------------------
+// Flex
+// ----------------------------------------------------------------------------
+
+export interface FlexOptions {
+  /** flex-direction */
+  direction?: 'row' | 'row-reverse' | 'column' | 'column-reverse';
+  /** flex-wrap */
+  wrap?: 'nowrap' | 'wrap' | 'wrap-reverse';
+  /** flex-grow */
+  grow?: number;
+  /** flex-shrink */
+  shrink?: number;
+  /** flex-basis */
+  basis?: string | number;
+  /** align-items */
+  align?: 'stretch' | 'center' | 'flex-start' | 'flex-end' | 'baseline';
+  /** justify-content */
+  justify?: 'flex-start' | 'flex-end' | 'center' | 'space-between' | 'space-around' | 'space-evenly';
+  /** align-content */
+  alignContent?: 'stretch' | 'center' | 'flex-start' | 'flex-end' | 'space-between' | 'space-around';
+  /** align-self */
+  alignSelf?: 'auto' | 'stretch' | 'center' | 'flex-start' | 'flex-end' | 'baseline';
+  /** gap (flex gap) */
+  gap?: string | number;
+  // Short aliases
+  /** Alias for direction */
+  d?: 'row' | 'row-reverse' | 'column' | 'column-reverse';
+  /** Alias for wrap */
+  w?: 'nowrap' | 'wrap' | 'wrap-reverse';
+  /** Alias for grow */
+  gr?: number;
+  /** Alias for shrink */
+  sh?: number;
+  /** Alias for basis */
+  b?: string | number;
+  /** Alias for align */
+  ai?: 'stretch' | 'center' | 'flex-start' | 'flex-end' | 'baseline';
+  /** Alias for justify */
+  jc?: 'flex-start' | 'flex-end' | 'center' | 'space-between' | 'space-around' | 'space-evenly';
+  /** flex shorthand (grow shrink basis) */
+  f?: string;
+}
+
+// ----------------------------------------------------------------------------
+// Animation
+// ----------------------------------------------------------------------------
+
+export interface AnimationOptions {
+  /** animation-name */
+  name?: string;
+  /** animation-duration */
+  duration?: string;
+  /** animation-timing-function */
+  timing?: string;
+  /** animation-delay */
+  delay?: string;
+  /** animation-iteration-count */
+  iterationCount?: number | 'infinite';
+  /** animation-direction */
+  direction?: 'normal' | 'reverse' | 'alternate' | 'alternate-reverse';
+  /** animation-fill-mode */
+  fillMode?: 'none' | 'forwards' | 'backwards' | 'both';
+  /** animation-play-state */
+  playState?: 'running' | 'paused';
+  // Short aliases
+  /** Alias for name */
+  n?: string;
+  /** Alias for duration */
+  d?: string;
+  /** Alias for timing */
+  t?: string;
+  /** Alias for delay */
+  dl?: string;
+  /** Alias for iterationCount */
+  i?: number | 'infinite';
+  /** animation shorthand */
+  a?: string;
+}
+
+// ----------------------------------------------------------------------------
+// Background
+// ----------------------------------------------------------------------------
+
+export interface BackgroundOptions {
+  /** background-color */
+  color?: string;
+  /** background-image */
+  image?: string;
+  /** background-position */
+  position?: string;
+  /** background-size */
+  size?: string;
+  /** background-repeat */
+  repeat?: string;
+  /** background-attachment */
+  attachment?: string;
+  /** background-origin */
+  origin?: string;
+  /** background-clip */
+  clip?: string;
+  /** background-blend-mode */
+  blendMode?: string;
+  // Short aliases
+  /** Alias for color */
+  c?: string;
+  /** Alias for image */
+  i?: string;
+  /** Alias for position */
+  p?: string;
+  /** Alias for size */
+  s?: string;
+  /** Alias for repeat */
+  r?: string;
+  /** background shorthand */
+  bg?: string;
+}
+
+// ----------------------------------------------------------------------------
+// Typography
+// ----------------------------------------------------------------------------
+
+export interface TypographyOptions {
+  /** font-family */
+  fontFamily?: string;
+  /** font-size */
+  fontSize?: string | number;
+  /** font-weight */
+  fontWeight?: string | number;
+  /** font-style */
+  fontStyle?: 'normal' | 'italic' | 'oblique';
+  /** line-height */
+  lineHeight?: string | number;
+  /** letter-spacing */
+  letterSpacing?: string | number;
+  /** text-align */
+  textAlign?: 'left' | 'right' | 'center' | 'justify' | 'start' | 'end';
+  /** text-transform */
+  textTransform?: 'none' | 'uppercase' | 'lowercase' | 'capitalize';
+  /** text-decoration */
+  textDecoration?: string;
+  /** text-indent */
+  textIndent?: string | number;
+  /** word-spacing */
+  wordSpacing?: string | number;
+  /** white-space */
+  whiteSpace?: 'normal' | 'nowrap' | 'pre' | 'pre-wrap' | 'pre-line' | 'break-spaces';
+  /** overflow-wrap / word-break handling */
+  wordBreak?: 'normal' | 'break-all' | 'keep-all' | 'break-word';
+   /** text color */
+  color?: string;
+  /** opacity */
+  opacity?: string | number;
+  // Short aliases
+  /** Alias for fontFamily */
+  ff?: string;
+  /** Alias for fontSize */
+  fs?: string | number;
+  /** Alias for fontWeight */
+  fw?: string | number;
+  /** Alias for lineHeight */
+  lh?: string | number;
+  /** Alias for textAlign */
+  ta?: 'left' | 'right' | 'center' | 'justify' | 'start' | 'end';
+  /** Alias for textTransform */
+  tt?: 'none' | 'uppercase' | 'lowercase' | 'capitalize';
+  /** font shorthand */
+  f?: string;
+}
+
+// ----------------------------------------------------------------------------
+// Box (margin, padding, border, dimensions)
+// ----------------------------------------------------------------------------
+
+export interface BoxOptions {
+  /** margin (shorthand or single value) */
+  margin?: string | number;
+  /** margin-top */
+  marginTop?: string | number;
+  /** margin-right */
+  marginRight?: string | number;
+  /** margin-bottom */
+  marginBottom?: string | number;
+  /** margin-left */
+  marginLeft?: string | number;
+  /** padding (shorthand or single value) */
+  padding?: string | number;
+  /** padding-top */
+  paddingTop?: string | number;
+  /** padding-right */
+  paddingRight?: string | number;
+  /** padding-bottom */
+  paddingBottom?: string | number;
+  /** padding-left */
+  paddingLeft?: string | number;
+  /** border (shorthand) */
+  border?: string;
+  /** border-radius */
+  borderRadius?: string | number;
+  /** border-width */
+  borderWidth?: string | number;
+  /** border-color */
+  borderColor?: string;
+  /** border-style */
+  borderStyle?: string;
+  /** border-top */
+  borderTop?: string;
+  /** border-right */
+  borderRight?: string;
+  /** border-bottom */
+  borderBottom?: string;
+  /** border-left */
+  borderLeft?: string;
+  /** width */
+  width?: string | number;
+  /** min-width */
+  minWidth?: string | number;
+  /** max-width */
+  maxWidth?: string | number;
+  /** height */
+  height?: string | number;
+  /** min-height */
+  minHeight?: string | number;
+  /** max-height */
+  maxHeight?: string | number;
+  /** overflow */
+  overflow?: string;
+  /** overflow-x */
+  overflowX?: string;
+  /** overflow-y */
+  overflowY?: string;
+  // Short aliases
+  /** Alias for margin */
+  m?: string | number;
+  /** Alias for padding */
+  p?: string | number;
+  /** Alias for borderRadius */
+  br?: string | number;
+  /** Alias for width */
+  w?: string | number;
+  /** Alias for height */
+  h?: string | number;
+}
+
+// ----------------------------------------------------------------------------
+// Position
+// ----------------------------------------------------------------------------
+
+export interface PositionOptions {
+  /** position */
+  type?: 'static' | 'relative' | 'absolute' | 'fixed' | 'sticky';
+  /** top */
+  top?: string | number;
+  /** right */
+  right?: string | number;
+  /** bottom */
+  bottom?: string | number;
+  /** left */
+  left?: string | number;
+  /** inset (shorthand for top/right/bottom/left) */
+  inset?: string | number;
+  /** z-index */
+  zIndex?: number;
+  // Short aliases
+  /** Alias for type */
+  t?: 'static' | 'relative' | 'absolute' | 'fixed' | 'sticky';
+  /** Alias for zIndex */
+  z?: number;
+}
+
+// ----------------------------------------------------------------------------
+// Transition
+// ----------------------------------------------------------------------------
+
+export interface TransitionOptions {
+  /** transition-property */
+  property?: string;
+  /** transition-duration */
+  duration?: string;
+  /** transition-timing-function */
+  timing?: string;
+  /** transition-delay */
+  delay?: string;
+  /** transition-behavior */
+  behavior?: string;
+  // Short aliases
+  /** Alias for property */
+  p?: string;
+  /** Alias for duration */
+  d?: string;
+  /** Alias for timing */
+  t?: string;
+  /** transition shorthand */
+  tr?: string;
+}
+
+// ----------------------------------------------------------------------------
+// Transform
+// ----------------------------------------------------------------------------
+
+export interface TransformOptions {
+  /** translate */
+  translate?: string;
+  /** translateX */
+  translateX?: string | number;
+  /** translateY */
+  translateY?: string | number;
+  /** translateZ */
+  translateZ?: string | number;
+  /** scale */
+  scale?: number;
+  /** scaleX */
+  scaleX?: number;
+  /** scaleY */
+  scaleY?: number;
+  /** rotate */
+  rotate?: string;
+  /** skew */
+  skew?: string;
+  /** skewX */
+  skewX?: string;
+  /** skewY */
+  skewY?: string;
+  /** transform-origin */
+  origin?: string;
+  /** raw transform string for complex transforms */
+  custom?: string;
+}
+
+// ----------------------------------------------------------------------------
+// Filter / Effects
+// ----------------------------------------------------------------------------
+
+export interface FilterOptions {
+  /** filter: blur() */
+  blur?: string | number;
+  /** filter: brightness() */
+  brightness?: string | number;
+  /** filter: contrast() */
+  contrast?: string | number;
+  /** filter: grayscale() */
+  grayscale?: string | number;
+  /** filter: hue-rotate() */
+  hueRotate?: string;
+  /** filter: invert() */
+  invert?: string | number;
+  /** filter: opacity() */
+  filterOpacity?: string | number;
+  /** filter: saturate() */
+  saturate?: string | number;
+  /** filter: sepia() */
+  sepia?: string | number;
+  /** filter: drop-shadow() */
+  dropShadow?: string;
+  /** backdrop-filter */
+  backdrop?: string;
+  /** raw filter string */
+  custom?: string;
+}
+
+// ----------------------------------------------------------------------------
+// Shadow
+// ----------------------------------------------------------------------------
+
+export interface ShadowOptions {
+  /** box-shadow */
+  box?: string;
+  /** text-shadow */
+  text?: string;
+  /** box-shadow color */
+  color?: string;
+  /** box-shadow offset-x */
+  x?: string | number;
+  /** box-shadow offset-y */
+  y?: string | number;
+  /** box-shadow blur */
+  blur?: string | number;
+  /** box-shadow spread */
+  spread?: string | number;
+  /** inset shadow */
+  inset?: boolean;
+}
+
+// ----------------------------------------------------------------------------
+// Container / Aspect
+// ----------------------------------------------------------------------------
+
+export interface ContainerOptions {
+  /** container-type */
+  type?: 'normal' | 'size' | 'inline-size';
+  /** container-name */
+  name?: string;
+}
+
+export interface AspectOptions {
+  /** aspect-ratio */
+  ratio?: string | number;
+  /** object-fit */
+  objectFit?: 'fill' | 'contain' | 'cover' | 'none' | 'scale-down';
+  /** object-position */
+  objectPosition?: string;
+}
+
+// ----------------------------------------------------------------------------
+// Outline
+// ----------------------------------------------------------------------------
+
+export interface OutlineOptions {
+  /** outline-width */
+  width?: string | number;
+  /** outline-style */
+  style?: 'none' | 'solid' | 'dashed' | 'dotted' | 'double' | 'groove' | 'ridge' | 'inset' | 'outset';
+  /** outline-color */
+  color?: string;
+  /** outline-offset */
+  offset?: string | number;
+  // Short aliases
+  /** Alias for width */
+  w?: string | number;
+  /** Alias for style */
+  s?: 'none' | 'solid' | 'dashed' | 'dotted' | 'double' | 'groove' | 'ridge' | 'inset' | 'outset';
+  /** Alias for color */
+  c?: string;
+  /** outline shorthand */
+  o?: string;
+}
+
+// ----------------------------------------------------------------------------
+// Scroll
+// ----------------------------------------------------------------------------
+
+export interface ScrollOptions {
+  /** scroll-behavior */
+  behavior?: 'auto' | 'smooth';
+  /** scroll-snap-type */
+  snapType?: 'none' | 'x mandatory' | 'y mandatory' | 'x proximity' | 'y proximity' | 'both mandatory' | 'both proximity';
+  /** scroll-snap-align */
+  snapAlign?: 'none' | 'start' | 'center' | 'end';
+  /** scroll-snap-stop */
+  snapStop?: 'normal' | 'always';
+  /** scroll-margin */
+  margin?: string | number;
+  /** scroll-margin-top */
+  marginTop?: string | number;
+  /** scroll-margin-right */
+  marginRight?: string | number;
+  /** scroll-margin-bottom */
+  marginBottom?: string | number;
+  /** scroll-margin-left */
+  marginLeft?: string | number;
+  /** scroll-padding */
+  padding?: string | number;
+  /** scroll-padding-top */
+  paddingTop?: string | number;
+  /** scroll-padding-right */
+  paddingRight?: string | number;
+  /** scroll-padding-bottom */
+  paddingBottom?: string | number;
+  /** scroll-padding-left */
+  paddingLeft?: string | number;
+  /** scrollbar-width (Firefox) */
+  scrollbarWidth?: 'auto' | 'thin' | 'none';
+  /** scrollbar-color (Firefox) */
+  scrollbarColor?: string;
+  /** overflow-x */
+  overflowX?: 'visible' | 'hidden' | 'scroll' | 'auto';
+  /** overflow-y */
+  overflowY?: 'visible' | 'hidden' | 'scroll' | 'auto';
+  // Short aliases
+  /** Alias for behavior */
+  b?: 'auto' | 'smooth';
+}
+
+// ----------------------------------------------------------------------------
+// List
+// ----------------------------------------------------------------------------
+
+export interface ListOptions {
+  /** list-style-type */
+  style?: 'none' | 'disc' | 'circle' | 'square' | 'decimal' | 'decimal-leading-zero' | 'lower-roman' | 'upper-roman' | 'lower-alpha' | 'upper-alpha' | string;
+  /** list-style-position */
+  position?: 'inside' | 'outside';
+  /** list-style-image */
+  image?: string;
+  /** list-style shorthand */
+  list?: string;
+}

@@ -37,7 +37,7 @@ export type { RecipeOptions, Recipe } from './compiler/recipe.js';
 // v3.1 Fix: DX for config — enables `import { defineConfig } from 'chaincss'`
 // ============================================================================
 export { defineConfig } from './core/config.js';
-export type { ChainCSSConfig, ChainCSSUserConfig } from './core/types.js';
+export type { ChainProxy, ChainCSSConfig, ChainCSSUserConfig } from './core/types.js';
 export { loadConfig, saveConfigTemplate } from './cli/utils/config-loader.js';
 
 // ============================================================================

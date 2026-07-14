@@ -30,7 +30,7 @@ export const shorthandMap: Record<string, string> = {
   'border': 'border', 'borderW': 'borderWidth', 'borderC': 'borderColor', 'borderS': 'borderStyle',
   'borderT': 'borderTop', 'borderR': 'borderRight', 'borderB': 'borderBottom', 'borderL': 'borderLeft',
   'shadow': 'boxShadow', 'textShadow': 'textShadow',
-  'transform': 'transform', 'transformOrigin': 'transformOrigin', 'transition': 'transition', 'transitionAll': 'transition',
+  'transform': 'transform', 'transformOrigin': 'transformOrigin', 'transitionAll': 'transition',
   'cursor': 'cursor', 'pointer': 'cursor', 'resize': 'resize', 'filter': 'filter', 'backdropFilter': 'backdropFilter',
   'us': 'userSelect', 'pe': 'pointerEvents', 'ap': 'appearance', 'accent': 'accentColor', 'caret': 'caretColor',
   'isolation': 'isolation', 'mixBlend': 'mixBlendMode', 'bgBlend': 'backgroundBlendMode',

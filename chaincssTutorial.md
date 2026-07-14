@@ -1,6 +1,10 @@
-# ChainCSS v2.3 — Comprehensive Tutorial
+# ChainCSS v2.13.0 — Comprehensive Tutorial
 
-> **The CSS Intelligence Platform** — Write styles as JavaScript. Compiler-enforced quality. Zero runtime.
+> **The CSS Intelligence Platform + Token Entanglement** — Write styles as TypeScript. Compiler-enforced quality. Figma → Browser in 80ms. Zero runtime.
+
+[![npm](https://badge.fury.io/js/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![Vite](https://img.shields.io/badge/Vite-HMR-646cff)](#vite-plugin) [![Entangled](https://img.shields.io/badge/ChainCSS-Entangled-6366f1)](#-token-entanglement--only-chaincss-has-this)
+
+📖 **[Full Docs →](https://www.chaincss.dev/)** | 🚀 **New:** Structured shorthand methods — `.flex()`, `.grid()`, `.box()`, `.typography()`, and more.
 
 ---
 
@@ -8,26 +12,33 @@
 
 1. [Installation & Setup](#1-installation--setup)
 2. [The Chain API](#2-the-chain-api)
-3. [Shorthands](#3-shorthands)
-4. [Macros](#4-macros)
-5. [Intent API](#5-intent-api)
-6. [Semantic Tokens](#6-semantic-tokens)
-7. [Responsive Design](#7-responsive-design)
-8. [Conditional Styles](#8-conditional-styles)
-9. [Nested Selectors & Mixins](#9-nested-selectors--mixins)
-10. [Math Engine](#10-math-engine)
-11. [Constraint-Based Styling](#11-constraint-based-styling)
-12. [Design Tokens & Themes](#12-design-tokens--themes)
-13. [Recipe System](#13-recipe-system)
-14. [Animations](#14-animations)
-15. [Scroll Timeline Engine](#15-scroll-timeline-engine)
-16. [Self-Healing CSS](#16-self-healing-css)
-17. [Compiler Intelligence](#17-compiler-intelligence)
-18. [Accessibility Engine](#18-accessibility-engine)
-19. [Source-Aware Optimization](#19-source-aware-optimization)
-20. [CLI Commands](#20-cli-commands)
-21. [Framework Integration](#21-framework-integration)
-22. [Configuration](#22-configuration)
+3. [Structured Shorthand Methods — NEW v2.12](#3-structured-shorthand-methods--new-v212)
+4. [Shorthands — 100+ Full Reference](#4-shorthands--100-full-reference)
+5. [Macros — 30+ Full Reference](#5-macros--30-full-reference)
+6. [Mixed Mode (Dynamic Styles)](#6-mixed-mode-dynamic-styles)
+7. [Intent API](#7-intent-api)
+8. [Semantic Tokens](#8-semantic-tokens)
+9. [Responsive Design](#9-responsive-design)
+10. [Conditional Styles](#10-conditional-styles)
+11. [Nested Selectors & Mixins](#11-nested-selectors--mixins)
+12. [Math Engine](#12-math-engine)
+13. [Constraint-Based Styling](#13-constraint-based-styling)
+14. [Design Tokens & Themes](#14-design-tokens--themes)
+15. [Token Entanglement — Only ChainCSS](#15-token-entanglement--only-chaincss-has-this)
+16. [Figma Live Sync](#16-figma-live-sync)
+17. [Recipe System](#17-recipe-system)
+18. [Animations](#18-animations)
+19. [Scroll Timeline Engine](#19-scroll-timeline-engine)
+20. [Self-Healing CSS](#20-self-healing-css)
+21. [Compiler Intelligence](#21-compiler-intelligence)
+22. [Accessibility Engine](#22-accessibility-engine)
+23. [Source-Aware Optimization](#23-source-aware-optimization)
+24. [CLI Commands](#24-cli-commands)
+25. [Vite Plugin](#25-vite-plugin)
+26. [Framework Integration](#26-framework-integration)
+27. [Configuration](#27-configuration)
+28. [Power Macros & Fixes](#28-power-macros--fixes)
+29. [API Reference](#29-complete-api-reference)
 
 ---
 
@@ -37,1132 +48,621 @@
 
 ```bash
 npm install chaincss
+# entangled template (recommended for new projects)
+npx chaincss create app my-app --template entangled
+cd my-app && npm install
 ```
-
----
 
 ## Vite Setup
 
 ```ts
 // vite.config.ts
-import { defineConfig } from "vite";
-import chaincss from "chaincss/plugin/vite";
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import chaincss from 'chaincss/vite'
+import { figmaSync } from 'chaincss/figma'
 
 export default defineConfig({
   plugins: [
-    chaincss({
-      atomic: true,
-      minify: false,
-      verbose: false,
-      hmr: true,
+    chaincss({ atomic: true, minify: false, verbose: false }),
+    figmaSync({
+      mode: 'url',
+      url: 'https://raw.githubusercontent.com/your-org/design-tokens/main/tokens.json',
+      output: 'tokens/global.json',
+      pollMs: 3000
     }),
-  ],
-});
+    react()
+  ]
+})
 ```
 
----
+**Vite plugin features:**
+- **TMP extension** — avoids watcher loops on `.chain.ts` files
+- **Stale cache handling** — guards against legacy `.chaincss-cache` file/directory collisions
+- **Python atomic writes** — handles `unlink+add` editor patterns
+- **Watcher loop prevention** — excludes generated `.css` and `.class.js` files from re-triggering compilation
+- **Live inspector** — `/__chaincss-ir.json` with full compiler history
+- **HMR** — `/__chaincss.css` + `/@chaincss/client.js` for instant style updates
 
 ## Quick Start
 
 ```ts
-import { chain } from "chaincss";
+import { chain } from 'chaincss'
 
 const styles = chain()
-  .display("flex")
-  .padding(20)
-  .color("red")
-  .$el("my-component");
-```
-
----
-
-## Three Modes
-
-| Mode | API | Use Case |
-|---|---|---|
-| Build-time | `chain()` | Static styles |
-| Runtime | `chain()` in browser | Dynamic styles |
-| Hybrid | `smartChain()` | Static + dynamic |
-
-```ts
-import { smartChain } from "chaincss";
-
-const styles = smartChain()
-  .display("flex")
-  .padding(20)
-  .color(props.textColor)
-  .fontSize(theme.sizes.lg)
-  .$el("hybrid-card");
+  .flex({ align: 'center', justify: 'space-between' })
+  .box({ padding: '12px 20px', borderRadius: 12 })
+  .background({ color: '#6366f1' })
+  .typography({ fontSize: 16, fontWeight: '600', color: '#fff' })
+  .pressable().hoverLift().peerDim({ opacity: 0.6 })
+  .$el('card')
 ```
 
 ---
 
 # 2. The Chain API
 
-Every chain starts with `chain()` and ends with `$el()`.
-
-## Basic Usage
-
 ```ts
 const card = chain()
-  .display("flex")
-  .flexDirection("column")
+  .flex({ direction: 'column', gap: 16 })
+  .box({ padding: 24, borderRadius: 12 })
+  .background({ color: 'white' })
+  .shadow({ box: '0 2px 8px rgba(0,0,0,0.1)' })
+  .$el('card')
+
+// Multiple selectors, debug mode
+chain().typography({ color: 'red' }).$el('h1','h2','h3')
+chain().debug().explain()
+chain().raw({ outline: 'none', resize: 'vertical', cursor: 'pointer' })
+```
+
+---
+
+# 3. Structured Shorthand Methods — NEW v2.12
+
+> The headline feature of v2.12. Grouped CSS properties in single, typed calls with full autocomplete, short aliases, and dynamic mode support.
+
+## Why Structured Shorthands?
+
+Instead of chaining 5-10 individual property calls, group related CSS into one method:
+
+```ts
+// Before (flat properties — still works)
+chain()
+  .display('flex')
+  .flexDirection('column')
+  .alignItems('center')
   .gap(16)
-  .padding(24)
-  .backgroundColor("white")
-  .borderRadius(12)
-  .boxShadow("0 2px 8px rgba(0,0,0,0.1)")
-  .$el("card");
+  .padding('24px')
+  .margin('0 auto')
+  .maxWidth(1200)
+  .$el('container')
+
+// After (structured shorthands — cleaner, typed, autocomplete)
+chain()
+  .flex({ direction: 'column', align: 'center', gap: 16 })
+  .box({ padding: '24px', margin: '0 auto', maxWidth: 1200 })
+  .$el('container')
 ```
 
----
+## Complete Shorthand Reference
 
-## The `$el()` Method
+| Method | CSS Properties Covered | Example |
+|:---|:---|:---|
+| `.flex()` | `display:flex`, `flex-direction`, `align-items`, `justify-content`, `gap`, `grow`, `shrink`, `basis`, `wrap`, `align-content`, `align-self` | `.flex({ direction: 'column', align: 'center', gap: 16 })` |
+| `.grid()` | `display:grid`, `grid-template-columns/rows`, `gap`, `grid-area`, `auto-flow/columns/rows`, `template` | `.grid({ columns: '1fr 1fr', gap: 24 })` |
+| `.box()` | `margin` (all sides), `padding` (all sides), `border`, `border-radius`, `width`, `height`, `min/max-width/height`, `overflow` | `.box({ padding: '24px', margin: '0 auto', maxWidth: 1200 })` |
+| `.typography()` | `font-family/size/weight/style`, `line-height`, `letter-spacing`, `text-align/transform/decoration`, `color`, `opacity`, `word-spacing`, `white-space`, `word-break` | `.typography({ fontSize: 16, fontWeight: '600', color: '#333' })` |
+| `.background()` | `background-color/image/position/size/repeat/attachment/origin/clip/blend-mode` | `.background({ color: '#fff', size: 'cover' })` |
+| `.position()` | `position`, `top/right/bottom/left`, `inset`, `z-index` | `.position({ type: 'absolute', top: 0, left: 0, zIndex: 10 })` |
+| `.animation()` | `animation-name/duration/timing/delay/iteration-count/direction/fill-mode/play-state` | `.animation({ name: 'fadeIn', duration: '300ms', timing: 'ease' })` |
+| `.transform()` | `translate/translateX/Y/Z`, `scale/scaleX/Y`, `rotate`, `skew/skewX/Y`, `origin`, `custom` | `.transform({ scale: 1.1, custom: 'translateY(-2px)' })` |
+| `.shadow()` | `box-shadow` (decomposed: x/y/blur/spread/color/inset), `text-shadow` | `.shadow({ x: 0, y: 4, blur: 12, color: 'rgba(0,0,0,0.1)' })` |
+| `.filter()` | `blur`, `brightness`, `contrast`, `grayscale`, `hue-rotate`, `invert`, `saturate`, `sepia`, `drop-shadow`, `backdrop-filter`, `custom` | `.filter({ blur: 5, brightness: 1.1 })` |
+| `.outline()` | `outline-width/style/color/offset` | `.outline({ width: '2px', style: 'solid', color: '#6366f1' })` |
+| `.scroll()` | `scroll-behavior`, `scroll-snap-type/align/stop`, `scroll-margin/padding` (all sides), `scrollbar-width/color`, `overflow-x/y` | `.scroll({ behavior: 'smooth', snapType: 'x mandatory' })` |
+| `.list()` | `list-style-type/position/image` | `.list({ style: 'none' })` |
+| `.transition()` | `transition-property/duration/timing/delay/behavior` | `.transition({ property: 'all', duration: '200ms', timing: 'ease' })` |
+| `.raw()` | Any CSS property not covered above (key-value or object form) | `.raw('cursor', 'pointer')` or `.raw({ cursor: 'pointer', resize: 'vertical' })` |
 
-```ts
-// Single selector
-chain().color("red").$el("heading");
+## Short Aliases (Power User Mode)
 
-// Multiple selectors
-chain().color("red").$el("h1", "h2", "h3");
-
-// Raw styles
-chain().color("red").$el();
-```
-
----
-
-## Debugging
+Every shorthand supports compact single-letter or two-letter aliases:
 
 ```ts
 chain()
-  .debug()
-  .explain("bg")
-  .bg("white")
-  .$el("debugged");
+  .flex({ d: 'col', ai: 'center', g: 16 })              // direction, align-items, gap
+  .grid({ c: '1fr 1fr', g: 24 })                         // columns, gap
+  .box({ p: '24px', m: '0 auto', w: '100%', mw: 1200 }) // padding, margin, width, maxWidth
+  .typography({ fs: 16, fw: '600', c: '#333' })          // fontSize, fontWeight, color
+  .background({ c: '#fff', s: 'cover' })                  // color, size
+  .animation({ n: 'fadeIn', d: '300ms', t: 'ease' })     // name, duration, timing
+  .transition({ tr: 'all 0.2s ease' })                    // transition shorthand
+  .shadow({ y: 4, blur: 12, c: 'rgba(0,0,0,0.1)' })     // y-offset, blur, color
+  .$el('card')
 ```
 
----
+## Backward Compatible
 
-# 3. Shorthands
-
-## Spacing
+All existing flat methods still work. Mix and match freely:
 
 ```ts
 chain()
-  .m(16)
-  .mt(8)
-  .mr(12)
-  .mb(8)
-  .ml(12)
-  .mx(20)
-  .my(10)
-  .p(24)
-  .pt(16)
-  .pr(16)
-  .pb(16)
-  .pl(16)
-  .px(20)
-  .py(12);
+  .display('flex')                     // Old way — still works
+  .flex({ direction: 'column' })       // New shorthand
+  .padding('24px')                     // Old way — still works
+  .box({ maxWidth: 1200 })             // New shorthand
+  .$el('hybrid')
+```
+
+## No-Argument Macros Still Work
+
+```ts
+chain().flex()   // → display: flex (macro behavior)
+chain().grid()   // → display: grid (macro behavior)
 ```
 
 ---
 
-## Sizing
+# 4. Shorthands — 100+ Full Reference
+
+> From `src/compiler/utils/shorthands.ts` — real CSS props, not utilities. All support tokens `$colors.primary`.
+
+### Spacing
+| Shorthand | CSS | Example |
+|---|---|---|
+| `m` | `margin` | `.m(16)` |
+| `mt,mr,mb,ml` | `marginTop/Right/Bottom/Left` | `.mt(8)` |
+| `mx,my` | `marginLeft+Right` / `Top+Bottom` | `.mx('auto')` |
+| `mi,mis,mie` | `marginInline, InlineStart/End` | RTL-ready |
+| `mbk,mbs,mbe` | `marginBlock, BlockStart/End` |  |
+| `p,pt,pr,pb,pl` | `padding*` |  |
+| `px,py` | `padding X/Y axis` | `.px(20)` |
+| `pi,pis,pie,pbk,pbs,pbe` | `paddingInline/Block` logical |  |
+| `mxi,myb,pxi,pyb` | logical axis shorthands |  |
+
+### Sizing & Layout
+`w,h,is,bs,minW,maxW,minH,maxH,minI,maxI,minB,maxB,size,d,pos,z,op,ov,ovx,ovy`
+
+### Typography
+`c,text,fs,fw,ff,fontF,lh,ls,ta,align,tt,td,tw,ws,wb,wsb,va`
+
+### Flex / Grid
+`flexDir,flexWrap,grow,shrink,basis,order,jc,justify,ai,items,ac,content,ji,self,place,placeC,placeS,gap,gapX,gapY,gridCols,gridRows,gridRow,gridCol`
+
+### Borders / Radius / Shadows
+`rounded,br,radius,roundedTL,roundedTR,roundedBR,roundedBL,border,borderW,borderC,borderS,borderT,R,B,L,shadow,textShadow`
+
+### Background & Effects
+`bg,bgc,bgImg,bgPos,bgSize,objFit,objPos,filter,backdropFilter,transform,transformOrigin,transition,transitionAll`
+
+### Interactivity & Misc
+`cursor,pointer,us,pe,ap,accent,caret,isolation,mixBlend,bgBlend,will,contain,contentVis,backface,scrollBehave,overscroll,list,listPos,col,colGap,hyphens,writing`
+
+All support: `.bg('$colors.primary.500')`, `.p('$spacing.md')`, `.border('1px solid $colors.border')`
+
+---
+
+# 5. Macros — 30+ Full Reference
+
+### Layout Macros
+
+| Macro | Output |
+|---|---|
+| `hide()` | `opacity:0; visibility:hidden; pointer-events:none` |
+| `show()` | `opacity:1; visibility:visible; pointer-events:auto` |
+| `glass(16?)` | `rgba(255,255,255,0.1); backdrop-filter:blur(16px); border:1px solid rgba(255,255,255,0.2)` |
+| `center()` | `display:flex; align-items:center; justify-content:center` |
+| `container()/containerMacro(1200)` | `width:100%; max-width:1200px; margin-inline:auto; padding-inline:1rem` |
+| `fullScreen(9999)` | `position:fixed; inset:0; z-index` |
+| `square(40),circle(40),size(40)` | square/circle + flex centering |
+| `stickyHeader` | `sticky top 0, z-50, blur(8px)` + scroll shadow |
+| `card` | flex col, radius 12px, shadow, hover lift `translateY(-2px)` |
+| `hero` | full-width centered `min-h:60vh` |
+| `sidebar` | `grid:280px 1fr`, collapses @1024px |
+| `gridList,autoGrid` | `repeat(auto-fit,minmax(280px,1fr))` |
+| `bentoNative` | bento grid + `container-type:inline-size` + subgrid |
+| `pricingRow` | `grid 3 cols / subgrid rows` + `&:has(> :hover) > :not(:hover){opacity:0.7}` |
+| `truncate(),srOnly(),pill()` | ellipsis, a11y hidden, pill |
+
+### Entanglement Native Macros — Zero JS
+
+| Macro | Result |
+|---|---|
+| `pressable()` | `cursor:pointer; user-select:none` + `active:scale(0.97)` + `hover:opacity:0.85` |
+| `clickScale(0.97),hoverLift('4px'),hoverGlow('#6366f1'),focusRing()` | interaction primitives |
+| `onHover(cb),onActive,focusVisible,onInteracting` | `&:hover`, `&:active`, `&:focus-visible` |
+| `peerHover(cb)` | emits `.peer:hover ~ &` fallback + modern `.group:has(.peer:hover) &:not(.peer:hover)` |
+| `peerDim({opacity:0.6,scale:0.98,blur:'2px'})` | `.group:has(> :hover) > &:not(:hover){...}` |
+| `groupHasHover(cb)` | `&:has(> :hover)` parent reacts to child |
+| `hasCount({count:3})` | `&:has(> :nth-child(3))` |
+| `entangleFocus()` | floating label: `&:focus-within label, &:has(input:not(:placeholder-shown))` |
+| `children,childHover` | `& > *`, `&:hover > *` |
+| `badge(),kbd(),dark(cb),light(cb)` | UI primitives + `prefers-color-scheme` |
+
+---
+
+# 6. Mixed Mode (Dynamic Styles)
+
+Static properties compile to CSS at build time. Dynamic functions stay in JS — evaluated at runtime via CSS custom properties.
+
+```ts
+export const btn = chain.dynamic()
+  .box({ padding: '12px 24px', borderRadius: 8 })
+  .background({ color: () => isActive ? '#6366f1' : '#a5b4fc' })
+  .shadow({ 
+    box: () => isActive 
+      ? '0 8px 25px rgba(99,102,241,0.4)' 
+      : '0 2px 8px rgba(0,0,0,0.1)'
+  })
+  .typography({ color: '#fff', fontWeight: '600' })
+  .$el('btn')
+```
+
+**Security:** Dynamic values are applied via CSS custom properties using the browser's CSSOM (`element.style.setProperty()`). This is inherently safe against CSS injection — characters like `;`, `}`, and `{` have no special meaning in custom property values. Static CSS values are sanitized against `</style>` breakout. See the [Security docs](https://www.chaincss.dev/docs/security) for details.
+
+**TypeScript:** All shorthand properties use the `Dynamic<T>` utility type, so functions work without type errors in `chain.dynamic()` mode.
+
+---
+
+# 7. Intent API
+
+```ts
+chain().intent('center-content').$el('centered')
+chain().intent('card').$el('card')
+chain().intent('sticky-header').$el('nav')
+chain().intent('hover-lift').$el('interactive')
+```
+
+Custom intents auto-registered from `chaincss.config.js`.
+
+---
+
+# 8. Semantic Tokens
+
+```ts
+chain().surface('interactive').text('primary').elevation('floating').$el('composed')
+```
+
+---
+
+# 9. Responsive Design
 
 ```ts
 chain()
-  .w(200)
-  .h(100)
-  .minW(300)
-  .maxW(1200)
-  .minH(200)
-  .maxH(800)
-  .size(50);
+  .flex({ direction: 'column' })
+  .media('(min-width: 768px)', (c: ChainProxy) => c.flex({ direction: 'row' }))
+  .$el('responsive')
+
+chain().container('(min-width:400px)', (c: ChainProxy) => c.grid({ columns: '1fr 1fr' })).$el('cq')
 ```
+
+> **TypeScript tip:** Import `ChainProxy` for typed media callbacks: `import { type ChainProxy } from 'chaincss'`
 
 ---
 
-## Typography
+# 10. Conditional Styles
 
 ```ts
 chain()
-  .bg("#f0f0f0")
-  .c("#333")
-  .fs(16)
-  .fw(700)
-  .lh(1.5)
-  .ls("0.5px")
-  .ta("center");
+  .box({ padding: 12 })
+  .when(isActive, (c: ChainProxy) => c.background({ color: '#10b981' }).typography({ color: 'white' }))
+  .when(isDisabled, (c: ChainProxy) => c.raw('opacity', '0.5').raw('cursor', 'not-allowed'))
+  .$el('stateful-btn')
 ```
 
 ---
 
-# 4. Macros
-
-## Layout
-
-```ts
-chain().flex();
-chain().inlineFlex();
-chain().flexCenter();
-chain().grid();
-chain().gridCenter();
-chain().stack(16);
-chain().bento(4);
-```
-
----
-
-## Effects
+# 11. Nested Selectors & Mixins
 
 ```ts
 chain()
-  .glass()
-  .glow("#6366f1")
-  .textGradient(["#667eea", "#764ba2"])
-  .meshGradient(["#f0f", "#0ff", "#ff0"]);
+  .flex({ gap: 0 })
+  .nest('& > *', (c: ChainProxy) => c.flex({ grow: 1 }))
+  .nest('&:first-child', (c: ChainProxy) => c.typography({ fontWeight: '700' }))
+  .$el('flex-container')
 ```
 
 ---
 
-## State & Interaction
+# 12. Math Engine
 
 ```ts
-chain()
-  .clickScale(0.95)
-  .pressable()
-  .focusRing("#3b82f6")
-  .skeleton(true);
+import { add, subtract, multiply, divide, fluidType } from 'chaincss'
+add('10px','20px'); fluidType({minSize:14,maxSize:20})
 ```
 
 ---
 
-# 5. Intent API
+# 13. Constraint-Based Styling
 
 ```ts
-// Layout
-chain().intent("center-content").$el("centered");
-chain().intent("stack").$el("stack");
-chain().intent("sidebar-layout").$el("dashboard");
-
-// Components
-chain().intent("card").$el("card");
-chain().intent("button-primary").$el("cta");
-chain().intent("modal").$el("dialog");
-
-// Semantic
-chain().intent("hero-section").$el("hero");
-chain().intent("sticky-header").$el("nav");
-
-// Interaction
-chain().intent("hover-lift").$el("interactive");
-chain().intent("focus-ring").$el("accessible");
+chain().constrain('width','< parent').constrain('height','= width * 0.5').$el('card')
 ```
 
 ---
 
-# 6. Semantic Tokens
+# 14. Design Tokens & Themes
 
 ```ts
-chain()
-  .surface("interactive")
-  .text("primary")
-  .elevation("floating")
-  .spacing("comfortable")
-  .state("hover")
-  .state("focus")
-  .$el("composed");
+import { createTokens, createThemeContract, createTheme } from 'chaincss'
+import { parseColor, contrastRatio, checkContrast, importFigmaTokens } from 'chaincss/tokens'
+
+const tokens = createTokens({ colors:{ primary:'#6366f1' }, spacing:{ sm:'8px' } })
+const contract = createThemeContract({ colors:{ primary:'', background:'' } })
+const light = createTheme(contract, { colors:{ primary:'#6366f1', background:'#fff' } })
+
+// Figma Tokens Studio import
+const figma = { colors:{ primary:{ 500:{ value:'#6366f1' } } } }
+const imported = importFigmaTokens(figma) // → { colors:{ primary:{ 500:'#6366f1' } } }
+contrastRatio('#ffffff','#6366f1') // 4.5+
+checkContrast('white','black') // { ratio, passes:{AA,AAA} }
 ```
 
 ---
 
-# 7. Responsive Design
+# 15. Token Entanglement — Only ChainCSS Has This
+
+> Flat variables are dead. Tokens are physically linked.
 
 ```ts
-chain()
-  .display("flex")
-  .flexDirection("column")
-  .responsive("md", c =>
-    c.flexDirection("row")
-  )
-  .$el("responsive");
+// chaincss.config.ts
+import { defineConfig } from 'chaincss'
+export default defineConfig({
+  tokens:{
+    tokens:{ colors:{ primary:{500:'#6366f1',100:'#e0e7ff'}, text:{onPrimary:'#fff',muted:'#6b7280'}, background:'#fff' } },
+    relationships:[
+      { type:'derived', source:'colors.primary.500', target:'colors.primary.100', method:'mix-white 80%' },
+      { type:'derived', source:'colors.primary.500', target:'colors.primary.600', method:'shade 20%' },
+      { type:'contrast', foreground:'colors.text.onPrimary', background:'colors.primary.500', target:4.5, autoFix:'auto', priority:10 },
+      { type:'harmony', source:'colors.primary.500', targets:['colors.accent.500'], rule:'complementary' }
+    ]
+  }
+})
 ```
+
+```ts
+import { createEntanglementEngine } from 'chaincss/entanglement'
+const engine = createEntanglementEngine({ relationships })
+const report = engine.propagate(tokens, 'colors.primary.500', '#ff3b30')
+// changes: primary.100 → #ffdad6, onPrimary → #000000 (5.2:1), violations: []
+```
+
+**Engine internals:** Topological sort, HSL lightness binary search (24 iterations preserving hue), priority fix ordering.
 
 ---
 
-## Container Queries
+# 16. Figma Live Sync
 
-```ts
-chain()
-  .containerQuery("(min-width: 400px)", c =>
-    c.gridTemplateColumns("1fr 1fr")
-  )
-  .$el("container-responsive");
+```bash
+npx chaincss create app my-app --template entangled
+npm run dev
+npm run tokens:watch
 ```
+
+Designer saves → Tokens Studio → GitHub → `figmaSync` polls → `TokenEntanglementEngine` propagates → HMR in 80ms.
 
 ---
 
-# 8. Conditional Styles
-
-## `when()`
+# 17. Recipe System
 
 ```ts
-chain()
-  .padding(12)
-  .when(isActive, c =>
-    c.background("#10b981")
-      .color("white")
-  )
-  .when(isDisabled, c =>
-    c.opacity(0.5)
-      .cursor("not-allowed")
-  )
-  .$el("stateful-btn");
-```
-
----
-
-## CSS `if()`
-
-```ts
-chain()
-  .background("if(style(--theme: dark): #1a1a1a else #ffffff)")
-  .color("if(style(--theme: dark): white else black)")
-  .$el("theme-aware");
-```
-
----
-
-# 9. Nested Selectors & Mixins
-
-## Nested Selectors
-
-```ts
-chain()
-  .display("flex")
-  .nest("& > *", c => c.flex(1))
-  .nest("&:first-child", c => c.fontWeight(700))
-  .nest(".child", c => c.color("red"))
-  .$el("flex-container");
-```
-
----
-
-## Mixins
-
-```ts
-const flexCenter = {
-  display: "flex",
-  justifyContent: "center",
-  alignItems: "center",
-};
-
-chain()
-  .use(flexCenter)
-  .padding(24)
-  .$el("composed-card");
-```
-
----
-
-# 10. Math Engine
-
-## Import
-
-```ts
-import {
-  math,
-  add,
-  subtract,
-  multiply,
-  divide,
-  fluidType,
-  convert,
-  scale
-} from "chaincss";
-```
-
----
-
-## Basic Arithmetic
-
-```ts
-add("10px", "20px");
-subtract("50px", "20px");
-multiply("10px", 3);
-divide("100px", 4);
-```
-
----
-
-## Fluid Typography
-
-```ts
-fluidType({
-  minSize: 14,
-  maxSize: 20
-});
-```
-
----
-
-# 11. Constraint-Based Styling
-
-```ts
-chain()
-  .constrain("width", "< parent")
-  .constrain("height", "= width * 0.5")
-  .constrain("columns", ">= 3 when > 768px")
-  .$el("responsive-card");
-```
-
----
-
-# 12. Design Tokens & Themes
-
-## Creating Tokens
-
-```ts
-import { createTokens } from "chaincss";
-
-const tokens = createTokens({
-  colors: {
-    primary: "#2563eb",
-    success: "#10b981",
-  },
-
-  spacing: {
-    sm: "8px",
-    md: "16px",
-    lg: "24px",
-  },
-});
-```
-
----
-
-## Theme Contracts
-
-```ts
-import {
-  createThemeContract,
-  createTheme
-} from "chaincss";
-
-const contract = createThemeContract({
-  colors: {
-    primary: "",
-    background: "",
-  },
-});
-
-const lightTheme = createTheme(contract, {
-  colors: {
-    primary: "#3b82f6",
-    background: "#ffffff",
-  },
-});
-```
-
----
-
-# 13. Recipe System
-
-```ts
-import { recipe } from "chaincss";
-
+import { recipe } from 'chaincss'
 const button = recipe({
-  base: {
-    selectors: ["btn"],
-    display: "inline-flex",
-    borderRadius: "8px",
-  },
-
-  variants: {
-    size: {
-      sm: { padding: "8px 16px" },
-      lg: { padding: "16px 32px" },
-    },
-  },
-});
+  base:{ selectors:['btn'], display:'inline-flex', borderRadius:'8px' },
+  variants:{ size:{ sm:{padding:'8px 16px'}, lg:{padding:'16px 32px'} } }
+})
 ```
 
 ---
 
-# 14. Animations
-
-## Presets
+# 18. Animations
 
 ```ts
-chain().fadeIn().$el("el");
-chain().slideInUp().$el("el");
-chain().zoomIn().$el("el");
-chain().bounce().$el("el");
-chain().pulse().$el("el");
-chain().spin().$el("el");
+chain().fadeIn().slideInUp().zoomIn().bounce().pulse().spin().$el('el')
+chain().animate('myBounce', { '0%':{transform:'scale(1)'}, '50%':{transform:'scale(1.2)'} }, {duration:'0.5s'}).$el('anim')
 ```
 
 ---
 
-## Custom Animation
+# 19. Scroll Timeline Engine
 
 ```ts
-chain()
-  .animate(
-    "myBounce",
-    {
-      "0%": { transform: "scale(1)" },
-      "50%": { transform: "scale(1.2)" },
-      "100%": { transform: "scale(1)" },
-    },
-    {
-      duration: "0.5s",
-      timing: "ease-in-out",
-    }
-  )
-  .$el("custom-animated");
+import { createScrollAnimation } from 'chaincss'
+const fadeIn = createScrollAnimation('fadeIn','.reveal')
 ```
+
+- Emits `@supports not (animation-timeline: scroll())` fallback
+- 7 scroll presets
 
 ---
 
-# 15. Scroll Timeline Engine
+# 20. Self-Healing CSS
 
 ```ts
-import {
-  createScrollAnimation,
-  compileScrollAnimation,
-} from "chaincss";
-
-const fadeIn = createScrollAnimation(
-  "fadeIn",
-  ".reveal"
-);
+import { correct, heal } from 'chaincss'
+correct('display','flexbox') // → flex
+heal({display:'flexbox',position:'abs'},'smart')
 ```
 
 ---
 
-# 16. Self-Healing CSS
+# 21. Compiler Intelligence
 
-```ts
-import { correct, heal } from "chaincss";
-
-correct("display", "flexbox");
-correct("position", "abs");
-
-heal(
-  {
-    display: "flexbox",
-    position: "abs",
-  },
-  "smart"
-);
-```
+The 5-stage pipeline detects mobile overflow, infers responsive breakpoints, flags inaccessible fonts, and optimizes layout patterns automatically.
 
 ---
 
-# 17. Compiler Intelligence
-
-```ts
-chain()
-  .width("1200px")
-  .fontSize("48px")
-  .$el("hero");
-```
-
-The compiler can:
-- prevent mobile overflow
-- infer responsive layouts
-- detect inaccessible font sizes
-- optimize layouts automatically
-
----
-
-# 18. Accessibility Engine
+# 22. Accessibility Engine
 
 | Check | WCAG | Auto Fix |
 |---|---|---|
-| Contrast ratio | 1.4.3 AA | No |
+| Contrast ratio | 1.4.3 AA | **Yes — HSL binary search preserves hue** |
 | Font size | 1.4.4 AA | Yes |
 | Touch target | 2.5.8 AA | Yes |
 | Focus indicator | 2.4.7 AA | Yes |
 
----
-
-# 19. Source-Aware Optimization
-
-Detects:
-- duplicate styles
-- dead CSS
-- specificity wars
-- animation conflicts
-- redundant media queries
-
----
-
-# 20. CLI Commands
-
 ```bash
-chaincss init
-chaincss build
-chaincss watch
-chaincss cache clear
-chaincss cache stats
-chaincss optimize --report
-chaincss doctor
+npx chaincss check
+npx chaincss audit --fix --write
 ```
 
 ---
 
-# 21. Framework Integration
+# 23. Source-Aware Optimization
 
-## React
+Detects duplicate, dead CSS, specificity wars, animation conflicts, redundant media queries. `atomic` extraction opt-in.
+
+---
+
+# 24. CLI Commands
+
+```bash
+npx chaincss init          # Scaffolds config
+npx chaincss create app my-app --template entangled
+npx chaincss dev           # Dev server + HMR + inspector
+npx chaincss build         # Build once
+npx chaincss watch
+npx chaincss check         # WCAG 2.2 audit
+npx chaincss check --fix
+npx chaincss tokens:watch  # Watch + propagate tokens
+npx chaincss tokens:fix    # One-shot fixAll()
+npx chaincss figma sync    # Pull from Figma/GitHub
+npx chaincss audit --fix --write
+npx chaincss cache clear | stats | prune
+npx chaincss timeline list | diff | export | clear
+```
+
+---
+
+# 25. Vite Plugin
+
+**Features in v2.12:**
+- TMP file strategy to avoid watcher loops
+- Generated `.css` and `.class.js` files excluded from re-triggering compilation
+- Deduplication of concurrent compilations via `compiling` Set + 500ms debounce
+- Live inspector at `/__chaincss-ir.json`
+- HMR via `/__chaincss.css` + `/@chaincss/client.js`
+- Proper `.d.ts` output preserved alongside `.js` bundles
+
+Press `Ctrl+Shift+I` to inspect compiler history.
+
+---
+
+# 26. Framework Integration
+
+React, Vue, Svelte, Solid — ChainCSS outputs plain CSS strings.
 
 ```tsx
-import { chain } from "chaincss";
-
-function Card({ children }) {
-  const styles = chain()
-    .intent("card")
-    .$el("card");
-
-  return (
-    <div className={styles.selectors[0]}>
-      {children}
-    </div>
-  );
+function Card({children}){
+  const s = chain().flex({ direction: 'column' }).box({ padding: 24 }).$el('card');
+  return <div className={s.selectors[0]}>{children}</div>
 }
 ```
 
 ---
 
-## Vue
-
-```vue
-<script setup>
-import { chain } from "chaincss";
-
-const styles = chain()
-  .grid()
-  .cols(3)
-  .gap(16)
-  .$el("grid");
-</script>
-
-<template>
-  <div :class="styles.selectors[0]">
-    <slot />
-  </div>
-</template>
-```
-
----
-
-## Svelte
-
-```svelte
-<script>
-  import { chain } from "chaincss";
-
-  const styles = chain()
-    .flex()
-    .center()
-    .$el("centered");
-</script>
-
-<div class={styles.selectors[0]}>
-  <slot />
-</div>
-```
-
----
-
-# 22. Configuration
+# 27. Configuration
 
 ```ts
 // chaincss.config.ts
-import { defineConfig } from "chaincss";
-
+import { defineConfig } from 'chaincss'
 export default defineConfig({
-  atomic: {
-    enabled: true,
-    mode: "hybrid",
-  },
-
-  tokens: {
-    enabled: true,
-    prefix: "$",
-  },
-
-  breakpoints: {
-    sm: "(min-width: 640px)",
-    md: "(min-width: 768px)",
-  },
-});
-```
-
-## 23. Power Macros
-
-### `autoContrast()`
-
-Automatically generates accessible foreground colors based on WCAG contrast rules.
-
-```ts
-import { intent } from "chaincss";
-
-intent.autoContrast("#1a1a1a"); // "#ffffff"
-intent.autoContrast("#ffffff"); // "#000000"
-intent.autoContrast("#a0c4ff"); // "#000000"
-
-chain()
-  .backgroundColor("#1a1a1a")
-  .color(intent.autoContrast("#1a1a1a"))
-  .$el("accessible");
-```
-
-### Smart Layout Macros
-
-```ts
-chain()
-  .stack("vertical center gap-4")
-  .glass()
-  .hoverLift()
-  .$el("smart-layout");
-```
-
-### Auto Grid
-
-Automatically creates responsive grid layouts.
-
-```ts
-chain()
-  .autoGrid({
-    min: 250,
-    gap: 24,
-  })
-  .$el("gallery");
-```
-
-Compiles to:
-
-```css
-grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-gap: 24px;
-```
-
-### Smart Container
-
-```ts
-chain()
-  .containerMacro(1200)
-  .$el("container");
-```
-
-Compiles to:
-
-```css
-width: min(100%, 1200px);
-margin-inline: auto;
-padding-inline: 24px;
-```
-
-### Glassmorphism Macro
-
-```ts
-chain()
-  .glass()
-  .$el("glass-card");
-
-chain()
-  .glass(12)
-  .$el("strong-glass");
-```
-
-### Frosted Navigation
-
-```ts
-chain()
-  .frostedNav(16)
-  .$el("navbar");
-```
-
-### Skeleton Loader
-
-```ts
-chain()
-  .skeleton(true)
-  .$el("loading-card");
-
-chain()
-  .skeleton({
-    active: true,
-    color: "#e5e7eb",
-    shimmer: true,
-  })
-  .$el("advanced-loader");
-```
-
-### Interactive Macros
-
-```ts
-chain()
-  .pressable()
-  .clickScale(0.96)
-  .focusRing("#3b82f6")
-  .$el("interactive-button");
-```
-
-### Accessibility Helpers
-
-```ts
-chain()
-  .visuallyHidden()
-  .$el("screen-reader-only");
-
-chain()
-  .focusVisible()
-  .$el("accessible-focus");
-```
-
-### Macro Autocomplete
-
-```ts
-import {
-  getSuggestion,
-  getAutocompleteSuggestions,
-  KNOWN_MACROS,
-} from "chaincss";
-
-getSuggestion("card");
-// → "card"
-
-getSuggestion("glsas");
-// → "glass"
-
-getAutocompleteSuggestions("sticky", 10);
-// → ["sticky", "stickyHeader", "stickyFooter"]
-
-KNOWN_MACROS.length;
-// → total available macros
+  shorthands:{}, macros:{}, intents:{}, allowOverride: true,
+  inputs:['src/**/*.chain.{js,ts}','src/**/*.tsx'],
+  output:{ cssFile:'dist/styles.css', minify:false },
+  atomic:{ enabled:true, naming:'readable' },
+  a11y:{ pairs:[{ foreground:'colors.text', background:'colors.background', label:'body' }] },
+  tokens:{
+    relationships:[
+      { type:'derived', source:'colors.primary.500', target:'colors.primary.100', method:'mix-white 80%' },
+      { type:'contrast', foreground:'colors.text.onPrimary', background:'colors.primary.500', target:4.5 }
+    ]
+  }
+})
 ```
 
 ---
 
-## 24. Complete API Reference
+# 28. Power Macros & Fixes
 
-### Core Imports
+Highlights from v2.12:
+
+- **Structured shorthands** — `.flex()`, `.grid()`, `.box()`, `.typography()`, `.background()`, `.position()`, `.animation()`, `.transform()`, `.shadow()`, `.filter()`, `.outline()`, `.scroll()`, `.list()`, `.transition()`, `.raw()`
+- **Dynamic mode fully typed** — `Dynamic<T>` utility so `chain.dynamic()` never throws type errors
+- **`ChainProxy` exported** — `import { type ChainProxy } from 'chaincss'` for typed callbacks
+- **Watcher loop fixed** — generated files excluded, concurrent compilation deduplicated
+- **Build order fixed** — `.d.ts` files preserved alongside `.js`
+- **`raw()` object form** — `.raw({ outline: 'none', resize: 'vertical' })`
+- **`hide()/show()/glass()`** — corrected return types and `rgba` strings
+- **`autoContrast('ffffff')`** — works without `#`
+
+```ts
+chain()
+  .flex({ align: 'center', justify: 'space-between' })
+  .box({ padding: '12px 20px', borderRadius: 12 })
+  .background({ color: '$colors.surface' })
+  .typography({ fontSize: 14, fontWeight: '600', color: '#fff' })
+  .shadow({ box: '0 4px 12px rgba(0,0,0,0.1)' })
+  .pressable().hoverLift().peerDim({opacity:0.6,blur:'1px'})
+  .dark((c: ChainProxy) => c.background({ color: '#0a0a0a' }).typography({ color: '#e5e5e5' }))
+  .$el('card')
+```
+
+---
+
+# 29. Complete API Reference
 
 ```ts
 import {
-  chain,
-  $,
-  smartChain,
-
-  // Intent API
-  intentAPI,
-  resolveIntent,
-  getAvailableIntents,
-
-  // Semantic Tokens
-  semanticTokens,
-  resolveSemantic,
-  getSemanticIntents,
-
-  // Math Engine
-  math,
-  add,
-  subtract,
-  multiply,
-  divide,
-  fluidType,
-  convert,
-  scale,
-  toPx,
-
-  // Constraint System
+  chain, type ChainProxy, type StyleObject,
+  $, smartChain,
+  intentAPI, resolveIntent, getAvailableIntents,
+  semanticTokens, resolveSemantic,
+  math, add, subtract, multiply, divide, fluidType, convert, scale,
   constraintSolver,
-  resolveConstraint,
-
-  // Self-Healing CSS
-  intent,
-  correct,
-  heal,
-  validateValue,
-  getIntent,
-
-  // Scroll Timeline Engine
-  scrollTimeline,
-  createScrollAnimation,
-  compileScrollAnimation,
-  getScrollPresets,
-
-  // Accessibility Engine
-  accessibilityEngine,
-  auditAccessibility,
-
-  // Optimization
+  intent, correct, heal, validateValue,
+  scrollTimeline, createScrollAnimation, compileScrollAnimation, getScrollPresets,
+  accessibilityEngine, auditAccessibility,
   sourceOptimizer,
-  optimizeSource,
-
-  // Pattern Learning
-  patternLearner,
-  learnPatterns,
-
-  // Compiler Intelligence
-  orchestrator,
-  contrastRatio,
-  checkContrast,
-  layoutIntelligence,
-  recognizeLayout,
-  suggestMacro,
-  responsiveInference,
-  analyzeResponsive,
-
-  // CSS if() Engine
-  compileIfConditions,
-  generateIfCSS,
-
-  // Compiler IR
-  styleIR,
-  parseIR,
-  generateCSS,
-  applyPass,
-
-  // Pipeline
-  PassManager,
-  runDefaultPipeline,
-  DEFAULT_PIPELINE,
-
-  // Suggestions
-  getSuggestion,
-  getSuggestions,
-  KNOWN_MACROS,
-
-  // Design Tokens
-  createTokens,
-  createThemeContract,
-  createTheme,
-  validateTheme,
-  Theme,
-
-  // Recipes
+  orchestrator, contrastRatio, checkContrast, auditContrast, validateTokenRelationships, parseColor, importFigmaTokens, createContextualToken,
+  createThemeContract, createTheme,
   recipe,
-
-  // Animations
-  animationPresets,
-  createAnimation,
-
-  // Shorthands & Macros
-  shorthandMap,
-  macros,
-  handleShorthand,
-
-  // Timeline
-  enableTimeline,
-  getStyleHistory,
-  getStyleDiff,
-
-  // Compiler
-  ChainCSSCompiler,
-  compileChainCSS,
-
-  // Runtime
-  injectChainStyles,
-  setManifest,
-  setTokens,
-} from "chaincss";
+  shorthandMap, macros, handleShorthand, registerCustomShorthands, registerCustomMacros,
+  createEntanglementEngine,
+  figmaSync,
+  ChainCSSCompiler, compileChainCSS
+} from 'chaincss'
 ```
 
 ---
 
-# Quick Reference Cards
+## Compiler Pipeline
 
-## Chain Lifecycle
-
-```txt
-chain() -> [methods] -> $el("selector")
+```
+Chain API → Parser → Style IR → Normalization (mutable intents, custom shorthands)
+→ Validation (WCAG 2.2, cached parseColor) → Analysis (Levenshtein early-exit)
+→ Lowering (token resolution, entanglement propagation, intent-resolver)
+→ Optimization (atomic, prefixer) → CSS Generation → Output + /__chaincss-ir.json
 ```
 
 ---
 
-## Three Modes
+## Feature Summary v2.12
 
-```txt
-chain()      -> build-time (zero runtime)
-chain()      -> runtime (browser injection)
-smartChain() -> hybrid auto-detection
-```
-
----
-
-## Method Categories
-
-### Shorthand Methods
-
-```ts
-.bg()
-.c()
-.m()
-.p()
-.w()
-.h()
-.br()
-.fs()
-.fw()
-```
-
-### Layout Macros
-
-```ts
-.flex()
-.grid()
-.center()
-.stack()
-.cols()
-.rows()
-.glass()
-.pill()
-```
-
-### Intent API
-
-```ts
-.intent("card")
-.intent("button-primary")
-.intent("hero-section")
-.intent("sidebar-layout")
-```
-
-### Semantic Tokens
-
-```ts
-.surface()
-.text()
-.elevation()
-.spacing()
-.state()
-```
-
-### Math Helpers
-
-```ts
-.add()
-.calc()
-.clamp()
-.fluidType()
-.scale()
-.convert()
-```
-
-### Constraints
-
-```ts
-.constrain("width", "< parent")
-.constrain("height", "= width * 0.5")
-```
-
-### State Methods
-
-```ts
-.hover()
-.when()
-.responsive()
-.dark()
-.light()
-.focusRing()
-```
-
-### Animation Methods
-
-```ts
-.fadeIn()
-.slideInUp()
-.zoomIn()
-.animate()
-.duration()
-.delay()
-```
+| Feature | Count | Note |
+|---|---|---|
+| Structured Shorthands | 15 | `.flex()`, `.grid()`, `.box()`, `.typography()`, etc. |
+| Flat Shorthands | 100+ | logical props mi/mis/mie/mbk/mbs/mbe/pi/pis/pie/pbk/pbs/pbe |
+| Macros | 32+ | + peerDim, groupHasHover, hasCount, entangleFocus, bentoNative, pricingRow |
+| Intents | 22+ custom | auto-registered |
+| Token Relationships | 3 types | derived, contrast, harmony |
+| Figma Sync Modes | 2 | url (Tokens Studio GitHub), figmaVariables API |
+| Scroll Presets | 7 | @supports not (animation-timeline: scroll()) |
+| CLI Commands | 11 | + audit, tokens:watch/fix, figma sync, create --template entangled |
+| WCAG Checks | 6+ | contrast auto-fix preserves hue |
+| Dynamic Type Safety | ✅ | `Dynamic<T>` utility type |
 
 ---
 
-# Compiler Pipeline
-
-```txt
-Chain API
-   ↓
-Parser
-   ↓
-Style IR
-   ↓
-Validation
-   ↓
-Accessibility Engine
-   ↓
-Optimization Passes
-   ↓
-Atomic Extraction
-   ↓
-CSS Generation
-   ↓
-Output Files
-```
-
----
-
-# Architecture Overview
-
-| Layer | Purpose |
-|---|---|
-| Chain API | Fluent style authoring |
-| Intent Engine | Semantic layout resolution |
-| Semantic Tokens | Theme-aware styling |
-| Compiler IR | Intermediate style representation |
-| Accessibility Engine | WCAG validation |
-| Responsive Inference | Mobile-aware optimization |
-| Source Optimizer | Deduplication & dead-code removal |
-| Runtime Injector | Browser style injection |
-| Timeline Engine | Style history tracking |
-
----
-
-# Feature Summary
-
-| Feature | Count |
-|---|---|
-| Intents | 22 |
-| Semantic Tokens | 30 |
-| Layout Patterns | 35+ |
-| Macros | 57+ |
-| Shorthands | 80+ |
-| Animations | 42 |
-| Breakpoints | 20 |
-| Compiler Passes | 10 |
-| WCAG Detectors | 6 |
-| Scroll Presets | 7 |
-| Framework Integrations | 4 |
-| CLI Commands | 7 |
-| Test Suites | 39 |
-| Passing Tests | 708 |
-
----
-
-# Final Notes
-
-ChainCSS is designed to combine:
-
-- **Tailwind-level utility speed**
-- **CSS-in-JS flexibility**
-- **Compiler intelligence**
-- **Accessibility enforcement**
-- **Semantic design systems**
-- **Zero-runtime extraction**
-
-The result is a styling platform that understands intent — not just CSS properties.
-
----
-
-<p align="center">
-  <strong>⛓️ ChainCSS v2.3</strong><br>
-  <em>The CSS Intelligence Platform</em><br><br>
-  708 tests · 17 modules · Zero runtime · WCAG-aware
-</p>
+<p align="center"><strong>⛓ ChainCSS v2.12.0</strong><br><em>The CSS Intelligence Platform + Entanglement</em><br>15 structured shorthands · 100+ flat shorthands · 32+ macros · Token Graph · Figma Live · Zero runtime · WCAG auto-fix</p>

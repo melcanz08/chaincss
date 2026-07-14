@@ -17,7 +17,6 @@ import { InspectorStore } from '../compiler/pipeline/inspector/store.js'
 const CHAIN_FILE_RE = /\.chain\.(ts|js)x?$/
 const TMP_MARKER = '.chaincss-tmp'
 const isTmpFile = (p: string) => p.includes(TMP_MARKER)
-const isGeneratedOutput = (p: string) => p.endsWith('.css') || p.endsWith('.class.js')
 
 interface ChainCSSPluginOptions {
   verbose?: boolean
@@ -44,9 +43,6 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
 
   const cssFileCache = new Map<string, string>()
   let _cachedCSS = ''
-
-  // Track files currently being compiled to avoid self-triggered loops
-  const compiling = new Set<string>()
 
   function updateCSS(file: string, css: string) {
     cssFileCache.set(path.resolve(file), css)
@@ -120,7 +116,6 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
       for (const entry of entries) {
         const fullPath = path.join(dir, entry.name)
         if (isTmpFile(fullPath)) continue
-        if (isGeneratedOutput(fullPath)) continue
         if (entry.isDirectory()) {
           if (entry.name === 'node_modules' || entry.name === 'dist') continue
           walk(fullPath)
@@ -147,9 +142,7 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
         for (const [name, className] of Object.entries(classMap)) {
           const r = (rawResults as any)[name]
           if (r?.dynamic && Object.keys(r.dynamic).length) {
-            const fns = Object.entries(r.dynamic).map(([k, v]) => 
-            `"${k}": ${(v as Function).toString()}`
-          ).join(', ')
+            const fns = Object.entries(r.dynamic).map(([k, v]) => `${k}: ${(v as Function).toString()}`).join(', ')
             lines.push(`export const ${name} = { className: '${className}', dynamic: { ${fns} } };`)
           } else {
             lines.push(`export const ${name} = '${className}'`)
@@ -222,9 +215,7 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
           for (const [name, cn] of Object.entries(classMap)) {
             const r = results[name] as any
             if (r?.dynamic && Object.keys(r.dynamic).length) {
-              const fns = Object.entries(r.dynamic).map(([k, v]) => 
-              `"${k}": ${(v as Function).toString()}`
-            ).join(', ')
+              const fns = Object.entries(r.dynamic).map(([k, v]) => `${k}: ${(v as Function).toString()}`).join(', ')
               lines.push(`export const ${name} = { className: '${cn}', dynamic: { ${fns} } };`)
             } else {
               lines.push(`export const ${name} = '${cn}'`)
@@ -306,16 +297,8 @@ hot.accept();
 
       // Handle python-style atomic writes (unlink+add) and normal changes
       const handleFileChange = async (fp: string) => {
-        // Ignore generated output files
-        if (isGeneratedOutput(fp)) return
         if (!CHAIN_FILE_RE.test(fp) || isTmpFile(fp)) return
-        
         const abs = path.resolve(fp)
-        
-        // Skip if this file is already being compiled
-        if (compiling.has(abs)) return
-        
-        compiling.add(abs)
         log(`Change detected (watcher): ${path.basename(abs)}`)
         try {
           if ((compiler as any)?.invalidateFileCache) {
@@ -329,16 +312,12 @@ hot.accept();
           devServer.ws.send({ type: 'custom', event: 'chaincss-update', data: { timestamp: Date.now() } })
         } catch (err) {
           logError(`Watcher HMR failed ${path.basename(abs)}: ${(err as Error).message}`)
-        } finally {
-          // Delay removal to debounce rapid re-triggers
-          setTimeout(() => compiling.delete(abs), 500)
         }
       }
 
       devServer.watcher.on('change', handleFileChange)
       devServer.watcher.on('add', handleFileChange)
       devServer.watcher.on('unlink', (fp: string) => {
-        if (isGeneratedOutput(fp)) return
         if (CHAIN_FILE_RE.test(fp) && !isTmpFile(fp)) {
           removeCSS(fp)
           devServer.ws.send({ type: 'custom', event: 'chaincss-update', data: { timestamp: Date.now() } })
@@ -348,13 +327,7 @@ hot.accept();
 
     async handleHotUpdate(ctx) {
       const filePath = path.resolve(ctx.file)
-      // Ignore generated output files
-      if (isGeneratedOutput(filePath)) return
       if (!CHAIN_FILE_RE.test(filePath) || isTmpFile(filePath)) return
-      
-      // Skip if already compiling this file
-      if (compiling.has(filePath)) return
-      compiling.add(filePath)
 
       log(`Change detected: ${path.basename(filePath)}`)
       try {
@@ -371,8 +344,6 @@ hot.accept();
       } catch (err) {
         logError(`HMR failed: ${(err as Error).message}`)
         return []
-      } finally {
-        setTimeout(() => compiling.delete(filePath), 500)
       }
     },
 

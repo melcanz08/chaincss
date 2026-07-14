@@ -11,9 +11,10 @@
  */
 
 import { build, context } from 'esbuild';
-import { writeFileSync, mkdirSync, chmodSync, rmSync, readFileSync } from 'fs';
+import { writeFileSync, mkdirSync, chmodSync, rmSync, readFileSync, existsSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
+
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '..');
@@ -165,7 +166,7 @@ const targets = [
 
 async function run() {
   // Clean
-  rmSync(dist, { recursive: true, force: true });
+  if (!existsSync(dist)) mkdirSync(dist, { recursive: true });
   mkdirSync(dist, { recursive: true });
 
   console.log('🔨 Building ChainCSS...\n');

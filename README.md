@@ -32,7 +32,7 @@ export default defineConfig({
 })
 ```
 
-Vite now handles CSS compilation, HMR, inspector injection (`/__chaincss.css`, `/@chaincss/client.js`), and `__chaincss-ir.json` export automatically — with no `EISDIR` warnings.
+Vite now handles CSS compilation, HMR, inspector injection (`/__chaincss.css`, `/@chaincss/client.js`), and `__chaincss-ir.json` export automatically.
 
 ### With CLI (Zero Config)
 
@@ -61,29 +61,75 @@ export const btn = chain()
 
 ---
 
-## CLI Commands
+## The New Shorthand Methods (v2.12)
 
-```bash
-npx chaincss init          # Scaffolds chaincss.config.js with shorthands/macros/intents + relationships
-npx chaincss create app my-app --template entangled  # NEW: Entangled template (Figma live + token graph)
-npx chaincss dev           # Dev server + live reload + auto-bundling + inspector
-npx chaincss build         # Build CSS once
-npx chaincss watch         # Watch and rebuild
-npx chaincss check         # Accessibility audit (WCAG 2.2)
-npx chaincss check --fix   # Auto-fix accessibility issues
+ChainCSS now ships with **structured shorthand methods** that group related CSS properties into single, typed calls. Each shorthand accepts an options object with full autocomplete and inline documentation.
 
-# New in v3.3/v3.4 — Entanglement & Audit
-npx chaincss tokens:watch  # Watch tokens/global.json, propagate derived + contrast (topo sort + binary search)
-npx chaincss tokens:fix    # One-shot fixAll() for all contrast relationships
-npx chaincss figma sync    # Pull Figma Variables API or GitHub raw tokens
-npx chaincss audit --theme ./tokens.json --contract ./theme.contract.ts --fail-on AA --target 4.5 --json ./a11y.json --strict
-npx chaincss audit --fix                         # Suggest closest AA-passing colors (preserves hue via HSL L search)
-npx chaincss audit --fix --write                 # Write fixes + entangled derived updates back to theme file
-npx chaincss cache clear | stats | prune
-npx chaincss timeline list | diff | export | clear
+### Core Shorthands
+
+| Method | Covers | Example |
+|:---|:---|:---|
+| `.flex()` | `display:flex`, `flex-direction`, `align-items`, `justify-content`, `gap`, `grow`, `shrink`, `basis`, `wrap` | `.flex({ direction: 'column', align: 'center', gap: 16 })` |
+| `.grid()` | `display:grid`, `grid-template-columns/rows`, `gap`, `area`, `auto-flow/columns/rows` | `.grid({ columns: '1fr 1fr', gap: 24 })` |
+| `.box()` | `margin`, `padding`, `border`, `border-radius`, `width`, `height`, `overflow` | `.box({ padding: '24px', margin: '0 auto', maxWidth: 1200 })` |
+| `.typography()` | `font-family/size/weight/style`, `line-height`, `letter-spacing`, `text-align/transform/decoration`, `color`, `opacity` | `.typography({ fontSize: 16, fontWeight: '600', color: '#333' })` |
+| `.background()` | `background-color/image/position/size/repeat/attachment/origin/clip` | `.background({ color: '#fff', size: 'cover' })` |
+| `.position()` | `position`, `top/right/bottom/left`, `inset`, `z-index` | `.position({ type: 'absolute', top: 0, left: 0, zIndex: 10 })` |
+| `.animation()` | `animation-name/duration/timing/delay/iteration/direction/fill-mode` | `.animation({ name: 'fadeIn', duration: '300ms', timing: 'ease' })` |
+| `.transform()` | `translate/translateX/Y/Z`, `scale/scaleX/Y`, `rotate`, `skew`, `origin` | `.transform({ scale: 1.1, custom: 'translateY(-2px)' })` |
+| `.shadow()` | `box-shadow`, `text-shadow` (with decomposed x/y/blur/spread/color/inset) | `.shadow({ x: 0, y: 4, blur: 12, color: 'rgba(0,0,0,0.1)' })` |
+| `.filter()` | `blur`, `brightness`, `contrast`, `grayscale`, `hue-rotate`, `invert`, `saturate`, `sepia`, `drop-shadow`, `backdrop-filter` | `.filter({ blur: 5, brightness: 1.1 })` |
+| `.outline()` | `outline-width/style/color/offset` | `.outline({ width: '2px', style: 'solid', color: '#6366f1' })` |
+| `.scroll()` | `scroll-behavior`, `scroll-snap-type/align/stop`, `scroll-margin/padding`, `scrollbar-width/color`, `overflow-x/y` | `.scroll({ behavior: 'smooth', snapType: 'x mandatory' })` |
+| `.list()` | `list-style-type/position/image` | `.list({ style: 'none' })` |
+| `.transition()` | `transition-property/duration/timing/delay/behavior` | `.transition({ property: 'all', duration: '200ms', timing: 'ease' })` |
+| `.raw()` | Any CSS property not covered by a shorthand (accepts key-value or object form) | `.raw('cursor', 'pointer')` or `.raw({ cursor: 'pointer', resize: 'vertical' })` |
+
+### Short Aliases (Power User Mode)
+
+Every shorthand supports compact aliases for rapid prototyping:
+
+```ts
+chain()
+  .flex({ d: 'col', ai: 'center', g: 16 })              // direction, align, gap
+  .grid({ c: '1fr 1fr', g: 24 })                         // columns, gap
+  .box({ p: '24px', m: '0 auto', w: '100%', mw: 1200 }) // padding, margin, width, maxWidth
+  .typography({ fs: 16, fw: '600', c: '#333' })          // fontSize, fontWeight, color
+  .background({ c: '#fff', s: 'cover' })                  // color, size
+  .animation({ n: 'fadeIn', d: '300ms', t: 'ease' })     // name, duration, timing
+  .shadow({ y: 4, blur: 12, c: 'rgba(0,0,0,0.1)' })     // y-offset, blur, color
+  .$el('card')
 ```
 
-`build:clean` now runs `rm -rf dist .chaincss-cache` to prevent `EISDIR: illegal operation on a directory, read` when `.chaincss-cache` exists as a directory from new version while old code expected a file.
+### Backward Compatible
+
+All existing flat methods (`.display()`, `.padding()`, `.fontSize()`, etc.) still work. The new shorthands are **additive** — mix and match freely:
+
+```ts
+chain()
+  .display('flex')                     // Old way — still works
+  .flex({ direction: 'column' })       // New shorthand
+  .padding('24px')                     // Old way — still works
+  .box({ maxWidth: 1200 })             // New shorthand
+  .$el('hybrid')
+```
+
+### Dynamic Mode with Shorthands
+
+All shorthand properties support `chain.dynamic()` with functions:
+
+```ts
+export const btn = chain.dynamic()
+  .box({ padding: '12px 24px', borderRadius: 8 })
+  .background({ color: () => isActive ? '#6366f1' : '#a5b4fc' })
+  .shadow({ 
+    box: () => isActive 
+      ? '0 8px 25px rgba(99,102,241,0.4)' 
+      : '0 2px 8px rgba(0,0,0,0.1)'
+  })
+  .typography({ color: '#fff', fontWeight: '600' })
+  .$el('btn')
+```
 
 ---
 
@@ -99,13 +145,15 @@ export const btn = chain.dynamic()
   .$el('btn')
 ```
 
+**Security note:** Dynamic values are applied via CSS custom properties using the browser's CSSOM (`element.style.setProperty()`). This is inherently safe against CSS injection — characters like `;`, `}`, and `{` have no special meaning in custom property values. See the [Security docs](https://www.chaincss.dev/docs/security) for details.
+
 ---
 
-## Shorthands & Macros  
+## Shorthands & Macros
 
-ChainCSS shorthands are **real CSS properties**, not utilities. `bgc('#6366f1')` → `background-color: #6366f1` , `bg('linear-gradient(135deg, #818cf8, #a78bfa, #f472b6)')` → `background: linear-gradient(135deg, #818cf8, #a78bfa, #f472b6)` , `mt(12)` → `margin-top: 12px` , `pt(12)` → `padding-top: 12px`. All support tokens `$colors.primary` and hex without `#` (fixed).
+ChainCSS shorthands are **real CSS properties**, not utilities. `bgc('#6366f1')` → `background-color: #6366f1` , `bg('linear-gradient(135deg, #818cf8, #a78bfa, #f472b6)')` → `background: linear-gradient(135deg, #818cf8, #a78bfa, #f472b6)` , `mt(12)` → `margin-top: 12px` , `pt(12)` → `padding-top: 12px`. All support tokens `$colors.primary` and hex without `#`.
 
-### Shorthands 
+### Shorthands
 
 | Shorthand | CSS Property | Example |
 |:---|:---|:---|
@@ -122,7 +170,7 @@ ChainCSS shorthands are **real CSS properties**, not utilities. `bgc('#6366f1')`
 | `is`, `bs` | `inlineSize`, `blockSize` | `.is('100%')` |
 | `minW`, `maxW`, `minH`, `maxH` | `min/max-width/height` | `.maxW(1200)` |
 | `minI`, `maxI`, `minB`, `maxB` | `min/max-inline/block-size` |  |
-| `c`, `text` | `color` | `.c('ffffff')` works without `#` (fixed) |
+| `c`, `text` | `color` | `.c('ffffff')` works without `#` |
 | `fs` | `fontSize` | `.fs(16)` |
 | `fw` | `fontWeight` | `.fw(600)` |
 | `ff`, `fontF` | `fontFamily` |  |
@@ -161,39 +209,39 @@ ChainCSS shorthands are **real CSS properties**, not utilities. `bgc('#6366f1')`
 
 ### Macros (30+ from `shorthands.ts` + `layout-macros.ts`)
 
-| Macro | Result | Fix Applied |
-|:---|:---|:---|
-| `hide()` | `opacity: 0; visibility: hidden; pointer-events: none` | **Fixed:** returns `number 0` not `"0"` |
-| `show()` | `opacity: 1; visibility: visible; pointer-events: auto` | **Fixed:** returns `number 1` not `"1"` |
-| `glass(16px?)` | `background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.2); border-radius:16px` | **Fixed:** was `rgba(255,255,255,0.08)` no spaces → now `0.1` with spaces |
-| `center()` | `display:flex; align-items:center; justify-content:center` | — |
-| `container()` / `containerMacro(1200)` | `width:100%; max-width:1200px; margin-inline:auto; padding-inline:1rem` | — |
-| `fullScreen(9999)` | `position:fixed; inset:0; z-index` | — |
-| `square(40)`, `circle(40)` | `40px` square/circle + flex centering, circle = `border-radius:50%` | — |
-| `size(40)` | `width+height: 40px` | — |
-| `stickyHeader` | `position:sticky; top:0; z-index:50; backdrop-filter:blur(8px)` + scroll shadow | — |
-| `card` | flex col, `radius:12px`, shadow, `hover{translateY(-2px)}` | — |
-| `hero` | full-width centered, `min-h:60vh`, responsive | — |
-| `sidebar` | `grid: 280px 1fr`, gap 32px, collapses @1024px | — |
-| `gridList` | `repeat(auto-fit, minmax(280px,1fr))`, gap 24px | — |
-| `autoGrid` | `repeat(auto-fit, minmax(min(280px,100%),1fr))` — no media queries | — |
-| `bentoNative` | bento grid + `container-type:inline-size` + subgrid | **NEW v2.12** |
-| `pricingRow` | `grid 3 cols / subgrid rows` + `&:has(> :hover) > :not(:hover){opacity:0.7}` | **NEW v2.12** |
-| `pill()` | `border-radius:9999px; padding:6px 14px; inline-flex` | — |
-| `truncate()` | `overflow:hidden; text-overflow:ellipsis; white-space:nowrap` | — |
-| `srOnly()` | screen-reader only, visually hidden | — |
-| `pressable()` | `cursor:pointer; user-select:none` + active scale + hover opacity | — |
-| `clickScale(0.97)` | `&:active{transform:scale}` | — |
-| `hoverLift('4px')` | `transition + &:hover{translateY + shadow}` | — |
-| `hoverGlow('#6366f1')` | `&:hover{box-shadow:0 0 20px #6366f140}` | — |
-| `focusRing('#6366f1')` | `&:focus-visible{outline:2px solid; offset:2px}` | — |
-| `onHover(cb)`, `onActive`, `focusVisible`, `onInteracting` | `&:hover`, `&:active`, `&:focus-visible` | — |
-| `peerHover(cb)` | emits `.peer:hover ~ &` fallback + modern `.group:has(.peer:hover) &:not(.peer:hover)` | **Upgraded** |
-| `peerDim({opacity:0.6, scale:0.98, blur:'2px'})` | `.group:has(> :hover) > &:not(:hover){opacity, scale, blur}` | **NEW entanglement** |
-| `groupHasHover(cb)` | `&:has(> :hover)` — parent reacts to child hover, zero JS | **NEW** |
-| `hasCount({count:3})` | `&:has(> :nth-child(3))` | **NEW** |
-| `entangleFocus()` | floating label: `&:focus-within label, &:has(input:not(:placeholder-shown))` | **NEW** |
-| `badge()`, `kbd()`, `dark(cb)`, `light(cb)` | UI primitives + `prefers-color-scheme` media | — |
+| Macro | Result |
+|:---|:---|
+| `hide()` | `opacity: 0; visibility: hidden; pointer-events: none` |
+| `show()` | `opacity: 1; visibility: visible; pointer-events: auto` |
+| `glass(16px?)` | `background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.2); border-radius:16px` |
+| `center()` | `display:flex; align-items:center; justify-content:center` |
+| `container()` / `containerMacro(1200)` | `width:100%; max-width:1200px; margin-inline:auto; padding-inline:1rem` |
+| `fullScreen(9999)` | `position:fixed; inset:0; z-index` |
+| `square(40)`, `circle(40)` | `40px` square/circle + flex centering, circle = `border-radius:50%` |
+| `size(40)` | `width+height: 40px` |
+| `stickyHeader` | `position:sticky; top:0; z-index:50; backdrop-filter:blur(8px)` + scroll shadow |
+| `card` | flex col, `radius:12px`, shadow, `hover{translateY(-2px)}` |
+| `hero` | full-width centered, `min-h:60vh`, responsive |
+| `sidebar` | `grid: 280px 1fr`, gap 32px, collapses @1024px |
+| `gridList` | `repeat(auto-fit, minmax(280px,1fr))`, gap 24px |
+| `autoGrid` | `repeat(auto-fit, minmax(min(280px,100%),1fr))` — no media queries |
+| `bentoNative` | bento grid + `container-type:inline-size` + subgrid |
+| `pricingRow` | `grid 3 cols / subgrid rows` + `&:has(> :hover) > :not(:hover){opacity:0.7}` |
+| `pill()` | `border-radius:9999px; padding:6px 14px; inline-flex` |
+| `truncate()` | `overflow:hidden; text-overflow:ellipsis; white-space:nowrap` |
+| `srOnly()` | screen-reader only, visually hidden |
+| `pressable()` | `cursor:pointer; user-select:none` + active scale + hover opacity |
+| `clickScale(0.97)` | `&:active{transform:scale}` |
+| `hoverLift('4px')` | `transition + &:hover{translateY + shadow}` |
+| `hoverGlow('#6366f1')` | `&:hover{box-shadow:0 0 20px #6366f140}` |
+| `focusRing('#6366f1')` | `&:focus-visible{outline:2px solid; offset:2px}` |
+| `onHover(cb)`, `onActive`, `focusVisible`, `onInteracting` | `&:hover`, `&:active`, `&:focus-visible` |
+| `peerHover(cb)` | emits `.peer:hover ~ &` fallback + modern `.group:has(.peer:hover) &:not(.peer:hover)` |
+| `peerDim({opacity:0.6, scale:0.98, blur:'2px'})` | `.group:has(> :hover) > &:not(:hover){opacity, scale, blur}` |
+| `groupHasHover(cb)` | `&:has(> :hover)` — parent reacts to child hover, zero JS |
+| `hasCount({count:3})` | `&:has(> :nth-child(3))` |
+| `entangleFocus()` | floating label: `&:focus-within label, &:has(input:not(:placeholder-shown))` |
+| `badge()`, `kbd()`, `dark(cb)`, `light(cb)` | UI primitives + `prefers-color-scheme` media |
 
 ---
 
@@ -214,6 +262,7 @@ chain()
   .hover().bg('red').end()
   .media('(min-width: 768px)', c => c.flexDirection('row'))
 ```
+
 ---
 
 ## Design Tokens & Design Orchestrator
@@ -242,9 +291,34 @@ chain()
   .padding('$spacing.sm $spacing.md')
   .border('1px solid $colors.border')
 ```
+
 ---
 
-## `autoContrast()` 
+## CLI Commands
+
+```bash
+npx chaincss init          # Scaffolds chaincss.config.js with shorthands/macros/intents + relationships
+npx chaincss create app my-app --template entangled  # Entangled template (Figma live + token graph)
+npx chaincss dev           # Dev server + live reload + auto-bundling + inspector
+npx chaincss build         # Build CSS once
+npx chaincss watch         # Watch and rebuild
+npx chaincss check         # Accessibility audit (WCAG 2.2)
+npx chaincss check --fix   # Auto-fix accessibility issues
+
+# Entanglement & Audit
+npx chaincss tokens:watch  # Watch tokens/global.json, propagate derived + contrast (topo sort + binary search)
+npx chaincss tokens:fix    # One-shot fixAll() for all contrast relationships
+npx chaincss figma sync    # Pull Figma Variables API or GitHub raw tokens
+npx chaincss audit --theme ./tokens.json --contract ./theme.contract.ts --fail-on AA --target 4.5 --json ./a11y.json --strict
+npx chaincss audit --fix                         # Suggest closest AA-passing colors (preserves hue via HSL L search)
+npx chaincss audit --fix --write                 # Write fixes + entangled derived updates back to theme file
+npx chaincss cache clear | stats | prune
+npx chaincss timeline list | diff | export | clear
+```
+
+---
+
+## `autoContrast()`
 
 ```ts
 export function autoContrast(bgColor: string): string {
@@ -254,16 +328,11 @@ export function autoContrast(bgColor: string): string {
 }
 ```
 
-- Handles `'ffffff'` and `'fff'` without `#` (was failing, defaulted to 128 gray)
+- Handles `'ffffff'` and `'fff'` without `#`
 - Handles `'#777777'` → `#ffffff` (below 50% luminance) and `'#999999'` → `#000000` (above)
 - Supports `rgb()`, `hsl()`, `var()` fallback to `#000000`
-
-**New in v2.12**
-
-- `parseColor()` now supports `#rgb`, `#rrggbb`, `#rrggbbaa`, `rgb()`, `rgba()`, `hsl()`, `hsla()`, named colors, `oklch` via orchestrator, and caching
-- Hex without `#` is now supported: `autoContrast('ffffff')` → `#000000`
+- `parseColor()` supports `#rgb`, `#rrggbb`, `#rrggbbaa`, `rgb()`, `rgba()`, `hsl()`, `hsla()`, named colors, `oklch` via orchestrator, and caching
 - `importFigmaTokens()` — import Tokens Studio / Style Dictionary JSON
-- Contextual tokens: `createContextualToken()`, `resolveContextual()`, `generateContextualCSS()`
 - `contrastRatio()`, `checkContrast()`, `auditContrast()`, `validateTokenRelationships()`
 
 Theme Contracts validate at build time:
@@ -273,109 +342,6 @@ import { createThemeContract, createTheme } from 'chaincss'
 const contract = createThemeContract({ colors: { primary: '', background: '' } })
 export const lightTheme = createTheme(contract, { colors: { primary: '#6366f1', background: '#fff' } })
 ```
-
----
-
-## `scroll-timeline`
-
-- Now emits `@supports not (animation-timeline: scroll())` fallback (test expects `scroll()`, not just `view()`)
-- Error now throws `Unknown scroll preset: ${preset}` (matches test regex)
-
----
-
-## 🔗 Token Entanglement — Only ChainCSS Has This
-
-> **Flat variables are dead. Tokens are physically linked.** Change `colors.primary.500` and every derived shade, badge, button, and text contrast auto-adjusts to keep AA, hue harmony, and scale rhythm. No manual `100,200,300` palette.
-
-Tailwind and Panda make you manually maintain `primary.100` to `primary.900`. ChainCSS has a **live token graph** with topological sort and HSL lightness binary search.
-
-### How it works in 15 seconds
-
-```ts
-// chaincss.config.ts
-import { defineConfig } from 'chaincss'
-
-export default defineConfig({
-  tokens: {
-    tokens: {
-      colors: {
-        primary: { 500: '#6366f1', 100: '#e0e7ff' },
-        text: { onPrimary: '#ffffff', muted: '#6b7280' },
-        background: '#ffffff'
-      }
-    },
-    relationships: [
-      // Derived — auto-computed, hue-preserving
-      { type: 'derived', source: 'colors.primary.500', target: 'colors.primary.100', method: 'mix-white 80%' },
-      { type: 'derived', source: 'colors.primary.500', target: 'colors.primary.50', method: 'tint 90%' },
-      { type: 'derived', source: 'colors.primary.500', target: 'colors.primary.600', method: 'shade 20%' },
-      { type: 'derived', source: 'colors.primary.500', target: 'colors.primary.700', method: 'mix-black 25%' },
-
-      // Contrast — auto-fixes to keep 4.5:1, preserves hue via binary search, not just black/white
-      { type: 'contrast', foreground: 'colors.text.onPrimary', background: 'colors.primary.500', target: 4.5, autoFix: 'auto', priority: 10 },
-      { type: 'contrast', foreground: 'colors.text.muted', background: 'colors.background', target: 4.5 },
-
-      // Harmony — keep palette in sync
-      { type: 'harmony', source: 'colors.primary.500', targets: ['colors.accent.500'], rule: 'complementary' }
-    ]
-  }
-})
-```
-
-```ts
-import { createEntanglementEngine } from 'chaincss/entanglement'
-
-const engine = createEntanglementEngine({ relationships })
-const report = engine.propagate(tokens, 'colors.primary.500', '#ff3b30')
-// report.changes: primary.100 → #ffdad6 (mix-white 80%), onPrimary → #000000 (auto-fix 5.2:1)
-// report.violations: [] — all AA now
-```
-
-**Engine internals:**
-
-1. **Topological sort** — `primary.600` derived from `primary.500` updates before anything that depends on `primary.600`
-2. **HSL lightness binary search (24 iterations)** — finds closest `L` meeting contrast while preserving `H`/`S`, not naive darken/lighten
-3. **Priority fix** — `onPrimary` (priority 10) fixed before `muted` to avoid thrashing
-4. **Methods:** `mix-white X%`, `mix-black X%`, `lighten N`, `darken N`, `alpha N`, `tint X%`, `shade X%`, `saturate N`, `desaturate N`
-
-### Figma → GitHub → Browser in 80ms
-
-```bash
-npx chaincss create app my-app --template entangled
-cd my-app && npm install && npm run dev
-# in another terminal
-npm run tokens:watch
-```
-
-**Option A: Tokens Studio → GitHub (recommended)**
-1. Figma → Plugins → Tokens Studio → Sync → GitHub → `tokens.json`
-2. `vite.config.ts` already has:
-```ts
-import { figmaSync } from 'chaincss/figma'
-figmaSync({
-  mode: 'url',
-  url: 'https://raw.githubusercontent.com/your-org/design-tokens/main/tokens.json',
-  output: 'tokens/global.json',
-  pollMs: 3000
-})
-```
-Designer hits Save → pushes to GitHub → `figmaSync` polls (hash compare) → `TokenEntanglementEngine` propagates → Vite HMR via `ws chaincss-update` → 80ms.
-
-**Option B: Figma Variables API (no plugin)**
-```ts
-figmaSync({ mode: 'figmaVariables', fileId: 'abc123', token: process.env.FIGMA_TOKEN!, output: 'tokens/global.json' })
-```
-
-**Scripts:**
-```bash
-npm run tokens:watch   # watch tokens/global.json, propagate derived + contrast
-npm run tokens:fix     # one-shot fixAll()
-npm run audit -- --fix --write  # WCAG + contract + entanglement auto-fix
-```
-
-Only ChainCSS has an IR, a pipeline report, and a token entanglement graph. Others generate strings. You generate a live system.
-
-> 🎯 **Works with React, Vue, Svelte, and Solid.** ChainCSS outputs plain CSS strings — use it with any framework or vanilla HTML.
 
 ---
 
@@ -392,7 +358,7 @@ All four frameworks verified with mixed mode end-to-end.
 
 ---
 
-## 5-Stage Compiler Pipeline 
+## 5-Stage Compiler Pipeline
 
 | Stage | What Happens |
 |-------|-------------|
@@ -402,21 +368,11 @@ All four frameworks verified with mixed mode end-to-end.
 | **4. Lowering** | Token resolution, constraint solving, `intent-resolver` with custom intents, CSS emission |
 | **5. Optimization** | Compression, specificity sorting, media query packing, atomic extraction, prefixer |
 
-Deep config merge now preserves `output`, `atomic`, `prefixer`, `tokens`. `getStats()` no longer mutates `aggregatedStats`. `persistentCache` is null-safe and handles legacy `.chaincss-cache` file/dir collisions.
-
 ---
 
 ## Live Compiler Inspector
 
-Vite plugin `v2.12` fixes:
-
-- **TMP extension** — `*.chain.ts.<marker>-<timestamp>.ts` so transpilation works but watcher doesn't loop
-- **Stale cache / ENOTDIR** — checks `fs.statSync('.chaincss-cache')` and unlinks if it's a file from old version; core compiler now removes file OR directory before creating `CacheManager`
-- **Python atomic writes** — handles `unlink+add` via `devServer.watcher.on('add')` + `handleFileChange`
-- **F5 mismatch** — `configureServer` `listening` hook + `buildStart` rebuilds CSS cache in prod
-- **Inspector** — `serializeForInspector()` + `InspectorStore` → `/__chaincss-ir.json`, HMR via `/__chaincss.css` + `/@chaincss/client.js`
-
-Press `Ctrl+Shift+I` on any ChainCSS-powered site to inspect compiler history.
+The Vite plugin provides a live inspector at `/__chaincss-ir.json` with full compiler history, pipeline reports, and diagnostics. Press `Ctrl+Shift+I` on any ChainCSS-powered site to inspect compiler history.
 
 ---
 
@@ -427,7 +383,7 @@ npx chaincss check
 npx chaincss audit --fix --write
 ```
 
-WCAG 2.2 checks: contrast ratios (now using cached `parseColor` + `relativeLuminance`), font-size minimums (12px+), touch target sizing (44x44px+), focus indicators, motion preferences.
+WCAG 2.2 checks: contrast ratios (using cached `parseColor` + `relativeLuminance`), font-size minimums (12px+), touch target sizing (44x44px+), focus indicators, motion preferences.
 
 ---
 
@@ -446,6 +402,7 @@ WCAG 2.2 checks: contrast ratios (now using cached `parseColor` + `relativeLumin
 | **Accessibility audit** | ✅ Built-in + auto-fix | ❌ | ❌ | ❌ | ❌ |
 | **Compiler inspector** | ✅ Live | ❌ | ❌ | ❌ | ❌ |
 | **Custom registries** | ✅ shorthands/macros/intents | ❌ | ❌ | ❌ | ❌ |
+| **Structured shorthands** | ✅ `.flex()`, `.grid()`, `.box()`, etc. | ❌ | ❌ | ❌ | ❌ |
 
 ---
 
@@ -462,44 +419,17 @@ Cold start ~61ms. Compiler never ships to browser.
 
 ---
 
-## Fixes in v2.12
+## What's New in v2.12
 
-- **hide()/show()/glass()** — corrected return types and exact `rgba` string to match tests
-- **autoContrast** — supports hex without `#`, 3/6/8-char hex, `rgb()`, `hsl()`, threshold `0.25` fixes `#777777` → white and `#ffffff` without `#` → black
-- **parseColor** — caching, named colors, `hsl`/`oklch`, optional `#` (patched to `^#?` in v3.3)
-- **scroll-timeline** — `@supports not (animation-timeline: scroll())` + `Unknown scroll preset` error message
-- **Cache EISDIR** — `build:clean` removes `.chaincss-cache`, `ChainCSSCompiler` and Vite plugin both guard `fs.statSync` file vs directory before `new CacheManager`
-- **CLI** — `audit --fix --write --json --strict --fail-on --target`, deep config merge, custom `shorthands`/`macros`/`intents` auto-registration
-- **Pipeline** — `SEMANTIC_INTENTS` mutable, `VALUE_CORRECTIONS` extensible, `KNOWN_PROPERTIES` Set + `registerCustomKnownProperties`, Levenshtein early-exit, `findClosestProperty` cache
-- **Entanglement Engine (v1.0)** — `TokenEntanglementEngine` with `contrast`/`derived`/`harmony` relationships, topological sort for derived propagation, HSL lightness binary search (24 iterations) preserving hue, priority-based auto-fix, `mix-white`, `mix-black`, `tint`, `shade`, `alpha`, `lighten`/`darken`, `saturate`/`desaturate`, Figma Tokens Studio → GitHub raw polling + Figma Variables API via `figmaSync` Vite plugin, `tokens:watch`/`tokens:fix`, entangled template `npx chaincss create app --template entangled`
-
----
-
-## Troubleshooting / FAQ
-
-**Q: What is Entanglement and why is it different from Tailwind's palette?**
-Tailwind requires you to manually define `100-900`. Entanglement is a live graph: define `primary.500` once, derive `primary.100` as `mix-white 80%` and `primary.600` as `shade 20%` via topological sort. When `primary.500` changes from Figma, all derived tokens recompute, then contrast relationships auto-fix `text.onPrimary` to keep 4.5:1 using HSL lightness binary search (not just black/white).
-
-**Q: `EISDIR: illegal operation on a directory, read '.chaincss-cache'`?**  
-Fixed in v2.11.2. Run `rm -rf .chaincss-cache dist` once, or update to latest where `build:clean` does `rm -rf dist .chaincss-cache` and compiler does:
-```ts
-try { const s = fs.statSync('.chaincss-cache'); if(s.isFile()||s.isDirectory()) fs.rmSync('.chaincss-cache',{recursive:true,force:true}) } catch {}
-```
-
-**Q: `autoContrast('ffffff')` returns white instead of black?**  
-Was bug — parser required `#`. Fixed to accept hex without `#` via `/^[a-f0-9]{3,8}$/` check.
-
-**Q: `hide()` test expected `0` got `"0"`?**  
-Fixed — now returns `number` not string.
-
-**Q: `glass()` expected `rgba(255, 255, 255, 0.1)` got `rgba(255,255,255,0.08)`?**  
-Fixed — now `0.1` with spaces, blur param supported.
-
-**Q: Vite HMR not updating ChainCSS after Python save?**  
-Fixed — Vite plugin now listens to `change` + `add` + `unlink`, handles `.chaincss-tmp` marker files.
-
-**Q: How do I wire Figma to entanglement?**
-Use the entangled template: `npx chaincss create app --template entangled` — it includes `figmaSync({ mode: 'url', url: 'https://raw.githubusercontent.com/.../tokens.json', output: 'tokens/global.json', pollMs: 3000 })`. Designer saves in Tokens Studio → GitHub → poll → engine.propagate() → HMR in 80ms.
+- **Structured shorthand methods** — `.flex()`, `.grid()`, `.box()`, `.typography()`, `.background()`, `.position()`, `.animation()`, `.transform()`, `.shadow()`, `.filter()`, `.outline()`, `.scroll()`, `.list()`, `.transition()` — each with full TypeScript types, short aliases, and dynamic mode support
+- **`.raw()` escape hatch** — accepts key-value `.raw('prop', 'value')` or object `.raw({ prop: 'value', ... })` for any CSS property not covered by a shorthand
+- **`Dynamic<T>` utility type** — all shorthand properties accept functions for `chain.dynamic()` mode with zero type errors
+- **`ChainProxy` type export** — explicitly type media/supports/nest callbacks with `import { type ChainProxy } from 'chaincss'`
+- **Vite plugin fixes** — watcher loop prevention (generated `.css`/`.class.js` files excluded, compiling deduplication), kebab-case keys quoted in dynamic exports
+- **Build order fix** — `.d.ts` files now preserved alongside `.js` output
+- **`hide()`/`show()`/`glass()`** — corrected return types and exact `rgba` strings
+- **`autoContrast`** — supports hex without `#`, 3/6/8-char hex, `rgb()`, `hsl()`, threshold `0.25`
+- **Entanglement Engine (v1.0)** — `TokenEntanglementEngine` with `contrast`/`derived`/`harmony` relationships, topological sort, HSL lightness binary search, Figma sync, `tokens:watch`/`tokens:fix`
 
 ---
 
