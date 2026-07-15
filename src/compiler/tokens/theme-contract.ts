@@ -1,4 +1,4 @@
-// src/compiler/theme-contract.ts
+// src/compiler//tokens/theme-contract.ts
 // Adds strict mode, token references, CSS var fallback, and integration with design-orchestrator
 
 import { contrastRatio, checkContrast } from './design-orchestrator.js';

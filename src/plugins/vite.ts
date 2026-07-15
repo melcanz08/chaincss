@@ -312,6 +312,9 @@ hot.accept();
         
         const abs = path.resolve(fp)
         
+        // Security: prevent path traversal outside project root
+        if (!abs.startsWith(root)) { logError(`Rejected path outside root: ${abs}`); return }
+        
         // Skip if this file is already being compiled
         if (compiling.has(abs)) return
         

@@ -270,13 +270,13 @@ export function createAnimation(
   
   return {
     animation: animationValue.trim(),
-    animationFillMode: fillMode,
     animationName: animationName,
     animationDuration: duration,
     animationDelay: delay,
     animationTimingFunction: timing,
     animationIterationCount: iteration,
     animationDirection: direction,
+    animationFillMode: fillMode,
     animationPlayState: playState
   };
 }

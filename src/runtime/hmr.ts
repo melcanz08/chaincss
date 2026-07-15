@@ -42,6 +42,7 @@ function setupViteHMR(): void {
   if (typeof window === 'undefined') return;
   
   const hot = (import.meta as any).hot;
+  const hot = (module as any)?.hot;
   if (!hot) return;
   
   // Listen for ChainCSS update events
@@ -93,13 +94,12 @@ function setupViteHMR(): void {
 function setupWebpackHMR(): void {
   if (typeof window === 'undefined') return;
   
-  if (typeof module === 'undefined') return;
-  if (typeof module === 'undefined') return;
   // (webpack HMR handler removed — use chaincss/plugin/webpack)
+  const hot = (module as any)?.hot;
   if (!hot) return;
   
   // Webpack HMR uses accept() pattern
-  hot.accept((err: Error | null) => {
+  (hot as any).accept((err: Error | null) => {
     if (err) {
       console.error('[ChainCSS HMR] ❌ Update failed:', err);
       return;
@@ -143,10 +143,11 @@ function registerViteHMR(
   callback?: (newStyles: Record<string, any>) => void
 ): void {
   const hot = (import.meta as any).hot;
+  const hot = (module as any)?.hot;
   if (!hot) return;
   
   // Accept updates for this module
-  hot.accept(() => {
+  (hot as any).accept(() => {
     console.log(`[ChainCSS HMR] 🔄 Accepting update for ${moduleId}`);
     
     // Clean up old styles
@@ -173,9 +174,10 @@ function registerWebpackHMR(
   if (typeof module === 'undefined') return;
   if (typeof module === 'undefined') return;
   // (webpack HMR handler removed — use chaincss/plugin/webpack)
+  const hot = (module as any)?.hot;
   if (!hot) return;
   
-  hot.accept(() => {
+  (hot as any).accept(() => {
     console.log(`[ChainCSS HMR] 🔄 Webpack HMR accept for ${moduleId}`);
     
     if (callback && styles) {

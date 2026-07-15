@@ -19,7 +19,7 @@ export interface RuleContext {
 function cloneAtRule(rule: AtRule): AtRule {
   return {
     ...rule,
-    styles: rule.styles ? { ...rule.styles } : undefined,
+    styles: rule.styles ? JSON.parse(JSON.stringify(rule.styles)) : undefined,
     steps: rule.steps ? { ...rule.steps } : undefined,
     properties: rule.properties ? { ...rule.properties } : undefined,
   };
@@ -39,10 +39,10 @@ export class RuleBuilder {
   /** Build a child context by executing a callback and collecting its output. */
   buildChild(
     fn: (childProxy: any) => void,
-    createChildProxy: (debug: boolean) => any,
+    createChildProxy: (opts: { debug: boolean; classPrefix?: string; tokens?: any }) => any,
     debug: boolean = false
   ): StyleObject {
-    const childProxy = createChildProxy(debug);
+    const childProxy = createChildProxy({ debug });
     fn(childProxy);
     return (childProxy as any).build
       ? (childProxy as any).build()

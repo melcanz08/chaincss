@@ -1,5 +1,5 @@
 // src/core/shorthand-types.ts
-type Dynamic<T> = T | (() => T);
+type Dynamic<T> = T extends Function ? T : T | (() => T);
 
 
 // ============================================================================

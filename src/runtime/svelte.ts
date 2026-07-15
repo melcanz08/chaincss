@@ -55,7 +55,7 @@ export interface AtomicClassesReturn {
 // ============================================================================
 
 function generateId(): string {
-  return `chain-${Math.random().toString(36).substring(2, 11)}`;
+  return `chain-${crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).substring(2, 11)}`;
 }
 
 function resolveStyles(styles: any): Record<string, any> | null {

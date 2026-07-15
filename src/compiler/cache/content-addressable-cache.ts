@@ -107,6 +107,7 @@ export class PersistentCache {
         
         if (!this.isExpired(entry)) {
           this.memoryCache.set(hash, entry);
+    if (this.memoryCache.size > 100) { const first = this.memoryCache.keys().next().value; if (first) this.memoryCache.delete(first); }
           if (this.options.verbose) {
             console.log(`[persistent-cache] Disk HIT for hash ${hash.slice(0, 8)}`);
           }
@@ -159,6 +160,7 @@ export class PersistentCache {
     };
     
     this.memoryCache.set(hash, entry);
+    if (this.memoryCache.size > 100) { const first = this.memoryCache.keys().next().value; if (first) this.memoryCache.delete(first); }
     
     const cachePath = path.join(this.cacheDir, `${hash}.json`);
     fs.writeFileSync(cachePath, JSON.stringify(entry, null, 2));
@@ -195,6 +197,7 @@ export class PersistentCache {
         const entry: PersistentCacheEntry = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
         if (!this.isExpired(entry)) {
           this.memoryCache.set(hash, entry);
+    if (this.memoryCache.size > 100) { const first = this.memoryCache.keys().next().value; if (first) this.memoryCache.delete(first); }
           return entry.result;
         } else {
           fs.unlinkSync(cachePath);
@@ -228,6 +231,7 @@ export class PersistentCache {
     };
     
     this.memoryCache.set(hash, entry);
+    if (this.memoryCache.size > 100) { const first = this.memoryCache.keys().next().value; if (first) this.memoryCache.delete(first); }
     
     const cachePath = path.join(this.cacheDir, `${hash}.json`);
     fs.writeFileSync(cachePath, JSON.stringify(entry, null, 2));

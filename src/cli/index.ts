@@ -11,7 +11,7 @@ import { devCommand } from './commands/dev.js';
 import { cacheCommand } from './commands/cache.js';
 import { checkCommand } from './commands/check.js';
 import { auditCommand } from './commands/audit.js';
-import { entanglementCommand } from './commands/entanglement.command.js';
+import { entanglementCommand } from './commands/entanglement.js';
 import { figmaInitCommand } from './commands/figma.js';
 import { createCommand } from './commands/create.js';
 

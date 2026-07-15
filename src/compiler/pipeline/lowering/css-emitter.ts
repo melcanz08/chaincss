@@ -30,7 +30,7 @@ export const cssEmitter: LoweringPass = {
           // Find selector in CSS output after current offset
           const idx = injectedCss.indexOf(selector, offset);
           if (idx !== -1) {
-            const comment = `/* source: ${rule.source!.file} */\n`;
+            const comment = `/* source: ${rule.source?.file?.replace(/\*\//g, '*\\/')} */\n`;
             injectedCss = injectedCss.slice(0, idx) + comment + injectedCss.slice(idx);
             offset = idx + comment.length + selector.length;
           }

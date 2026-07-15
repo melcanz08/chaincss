@@ -313,6 +313,14 @@ function detectFromParsed(value: ParsedValue, features: Set<string>): void {
 }
 
 function detectFromString(decl: IRDeclaration, features: Set<string>): void {
+  // Check display property directly (raw is the value, not property: value)
+  if (decl.property === 'display') {
+    const val = String(decl.value);
+    if (/\b(inline-)?(flex|grid)\b/.test(val)) {
+      features.add('flexbox-grid');
+      return;
+    }
+  }
   const raw = String(decl.value);
 
   if (/\b\d+(\.\d+)?(vh|vw|vmin|vmax)\b/.test(raw)) {

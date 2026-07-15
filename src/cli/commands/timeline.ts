@@ -1,10 +1,9 @@
 // chaincss/src/commands/timeline.ts
 import chalk from 'chalk';
 import fs from 'fs';
+import { formatBytes, formatDuration } from "../utils/format.js";
 import path from 'path';
-import { createRequire } from 'module';
 
-const require = createRequire(import.meta.url);
 
 // Types
 interface StyleSnapshot {
@@ -36,26 +35,6 @@ interface TimelineData {
     firstRecorded: number;
     lastRecorded: number;
   };
-}
-
-// Helper to format bytes
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
-
-// Helper to format duration
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  const seconds = ms / 1000;
-  if (seconds < 60) return `${seconds.toFixed(1)}s`;
-  const minutes = seconds / 60;
-  if (minutes < 60) return `${minutes.toFixed(1)}min`;
-  const hours = minutes / 60;
-  return `${hours.toFixed(1)}h`;
 }
 
 // Load timeline data with validation
@@ -106,6 +85,20 @@ function displaySnapshotDetails(snapshot: StyleSnapshot, index: number): void {
 }
 
 // Calculate diff between two snapshots
+// Shallow comparison helper — faster than JSON.stringify
+function shallowEqual(a: any, b: any): boolean {
+  if (a === b) return true;
+  if (typeof a !== typeof b) return false;
+  if (typeof a !== "object" || a === null) return a === b;
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  if (keysA.length !== keysB.length) return false;
+  for (const key of keysA) {
+    if (a[key] !== b[key]) return false;
+  }
+  return true;
+}
+
 function calculateDiff(snapshot1: StyleSnapshot, snapshot2: StyleSnapshot): {
   added: Record<string, any>;
   removed: Record<string, any>;

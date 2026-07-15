@@ -71,9 +71,13 @@ const knownSet = new Set<string>(BUILTIN_KNOWN.map(p=>p.toLowerCase()));
 const customKnown = new Set<string>();
 
 export function registerCustomKnownProperties(props: string[]) {
+  propertyCache.clear();
   for (const p of props) { const lp = p.toLowerCase(); if (!knownSet.has(lp)) { knownSet.add(lp); customKnown.add(lp); KNOWN_PROPERTIES.push(p); } }
 }
-export function isKnownProperty(prop: string): boolean { return knownSet.has(prop.toLowerCase()) || customKnown.has(prop.toLowerCase()); }
+export function isKnownProperty(prop: string): boolean { 
+  const kebab = prop.replace(/[A-Z]/g, m => '-' + m.toLowerCase());
+  return knownSet.has(kebab) || customKnown.has(kebab) || knownSet.has(prop.toLowerCase()) || customKnown.has(prop.toLowerCase()); 
+}
 export function resetKnownProperties() {
   KNOWN_PROPERTIES.length = 0; KNOWN_PROPERTIES.push(...BUILTIN_KNOWN);
   knownSet.clear(); for (const p of BUILTIN_KNOWN) knownSet.add(p.toLowerCase()); customKnown.clear(); propertyCache.clear();

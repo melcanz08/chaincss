@@ -1,4 +1,4 @@
-// src/compiler/pipeline/inspector-store.ts
+// src/compiler/pipeline/inspector/inspector-store.ts
 // Accumulates inspector rules during compilation and exports them
 
 import type { InspectorRule, InspectorExport } from './types.js';

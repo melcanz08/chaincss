@@ -19,8 +19,11 @@
  *   chain.spacing('comfortable')  // → maps to padding
  */
 
-import type { StyleIR, IRRule, IRPass, IRPseudoClass} from '../../style-ir.js';
-import { createDeclaration } from '../../style-ir.js';
+import type { StyleIR, IRRule, IRPseudoClass } from '../pipeline/ir/types.js';
+import type { IRPass } from '../../style-ir.js';
+let _semIdCounter = 0;
+function nextSemId(prefix: string): string { return `${prefix}-${++_semIdCounter}`; }
+import { createDeclaration } from '../pipeline/ir/factory.js';
 
 // ============================================================================
 // Types
@@ -438,7 +441,7 @@ export const semanticTokensPass: IRPass = (ir: StyleIR): StyleIR => {
           let pc = rule.pseudoClasses.find((p: IRPseudoClass) => p.name === resolved.pseudoClass);
           if (!pc) {
             pc = {
-              id: 'semantic-pc-' + Date.now(),
+              id: nextSemId('semantic-pc'),
               name: resolved.pseudoClass!,
               declarations: [],
               source: rule.source,

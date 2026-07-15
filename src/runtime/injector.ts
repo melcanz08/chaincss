@@ -141,6 +141,8 @@ class StyleInjector {
     styles: Record<string, StyleObject>,
     moduleId?: string
   ): Record<string, string> {
+    // SSR guard: don't touch DOM during server rendering
+    if (typeof document === 'undefined') return {};
     const result: Record<string, string> = {};
     const sheet = this.ensureElement().sheet;
     if (!sheet) return result;
@@ -221,6 +223,8 @@ class StyleInjector {
    * Used by useChainStyles() for dynamic style injection.
    */
   inject(className: string, css: string, debug: boolean = false): void {
+    // SSR guard
+    if (typeof document === 'undefined') return;
     const sheet = this.ensureElement().sheet;
     if (!sheet) return;
 
@@ -258,7 +262,7 @@ class StyleInjector {
     if (!sheet) return;
     for (let i = sheet.cssRules.length - 1; i >= 0; i--) {
       const rule = sheet.cssRules[i] as CSSStyleRule;
-      if (rule.selectorText?.includes(className)) {
+      if (rule.selectorText && new RegExp('\\.' + className.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\s|:|$)').test(rule.selectorText)) {
         try { sheet.deleteRule(i); } catch {}
       }
     }

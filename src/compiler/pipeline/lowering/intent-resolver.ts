@@ -5,11 +5,11 @@ import { recordHistory } from '../ir/utils.js';
 import type { StyleIR } from '../ir/types.js';
 import type { LoweringPass, LoweringResult, LoweringContext } from '../pipeline-types.js';
 import { createDeclaration } from '../ir/factory.js';
-import { resolveSemantic } from '../../legacy/semantic-tokens.js';
+import { resolveSemantic } from '../../tokens/semantic-tokens.js';
 
 interface IntentDefinition {
   name: string;
-  category: 'layout' | 'component' | 'semantic' | 'interaction' | string;
+  category: "layout" | "component" | "semantic" | "interaction" | string;
   description: string;
   semantics?: Array<{ category: string; intent: string }>;
   properties?: Record<string, string | number>;
@@ -17,6 +17,7 @@ interface IntentDefinition {
   responsive?: Record<string, Record<string, string | number>>;
   a11y?: string[];
 }
+
 
 const BUILTIN_INTENT_CATALOG: Record<string, IntentDefinition> = {
   'center-content': {

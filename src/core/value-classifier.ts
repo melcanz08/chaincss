@@ -13,7 +13,10 @@ export function partitionStyles(properties: CSSProperties): {
   const dynamicProps: Record<string, ((...args: any[]) => string)> = {};
 
   for (const [key, value] of Object.entries(properties)) {
-    if (isDynamicValue(value)) {
+    // Template literals with ${} in CSS content property are static (not dynamic)
+    if (key === 'content' && typeof value === 'string' && value.includes('${')) {
+      staticProps[key] = value;
+    } else if (isDynamicValue(value)) {
       dynamicProps[key] = value;
     } else if (typeof value === 'string' || typeof value === 'number') {
       staticProps[key] = value;

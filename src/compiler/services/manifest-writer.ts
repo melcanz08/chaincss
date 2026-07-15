@@ -40,7 +40,9 @@ export class ManifestWriter {
     }
 
     const manifestPath = path.join(this.outputDir, 'manifest.json');
-    fs.writeFileSync(manifestPath, JSON.stringify(data, null, 2));
+    const tmpPath = manifestPath + ".tmp";
+    fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2));
+    fs.renameSync(tmpPath, manifestPath);
     
     return manifestPath;
   }

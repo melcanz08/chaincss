@@ -1,4 +1,4 @@
-// src/compiler/pipeline/inspector-helpers.ts
+// src/compiler/pipeline/inspector/inspector-helpers.ts
 // Shared helpers for inspector serialization
 
 import type { IRRule } from '../ir/types.js';

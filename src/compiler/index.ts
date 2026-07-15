@@ -21,11 +21,6 @@ export { tokens } from './tokens/tokens.js';
 export { setBreakpoints } from './breakpoints.js';
 
 // Export atomic optimizer (deprecated)
-/** @deprecated Atomic extraction is now handled by the pipeline's atomic-extractor pass. */
-export { AtomicOptimizer } from './legacy/atomic-optimizer.js';
-/** @deprecated Use pipeline's IR types instead. */
-export type { AtomicClass } from '../core/types.js';
-export type { ComponentClassMapEntry, OptimizeResult } from './legacy/atomic-optimizer.js';
 
 // Export prefixer
 export { ChainCSSPrefixer } from './prefixer.js';

@@ -3,6 +3,7 @@
 import fs from 'fs';
 import path from 'path';
 import { glob } from 'glob';
+import { createHash } from "crypto";
 
 export interface FindOptions {
   ignore?: string[];
@@ -102,9 +103,8 @@ export function getFileSize(filePath: string): number {
 }
 
 export function getFileHash(filePath: string): string {
-  const crypto = require('crypto');
   const content = readFile(filePath);
-  return crypto.createHash('md5').update(content).digest('hex').slice(0, 8);
+  return createHash('md5').update(content).digest('hex').slice(0, 8);
 }
 
 export function isDirectory(dirPath: string): boolean {

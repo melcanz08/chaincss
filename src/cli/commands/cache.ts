@@ -1,29 +1,11 @@
 // chaincss/src/cli/commands/cache.ts
 
 import chalk from 'chalk';
+import { formatBytes, formatDuration } from "../utils/format.js";
 import fs from 'fs';
 import path from 'path';
 import { PersistentCache } from '../../compiler/cache/content-addressable-cache.js';
 
-// Helper to format bytes
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
-
-// Helper to format duration
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  const seconds = ms / 1000;
-  if (seconds < 60) return `${seconds.toFixed(1)}s`;
-  const minutes = seconds / 60;
-  if (minutes < 60) return `${minutes.toFixed(1)}min`;
-  const hours = minutes / 60;
-  return `${hours.toFixed(1)}h`;
-}
 
 // Display cache entry details
 function displayCacheEntry(key: string, entry: any, index: number): void {
@@ -117,13 +99,13 @@ export async function cacheCommand(action: string, options: any) {
           let totalSize = 0;
           let fileCount = 0;
           
-          const calculateSize = (dir: string) => {
+          const calculateSize = async (dir: string) => {
             const files = fs.readdirSync(dir);
             for (const file of files) {
               const filePath = path.join(dir, file);
               const stat = fs.statSync(filePath);
               if (stat.isDirectory()) {
-                calculateSize(filePath);
+                await calculateSize(filePath);
               } else {
                 totalSize += stat.size;
                 fileCount++;
@@ -131,7 +113,7 @@ export async function cacheCommand(action: string, options: any) {
             }
           };
           
-          calculateSize(cacheDir);
+          await calculateSize(cacheDir);
           console.log(`  File count: ${chalk.white(fileCount)}`);
           console.log(`  Total size: ${chalk.white(formatBytes(totalSize))}`);
         }
@@ -304,7 +286,7 @@ export async function cacheCommand(action: string, options: any) {
       break;
       
     case 'backup':
-      const backupPath = options.output || `./.chaincss-cache-backup-${Date.now()}.tar.gz`;
+      const backupPath = options.output || `./.chaincss-cache-backup-${Date.now()}`;
       
       try {
         console.log(chalk.cyan.bold('\n💾 Creating Cache Backup\n'));

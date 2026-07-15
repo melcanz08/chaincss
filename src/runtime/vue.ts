@@ -72,7 +72,11 @@ export function useAtomicClasses(
       classNames[key] = className;
     }
     if (isMounted) {
-      compileRuntime(sourceStyles, moduleId);
+      const realMap = compileRuntime(sourceStyles, moduleId);
+      if (realMap && Object.keys(realMap).length > 0) {
+        classMap.value = realMap;
+        return;
+      }
     }
     classMap.value = classNames;
   };

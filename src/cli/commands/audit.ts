@@ -150,12 +150,15 @@ function findTokensFile(root:string, explicit?:string): string | null {
   return null
 }
 
+const TEXT_RE = /text|foreground/i;
+const BG_RE = /background|bg|surface/i;
+
 function extractPairs(tokens:any): Array<{selector:string;color:string;backgroundColor:string; fgPath?:string; bgPath?:string}> {
   const flat:Record<string,string>={}
   function flatten(o:any,pfx=''){ for(const [k,v] of Object.entries(o||{})){ const np=pfx?`${pfx}.${k}`:k; if(v&&typeof v==='object'&&!Array.isArray(v)&&!('value'in v)){ flatten(v,np)} else if(typeof v==='string'||typeof v==='number') flat[np]=String(v); else if(v&&typeof v==='object'&&'value'in v) flat[np]=String((v as any).value) } }
   flatten(tokens)
-  const textKeys=Object.keys(flat).filter(k=>/text|foreground/i.test(k))
-  const bgKeys=Object.keys(flat).filter(k=>/background|bg|surface/i.test(k))
+  const textKeys=Object.keys(flat).filter(k=>TEXT_RE.test(k))
+  const bgKeys=Object.keys(flat).filter(k=>BG_RE.test(k))
   const pairs: any[]=[]
   const seen=new Set<string>()
   for(const tk of textKeys){ for(const bk of bgKeys){ if(tk===bk) continue; const fg=flat[tk], bg=flat[bk]; if(!fg||!bg) continue; if(!parseColor(fg)||!parseColor(bg)) continue; const id=`${tk}|${bk}`; if(seen.has(id)) continue; seen.add(id); pairs.push({ selector:`${tk} on ${bk}`, color:fg, backgroundColor:bg, fgPath:tk, bgPath:bk }) } }

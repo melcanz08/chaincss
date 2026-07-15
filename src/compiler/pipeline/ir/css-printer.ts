@@ -40,11 +40,13 @@ function emitRule(rule: IRRule, indent: string, nl: string, space: string, minif
     const pcDecls: IRDeclaration[] = [];
     for (const d of pc.declarations) if (hasValue(d)) pcDecls.push(d);
     if (pcDecls.length === 0) continue;
-    // v3.2: handle pseudo-elements (::before) vs pseudo-classes (:hover) and custom selectors (&[data-active])
-    const sep = pc.name.startsWith(':') || pc.name.startsWith('[') || pc.name.startsWith('&') ? '' : ':';
-    // pc.name may be 'hover' or ':hover' or '::before' or '&:is(:hover,:focus)'
-    const suffix = pc.name.startsWith(':') || pc.name.startsWith('&') || pc.name.startsWith('[') ? pc.name : `:${pc.name}`;
-    parts.push(emitDeclBlock(`${rule.selector}${suffix}`, pcDecls, indent, nl, space));
+    // v2.13: handle &-prefixed selectors, pseudo-elements, pseudo-classes, and attribute selectors
+    const raw = pc.name;
+    // Replace & with parent selector, handle :hover / ::before / [data-x] / &:is()
+    const resolved = raw.includes('&')
+      ? raw.replace(/&/g, rule.selector)
+      : `${rule.selector}${raw.startsWith(':') || raw.startsWith('[') ? '' : ':'}${raw}`;
+    parts.push(emitDeclBlock(resolved, pcDecls, indent, nl, space));
   }
 
   for (const atRule of rule.atRules) {
@@ -129,11 +131,13 @@ function emitAtRule(parentSelector: string, atRule: IRAtRule, indent: string, nl
       return emitKeyframes(atRule.name || 'unnamed', activeDecls, indent, nl, space, minify);
     }
     default: {
-      // v3.2: support custom at-rules like @starting-style, @scope from macros
+      // v2.13: custom at-rules like @starting-style, @scope, @layer
       const name = (atRule as any).type || 'unknown';
-      if (activeDecls.length === 0) return '';
+      const query = atRule.query || atRule.name || '';
       const inner = emitDeclBlock(parentSelector, activeDecls, indent, nl, space);
-      return `@${name} ${atRule.query || atRule.name || ''} {${nl}${emitIndented(inner, indent, nl, minify)}${nl}}`.trim() + ` {${nl}${emitIndented(inner, indent, nl, minify)}${nl}}`.replace(/.*\{\{/, '{');
+      if (!inner && !query) return '';
+      const body = inner ? `${nl}${emitIndented(inner, indent, nl, minify)}${nl}` : '';
+      return `@${name} ${query} {${body}}`;
     }
   }
 }
@@ -162,18 +166,11 @@ function emitConditions(selector: string, conditions: IRRule['conditions'], inde
   for (const cond of conditions) {
     const entries = Object.entries(cond.conditions);
     if (entries.length === 0) continue;
-    if (entries.length === 1) {
-      const [cv, sv] = entries[0];
-      parts.push(`${indent}${kebab(cond.property)}:${space}if(style(${cond.variable}:${space}${cv}):${space}${sv}${space}else${space}${cond.defaultValue});`);
-    } else {
-      let result = `${indent}${kebab(cond.property)}:${space}`;
-      for (let i = 0; i < entries.length; i++) {
-        const [c, v] = entries[i];
-        result += i === 0 ? `if(style(${cond.variable}:${space}${c}):${space}${v}` : `${space}else if(style(${cond.variable}:${space}${c}):${space}${v}`;
-      }
-      result += `${space}else${space}${cond.defaultValue}` + ')'.repeat(entries.length);
-      parts.push(result);
-    }
+    // CSS if() spec: if(style(--var: val): result; else: fallback)
+    // Multi-condition: if(style(--var: a): x; else: style(--var: b): y; else: z)
+    const clauses = entries.map(([c, v]) => `style(${cond.variable}:${space}${c}):${space}${v}`).join('; else: ');
+    const result = `if(${clauses}; else:${space}${cond.defaultValue})`;
+    parts.push(`${indent}${kebab(cond.property)}:${space}${result};`);
   }
   if (parts.length === 0) return '';
   return `${selector}${space}{${nl}${parts.join(nl)}${nl}}`;

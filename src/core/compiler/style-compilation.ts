@@ -1,7 +1,15 @@
 // src/core/compiler/style-compilation.ts — extracted from compiler.ts
 // Responsibility: single style -> CSS via pipeline or direct path
 
-import crypto from 'crypto'
+function hashString(str: string): string {
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) + hash) + str.charCodeAt(i);
+    hash = hash & hash;
+  }
+  return Math.abs(hash).toString(36);
+}
+// crypto replaced with djb2 hash for browser compat
 import { formatCSS } from '../utils.js'
 import { compileToCSS, partitionForBuild } from '../style-compiler.js'
 import { parseIR, generateCSS } from '../../style-ir.js'
@@ -31,7 +39,7 @@ export function createStyleCompilation(ctx: CompilationContext) {
       for (const k of keys) o[k] = stable(obj[k])
       return o
     }
-    return crypto.createHash('sha256').update(JSON.stringify(stable(relevant))).digest('hex').slice(0, 16)
+    return hashString(JSON.stringify(stable(relevant)))
   }
 
   function styleDefToObject(styleDef: StyleDefinition): StyleObject {

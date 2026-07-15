@@ -1,4 +1,4 @@
-// chaincss/src/compiler/cache-manager.ts
+// chaincss/src/compiler/cache/cache-manager.ts
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -22,7 +22,7 @@ export interface CacheData {
 export interface CacheOptions {
   maxAge?: number; // Maximum age in milliseconds
   maxSize?: number; // Maximum cache size in bytes
-  compress?: boolean; // Compress cache data
+  // compress option removed in v2.13 — base64 encoding increased size by 33%
   autoSave?: boolean; // Auto-save on changes
   saveInterval?: number; // Auto-save interval in ms
 }
@@ -45,7 +45,6 @@ export class CacheManager {
     this.options = {
       maxAge: options.maxAge || 7 * 24 * 60 * 60 * 1000, // 7 days default
       maxSize: options.maxSize || 100 * 1024 * 1024, // 100MB default
-      compress: options.compress || false,
       autoSave: options.autoSave !== false,
       saveInterval: options.saveInterval || 5000 // 5 seconds
     };
@@ -88,9 +87,7 @@ export class CacheManager {
         let data = fs.readFileSync(this.cachePath, 'utf8');
         
         // Decompress if needed
-        if (this.options.compress && this.isCompressed(data)) {
-          data = this.decompress(data);
-        }
+          // decompress removed
         
         this.cache = JSON.parse(data);
         
@@ -282,9 +279,7 @@ export class CacheManager {
       let data = JSON.stringify(this.cache, null, 2);
       
       // Compress if enabled
-      if (this.options.compress && data.length > 1024) {
-        data = this.compress(data);
-      }
+      // decompress removed
       
       // Ensure directory exists
       if (!fs.existsSync(this.cacheDir)) {

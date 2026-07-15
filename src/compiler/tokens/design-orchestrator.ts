@@ -18,7 +18,7 @@ export function parseColor(color: string): { r:number; g:number; b:number; a:num
   if (parseCache.has(trimmed)) return parseCache.get(trimmed)!;
   let out: { r:number; g:number; b:number; a:number } | null = null;
 
-  if (trimmed.startsWith('var(') || trimmed === 'currentcolor' || trimmed === 'inherit' || trimmed === 'transparent' && false) {
+  if (trimmed.startsWith('var(') || trimmed === 'currentcolor' || trimmed === 'inherit' || trimmed === 'transparent') {
     // keep transparent as parseable below, var/currentColor as null
   }
 

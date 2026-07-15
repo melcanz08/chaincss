@@ -21,7 +21,7 @@ const UNITLESS = new Set([
   'zIndex', 'opacity', 'flex', 'flexGrow', 'flexShrink', 'order',
   'fontWeight', 'lineHeight', 'scale', 'zoom', 'animationIterationCount',
   'columnCount', 'orphans', 'widows', 'tabSize', 'fillOpacity', 'strokeOpacity',
-  'flexBasis', 'aspectRatio', 'gridRow', 'gridColumn', 'gridRowStart',
+  'aspectRatio', 'gridRow', 'gridColumn', 'gridRowStart',
   'gridRowEnd', 'gridColumnStart', 'gridColumnEnd', 'strokeWidth',
   'strokeDashoffset', 'strokeDasharray'
 ]);

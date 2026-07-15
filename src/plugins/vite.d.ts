@@ -1,4 +1,7 @@
 // src/plugins/vite.d.ts
+// NOTE: Some options are planned but not yet implemented. See src/plugins/vite.ts for current options.
+// Implemented: atomic, breakpoints, tokens, minify, verbose, silent, disablePipeline
+// Planned: generateTypes, outputDir, sourceMap, classPrefix, timeline, cache.*, atomicOptions.*
 
 import { Plugin } from 'vite';
 

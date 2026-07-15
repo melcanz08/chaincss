@@ -12,8 +12,6 @@ import { DEFAULT_CONFIG as CORE_DEFAULTS } from '../../core/constants.js'
 // ------------------------------------------------------------------
 // Extensibility types
 // ------------------------------------------------------------------
-export type MacroHandler = (value: any, catcher: Record<string, any>, useTokens: boolean) => void
-
 export interface IntentDefinition {
   name?: string
   category?: 'layout' | 'component' | 'semantic' | 'interaction' | string
@@ -24,6 +22,9 @@ export interface IntentDefinition {
   responsive?: Record<string, Record<string, string | number>>
   a11y?: string[]
 }
+
+export type MacroHandler = (value: any, catcher: Record<string, any>, useTokens: boolean) => void
+
 
 export interface ChainCSSUserConfig extends ChainCSSConfig {
   shorthands?: Record<string, string>

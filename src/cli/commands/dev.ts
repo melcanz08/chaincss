@@ -110,7 +110,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
   // Check if esbuild is available (local or global)
   let esbuildAvailable = false;
   try {
-    require.resolve('esbuild');
+    import.meta.resolve('esbuild');
     esbuildAvailable = true;
   } catch {
     try {

@@ -1,4 +1,4 @@
-// src/compiler/pipeline/inspector-metrics.ts
+// src/compiler/pipeline/inspector/inspector-metrics.ts
 // Computes derived metrics for the inspector
 
 import type { IRRule } from '../ir/types.js';
@@ -13,6 +13,6 @@ export function computeStats(rule: IRRule, pipelineReportLength: number): Inspec
     pipelinePasses: pipelineReportLength,
     hasHover: rule.declarations.some(d =>
       d.history?.some(h => h.reason?.includes('hover'))
-    ),
+    ) || (rule as any).pseudoClasses?.some((pc: any) => pc.name === 'hover'),
   };
 }

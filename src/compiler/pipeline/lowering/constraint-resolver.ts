@@ -1,4 +1,4 @@
-// src/compiler/pipeline/generators/constraint-resolver.ts
+// src/compiler/pipeline/lowering/constraint-resolver.ts
 
 import type { StyleIR } from '../ir/types.js';
 import type { LoweringPass, LoweringResult } from '../pipeline-types.js';

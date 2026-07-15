@@ -422,7 +422,11 @@ export class StyleCollector {
     if (typeof options === 'object') {
       const parts: string[] = [];
       if (options.translate) parts.push(`translate(${options.translate})`);
-      if (options.translateX !== undefined || options.translateY !== undefined || options.translateZ !== undefined) {
+      if (options.translateX !== undefined && options.translateY === undefined && options.translateZ === undefined) {
+        parts.push(`translateX(${options.translateX})`);
+      } else if (options.translateX === undefined && options.translateY !== undefined && options.translateZ === undefined) {
+        parts.push(`translateY(${options.translateY})`);
+      } else if (options.translateX !== undefined || options.translateY !== undefined || options.translateZ !== undefined) {
         const tx = options.translateX ?? 0;
         const ty = options.translateY ?? 0;
         const tz = options.translateZ;
@@ -437,7 +441,6 @@ export class StyleCollector {
       if (options.skewY !== undefined) parts.push(`skewY(${options.skewY})`);
       if (options.origin) this.set('transform-origin', options.origin as any);
       if (parts.length > 0) this.set('transform', parts.join(' '));
-      if (options.origin) this.set('transform-origin', options.origin as any);
     }
     
     return this;
@@ -464,7 +467,6 @@ export class StyleCollector {
     if (options.dropShadow) parts.push(`drop-shadow(${options.dropShadow})`);
     if (options.backdrop) this.set('backdrop-filter', options.backdrop as any);
     if (parts.length > 0) this.set('filter', parts.join(' '));
-    if (options.backdrop) this.set('backdrop-filter', options.backdrop as any);
     return this;
   }
 
@@ -681,6 +683,23 @@ export class StyleCollector {
       for (const [key, value] of Object.entries(childResult)) {
         if (key !== 'selectors' && key !== '_atRules' && key !== '_nestedRules' && !key.startsWith('_')) {
           this.set(key, value);
+        }
+      }
+      // Preserve atRules from child (e.g., media queries inside when())
+      if (childResult._atRules && childResult._atRules.length > 0) {
+        for (const rule of childResult._atRules) {
+          if (rule.type === 'media') this.rules.addMedia(rule.query || '', rule.styles || {});
+          else if (rule.type === 'supports') this.rules.addSupports(rule.condition || '', rule.styles || {});
+          else if (rule.type === 'container') this.rules.addContainer(rule.condition || '', rule.styles || {});
+          else if (rule.type === 'layer') this.rules.addLayer(rule.name || '', rule.styles || {});
+          else if (rule.type === 'keyframes') this.rules.addKeyframes(rule.name || '', rule.steps || {});
+          else if (rule.type === 'font-face') this.rules.addFontFace(rule.properties || {});
+        }
+      }
+      // Preserve nested rules from child
+      if (childResult._nestedRules && childResult._nestedRules.length > 0) {
+        for (const rule of childResult._nestedRules) {
+          this.rules.addNested(rule.selector, rule.styles);
         }
       }
     }

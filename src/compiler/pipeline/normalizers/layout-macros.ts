@@ -119,5 +119,7 @@ export function autoContrast(bgColor: string): string {
 
   const toLinear = (c: number) => { const s = c/255; return s <= 0.03928 ? s/12.92 : Math.pow((s+0.055)/1.055, 2.4); };
   const lum = 0.2126*toLinear(r) + 0.7152*toLinear(g) + 0.0722*toLinear(b);
-  return lum > 0.25 ? '#000000' : '#ffffff';
+  const contrastBlack = (lum + 0.05) / 0.05;
+  const contrastWhite = 1.05 / (lum + 0.05);
+  return contrastBlack > contrastWhite ? "#000000" : "#ffffff";
 }

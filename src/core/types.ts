@@ -715,9 +715,27 @@ export function parseStyleObject(obj: Record<string, unknown>): ParsedStyleObjec
   let selectors: string | string[] | undefined;
 
   for (const [key, value] of Object.entries(obj)) {
+    // Handle _atRules before the underscore skip
+    if (key === '_atRules' && Array.isArray(value)) {
+      for (const rule of value) {
+        if (typeof rule === 'object' && rule !== null && 'type' in rule) {
+          atRules.push(rule as AtRule);
+        }
+      }
+      continue;
+    }
+    
+    // Handle _nestedRules before the underscore skip
+    if (key === '_nestedRules' && Array.isArray(value)) {
+      for (const rule of value) {
+        if (isNestedRuleV2(rule)) {
+          nestedRules.push({ selector: rule.selector, styles: rule.styles as StyleObject });
+        }
+      }
+      continue;
+    }
+    
     // Skip internal metadata (_classes, _name, _mixed, _transforms).
-    // _atRules and _nestedRules are handled explicitly below via their
-    // underscore-less aliases (atRules, nestedRules) or direct _prefixed checks.
     if (key.startsWith('_')) continue;
 
     // Extract selectors

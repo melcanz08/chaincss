@@ -1,9 +1,10 @@
 // src/compiler/pipeline/unified-pipeline.ts
-// Fixes: duplicate atomic Map clone, adds deep clone, supports custom intents via config
+import { clearKeyframeCache } from "../utils/shorthands.js";
+// v2.13: Fixed phase ordering, deep merge contexts, token resolution as normalization
 
 import { Pipeline } from './pipeline.js';
 import type { OptimizationContext } from './pipeline-types.js';
-import type { PipelineConfig, PipelineResult, OptimizationPass, OptimizationResult } from './pipeline-types.js';
+import type { PipelineConfig, PipelineResult, NormalizationPass, NormalizationResult } from './pipeline-types.js';
 import type { StyleIR } from './ir/types.js';
 
 // Core passes
@@ -28,22 +29,17 @@ import { responsiveAnalyzer } from './analyzers/responsive-analyzer.js';
 import { layoutAnalyzer } from './analyzers/layout-analyzer.js';
 import { patternDetector } from './analyzers/pattern-detector.js';
 
-const tokenOptimizer: OptimizationPass = {
+// Token resolver as NormalizationPass — tokens must resolve before intent resolution
+const tokenResolver: NormalizationPass = {
   name: tokenLowering.name,
-  cost: 'cheap',
-  requiredFor: ['css'],
-  optimize(ir: StyleIR, context: OptimizationContext = {} as OptimizationContext): OptimizationResult {
-    const result = tokenLowering.generate(ir, context || {});
-    return {
-      ir: result.ir,
-      savings: { rulesEliminated: 0, declarationsEliminated: 0, bytesSaved: 0 },
-      changes: result.generatedNodes,
-    };
+  normalize(ir: StyleIR, context: Record<string, any> = {}): NormalizationResult {
+    const result = tokenLowering.generate(ir, context);
+    return { ir: result.ir, corrections: [] };
   },
 };
 
-const BASE_NORMALIZATION = [intentNormalizer, unitNormalizer];
-const BASE_OPTIMIZATION = [tokenOptimizer, cssCompressor];
+const BASE_NORMALIZATION = [intentNormalizer, unitNormalizer, tokenResolver];
+const BASE_OPTIMIZATION = [cssCompressor];
 const BASE_LOWERING = [intentResolver, cssEmitter];
 
 export type PipelinePreset = 'default' | 'production' | 'ci' | 'lint' | 'atomic';
@@ -60,14 +56,15 @@ const PRESETS: Record<PipelinePreset, Partial<PipelineConfig>> = {
     normalization: BASE_NORMALIZATION,
     validation: [],
     analysis: [],
-    optimization: [specificitySorter, deadCodeEliminator, ...BASE_OPTIMIZATION, mediaQueryPacker, sourceOptimizer],
+    // Fixed: deadCodeEliminator BEFORE specificitySorter
+    optimization: [deadCodeEliminator, cssCompressor, specificitySorter, mediaQueryPacker, sourceOptimizer],
     lowering: BASE_LOWERING,
   },
   ci: {
     normalization: BASE_NORMALIZATION,
     validation: [accessibilityValidator, conflictValidator],
     analysis: [responsiveAnalyzer, layoutAnalyzer, patternDetector],
-    optimization: [duplicateDeclarationDetector, specificitySorter, deadCodeEliminator, ...BASE_OPTIMIZATION, mediaQueryPacker, sourceOptimizer, accessibilityOptimizer],
+    optimization: [duplicateDeclarationDetector, deadCodeEliminator, cssCompressor, specificitySorter, mediaQueryPacker, sourceOptimizer, accessibilityOptimizer],
     lowering: BASE_LOWERING,
   },
   lint: {
@@ -82,13 +79,28 @@ const PRESETS: Record<PipelinePreset, Partial<PipelineConfig>> = {
     validation: [],
     analysis: [],
     contexts: { optimization: {} },
-    optimization: [atomicExtractor, ...BASE_OPTIMIZATION],
+    optimization: [atomicExtractor, cssCompressor],
     lowering: [cssEmitter],
   },
 };
 
+function deepMerge<T extends Record<string, any>>(base: T, overrides: Partial<T>): T {
+  const result = { ...base };
+  for (const key of Object.keys(overrides) as (keyof T)[]) {
+    const overrideVal = overrides[key];
+    const baseVal = result[key];
+    if (overrideVal !== undefined && typeof overrideVal === 'object' && !Array.isArray(overrideVal) && typeof baseVal === 'object' && !Array.isArray(baseVal)) {
+      result[key] = deepMerge(baseVal, overrideVal);
+    } else if (Array.isArray(overrideVal)) {
+      result[key] = [...overrideVal] as any;
+    } else {
+      result[key] = overrideVal as any;
+    }
+  }
+  return result;
+}
+
 function deepCloneConfig<T>(config: T): T {
-  // Shallow clone arrays to prevent cross-pipeline mutation, keep pass references
   const clone: any = { ...config as any };
   if ((clone as any).normalization) clone.normalization = [...(clone as any).normalization];
   if ((clone as any).validation) clone.validation = [...(clone as any).validation];
@@ -109,7 +121,6 @@ export function createPipeline(preset: PipelinePreset = 'default', overrides?: P
 
   const cloned = deepCloneConfig(base);
 
-  // v3.1 fix: single, correct fresh Map for atomic preset, no duplicate block
   if (preset === 'atomic') {
     cloned.contexts = cloned.contexts || {};
     cloned.contexts.optimization = {
@@ -118,7 +129,10 @@ export function createPipeline(preset: PipelinePreset = 'default', overrides?: P
     };
   }
 
-  return new Pipeline({ ...cloned, ...overrides } as PipelineConfig);
+  const merged = overrides ? deepMerge(cloned, overrides) : cloned;
+
+  clearKeyframeCache();
+  return new Pipeline(merged as PipelineConfig);
 }
 
 export function createDefaultPipeline(overrides?: Partial<PipelineConfig>): Pipeline { return createPipeline('default', overrides); }

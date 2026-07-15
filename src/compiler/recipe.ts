@@ -92,7 +92,7 @@ export function recipe<TVariants extends Record<string, Record<string, any>>>(
     // Return the merged StyleDefinition directly — no need to rebuild via chain().
     // The style-collector already processed all properties, shorthands, and macros.
     // Apply class prefix to match chain().$el() behavior (e.g., 'btn' → '.chain-btn')
-    const classPrefix = 'chain-';
+    const classPrefix = (options as any)?.namespace || 'chain-';
     if (merged.selectors && merged.selectors.length > 0) {
       merged.selectors = merged.selectors.map(s => {
         if (s.startsWith('.') || s.startsWith('#') || s.startsWith('[') || s.startsWith(':') || s === '*') {
@@ -115,7 +115,8 @@ export function recipe<TVariants extends Record<string, Record<string, any>>>(
     const result: Array<Partial<Record<keyof TVariants, any>>> = [];
     const variantKeys = Object.keys(variants) as (keyof TVariants)[];
     function generate(current: Partial<Record<keyof TVariants, any>>, index: number): void {
-      if (index === variantKeys.length) { result.push({ ...current }); return; }
+      if (index === variantKeys.length) { if (result.length >= 1000) throw new Error(`Recipe variant limit exceeded (1000). Reduce variant combinations.`);
+    result.push({ ...current }); return; }
       for (const v of Object.keys(variants[variantKeys[index]] as Record<string, any>)) {
         current[variantKeys[index]] = v as any;
         generate(current, index + 1);

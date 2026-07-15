@@ -93,7 +93,7 @@ export async function watchCommand(options: WatchOptions): Promise<void> {
   logger.info(`👀 Watching for changes... (press Ctrl+C to stop)\n`);
   
   const chokidar = await import('chokidar');
-  const debounceDelay = options.debounce || 100;
+  const debounceDelay = options.debounce || 200;
   
   // Create watcher
   const watcher = chokidar.watch(inputs, {
@@ -207,5 +207,5 @@ export async function watchCommand(options: WatchOptions): Promise<void> {
   process.on('SIGTERM', cleanup);
   
   // Keep the process alive
-  await new Promise(() => {});
+  process.stdin.resume();
 }

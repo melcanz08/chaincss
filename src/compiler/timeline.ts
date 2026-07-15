@@ -77,7 +77,7 @@ export function getStyleDiff(snapshotId1: string, snapshotId2: string): Record<s
 export function takeSnapshot(selector: string, styles: Record<string, any>, source: string): string {
   if (!timelineEnabled) return '';
   
-  const hash = JSON.stringify(styles);
+  const hash = JSON.stringify(styles, (_, v) => typeof v === "function" ? v.toString() : v);
   const existing = styleHistory.find(s => s.selector === selector && s.hash === hash);
   if (existing) return existing.id;
   

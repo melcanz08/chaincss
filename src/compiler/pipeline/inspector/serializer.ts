@@ -1,4 +1,4 @@
-// src/compiler/pipeline/inspector-serializer.ts
+// src/compiler/pipeline/inspector/inspector-serializer.ts
 // Strips compiler IR down to only what the inspector needs.
 // Each serialization concern is a separate function.
 

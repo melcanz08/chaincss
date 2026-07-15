@@ -3,7 +3,7 @@
  * This file will be removed in v3.0.
  */
 
-// src/compiler/intent-api.ts
+// src/compiler/legacy/intent-api.ts
 /**
  * Intent-Based API
  * 
@@ -16,14 +16,20 @@
  *   chain.intent('button-primary') // → accessible blue button
  */
 
-import type { StyleIR, IRRule, IRPass } from '../../style-ir.js';
-import { createDeclaration, createRule } from '../../style-ir.js';
-import { resolveSemantic } from './semantic-tokens.js';
+import type { StyleIR, IRRule, IRPass } from '../../../style-ir.js';
+import { createDeclaration, createRule } from '../../../style-ir.js';
+import { resolveSemantic } from '../../tokens/semantic-tokens.js';
 
 // ============================================================================
 // Intent Catalog
 // ============================================================================
 
+
+/**
+ * @deprecated Use import { IntentDefinition } from 'chaincss' instead.
+ * This local definition is kept for backward compatibility.
+ * Canonical definition in src/core/types.ts
+ */
 interface IntentDefinition {
   /** Human-readable name */
   name: string;

@@ -3,6 +3,17 @@
 
 import fs from 'fs'
 import path from 'path'
+function deepMerge(base: any, overrides: any): any {
+  const result = { ...base };
+  for (const key of Object.keys(overrides)) {
+    if (overrides[key] && typeof overrides[key] === "object" && !Array.isArray(overrides[key]) && typeof result[key] === "object") {
+      result[key] = deepMerge(result[key], overrides[key]);
+    } else {
+      result[key] = overrides[key];
+    }
+  }
+  return result;
+}
 import chalk from 'chalk'
 import { DEFAULT_CONFIG, VERSION, PERFORMANCE } from './constants.js'
 import { writeFile, getBaseName } from './utils.js'
@@ -47,7 +58,7 @@ export class ChainCSSCompiler {
   private _hasStyles = false
 
   constructor(config: ChainCSSConfig) {
-    this.config = { ...DEFAULT_CONFIG, ...config, output: { ...DEFAULT_CONFIG.output, ...(config as any).output }, atomic: { ...DEFAULT_CONFIG.atomic, ...(config as any).atomic }, prefixer: { ...DEFAULT_CONFIG.prefixer, ...(config as any).prefixer }, tokens: { ...DEFAULT_CONFIG.tokens, ...(config as any).tokens } } as Required<ChainCSSConfig>
+    this.config = { ...DEFAULT_CONFIG, ...config, output: { ...DEFAULT_CONFIG.output, ...(config as any).output }, atomic: { ...DEFAULT_CONFIG.atomic, ...(config as any).atomic }, prefixer: { ...DEFAULT_CONFIG.prefixer, ...(config as any).prefixer }, tokens: deepMerge(DEFAULT_CONFIG.tokens, (config as any).tokens || {}) } as Required<ChainCSSConfig>
     if (this.config.breakpoints) setBreakpoints(this.config.breakpoints)
     if (this.config.prefixer?.enabled) this.prefixer = new ChainCSSPrefixer(this.config.prefixer)
 

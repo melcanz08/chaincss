@@ -56,14 +56,6 @@ export type {
 } from './style-ir.js';
 
 // Style Graph
-export { StyleGraphCompiler, compileGraph } from './compiler/style-graph.js';
-export type {
-  StyleGraph,
-  StyleGraphNode,
-  StyleGraphEdge,
-  GraphCompileOptions,
-  GraphCompileResult,
-} from './compiler/style-graph.js';
 
 // Cache
 export { CacheManager } from './compiler/cache/cache-manager.js';
@@ -71,10 +63,10 @@ export { PersistentCache } from './compiler/cache/content-addressable-cache.js';
 
 // Atomic Optimizer (deprecated — use pipeline atomic-extractor pass instead)
 /** @deprecated Atomic extraction is now handled by the pipeline's atomic-extractor pass. */
-export { AtomicOptimizer } from './compiler/legacy/atomic-optimizer.js';
+export { AtomicOptimizer } from './compiler/pipeline/optimizers/atomic-optimizer.js';
 /** @deprecated Use pipeline's IR types instead. */
 export type { AtomicClass } from './core/types.js';
-export type { AtomicOptimizerStats } from './compiler/legacy/atomic-optimizer.js';
+export type { AtomicOptimizerStats } from './compiler/pipeline/optimizers/atomic-optimizer.js';
 
 // Design Orchestrator
 export {

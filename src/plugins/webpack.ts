@@ -231,7 +231,7 @@ export default function chaincssLoader(this: LoaderContext, source: string): voi
     .then(({ css, classMap }) => {
       if (options.extractCSS && css) {
         const cssFileName = `${path.basename(this.resourcePath, path.extname(this.resourcePath))}.css`;
-        this.emitFile(cssFileName, css);
+        if ((this as any)._compilation && (this as any)._compilation.emitAsset) { (this as any)._compilation.emitAsset(cssFileName, new (require('webpack').sources.RawSource)(css)); } else if (this.emitFile) { this.emitFile(cssFileName, css); }
       }
 
       const code = generateProductionCode(css, styleExports, this.resourcePath, options);

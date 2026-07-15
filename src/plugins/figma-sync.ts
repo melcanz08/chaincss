@@ -31,7 +31,7 @@ function hash(str: string) { return crypto.createHash('sha256').update(str).dige
 
 async function fetchUrl(url: string, token?: string): Promise<any> {
   const headers: Record<string, string> = { 'Accept': 'application/json' }
-  if (token) headers['X-Figma-Token'] = token
+  if (token && url.includes("figma.com")) headers["X-Figma-Token"] = token
   const res = await fetch(url, { headers })
   if (!res.ok) throw new Error(`Fetch failed ${res.status} ${res.statusText} for ${url}`)
   return await res.json()
@@ -192,7 +192,7 @@ export function figmaSyncPlugin(opts: FigmaSyncOptions = {}): Plugin {
       syncOnce()
 
       // Polling loop
-      timer = setInterval(syncOnce, pollMs)
+      timer = setInterval(syncOnce, pollMs); timer.unref()
 
       // Expose endpoint to manually trigger sync via fetch('/__figma-sync')
       server.middlewares.use('/__figma-sync', async (_req, res) => {

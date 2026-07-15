@@ -1,4 +1,4 @@
-// src/compiler/pipeline/inspector-snapshots.ts
+// src/compiler/pipeline/inspector/inspector-snapshots.ts
 // Reconstructs the timeline of CSS states across pipeline passes
 
 import type { IRRule } from '../ir/types.js';

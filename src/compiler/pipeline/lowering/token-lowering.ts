@@ -1,10 +1,10 @@
-// src/compiler/pipeline/generators/token-resolver.ts
+// src/compiler/pipeline/lowering/token-resolver.ts
 import { recordHistory } from '../ir/utils.js';
 
 import type { StyleIR } from '../ir/types.js';
 import type { LoweringPass, LoweringResult } from '../pipeline-types.js';
 import { createDeclaration } from '../ir/factory.js';
-import { resolveSemantic } from '../../legacy/semantic-tokens.js';
+import { resolveSemantic } from '../../tokens/semantic-tokens.js';
 
 /**
  * Resolve a $token.path.string to its value from a token store.

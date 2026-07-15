@@ -1,11 +1,15 @@
-// chaincss/src/compiler/atomic-optimizer.ts
+// chaincss/src/compiler/pipeline/optimizers/atomic-optimizer.ts
 
-import { ChainCSSConfig } from '../../cli/types.js';
-import crypto from 'crypto';
-import path from 'path';
-import fs from 'fs';
+import { ChainCSSConfig } from '../../../cli/types.js';
+// crypto/fs/path replaced with browser-safe alternatives for v2.13
+function createHash(algo: string) {
+  return {
+    update(s: string) { return { digest: (_format?: string) => s.split('').reduce((h,c)=>(h=((h<<5)-h)+c.charCodeAt(0),h&h),0).toString(36) } }
+  };
+}
+const crypto = { createHash };
 
-import type { AtomicClass } from '../../core/types.js';
+import type { AtomicClass } from '../../../core/types.js';
 export type { AtomicClass };
 
 // Types

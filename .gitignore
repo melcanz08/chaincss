@@ -1,3 +1,7 @@
+cd /home/melcanz/dev/chaincss
+
+# Remove duplicate entries and add missing ones
+cat > .gitignore << 'EOF'
 node_modules/
 *.log
 .DS_Store
@@ -6,20 +10,33 @@ node_modules/
 npm-debug.log*
 .npmrc
 
+# Build output
 dist/
-dist/
-demo/
-demo-website/
-__tests__/
-.chaincss-cache
 
 # ChainCSS generated files
 *.class.js
 *.class.ts
+
+# Cache
+.chaincss-cache
+.chaincss-cache/
+.chaincss/
+
+# Backup files
+*.bak
+*.bck
+
+# Benchmark results (keep baseline)
+benchmarks/results/*
+!benchmarks/results/baseline.json
 benchmarks/node_modules/
 benchmarks/package-lock.json
-.chaincss/
+
+# Tests
+__tests__/
+
+# Docs / Temp
+demo/
+demo-website/
 review.md
-.chaincss-cache/
-benchmarks/results/*.json
-benchmarks/results/*.md
+EOF

@@ -1,4 +1,4 @@
-// src/compiler/pipeline/inspector-exporter.ts
+// src/compiler/pipeline/inspector/inspector-exporter.ts
 // Builds the final InspectorExport from accumulated rules
 
 import type { InspectorRule, InspectorExport } from './types.js';
@@ -9,8 +9,8 @@ export function buildInspectorExport(rules: Map<string, InspectorRule>): Inspect
   return {
     schemaVersion: 1,
     compilerVersion: VERSION,
-    pipeline: 'ci',
-    generatedAt: new Date().toISOString(),
+    pipeline: 'ci',  // TODO: pass actual preset from context
+    generatedAt: new Date().toISOString(),  // TODO: use ir.meta.compiledAt for determinism
     rules: Array.from(rules.values()),
   };
 }

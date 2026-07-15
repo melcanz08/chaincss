@@ -23,6 +23,8 @@ export const unitNormalizer: NormalizationPass = {
       for (const decl of rule.declarations) {
         // Normalize number values — add px where appropriate
         if (typeof decl.value === 'number') {
+          if (+decl.value === 0) continue;
+          if (+decl.value === 0) continue;
           if (!UNITLESS_PROPERTIES.includes(decl.property)) {
             const original = decl.value;
             decl.value = decl.value + 'px';
@@ -39,6 +41,7 @@ export const unitNormalizer: NormalizationPass = {
 
         // Normalize string values that look like numbers
         if (typeof decl.value === 'string' && /^-?\d+(\.\d+)?$/.test(decl.value)) {
+          if (+decl.value === 0) continue;
           if (!UNITLESS_PROPERTIES.includes(decl.property)) {
             const original = decl.value;
             decl.value = decl.value + 'px';

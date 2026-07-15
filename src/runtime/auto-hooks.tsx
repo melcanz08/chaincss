@@ -94,7 +94,7 @@ export function createSmartComponent<P extends Record<string, any>>(
       }
       
       if (props.className) {
-        instance = instance.className(props.className);
+        instance = instance.addClass(props.className);
       }
       
       return instance.$el();

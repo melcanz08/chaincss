@@ -158,6 +158,24 @@ const targets = [
     format: 'esm',
     packages: 'external',
   },
+  // Figma sync plugin
+  {
+    name: "figma-sync",
+    entryPoints: ["src/plugins/figma-sync.ts"],
+    outfile: "dist/plugins/figma-sync.js",
+    platform: "node",
+    format: "esm",
+    packages: "external",
+  },
+  // Token entanglement engine
+  {
+    name: "entanglement",
+    entryPoints: ["src/compiler/tokens/entanglement.ts"],
+    outfile: "dist/compiler/tokens/entanglement.js",
+    platform: "node",
+    format: "esm",
+    packages: "external",
+  }
 ];
 
 // ============================================================================

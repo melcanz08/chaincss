@@ -1,7 +1,6 @@
 // src/core/index.ts
 
 // Core compiler
-export { ChainCSSCompiler, compileChainCSS } from './compiler.js';
 
 // Types
 export type { 

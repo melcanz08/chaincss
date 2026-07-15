@@ -62,7 +62,8 @@ export function createComponentCompiler(ctx: ComponentContext) {
           if (hasDyn) {
             const fns: Record<string, string> = {}
             for (const [p, fn] of Object.entries(result.dynamic!)) fns[p] = (fn as Function).toString()
-            js += `export const ${name} = { className: '${className}', dynamic: ${JSON.stringify(fns)} };\n`
+            const fnEntries = Object.entries(fns).map(([k,v]) => `"${k}": ${v}`).join(", ");
+            js += `export const ${name} = { className: '${className}', dynamic: { ${fnEntries} } };\n`
           } else js += `export const ${name} = '${className}';\n`
         }
         css += result.css + '\n'
