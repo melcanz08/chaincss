@@ -1,7 +1,7 @@
-// src/core/compiler/component-compiler.ts — extracted from compiler.ts
-// Responsibility: batch .chain.ts files -> .class.js + .css + manifest
+// src/core/compiler/component-compiler.ts 
 
 import fs from 'fs'
+import fsp from 'fs/promises'
 import path from 'path'
 import chalk from 'chalk'
 import { formatCSS } from '../utils.js'
@@ -9,6 +9,7 @@ import type { CompileResult, StyleDefinition } from '../types.js'
 import type { ChainCSSPrefixer } from '../../compiler/prefixer.js'
 import type { ManifestWriter } from '../../compiler/services/manifest-writer.js'
 import { VERSION } from '../constants.js'
+import type { StatsTracker } from './stats.js'
 
 export interface ComponentContext {
   config: any
@@ -19,25 +20,83 @@ export interface ComponentContext {
   computeStats: () => any
   getAggregatedStats: () => any
   emit: (e: any) => void
+  statsTracker?: StatsTracker // <-- OPTIONAL fix for your build error
+}
+
+function isStyleDef(v: any): boolean {
+  return v && typeof v === 'object' && (v.selectors || v._atRules || v._nestedRules || Object.keys(v).some(k => k.startsWith('&') || k.startsWith('.') || k.includes('-')))
+}
+
+function normalizeImports(raw: any): Record<string, StyleDefinition> {
+  const styles: Record<string, StyleDefinition> = {}
+  if (!raw || typeof raw !== 'object') return styles
+  if (raw.default && typeof raw.default === 'object' && raw.default.selectors) {
+    styles['default'] = raw.default
+    for (const [k, v] of Object.entries(raw)) {
+      if (k === 'default' || k === '__esModule') continue
+      if (isStyleDef(v)) styles[k] = v as any
+    }
+    return styles
+  }
+  if (raw.default && typeof raw.default === 'object') {
+    const def = raw.default as Record<string, any>
+    if (Object.values(def).some(isStyleDef)) {
+      for (const [k, v] of Object.entries(def)) if (isStyleDef(v)) styles[k] = v as any
+    }
+  }
+  for (const [k, v] of Object.entries(raw)) {
+    if (k === 'default' || k === '__esModule') continue
+    if (isStyleDef(v)) styles[k] = v as any
+  }
+  if (Object.keys(styles).length === 0) {
+    for (const [k, v] of Object.entries(raw)) {
+      if (k === '__esModule') continue
+      if (isStyleDef(v)) styles[k] = v as any
+    }
+  }
+  return styles
+}
+
+function header(file: string): string {
+  const rel = path.relative(process.cwd(), file)
+  return `/**\n * ChainCSS Generated Class Map — v${VERSION}\n * Source: ${rel}\n * DO NOT EDIT MANUALLY\n */\n\n`
+}
+
+function safeKey(k: string): string {
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(k) ? k : JSON.stringify(k)
+}
+
+function serializeDynamic(dynamic: Record<string, any>): string {
+  const entries: string[] = []
+  for (const [prop, val] of Object.entries(dynamic)) {
+    let serialized = typeof val === 'function' ? val.toString() : JSON.stringify(val)
+    entries.push(`${safeKey(prop)}: ${serialized}`)
+  }
+  return `{ ${entries.join(', ')} }`
 }
 
 export function createComponentCompiler(ctx: ComponentContext) {
-  function header(file: string) {
-    return `/**\n * ChainCSS Generated Class Map\n * Source: ${path.relative(process.cwd(), file)}\n * Generated: ${new Date().toISOString()}\n * DO NOT EDIT MANUALLY\n */\n\n`
-  }
-
-  async function writeOutput(sourceDir: string, baseName: string, js: string, css: string, generated: string[]) {
-    if (!fs.existsSync(sourceDir)) fs.mkdirSync(sourceDir, { recursive: true })
+  async function writeOutput(sourceDir: string, baseName: string, js: string, css: string, generated: string[]): Promise<void> {
+    await fsp.mkdir(sourceDir, { recursive: true })
     const classFile = path.join(sourceDir, `${baseName}.class.js`)
-    fs.writeFileSync(classFile, js); generated.push(classFile)
+    const cssFile = path.join(sourceDir, `${baseName}.css`)
+    await fsp.writeFile(classFile, js, 'utf8')
+    generated.push(classFile)
     if (css.trim()) {
       let final = css
       if (ctx.prefixer && ctx.config.prefixer?.enabled) {
-        try { const p = await ctx.prefixer.process(final); final = p.css || final } catch (e) {
+        try { final = (await ctx.prefixer.process(final)).css || final } catch (e) {
           ctx.emit({ type: 'warning', code: 'PREFIXER_BATCH_FAILED', message: `prefix failed for ${baseName}`, sourceFile: classFile, originalError: e })
         }
       }
-      fs.writeFileSync(path.join(sourceDir, `${baseName}.css`), formatCSS(final, false))
+      await fsp.writeFile(cssFile, formatCSS(final, false), 'utf8')
+      generated.push(cssFile)
+    } else {
+      if (fs.existsSync(cssFile)) {
+        try { await fsp.unlink(cssFile) } catch (e) {
+          ctx.emit({ type: 'warning', code: 'CLEANUP_FAILED', message: `Failed to remove stale stylesheet: ${cssFile}`, sourceFile: classFile, originalError: e })
+        }
+      }
     }
     if (ctx.config.verbose) console.log(chalk.green(`   ✨ ${baseName} → ${path.relative(process.cwd(), classFile)}`))
   }
@@ -46,53 +105,53 @@ export function createComponentCompiler(ctx: ComponentContext) {
     let diag = 0
     try {
       const raw = await ctx.loader.import(file)
-      const styles: Record<string, any> = {}
-      if (raw.default && typeof raw.default === 'object' && !raw.default.selectors) Object.assign(styles, raw.default)
-      for (const [k, v] of Object.entries(raw)) if (k !== 'default' && k !== '__esModule' && typeof v === 'object' && v !== null) styles[k] = v
-      if (raw.default?.selectors) styles['default'] = raw.default
-      if (Object.keys(styles).length === 0 && typeof raw === 'object') Object.assign(styles, raw)
-
-      let js = header(file), css = ''
+      const styles = normalizeImports(raw)
+      let js = header(file)
+      let css = ''
+      let hasExport = false
       for (const [name, style] of Object.entries(styles)) {
-        if (!style || typeof style !== 'object' || !(style as any).selectors) continue
+        if (!isStyleDef(style)) continue
         const result = ctx.compileStyle(name, style as StyleDefinition)
-        const className = Object.values(result.classMap)[0] as string | undefined
+        const className = (Object.values(result.classMap)[0] as string | undefined) || ''
         if (className) {
-          const hasDyn = result.dynamic && Object.keys(result.dynamic).length > 0
-          if (hasDyn) {
-            const fns: Record<string, string> = {}
-            for (const [p, fn] of Object.entries(result.dynamic!)) fns[p] = (fn as Function).toString()
-            const fnEntries = Object.entries(fns).map(([k,v]) => `"${k}": ${v}`).join(", ");
-            js += `export const ${name} = { className: '${className}', dynamic: { ${fnEntries} } };\n`
-          } else js += `export const ${name} = '${className}';\n`
+          const dyn = result.dynamic
+          if (dyn && Object.keys(dyn).length > 0) {
+            js += `export const ${safeKey(name)} = { className: '${className}', dynamic: ${serializeDynamic(dyn as any)} };\n`
+          } else {
+            js += `export const ${safeKey(name)} = '${className}';\n`
+          }
+          hasExport = true
         }
-        css += result.css + '\n'
+        if (result.css) css += result.css + '\n'
         if ((result as any)._diagnostics) diag += (result as any)._diagnostics.length
       }
-      if (css.trim() || js.includes('export const')) await writeOutput(sourceDir, baseName, js, css, generated)
+      if (css.trim() || hasExport) await writeOutput(sourceDir, baseName, js, css, generated)
     } catch (e) {
-      ctx.emit({ type: 'error', code: 'FILE_PROCESS_FAILED', message: `Failed ${baseName}: ${(e as Error).message}`, sourceFile: file, originalError: e })
+      ctx.emit({ type: 'error', code: 'FILE_PROCESS_FAILED', message: `Failed to compile ${baseName}: ${(e as Error).message}`, sourceFile: file, originalError: e })
     }
     return diag
   }
 
   async function compileAll(components: string[], onProgress?: (msg: string) => void) {
-    let processed = 0, totalDiags = 0
+    let processed = 0
+    let totalDiags = 0
     const classFiles: string[] = []
-    const aggregated = { totalStyles: 0, atomicStyles: 0, deadRulesEliminated: 0, pipelinePasses: 0, filesProcessed: 0 }
-
     if (!ctx.config.silent) console.log(chalk.blue('\n🏗  Building Component Styles...'))
-
-    for (const file of components) {
-      if (!file.endsWith('.chain.js') && !file.endsWith('.chain.ts') && !file.endsWith('.chain.jsx') && !file.endsWith('.chain.tsx')) continue
-      const baseName = path.basename(file).replace(/\.chain\.(js|ts|jsx|tsx)$/, '')
-      const sourceDir = path.dirname(file)
-      const d = await compileOne(file, baseName, sourceDir, classFiles)
-      totalDiags += d; processed++
+    const chainFiles = components.filter(f => f.endsWith('.chain.js') || f.endsWith('.chain.ts') || f.endsWith('.chain.jsx') || f.endsWith('.chain.tsx'))
+    const CONCURRENCY = 16
+    for (let i = 0; i < chainFiles.length; i += CONCURRENCY) {
+      const batch = chainFiles.slice(i, i + CONCURRENCY)
+      const results = await Promise.all(batch.map(async (file) => {
+        const baseName = path.basename(file).replace(/\.chain\.(js|ts|jsx|tsx)$/, '')
+        const sourceDir = path.dirname(file)
+        const d = await compileOne(file, baseName, sourceDir, classFiles)
+        ctx.statsTracker?.recordFileProcessed() // safe optional call - fixes double counting
+        onProgress?.(file)
+        return d
+      }))
+      for (const d of results) { totalDiags += d; processed++ }
     }
-
     if (!ctx.config.silent) console.log(chalk.blue('\n📋 Finalizing Manifest...'))
-
     ctx.manifestWriter.write({
       version: VERSION,
       timestamp: new Date().toISOString(),
@@ -102,15 +161,12 @@ export function createComponentCompiler(ctx: ComponentContext) {
       diagnosticsCount: totalDiags,
       classFiles: classFiles.map(f => path.relative(process.cwd(), f))
     })
-
     if (!ctx.config.silent) {
       console.log(chalk.green(`\n✅ Build Complete!`))
       console.log(chalk.gray(`   📁 Components: ${processed}`))
-      console.log(chalk.gray(`   📁 Class files: ${classFiles.length}`))
+      console.log(chalk.gray(`   📁 Generated files: ${classFiles.length}`))
     }
-
     return { processed, classFiles, totalDiags }
   }
-
-  return { compileOne, compileAll, writeOutput }
+  return { compileOne, compileAll, writeOutput, normalizeImports }
 }

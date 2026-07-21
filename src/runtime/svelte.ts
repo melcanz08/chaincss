@@ -1,322 +1,109 @@
-// @ts-nocheck — optional peer dependency
-// src/runtime/svelte.ts
-//
-// ChainCSS Runtime for Svelte 5
-// Uses Svelte 5 runes ($state, $derived, $effect) when available.
-// Falls back to plain values in non-Svelte environments (tests, SSR).
-
+// src/runtime/svelte.ts — Store-based, works in Svelte 4 & 5, leak-safe, no hard dep
+// @ts-nocheck
 import { compileRuntime, removeRuntimeModule, styleInjector } from './injector.js';
 
-// ============================================================================
-// Svelte 5 Rune Detection
-// ============================================================================
-
-// $state/$effect/$derived are Svelte compiler macros — they only exist
-// when compiled by the Svelte compiler. In tests and non-Svelte environments,
-// we fall back to plain values that preserve the API shape.
-const hasRunes = typeof $state !== 'undefined';
-
-function createReactive<T>(initial: T): T {
-  if (hasRunes) return $state(initial);
-  return initial;
+let writable: any, get: any, onDestroyFn: any = null;
+try { const svelte = require('svelte'); onDestroyFn = svelte.onDestroy || null; } catch { onDestroyFn = null; }
+try {
+  const store = require('svelte/store');
+  writable = store.writable; get = store.get;
+} catch {
+  writable = (initial: any) => {
+    let value = initial; const subs = new Set();
+    return {
+      set: (v: any) => { value = v; subs.forEach((fn:any)=>fn(value)); },
+      update: (fn: any) => { value = fn(value); subs.forEach((f:any)=>f(value)); },
+      subscribe: (fn: any) => { fn(value); subs.add(fn); return ()=>subs.delete(fn); },
+    };
+  };
+  get = (store: any) => { let v: any; const u = store.subscribe((x:any)=>(v=x)); u(); return v; };
 }
-
-function createEffect(fn: () => (() => void) | void): void {
-  if (hasRunes) {
-    $effect(fn);
-  } else {
-    const cleanup = fn();
-    if (typeof cleanup === 'function') cleanup();
-  }
-}
-
-function createDerived<T>(fn: () => T): T {
-  if (hasRunes) return $derived(fn);
-  return fn();
-}
-
-// ============================================================================
-// Types
-// ============================================================================
-
-export interface UseAtomicClassesOptions {
-  debug?: boolean;
-}
-
-export interface AtomicClassesReturn {
-  classes: Record<string, string>;
-  cx: (name: string) => string;
-  cn: (...names: string[]) => string;
-  inject: (styles: Record<string, any>) => void;
-}
-
-// ============================================================================
-// Helpers
-// ============================================================================
 
 function generateId(): string {
-  return `chain-${crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).substring(2, 11)}`;
+  if (typeof crypto !== 'undefined' && (crypto as any).randomUUID) return `chain-${(crypto as any).randomUUID().slice(0,8)}`;
+  return `chain-${Math.random().toString(36).substring(2,11)}`;
+}
+function resolveStyles(styles: any) {
+  if (typeof styles === 'function') { try { return styles(); } catch { return null; } }
+  if (styles && typeof styles === 'object') return styles; return null;
 }
 
-function resolveStyles(styles: any): Record<string, any> | null {
-  if (typeof styles === 'function') return styles();
-  if (styles && typeof styles === 'object') return styles;
-  return null;
-}
-
-// ============================================================================
-// useAtomicClasses
-// ============================================================================
-
-export function useAtomicClasses(
-  styles: Record<string, any> | (() => Record<string, any>),
-  options: UseAtomicClassesOptions = {}
-): AtomicClassesReturn {
-  const { debug = false } = options;
+export function useAtomicClasses(styles: any, options: any = {}) {
   const moduleId = `chaincss-svelte-${generateId()}`;
-
-  let classes = createReactive<Record<string, string>>({});
-
-  const compileStyles = (sourceStyles: Record<string, any>) => {
-    if (!sourceStyles || Object.keys(sourceStyles).length === 0) return;
-
-    const compiledStyles: Record<string, any> = {};
-    const classNames: Record<string, string> = {};
-
-    for (const [key, styleDef] of Object.entries(sourceStyles)) {
-      const className = `${key}-${moduleId}`;
-      const styleObj = typeof styleDef === 'function' ? styleDef() : styleDef;
-      classNames[key] = className;
-      compiledStyles[`${key}_${moduleId}`] = {
-        selectors: [`.${className}`],
-        ...styleObj,
-      };
+  const classesStore = writable({});
+  const injectedIds: string[] = []; let destroyed = false;
+  const compileStyles = (sourceStyles: any) => {
+    if (!sourceStyles || Object.keys(sourceStyles).length===0) return;
+    const compiled: any = {}; const names: any = {};
+    for (const [k, def] of Object.entries(sourceStyles)) {
+      const cn = `${k}-${moduleId}`; names[k]=cn;
+      compiled[`${k}_${moduleId}`] = { selectors:[`.${cn}`], ...(typeof def==='function'?(def as any)():def) };
     }
-
-    compileRuntime(compiledStyles, moduleId);
-    classes = { ...classNames };
-
-    if (debug) {
-      console.log(`[ChainCSS Svelte] Compiled ${Object.keys(classNames).length} styles for ${moduleId}`);
-    }
+    compileRuntime(compiled, moduleId);
+    if (!destroyed) classesStore.set(names);
   };
-
-  createEffect(() => {
-    const sourceStyles = resolveStyles(styles);
-    if (sourceStyles) {
-      compileStyles(sourceStyles);
-    }
-
-    return () => {
-      removeRuntimeModule(moduleId);
-      if (debug) {
-        console.log(`[ChainCSS Svelte] Cleaned up module: ${moduleId}`);
-      }
-    };
-  });
-
+  const initial = resolveStyles(styles);
+  if (initial) compileStyles(initial);
+  if (styles && typeof (styles as any).subscribe==='function') {
+    (styles as any).subscribe((v:any)=>{ const r=resolveStyles(v); if(r) compileStyles(r); });
+  }
+  const cleanup = () => {
+    if (destroyed) return; destroyed=true;
+    try { removeRuntimeModule(moduleId); } catch {}
+    for (const id of injectedIds) { try { removeRuntimeModule(id); } catch {} }
+  };
+  if (onDestroyFn) { try { onDestroyFn(cleanup); } catch {} }
   return {
-    get classes() {
-      return classes;
-    },
-    cx: (name: string) => classes[name] || '',
-    cn: (...names: string[]) => names.map(name => classes[name]).filter(Boolean).join(' '),
-    inject: (newStyles: Record<string, any>) => {
-      const injectedId = `chaincss-injected-${Date.now()}`;
-      compileRuntime(newStyles, injectedId);
-      if (debug) {
-        console.log(`[ChainCSS Svelte] Injected additional styles: ${injectedId}`);
+    get classes() { return get(classesStore); },
+    cx: (n:string)=>get(classesStore)[n]||'',
+    cn: (...ns:string[])=>ns.map((n)=>get(classesStore)[n]).filter(Boolean).join(' '),
+    inject: (newStyles:any)=>{
+      const iid=`chaincss-injected-${generateId()}`; injectedIds.push(iid);
+      const comp:any={}; const nm:any={};
+      for (const [k,def] of Object.entries(newStyles)) {
+        const cn=`${k}-${iid}`; nm[k]=cn;
+        comp[`${k}_${iid}`]={ selectors:[`.${cn}`], ...(typeof def==='function'?(def as any)():def) };
       }
+      compileRuntime(comp,iid); return nm;
     },
   };
 }
 
-// ============================================================================
-// ChainCSSGlobal
-// ============================================================================
-
-export function ChainCSSGlobal(props: {
-  styles?: Record<string, any>;
-  tokens?: Record<string, any>;
-  debug?: boolean;
-}): void {
-  if (props.tokens && Object.keys(props.tokens).length > 0) {
-    styleInjector.setTokens(props.tokens);
-  }
-
-  if (props.styles && Object.keys(props.styles).length > 0) {
-    useAtomicClasses(props.styles, { debug: props.debug });
-  }
+export function ChainCSSGlobal(props:any): void {
+  if (typeof document==='undefined') return;
+  if (props.tokens && Object.keys(props.tokens).length>0) { try { styleInjector.setTokens(props.tokens); } catch {} }
+  if (props.styles && Object.keys(props.styles).length>0) { useAtomicClasses(props.styles,{debug:props.debug}); }
 }
 
-// ============================================================================
-// createStyledComponent
-// ============================================================================
-
-export function createStyledComponent(
-  styles: Record<string, any> | (() => Record<string, any>),
-  tag: string = 'div',
-  options: UseAtomicClassesOptions = {}
-): any {
-  const resolvedStyles = typeof styles === 'function' ? styles() : styles;
-  const { classes } = useAtomicClasses({ root: resolvedStyles }, options);
-
+export function createStyledComponent(styles:any, tag:string='div', options:any={}) {
+  const resolved = typeof styles==='function'?(styles as any)():styles;
+  const inst = useAtomicClasses({root:resolved}, options);
   return {
-    $$render: (props: Record<string, any> = {}, { default: slot }: any = {}) => {
-      const rootClass = classes['root'] || '';
-      const combinedClass = [rootClass, props.class].filter(Boolean).join(' ');
-
-      const attrs: Record<string, any> = { ...props };
-      delete attrs.class;
-      attrs.class = combinedClass;
-
-      return {
-        tag: props.as || tag,
-        props: attrs,
-        children: slot ? [slot] : [],
-      };
+    $$render: (res:any, props:any={}, _b:any, slots:any={})=>{
+      const rc=inst.classes['root']||''; const comb=[rc,props.class,props.className].filter(Boolean).join(' ');
+      const attrs=Object.entries(props).filter(([k])=>k!=='class'&&k!=='className'&&k!=='as').map(([k,v])=>`${k}="${String(v).replace(/"/g,'&quot;')}"`).join(' ');
+      const children=slots?.default?slots.default({}):''; const ft=props.as||tag;
+      return `<${ft} class="${comb}" ${attrs}>${children}</${ft}>`;
     },
+    render:(props:any={})=>({ tag:props.as||tag, class:[inst.classes['root']||'',props.class,props.className].filter(Boolean).join(' '), props, classes:inst.classes }),
+    _instance:inst,
   };
 }
 
-// ============================================================================
-// createStyledComponents
-// ============================================================================
-
-export function createStyledComponents(
-  components: Record<string, any>,
-  options?: UseAtomicClassesOptions
-): Record<string, any> {
-  const result: Record<string, any> = {};
-
-  for (const [name, config] of Object.entries(components)) {
-    const { element = 'div', styles } = config as any;
-    result[name] = createStyledComponent(styles, element, options);
-  }
-
-  return result;
+export function createStyledComponents(comps:Record<string,any>, options?:any){
+  const r:Record<string,any>={}; for(const [n,c] of Object.entries(comps)){ const {element='div',styles}=c as any; r[n]=createStyledComponent(styles,element,options); } return r;
 }
-
-// ============================================================================
-// useComputedStyles
-// ============================================================================
-
-export function useComputedStyles<T extends Record<string, any>>(
-  stylesFactory: (props: T) => Record<string, any>,
-  props: T
-): {
-  classes: Record<string, string>;
-  rootClass: string;
-} {
-  const computedStyles = createDerived(() => ({
-    root: stylesFactory(props),
-  }));
-
-  const { classes } = useAtomicClasses(computedStyles);
-
-  return {
-    get classes() {
-      return classes;
-    },
-    get rootClass() {
-      return classes['root'] || '';
-    },
-  };
+export function useComputedStyles(f:any,p:any){ const comp={root:f(p)}; const {classes}=useAtomicClasses(comp); return { get classes(){return classes;}, get rootClass(){return classes['root']||'';} }; }
+export function chainStyles(map:Record<string,any>){
+  const mid=`chaincss-template-${generateId()}`; const comp:any={}; const names:any={};
+  for(const [k,def] of Object.entries(map)){ const cn=`${k}-${mid}`; names[k]=cn; comp[`${k}_${mid}`]={ selectors:[`.${cn}`], ...(typeof def==='function'?(def as any)():def) }; }
+  compileRuntime(comp,mid); return names;
 }
+const KEY=Symbol('chaincss'); function getCtx(){ try {return require('svelte');}catch{return null;} }
+export function provideStyleContext(t:any){ const s=getCtx(); if(!s) return; try {s.setContext(KEY,writable(t));}catch{} }
+export function injectStyleContext(){ const s=getCtx(); if(!s) return writable({}); try {return s.getContext(KEY)||writable({});}catch{return writable({});} }
+export function cx(...cls:any[]){ const r:string[]=[]; for(const c of cls){ if(!c) continue; if(typeof c==='string') r.push(c); else if(typeof c==='object'){ for(const [k,v] of Object.entries(c)) if(v) r.push(k);} } return r.join(' '); }
+export function enableSvelteDebug(){ if(typeof window!=='undefined') (window as any).__CHAINCSS_SVELTE_DEBUG__=true; }
+export function disableSvelteDebug(){ if(typeof window!=='undefined') (window as any).__CHAINCSS_SVELTE_DEBUG__=false; }
+export function isSvelteDebugEnabled(){ return typeof window!=='undefined' && !!(window as any).__CHAINCSS_SVELTE_DEBUG__; }
 
-// ============================================================================
-// chainStyles
-// ============================================================================
-
-export function chainStyles(
-  styleMap: Record<string, Record<string, any>>
-): Record<string, string> {
-  const moduleId = `chaincss-template-${generateId()}`;
-  const compiledStyles: Record<string, any> = {};
-  const classNames: Record<string, string> = {};
-
-  for (const [key, styleDef] of Object.entries(styleMap)) {
-    const className = `${key}-${moduleId}`;
-    const styleObj = typeof styleDef === 'function' ? styleDef() : styleDef;
-    classNames[key] = className;
-    compiledStyles[`${key}_${moduleId}`] = {
-      selectors: [`.${className}`],
-      ...styleObj,
-    };
-  }
-
-  compileRuntime(compiledStyles, moduleId);
-  return classNames;
-}
-
-// ============================================================================
-// Context
-// ============================================================================
-
-const CHAIN_CSS_KEY = Symbol('chaincss');
-
-function getSvelteContext(): any {
-  try {
-    return require('svelte');
-  } catch {
-    return null;
-  }
-}
-
-export function provideStyleContext(theme: any): void {
-  const svelte = getSvelteContext();
-  if (!svelte) return;
-
-  const themeState = createReactive({ theme });
-  svelte.setContext(CHAIN_CSS_KEY, themeState);
-}
-
-export function injectStyleContext(): any {
-  const svelte = getSvelteContext();
-  if (!svelte) return createReactive({ theme: {} });
-
-  return svelte.getContext(CHAIN_CSS_KEY) || createReactive({ theme: {} });
-}
-
-// ============================================================================
-// cx
-// ============================================================================
-
-export function cx(...classes: (string | undefined | null | false | Record<string, boolean>)[]): string {
-  const result: string[] = [];
-
-  for (const cls of classes) {
-    if (!cls) continue;
-    if (typeof cls === 'string') {
-      result.push(cls);
-    } else if (typeof cls === 'object') {
-      for (const [key, value] of Object.entries(cls)) {
-        if (value) result.push(key);
-      }
-    }
-  }
-
-  return result.join(' ');
-}
-
-// ============================================================================
-// Debug
-// ============================================================================
-
-export function enableSvelteDebug(): void {
-  if (typeof window !== 'undefined') {
-    (window as any).__CHAINCSS_SVELTE_DEBUG__ = true;
-    console.log('🔍 ChainCSS Svelte Debug Mode Enabled');
-  }
-}
-
-export function disableSvelteDebug(): void {
-  if (typeof window !== 'undefined') {
-    (window as any).__CHAINCSS_SVELTE_DEBUG__ = false;
-    console.log('🔍 ChainCSS Svelte Debug Mode Disabled');
-  }
-}
-
-export function isSvelteDebugEnabled(): boolean {
-  return typeof window !== 'undefined' && !!(window as any).__CHAINCSS_SVELTE_DEBUG__;
-}

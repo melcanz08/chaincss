@@ -1,75 +1,73 @@
-// chaincss/src/compiler/cache/cache-manager.ts
+// chaincss/src/compiler/cache/cache-manager.ts 
+// High-performance, concurrent-safe compilation cache subsystem with precise boundary controls
+
 import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto';
+
+export interface CacheEntry<T = any> {
+  value: T;
+  cachedAt: number;
+  expires?: number;
+}
 
 export interface CacheData {
   version: string;
   created: string;
   updated: string;
-  atomic: Record<string, any>;
-  usage: Record<string, any>;
-  componentMap: Record<string, any>;
   stats: {
     totalStyles: number;
     atomicStyles: number;
     cacheHits: number;
     cacheMisses: number;
   };
-  [key: string]: any;
+  entries: Record<string, CacheEntry>;
 }
 
 export interface CacheOptions {
-  maxAge?: number; // Maximum age in milliseconds
-  maxSize?: number; // Maximum cache size in bytes
-  // compress option removed in v2.13 — base64 encoding increased size by 33%
-  autoSave?: boolean; // Auto-save on changes
-  saveInterval?: number; // Auto-save interval in ms
+  maxAge?: number;
+  maxSize?: number;
+  autoSave?: boolean;
+  saveInterval?: number;
 }
 
 export class CacheManager {
-  cachePath: string;
-  cacheDir: string;
-  cache: CacheData | Record<string, any>;
-  private dirty: boolean = false;
+  readonly cachePath: string;
+  readonly cacheDir: string;
+  cache!: CacheData;
+  private dirty = false;
   private saveTimer: NodeJS.Timeout | null = null;
-  private stats = {
-    hits: 0,
-    misses: 0,
-    writes: 0,
-    reads: 0
-  };
+  private stats = { hits: 0, misses: 0, writes: 0, reads: 0 };
   private options: Required<CacheOptions>;
+  private lastSize = 0;
+  private lastSizeCheck = 0;
 
   constructor(cachePath: string = './.chaincss-cache', options: CacheOptions = {}) {
     this.options = {
-      maxAge: options.maxAge || 7 * 24 * 60 * 60 * 1000, // 7 days default
-      maxSize: options.maxSize || 100 * 1024 * 1024, // 100MB default
+      maxAge: options.maxAge ?? 7 * 24 * 60 * 60 * 1000,
+      maxSize: options.maxSize ?? 100 * 1024 * 1024,
       autoSave: options.autoSave !== false,
-      saveInterval: options.saveInterval || 5000 // 5 seconds
+      saveInterval: options.saveInterval ?? 5000,
     };
-    
     this.cachePath = path.resolve(process.cwd(), cachePath);
     this.cacheDir = path.dirname(this.cachePath);
-    this.cache = {};
-    this.load();
     
-    // Setup auto-save if enabled
+    this.load();
     if (this.options.autoSave) {
       this.startAutoSave();
     }
   }
 
   private startAutoSave(): void {
-    if (this.saveTimer) clearInterval(this.saveTimer);
+    if (this.saveTimer) {
+      clearInterval(this.saveTimer);
+    }
     this.saveTimer = setInterval(() => {
       if (this.dirty) {
         this.save();
       }
     }, this.options.saveInterval);
     
-    // Ensure timer doesn't keep process alive
-    if (this.saveTimer.unref) {
+    if (this.saveTimer && typeof this.saveTimer.unref === 'function') {
       this.saveTimer.unref();
     }
   }
@@ -84,143 +82,122 @@ export class CacheManager {
   load(): void {
     try {
       if (fs.existsSync(this.cachePath)) {
-        let data = fs.readFileSync(this.cachePath, 'utf8');
-        
-        // Decompress if needed
-          // decompress removed
-        
-        this.cache = JSON.parse(data);
-        
-        // Check if cache is expired
-        if (this.isExpired()) {
-          console.log('Cache expired, clearing...');
-          this.clear();
+        try {
+          const stat = fs.statSync(this.cachePath);
+          if (stat.isDirectory()) {
+            fs.rmSync(this.cachePath, { recursive: true, force: true });
+            this.cache = this.getDefaultCache();
+            this.dirty = true;
+            return;
+          }
+          this.lastSize = stat.size;
+          this.lastSizeCheck = Date.now();
+        } catch {
+          // Fallback if stat checks fail during system locks
+        }
+
+        const rawData = fs.readFileSync(this.cachePath, 'utf8');
+        const parsed = JSON.parse(rawData);
+        if (!parsed || !parsed.entries) {
           this.cache = this.getDefaultCache();
+          this.dirty = true;
+          return;
         }
         
-        // Check cache size
-        this.checkAndPrune();
+        this.cache = parsed;
+        if (this.isExpired()) {
+          this.clear();
+        } else {
+          this.checkAndPrune();
+        }
       } else {
-        // Ensure cache directory exists
         if (!fs.existsSync(this.cacheDir)) {
           fs.mkdirSync(this.cacheDir, { recursive: true });
         }
         this.cache = this.getDefaultCache();
+        this.dirty = true;
       }
     } catch (error) {
-      console.warn('Could not load cache, starting fresh:', (error as Error).message);
+      console.warn('Could not load compiler cache, starting fresh:', (error as Error).message);
       this.cache = this.getDefaultCache();
+      this.dirty = true;
     }
   }
 
   private getDefaultCache(): CacheData {
     return {
-      version: '2.0.0',
+      version: '2.14.0',
       created: new Date().toISOString(),
       updated: new Date().toISOString(),
-      atomic: {},
-      usage: {},
-      componentMap: {},
-      stats: {
-        totalStyles: 0,
-        atomicStyles: 0,
-        cacheHits: 0,
-        cacheMisses: 0
-      }
+      stats: { totalStyles: 0, atomicStyles: 0, cacheHits: 0, cacheMisses: 0 },
+      entries: {},
     };
   }
 
   private isExpired(): boolean {
     const created = this.cache.created ? new Date(this.cache.created).getTime() : 0;
-    const now = Date.now();
-    return (now - created) > this.options.maxAge;
+    return Date.now() - created > this.options.maxAge;
   }
 
   private checkAndPrune(): void {
-    try {
-      const stats = fs.statSync(this.cachePath);
-      if (stats.size > this.options.maxSize) {
-        console.log(`Cache size (${stats.size} bytes) exceeds limit (${this.options.maxSize} bytes), pruning...`);
-        this.prune();
-      }
-    } catch (error) {
-      // File might not exist yet
+    const size = this.getCacheSize();
+    if (size > this.options.maxSize) {
+      this.prune();
     }
   }
 
-  private isCompressed(data: string): boolean {
-    // Check if data looks like compressed (base64 encoded)
-    return data.startsWith('COMPRESSED:');
-  }
-
-  private compress(data: string): string {
-    // Simple compression - could be enhanced with zlib
-    const compressed = Buffer.from(data).toString('base64');
-    return `COMPRESSED:${compressed}`;
-  }
-
-  private decompress(data: string): string {
-    if (data.startsWith('COMPRESSED:')) {
-      const compressed = data.substring(11);
-      return Buffer.from(compressed, 'base64').toString();
-    }
-    return data;
-  }
-
-  get(key: string): any {
+  get<T = any>(key: string): T | undefined {
     this.stats.reads++;
+    const entry = this.cache.entries[key];
     
-    if (this.cache[key] !== undefined) {
-      // Check if this specific entry has expired
-      if (this.cache[key].expires && this.cache[key].expires < Date.now()) {
-        delete this.cache[key];
+    if (entry !== undefined) {
+      if (entry.expires && entry.expires < Date.now()) {
+        delete this.cache.entries[key];
         this.stats.misses++;
         this.dirty = true;
         return undefined;
       }
-      
       this.stats.hits++;
-      if (this.cache.stats) {
-        this.cache.stats.cacheHits++;
-      }
-      return this.cache[key];
+      return entry.value as T;
     }
     
     this.stats.misses++;
-    if (this.cache.stats) {
-      this.cache.stats.cacheMisses++;
-    }
     return undefined;
   }
 
   set(key: string, value: any, ttl?: number): void {
-    const entry = {
-      ...value,
+    this.cache.entries[key] = {
+      value,
       cachedAt: Date.now(),
-      expires: ttl ? Date.now() + ttl : undefined
+      expires: ttl ? Date.now() + ttl : undefined,
     };
-    
-    this.cache[key] = entry;
     this.dirty = true;
     this.stats.writes++;
     
-    if (this.cache.stats && key !== 'stats') {
-      // Update stats if this is atomic or component data
-      if (key === 'atomic') {
+    if (this.cache.stats) {
+      if (key === 'atomic' && value && typeof value === 'object') {
         this.cache.stats.atomicStyles = Object.keys(value).length;
       }
+      this.cache.stats.totalStyles = Object.keys(this.cache.entries).length;
     }
   }
 
   has(key: string): boolean {
-    const value = this.get(key);
-    return value !== undefined;
+    const e = this.cache.entries[key];
+    if (!e) return false;
+    if (e.expires && e.expires < Date.now()) {
+      return false;
+    }
+    return true;
   }
 
   delete(key: string): boolean {
-    if (this.cache[key] !== undefined) {
-      delete this.cache[key];
+    if (this.cache.entries[key] !== undefined) {
+      delete this.cache.entries[key];
       this.dirty = true;
+      if (this.cache.stats) {
+        this.cache.stats.totalStyles = Object.keys(this.cache.entries).length;
+      }
       return true;
     }
     return false;
@@ -230,212 +207,211 @@ export class CacheManager {
     this.cache = this.getDefaultCache();
     this.dirty = true;
     this.stats = { hits: 0, misses: 0, writes: 0, reads: 0 };
-    
+    this.lastSize = 0;
+    this.lastSizeCheck = 0;
     if (fs.existsSync(this.cachePath)) {
-      try {
-        fs.unlinkSync(this.cachePath);
-      } catch (error) {
-        console.warn('Could not delete cache file:', (error as Error).message);
+      try { 
+        fs.unlinkSync(this.cachePath); 
+      } catch (e) { 
+        console.warn('Could not delete cache file:', (e as Error).message); 
       }
     }
-    
-    console.log('Cache cleared');
   }
 
   prune(): void {
     const now = Date.now();
     let prunedCount = 0;
     
-    for (const [key, value] of Object.entries(this.cache)) {
-      // Skip metadata keys
-      if (['version', 'created', 'updated', 'stats'].includes(key)) continue;
-      
-      // Remove expired entries
-      if (value.expires && value.expires < now) {
-        delete this.cache[key];
+    for (const k in this.cache.entries) {
+      if (!Object.prototype.hasOwnProperty.call(this.cache.entries, k)) continue;
+      if (this.cache.entries[k].expires && this.cache.entries[k].expires! < now) {
+        delete this.cache.entries[k];
         prunedCount++;
       }
     }
     
-    // Update timestamp
+    // Check real sizing context including volatile runtime additions
+    const currentSize = this.getCacheSize(true);
+    if (currentSize > this.options.maxSize) {
+      const entries = Object.entries(this.cache.entries);
+      entries.sort((a, b) => a[1].cachedAt - b[1].cachedAt);
+      
+      const toEvict = Math.ceil(entries.length * 0.3);
+      for (let i = 0; i < toEvict && i < entries.length; i++) {
+        delete this.cache.entries[entries[i][0]];
+        prunedCount++;
+      }
+    }
+    
     this.cache.updated = new Date().toISOString();
+    if (this.cache.stats) {
+      this.cache.stats.totalStyles = Object.keys(this.cache.entries).length;
+    }
     this.dirty = true;
     
     if (prunedCount > 0 && this.options.autoSave) {
-      console.log(`Pruned ${prunedCount} expired cache entries`);
+      console.log(`[ChainCSS Cache] Pruned ${prunedCount} entries to fit within footprint layout.`);
     }
   }
 
   save(): void {
     if (!this.dirty) return;
-    
     try {
-      // Update metadata
       this.cache.updated = new Date().toISOString();
+      
+      // Flush volatile tracking counters out to the structural engine layout
       if (this.cache.stats) {
-        this.cache.stats = { ...this.cache.stats, ...this.stats };
+        this.cache.stats.cacheHits = (this.cache.stats.cacheHits || 0) + this.stats.hits;
+        this.cache.stats.cacheMisses = (this.cache.stats.cacheMisses || 0) + this.stats.misses;
       }
       
-      let data = JSON.stringify(this.cache, null, 2);
+      // Reset the local operational tracker loops safely
+      this.stats.hits = 0;
+      this.stats.misses = 0;
       
-      // Compress if enabled
-      // decompress removed
-      
-      // Ensure directory exists
+      const data = JSON.stringify(this.cache);
       if (!fs.existsSync(this.cacheDir)) {
         fs.mkdirSync(this.cacheDir, { recursive: true });
       }
       
-      // Write to temp file first, then rename for atomicity
-      const tempPath = `${this.cachePath}.tmp`;
-      fs.writeFileSync(tempPath, data, 'utf8');
-      fs.renameSync(tempPath, this.cachePath);
+      const tmp = `${this.cachePath}.tmp`;
+      fs.writeFileSync(tmp, data, 'utf8');
+      fs.renameSync(tmp, this.cachePath);
       
+      this.lastSize = Buffer.byteLength(data, 'utf8');
+      this.lastSizeCheck = Date.now();
       this.dirty = false;
     } catch (error) {
-      console.warn('Could not save cache:', (error as Error).message);
+      console.warn('Could not save cache to disk:', (error as Error).message);
     }
   }
 
-  getStats(): {
-    hits: number;
-    misses: number;
-    reads: number;
-    writes: number;
-    hitRate: number;
-    size: number;
-    entryCount: number;
-  } {
-    const total = this.stats.hits + this.stats.misses;
-    const hitRate = total > 0 ? (this.stats.hits / total) * 100 : 0;
-    
-    let size = 0;
-    try {
-      if (fs.existsSync(this.cachePath)) {
-        const stats = fs.statSync(this.cachePath);
-        size = stats.size;
-      }
-    } catch (error) {
-      // Ignore
-    }
-    
-    const entryCount = Object.keys(this.cache).filter(k => 
-      !['version', 'created', 'updated', 'stats'].includes(k)
-    ).length;
+  getStats() {
+    // Unify transactional memory context with structural values
+    const instantHits = this.cache.stats.cacheHits + this.stats.hits;
+    const instantMisses = this.cache.stats.cacheMisses + this.stats.misses;
+    const total = instantHits + instantMisses;
+    const hitRate = total > 0 ? (instantHits / total) * 100 : 0;
     
     return {
-      hits: this.stats.hits,
-      misses: this.stats.misses,
+      hits: instantHits,
+      misses: instantMisses,
       reads: this.stats.reads,
       writes: this.stats.writes,
       hitRate,
-      size,
-      entryCount
+      size: this.getCacheSize(this.dirty), // Force deep structural evaluation only if changes are dirty
+      entryCount: Object.keys(this.cache.entries).length,
     };
   }
 
-  getCacheSize(): number {
+  getCacheSize(force = false): number {
+    const now = Date.now();
+    // Return the cached record weight if it falls within the 1-second throttle boundary
+    if (!force && now - this.lastSizeCheck < 1000 && this.lastSize > 0) {
+      return this.lastSize;
+    }
+    
+    // If the data structure has modified fields, compute space size dynamically from the live structure
+    if (this.dirty || force || this.lastSize === 0) {
+      try {
+        const structuralWeight = Buffer.byteLength(JSON.stringify(this.cache), 'utf8');
+        this.lastSize = structuralWeight;
+        this.lastSizeCheck = now;
+        return structuralWeight;
+      } catch {
+        // Fallback to absolute file reading constraints if stringification throws exception drops
+      }
+    }
+
     try {
       if (fs.existsSync(this.cachePath)) {
-        const stats = fs.statSync(this.cachePath);
-        return stats.size;
+        const s = fs.statSync(this.cachePath).size;
+        this.lastSize = s;
+        this.lastSizeCheck = now;
+        return s;
       }
-    } catch (error) {
-      // Ignore
-    }
-    return 0;
+    } catch {}
+    
+    return this.lastSize;
   }
 
   getCacheAge(): number {
     try {
       if (fs.existsSync(this.cachePath)) {
-        const stats = fs.statSync(this.cachePath);
-        return Date.now() - stats.mtimeMs;
+        return Date.now() - fs.statSync(this.cachePath).mtimeMs;
       }
-    } catch (error) {
-      // Ignore
-    }
+    } catch {}
     return 0;
   }
 
-  getKeys(): string[] {
-    return Object.keys(this.cache).filter(k => 
-      !['version', 'created', 'updated', 'stats'].includes(k)
-    );
+  getKeys(): string[] { return Object.keys(this.cache.entries); }
+  getSize(): number { return this.getCacheSize(); }
+  isDirty(): boolean { return this.dirty; }
+
+  async flush(): Promise<void> { 
+    if (this.dirty) {
+      this.save();
+    } 
   }
 
-  getSize(): number {
-    return this.getCacheSize();
-  }
-
-  isDirty(): boolean {
-    return this.dirty;
-  }
-
-  async flush(): Promise<void> {
+  destroy(): void {
+    this.stopAutoSave();
     if (this.dirty) {
       this.save();
     }
   }
 
-  destroy(): void {
-    this.stopAutoSave();
-    this.clear();
-  }
-
-  // Get cache entry with metadata
-  getEntry(key: string): { value: any; cachedAt: number; expires?: number } | undefined {
-    const entry = this.cache[key];
+  getEntry(key: string): CacheEntry | undefined {
+    const entry = this.cache.entries[key];
     if (entry && (!entry.expires || entry.expires > Date.now())) {
-      return {
-        value: entry.value !== undefined ? entry.value : entry,
-        cachedAt: entry.cachedAt,
-        expires: entry.expires
-      };
+      return entry;
     }
     return undefined;
   }
 
-  // Set cache entry with custom TTL in seconds
   setWithTTL(key: string, value: any, ttlSeconds: number): void {
     this.set(key, value, ttlSeconds * 1000);
   }
 
-  // Bulk set multiple entries
   setBulk(entries: Record<string, any>): void {
-    for (const [key, value] of Object.entries(entries)) {
-      this.set(key, value);
+    const now = Date.now();
+    let changed = false;
+    let newWrites = 0;
+    
+    for (const k in entries) {
+      if (!Object.prototype.hasOwnProperty.call(entries, k)) continue;
+      this.cache.entries[k] = { value: entries[k], cachedAt: now };
+      changed = true;
+      newWrites++;
+    }
+    
+    if (changed) {
+      this.dirty = true;
+      this.stats.writes += newWrites;
+      if (this.cache.stats) {
+        this.cache.stats.totalStyles = Object.keys(this.cache.entries).length;
+      }
     }
   }
 
-  // Bulk get multiple entries
   getBulk(keys: string[]): Record<string, any> {
     const result: Record<string, any> = {};
     for (const key of keys) {
-      const value = this.get(key);
-      if (value !== undefined) {
-        result[key] = value;
+      const v = this.get(key);
+      if (v !== undefined) {
+        result[key] = v;
       }
     }
     return result;
   }
 
-  // Get or compute cache value
-  async getOrCompute<T>(
-    key: string, 
-    compute: () => Promise<T>, 
-    ttl?: number
-  ): Promise<T> {
-    const cached = this.get(key);
-    if (cached !== undefined) {
-      return cached;
-    }
-    
+  async getOrCompute<T>(key: string, compute: () => Promise<T>, ttl?: number): Promise<T> {
+    const cached = this.get<T>(key);
+    if (cached !== undefined) return cached;
     const computed = await compute();
     this.set(key, computed, ttl);
     return computed;
   }
 }
 
-// ESM Export
 export { CacheManager as default };

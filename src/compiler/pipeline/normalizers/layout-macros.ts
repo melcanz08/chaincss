@@ -1,5 +1,6 @@
-// src/compiler/pipeline/normalizers/layout-macros.ts 
-// Adds custom macro registry, structuredClone, and robust autoContrast with rgb/hsl/var support
+// ============================================================================
+// FILE: src/compiler/pipeline/normalizers/layout-macros.ts
+// ============================================================================
 
 export interface LayoutMacro {
   name: string;
@@ -48,7 +49,6 @@ const BUILTIN_LAYOUT_MACROS: Record<string, LayoutMacro> = {
   glass: { name: 'glass', description: 'Frosted glass morphism effect', properties: { backgroundColor: 'rgba(255, 255, 255, 0.1)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.2)', borderRadius: '16px' } },
   truncate: { name: 'truncate', description: 'Single-line text truncation with ellipsis', properties: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
   srOnly: { name: 'srOnly', description: 'Screen-reader only (visually hidden but accessible)', properties: { position: 'absolute', width: '1px', height: '1px', padding: '0', margin: '-1px', overflow: 'hidden', clip: 'rect(0, 0, 0, 0)', whiteSpace: 'nowrap', borderWidth: '0' } },
-  // --- NATIVE v2.12 ADDITIONS (additive) ---
   bentoNative: {
     name: 'bentoNative', description: 'Bento grid with subgrid + container queries (native)',
     properties: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', containerType: 'inline-size' as any },
@@ -68,8 +68,10 @@ const BUILTIN_LAYOUT_MACROS: Record<string, LayoutMacro> = {
 export let LAYOUT_MACROS: Record<string, LayoutMacro> = { ...BUILTIN_LAYOUT_MACROS };
 
 export function registerLayoutMacro(name: string, macro: LayoutMacro, allowOverride = false) {
-  if (!allowOverride && BUILTIN_LAYOUT_MACROS[name]) console.warn(`[ChainCSS] layout macro '${name}' overrides builtin. Use allowOverride:true to silence.`);
-  LAYOUT_MACROS[name] = {...macro,name };
+  if (!allowOverride && BUILTIN_LAYOUT_MACROS[name]) {
+    console.warn(`[ChainCSS] layout macro '${name}' overrides builtin. Use allowOverride:true to silence.`);
+  }
+  LAYOUT_MACROS[name] = {...macro, name };
 }
 export function registerLayoutMacros(macros: Record<string, LayoutMacro>, allowOverride = false) {
   for (const [k, v] of Object.entries(macros || {})) registerLayoutMacro(k, v, allowOverride);
@@ -81,14 +83,26 @@ export function resolveLayoutMacro(name: string): LayoutMacro | null { return LA
 export function expandLayoutMacro(name: string): Record<string, any> | null {
   const macro = resolveLayoutMacro(name);
   if (!macro) return null;
+  
   const result: Record<string, any> = { ...macro.properties };
   if (macro.defaults) Object.assign(result, macro.defaults);
+  
   if (macro.mediaQueries) {
-    result.atRules = result.atRules || [];
     for (const [query, props] of Object.entries(macro.mediaQueries)) {
-      // v3.2: support '&:hover' inside mediaQueries by keeping it as nested style
-      // The pipeline's css-printer now handles nested '&' correctly
-      result.atRules.push({ type: 'media', query, styles: props, nestedRules: [] });
+      // Phase 2 Upgrade: Correctly classify native container rules, nested configurations, or traditional media queries
+      if (query.startsWith('@container')) {
+        result.atRules = result.atRules || [];
+        const cleanQuery = query.replace('@container', '').trim();
+        result.atRules.push({ type: 'container', query: cleanQuery, styles: props, nestedRules: [] });
+      } 
+      else if (query.startsWith('&') || query.startsWith(':')) {
+        // Direct nested blocks mapped dynamically inside standard styles declaration layer
+        result[query] = props;
+      } 
+      else {
+        result.atRules = result.atRules || [];
+        result.atRules.push({ type: 'media', query, styles: props, nestedRules: [] });
+      }
     }
   }
   return result;
@@ -104,20 +118,32 @@ export function autoContrast(bgColor: string): string {
 
   let hex = '';
   if (input.startsWith('#')) hex = input.slice(1);
-  else if (/^[a-f0-9]{3,8}$/.test(input)) hex = input; // FIX: handles 'ffffff' without #
+  else if (/^[a-f0-9]{3,8}$/.test(input)) hex = input;
 
   if (hex) {
-    if (hex.length === 3) { r = parseInt(hex[0]+hex[0],16); g = parseInt(hex[1]+hex[1],16); b = parseInt(hex[2]+hex[2],16); }
-    else if (hex.length >= 6) { r = parseInt(hex.slice(0,2),16); g = parseInt(hex.slice(2,4),16); b = parseInt(hex.slice(4,6),16); }
+    if (hex.length === 3) { 
+      r = parseInt(hex[0]+hex[0], 16); 
+      g = parseInt(hex[1]+hex[1], 16); 
+      b = parseInt(hex[2]+hex[2], 16); 
+    }
+    else if (hex.length >= 6) { 
+      r = parseInt(hex.slice(0, 2), 16); 
+      g = parseInt(hex.slice(2, 4), 16); 
+      b = parseInt(hex.slice(4, 6), 16); 
+    }
   } else if (input.startsWith('rgb')) {
     const m = input.match(/(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
-    if (m) { r = parseInt(m[1],10); g = parseInt(m[2],10); b = parseInt(m[3],10); }
+    if (m) { r = parseInt(m[1], 10); g = parseInt(m[2], 10); b = parseInt(m[3], 10); }
   } else if (input.startsWith('hsl')) {
     const m = input.match(/hsl\(\s*\d+,\s*[\d.]+%?\s*,\s*([\d.]+)%/);
     if (m) { const l = parseFloat(m[1]); r = g = b = Math.round(l*2.55); }
   }
 
-  const toLinear = (c: number) => { const s = c/255; return s <= 0.03928 ? s/12.92 : Math.pow((s+0.055)/1.055, 2.4); };
+  const toLinear = (c: number) => { 
+    const s = c/255; 
+    return s <= 0.03928 ? s/12.92 : Math.pow((s+0.055)/1.055, 2.4); 
+  };
+  
   const lum = 0.2126*toLinear(r) + 0.7152*toLinear(g) + 0.0722*toLinear(b);
   const contrastBlack = (lum + 0.05) / 0.05;
   const contrastWhite = 1.05 / (lum + 0.05);

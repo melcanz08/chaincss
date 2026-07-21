@@ -41,15 +41,47 @@ function hashString(str: string): string {
 }
 
 // ============================================================================
+// no regex, handles "}", '}', /* } */, url()
+// ============================================================================
+
+export function splitCSSRules(css: string): string[] {
+  const rules: string[] = []
+  let start = 0, depth = 0
+  let inSingle = false, inDouble = false, inComment = false
+
+  for (let i = 0; i < css.length; i++) {
+    const ch = css[i], next = css[i+1]
+    if (inComment) {
+      if (ch === '*' && next === '/') { inComment = false; i++ }
+      continue
+    }
+    if (ch === '/' && next === '*') { inComment = true; i++; continue }
+    if (ch === "'" && !inDouble) inSingle = !inSingle
+    else if (ch === '"' && !inSingle) inDouble = !inDouble
+    if (inSingle || inDouble) continue
+
+    if (ch === '{') depth++
+    if (ch === '}') {
+      depth--
+      if (depth === 0) {
+        rules.push(css.slice(start, i+1).trim())
+        start = i+1
+      }
+    }
+  }
+  return rules.filter(Boolean)
+}
+
+// ============================================================================
 // StyleInjector
 // ============================================================================
 
 class StyleInjector {
   private styleElement: HTMLStyleElement | null = null;
   private injectedIds = new Set<string>();
-  private contentHashes = new Set<string>();       // NEW: deduplicate by CSS content
+  private contentHashes = new Set<string>();       
+  private classToHash = new Map<string, string>();    // Maps class names back to their hashes for clean teardowns
   private moduleMap = new Map<string, Set<string>>();
-  private ruleTracker = new Map<string, number[]>();
   private debugMode = false;
   
   private get tokenStore(): TokenStore {
@@ -67,8 +99,7 @@ class StyleInjector {
   
   constructor() {
     // Lazy initialization: DOM element created on first use, not on import.
-    // This prevents "document is not defined" in SSR and avoids relying
-    // on import side-effects for critical DOM nodes.
+    // This prevents "document is not defined" in SSR environments.
   }
 
   /**
@@ -92,7 +123,7 @@ class StyleInjector {
       document.head.appendChild(el);
       this.styleElement = el;
     }
-    return this.styleElement || (typeof document !== 'undefined' ? document.getElementById('chaincss-runtime') as HTMLStyleElement : null);
+    return this.styleElement;
   }
   
   enableDebug(enable: boolean = true): void {
@@ -125,7 +156,8 @@ class StyleInjector {
       const resolved = this.getToken(value.slice(1));
       return resolved !== undefined ? resolved : value;
     }
-    return value.replace(/\$([a-zA-Z0-9.-]+)/g, (_, path) => {
+    // Fixes Issue 1: Rigid path structure matching segment by segment via word/dash characters
+    return value.replace(/\$([a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)*)/g, (_, path) => {
       const resolved = this.getToken(path);
       return resolved !== undefined ? String(resolved) : _;
     });
@@ -136,17 +168,14 @@ class StyleInjector {
    * Uses CSSStyleSheet.insertRule for O(1) injection — no textContent reparse.
    * Deduplicates by CSS content hash.
    */
-
   injectMultiple(
     styles: Record<string, StyleObject>,
     moduleId?: string
   ): Record<string, string> {
-    // SSR guard: don't touch DOM during server rendering
     if (typeof document === 'undefined') return {};
     const result: Record<string, string> = {};
     const sheet = this.ensureElement().sheet;
     if (!sheet) return result;
-    const indices: number[] = [];
     const moduleClasses = new Set<string>();
 
     for (const [name, style] of Object.entries(styles)) {
@@ -166,10 +195,10 @@ class StyleInjector {
 
       if (!css) continue;
 
-      // Deduplicate by CSS content hash
       const contentHash = hashString(css);
       if (this.contentHashes.has(contentHash)) {
         this.injectedIds.add(className);
+        this.classToHash.set(className, contentHash);
         moduleClasses.add(className);
         if (this.debugMode) {
           console.log(`[ChainCSS] Deduplicated: ${className} (hash: ${contentHash})`);
@@ -178,39 +207,36 @@ class StyleInjector {
       }
 
       try {
-        // Native CSSOM insertion — no textContent reparse
-        // Split compound rules (e.g., .btn { ... } .btn:hover { ... })
-        const rules = css.split(/\}(?=\s*\.|@)/);
+        const rules = splitCSSRules(css);
+        let insertedCount = 0;
         for (const rule of rules) {
           const trimmed = rule.trim();
           if (!trimmed) continue;
           const fullRule = trimmed.endsWith('}') ? trimmed : trimmed + '}';
-          const index = sheet.insertRule(fullRule, sheet.cssRules.length);
-          indices.push(index);
+          sheet.insertRule(fullRule, sheet.cssRules.length);
+          insertedCount++;
         }
 
         this.injectedIds.add(className);
         this.contentHashes.add(contentHash);
+        this.classToHash.set(className, contentHash);
 
         if (this.debugMode) {
-          console.log(`[ChainCSS] Inserted: ${className} (${indices.length} rules, hash: ${contentHash})`);
+          console.log(`[ChainCSS] Inserted: ${className} (${insertedCount} rules, hash: ${contentHash})`);
         }
       } catch (e) {
-        // Fallback: if insertRule fails (malformed CSS), use textContent
         if (this.debugMode) {
           console.error(`[ChainCSS] insertRule failed for ${className}, falling back to textContent`, e);
         }
         this.ensureElement().textContent += css + '\n';
         this.injectedIds.add(className);
         this.contentHashes.add(contentHash);
+        this.classToHash.set(className, contentHash);
       }
 
       moduleClasses.add(className);
     }
 
-    if (moduleId && indices.length > 0) {
-      this.ruleTracker.set(moduleId, indices);
-    }
     if (moduleId && moduleClasses.size > 0) {
       this.moduleMap.set(moduleId, moduleClasses);
     }
@@ -223,7 +249,6 @@ class StyleInjector {
    * Used by useChainStyles() for dynamic style injection.
    */
   inject(className: string, css: string, debug: boolean = false): void {
-    // SSR guard
     if (typeof document === 'undefined') return;
     const sheet = this.ensureElement().sheet;
     if (!sheet) return;
@@ -231,12 +256,13 @@ class StyleInjector {
     const contentHash = hashString(css);
     if (this.contentHashes.has(contentHash)) {
       this.injectedIds.add(className);
+      this.classToHash.set(className, contentHash);
       if (debug) console.log("[ChainCSS] Deduplicated: " + className);
       return;
     }
 
     try {
-      const rules = css.split(/\}(?=\s*\.|@)/);
+      const rules = splitCSSRules(css);
       for (const rule of rules) {
         const trimmed = rule.trim();
         if (!trimmed) continue;
@@ -246,111 +272,112 @@ class StyleInjector {
       }
       this.injectedIds.add(className);
       this.contentHashes.add(contentHash);
+      this.classToHash.set(className, contentHash);
       if (debug) console.log("[ChainCSS] Injected: " + className);
     } catch (e) {
       this.ensureElement().textContent += css + "\n";
       this.injectedIds.add(className);
       this.contentHashes.add(contentHash);
+      this.classToHash.set(className, contentHash);
     }
   }
 
   /**
-   * Remove a single injected class from the sheet.
+   * Remove a single injected class from the sheet. Clears associated cache tokens.
    */
   remove(className: string): void {
     const sheet = this.ensureElement().sheet;
     if (!sheet) return;
+    
+    // Fixes Issue 2: Compile the selector match expression once, not per rule iteration
+    const escapedClass = className.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const ruleMatcher = new RegExp('\\.' + escapedClass + '(\\s|:|$|,)');
+
     for (let i = sheet.cssRules.length - 1; i >= 0; i--) {
       const rule = sheet.cssRules[i] as CSSStyleRule;
-      if (rule.selectorText && new RegExp('\\.' + className.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\s|:|$)').test(rule.selectorText)) {
+      if (rule.selectorText && ruleMatcher.test(rule.selectorText)) {
         try { sheet.deleteRule(i); } catch {}
       }
+    }
+    
+    const associatedHash = this.classToHash.get(className);
+    if (associatedHash) {
+      this.contentHashes.delete(associatedHash);
+      this.classToHash.delete(className);
     }
     this.injectedIds.delete(className);
   }
   
   private resolveStyleTokens(style: StyleObject): StyleObject {
-    const resolved: StyleObject = { ...style };
+    const resolved = { ...style } as Record<string, any>;
     
-    for (const [key, value] of Object.entries(resolved)) {
+    for (const key of Object.keys(resolved)) {
+      const value = resolved[key];
       if (typeof value === 'string') {
-        (resolved as any)[key] = this.resolveTokens(value);
-      } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !key.startsWith('_') && !key.startsWith('&')) {
-        (resolved as any)[key] = this.resolveStyleTokens(value as any);
+        resolved[key] = this.resolveTokens(value);
+      } else if (
+        typeof value === 'object' && 
+        value !== null && 
+        !Array.isArray(value) && 
+        !key.startsWith('_') && 
+        !key.startsWith('&')
+      ) {
+        resolved[key] = this.resolveStyleTokens(value);
       }
     }
     
-    if (resolved._nestedRules) {
+    if (resolved._nestedRules && Array.isArray(resolved._nestedRules)) {
       resolved._nestedRules = resolved._nestedRules.map((rule: any) => ({
         ...rule,
         styles: this.resolveStyleTokens(rule.styles)
       }));
     }
     
-    return resolved;
+    return resolved as StyleObject;
   }
   
   /**
-   * Remove a module's injected styles.
-   * Uses tracked rule indices for O(1) deletion — no sheet scan.
+   * Remove a module's injected styles safely via specific target selector matching.
+   * Completely immune to absolute index displacements caused by multi-module actions.
    */
-
   removeModule(moduleId: string): void {
     const sheet = this.ensureElement().sheet;
     if (!sheet) return;
 
-    // Fast path: use tracked indices for O(1) deletion
-    const indices = this.ruleTracker.get(moduleId);
-    if (indices && indices.length > 0) {
-      // Sort descending to avoid index shifting during deletion
-      const sorted = [...indices].sort((a, b) => b - a);
-      for (const index of sorted) {
-        if (index < sheet.cssRules.length) {
-          try {
-            sheet.deleteRule(index);
-          } catch {
-            // Rule already removed or index shifted — ignore
-          }
-        }
-      }
-      this.ruleTracker.delete(moduleId);
-
-      // Update injectedIds by matching classes from moduleMap
-      const classes = this.moduleMap.get(moduleId);
-      if (classes) {
-        for (const cls of classes) {
-          this.injectedIds.delete(cls);
-        }
-        this.moduleMap.delete(moduleId);
-      }
-
-      if (this.debugMode) {
-        console.log(`[ChainCSS] Removed ${sorted.length} rules for ${moduleId}`);
-      }
-      return;
-    }
-
-    // Slow fallback: scan sheet for class names (for modules without tracked indices)
     const classes = this.moduleMap.get(moduleId);
     if (!classes) return;
 
     let removed = 0;
+    // Walk backward to guarantee index modifications do not affect outstanding rules
     for (let i = sheet.cssRules.length - 1; i >= 0; i--) {
       const rule = sheet.cssRules[i] as CSSStyleRule;
       if (rule.selectorText) {
         const match = rule.selectorText.match(/\.([a-zA-Z0-9_-]+)/);
         if (match && classes.has(match[1])) {
-          sheet.deleteRule(i);
-          this.injectedIds.delete(match[1]);
-          removed++;
+          try {
+            sheet.deleteRule(i);
+            removed++;
+          } catch (e) {
+            if (this.debugMode) console.error(e);
+          }
         }
       }
+    }
+
+    // Flush cache entries for this module
+    for (const cls of classes) {
+      const associatedHash = this.classToHash.get(cls);
+      if (associatedHash) {
+        this.contentHashes.delete(associatedHash);
+        this.classToHash.delete(cls);
+      }
+      this.injectedIds.delete(cls);
     }
 
     this.moduleMap.delete(moduleId);
 
     if (this.debugMode) {
-      console.log(`[ChainCSS] Removed ${removed} rules for ${moduleId} (slow path)`);
+      console.log(`[ChainCSS] Safely unmounted ${removed} rules for ${moduleId}`);
     }
   }
   
@@ -359,12 +386,11 @@ class StyleInjector {
       this.ensureElement().textContent = '';
       this.injectedIds.clear();
       this.contentHashes.clear();
+      this.classToHash.clear();
       this.moduleMap.clear();
-      this.ruleTracker.clear();
     }
   }
 
-  
   getStyleElement(): HTMLStyleElement | null {
     return this.styleElement || (typeof document !== 'undefined' ? document.getElementById('chaincss-runtime') as HTMLStyleElement : null);
   }
@@ -398,7 +424,7 @@ export function runRuntime(...styleObjects: StyleObject[]): string {
     .join('\n');
   
   if (css) {
-    (styleInjector as any).styleElement.textContent += css;
+    styleInjector.inject('runtime-' + hashString(css), css);
   }
   
   return css;

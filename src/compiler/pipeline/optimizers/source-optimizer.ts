@@ -1,14 +1,40 @@
-// src/compiler/pipeline/optimizers/source-optimizer.ts
-//
-// Source Optimizer — detects and eliminates duplicate CSS rules.
-//
-// Two rules are considered duplicates if they share the same selector
-// and the same set of declarations (regardless of declaration order).
-// The later rule is kept (it would win in CSS cascade anyway), and
-// earlier duplicates are marked as dead for the dead-code-eliminator.
+// ============================================================================
+// FILE: src/compiler/pipeline/optimizers/source-optimizer.ts
+// ============================================================================
 
-import type { StyleIR } from '../ir/types.js';
+import type { StyleIR, IRRule, IRDeclaration } from '../ir/types.js';
 import type { OptimizationPass, OptimizationResult } from '../pipeline-types.js';
+
+function stringifyDeclarations(decls: IRDeclaration[] | undefined): string {
+  if (!decls) return '';
+  return decls
+    .map(d => `${d.property}:${d.value}`)
+    .sort()
+    .join(';');
+}
+
+function computeRuleHash(rule: IRRule): string {
+  const selector = rule.selector || '';
+  const declString = stringifyDeclarations(rule.declarations);
+
+  // Safely sort and normalize pseudo-classes to avoid compilation order variance
+  const pseudoStr = (rule as any).pseudoClasses
+    ? [...(rule as any).pseudoClasses]
+        .map((p: any) => `${p.name}:${stringifyDeclarations(p.declarations)}`)
+        .sort()
+        .join(';')
+    : '';
+
+  // Safely sort and normalize nested media/container queries
+  const atRuleStr = rule.atRules
+    ? [...rule.atRules]
+        .map((a: any) => `${a.type}:${a.query || ''}:${stringifyDeclarations(a.declarations)}`)
+        .sort()
+        .join(';')
+    : '';
+
+  return `${selector}|${pseudoStr}|${atRuleStr}|${declString}`;
+}
 
 export const sourceOptimizer: OptimizationPass = {
   name: 'source-optimizer',
@@ -19,46 +45,55 @@ export const sourceOptimizer: OptimizationPass = {
     let changes = 0;
     let bytesSaved = 0;
 
-    // Build a hash for each rule: selector + sorted declarations
-    // Walk backward so later rules are seen first — earlier duplicates get marked dead
-    const seen = new Map<string, number>(); // hash → first-seen index
+    if (!ir || !ir.rules) {
+      return { ir, savings: { rulesEliminated: 0, declarationsEliminated: 0, bytesSaved: 0 }, changes: 0 };
+    }
 
-    for (let i = ir.rules.length - 1; i >= 0; i--) {
+    if (!ir.diagnostics) {
+      ir.diagnostics = [];
+    }
+
+    // Map to keep track of the most recent index for a given rule hash
+    const seenHashes = new Map<string, number>();
+
+    // Phase 1: Forward pass to flag identical prior rules while preserving cascade order
+    for (let i = 0; i < ir.rules.length; i++) {
       const rule = ir.rules[i];
       if (rule.isDead) continue;
 
-      // Generate a stable hash from selector + declarations (order-independent)
-      const declString = rule.declarations
-        .map(d => `${d.property}:${d.value}`)
-        .sort()
-        .join(';');
-      const hash = rule.selector + '|' + declString;
+      const hash = computeRuleHash(rule);
 
-      if (seen.has(hash)) {
-        // Duplicate found — mark the earlier occurrence as dead
-        rule.isDead = true;
+      if (seenHashes.has(hash)) {
+        const previousIndex = seenHashes.get(hash)!;
+        const previousRule = ir.rules[previousIndex];
+
+        // Instead of breaking cascade lines later, we safely kill the EARLIER redundant block
+        previousRule.isDead = true;
         changes++;
-        bytesSaved += declString.length + rule.selector.length + 20; // ~declarations + selector + braces
+
+        const approximateBytes = (rule.selector || '').length + stringifyDeclarations(rule.declarations).length + 20;
+        bytesSaved += approximateBytes;
 
         ir.diagnostics.push({
-          id: 'dup-rule-' + Date.now(),
-          nodeId: rule.id,
+          id: `dup-rule-${previousRule.id}-${rule.id}`,
+          nodeId: previousRule.id,
           severity: 'info',
-          message: `Duplicate rule "${rule.selector}" eliminated — identical to rule at index ${seen.get(hash)}`,
-          suggestion: 'Consider using a shared style definition instead of duplicating rules.',
+          message: `Duplicate rule "${rule.selector}" eliminated — overridden by identical subsequent block at index ${i}`,
+          suggestion: 'Consolidate redundant styles or combine shared definitions.',
           pass: 'source-optimizer',
         });
-      } else {
-        seen.set(hash, i);
       }
+
+      // Always track the newest declaration instance to preserve progressive override chains
+      seenHashes.set(hash, i);
     }
 
     if (changes > 0) {
       ir.diagnostics.push({
-        id: 'source-opt-summary-' + Date.now(),
+        id: `source-opt-summary-${Date.now()}`,
         nodeId: ir.id,
         severity: 'info',
-        message: `Source optimizer: eliminated ${changes} duplicate rules, saving ~${bytesSaved} bytes`,
+        message: `Source optimizer: eliminated ${changes} redundant rule blocks, recovering ~${bytesSaved} bytes`,
         pass: 'source-optimizer',
       });
     }

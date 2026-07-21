@@ -14,7 +14,7 @@ export interface TokenTypography {
   fontSize: Record<string, string>;
   fontWeight: Record<string, string>;
   lineHeight: Record<string, string>;
-  letterSpacing?: Record<string, string>; // Add this optional property
+  letterSpacing?: Record<string, string>;
 }
 
 export interface TokenBreakpoints {
@@ -33,6 +33,10 @@ export interface TokenBorderRadius {
   [key: string]: string;
 }
 
+export interface TokenAnimations {
+  [key: string]: Record<string, Record<string, string | number>>;
+}
+
 export interface TokensStructure {
   colors: TokenColors;
   spacing: TokenSpacing;
@@ -41,14 +45,8 @@ export interface TokensStructure {
   zIndex: TokenZIndex;
   shadows: TokenShadows;
   borderRadius: TokenBorderRadius;
+  animations?: TokenAnimations;
   [key: string]: any;
-}
-
-export interface TokenValue {
-  value: any;
-  description?: string;
-  deprecated?: boolean;
-  aliases?: string[];
 }
 
 export type FlattenedTokens = Record<string, string>;
@@ -127,7 +125,6 @@ export const defaultTokens: TokensStructure = {
       900: '#713f12'
     }
   },
-  
   spacing: {
     0: '0',
     0.5: '0.125rem',
@@ -173,7 +170,6 @@ export const defaultTokens: TokensStructure = {
     '4xl': '8rem',
     '5xl': '10rem'
   },
-  
   typography: {
     fontFamily: {
       sans: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
@@ -232,7 +228,6 @@ export const defaultTokens: TokensStructure = {
       widest: '0.1em'
     }
   },
-  
   breakpoints: {
     sm: '640px',
     md: '768px',
@@ -245,7 +240,6 @@ export const defaultTokens: TokensStructure = {
     desktop: '1024px',
     wide: '1280px'
   },
-  
   zIndex: {
     0: '0',
     10: '10',
@@ -263,7 +257,6 @@ export const defaultTokens: TokensStructure = {
     toast: '1070',
     overlay: '1080'
   },
-  
   shadows: {
     xs: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
     sm: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
@@ -278,7 +271,6 @@ export const defaultTokens: TokensStructure = {
     'glow-md': '0 0 20px rgba(102, 126, 234, 0.5)',
     'glow-lg': '0 0 30px rgba(102, 126, 234, 0.5)'
   },
-  
   borderRadius: {
     none: '0',
     sm: '0.125rem',
@@ -291,8 +283,6 @@ export const defaultTokens: TokensStructure = {
     '4xl': '2rem',
     full: '9999px'
   },
-  
-  // Additional animation presets
   animations: {
     fade: {
       '0%': { opacity: 0 },
@@ -336,6 +326,7 @@ export const defaultTokens: TokensStructure = {
     }
   }
 };
+Object.freeze(defaultTokens);
 
 export class DesignTokens {
   private customTokens: TokensStructure;
@@ -351,27 +342,29 @@ export class DesignTokens {
     this.customFlattened = this.flattenTokens(this.customTokens);
     this.defaultFlattened = this.flattenTokens(defaultTokens);
     
-    // Freeze to prevent modifications
-    Object.freeze(this.customTokens);
-    Object.freeze(this.customFlattened);
-    Object.freeze(this.defaultFlattened);
+    // Deep freeze to guarantee immutability across nested properties
+    this.deepFreeze(this.customTokens);
+    this.deepFreeze(this.customFlattened);
+    this.deepFreeze(this.defaultFlattened);
   }
 
-  // Deep clone objects
   private deepClone<T>(obj: T): T {
-    if (obj === null || typeof obj !== 'object') return obj;
+    try {
+      // @ts-ignore
+      if (typeof structuredClone === 'function') return structuredClone(obj);
+    } catch {}
+    if (obj === null || typeof obj!== 'object') return obj;
     if (Array.isArray(obj)) return obj.map(item => this.deepClone(item)) as any;
-    
     const cloned: any = {};
     for (const key in obj) {
-      if (obj.hasOwnProperty(key)) {
-        cloned[key] = this.deepClone(obj[key]);
+      if (['__proto__','constructor','prototype'].includes(key)) continue;
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        cloned[key] = this.deepClone((obj as any)[key]);
       }
     }
     return cloned;
   }
 
-  // Deep freeze to prevent accidental modifications
   private deepFreeze<T extends object>(obj: T): T {
     Object.keys(obj).forEach(key => {
       const value = (obj as any)[key];
@@ -382,59 +375,48 @@ export class DesignTokens {
     return Object.freeze(obj);
   }
 
-  // Flatten nested tokens for easy access
   flattenTokens(obj: Record<string, any>, prefix: string = ''): FlattenedTokens {
     const result: FlattenedTokens = {};
-    
     for (const [key, value] of Object.entries(obj)) {
-      const prefixed = prefix ? `${prefix}.${key}` : key;
-      
-      if (value && typeof value === 'object' && !Array.isArray(value)) {
-        // Recursively flatten nested objects
+      if (['__proto__','constructor','prototype'].includes(key)) continue;
+      const prefixed = prefix? `${prefix}.${key}` : key;
+      // keyframe objects are leaves, not tokens to flatten
+      // { '0%': { opacity: 0 } } -> keep as whole object
+      if (value && typeof value === 'object' &&!Array.isArray(value)) {
+        const isKeyframe = Object.keys(value).some(k => k.includes('%'));
+        if (isKeyframe) continue; // skip, don't flatten
         Object.assign(result, this.flattenTokens(value, prefixed));
       } else {
         result[prefixed] = String(value);
       }
     }
-    
     return result;
   }
 
-  // Get token value by path (e.g., 'colors.primary')
-  // Checks custom tokens first, then falls back to default tokens
-  get(path: string, defaultValue: string = ''): string {
-    // Check cache first
-    if (this.tokenCache.has(path)) {
+  get(path: string, defaultValue: string = '', seen = new Set<string>()): string {
+    if (seen.has(path)) return defaultValue; // cycle detected
+      seen.add(path);
+
+    // only use cache on root call to avoid stale transitive refs
+    if (this.tokenCache.has(path) && seen.size === 1) {
       return this.tokenCache.get(path)!;
     }
-    
-    let value: string | undefined;
-    
-    // First try custom tokens
-    if (path in this.customFlattened) {
-      value = this.customFlattened[path];
-    }
-    
-    // Then try default tokens
-    if (value === undefined && path in this.defaultFlattened) {
-      value = this.defaultFlattened[path];
-    }
-    
-    // Handle token references (e.g., "$colors.primary")
+    let value = this.customFlattened[path]?? this.defaultFlattened[path];
     if (value && value.startsWith('$')) {
       const refPath = value.substring(1);
-      value = this.get(refPath, defaultValue);
+      value = this.get(refPath, defaultValue, seen);
     }
     
     const result = value !== undefined ? value : defaultValue;
-    
-    // Cache the result
-    this.tokenCache.set(path, result);
+    if (seen.size === 1) {
+      this.tokenCache.set(path, result);
+      if (this.tokenCache.size > 500) this.tokenCache.clear();
+    }
     
     return result;
   }
 
-  // Get token with type safety
+  // Type-safe convenience getters
   getColor(path: string, defaultValue: string = '#000000'): string {
     return this.get(`colors.${path}`, defaultValue);
   }
@@ -471,29 +453,25 @@ export class DesignTokens {
     return this.get(`borderRadius.${path}`, defaultValue);
   }
 
-  // Get all custom tokens (as flattened object)
   getCustomTokens(): FlattenedTokens {
     return { ...this.customFlattened };
   }
 
-  // Get all default tokens (as flattened object)
   getDefaultTokens(): FlattenedTokens {
     return { ...this.defaultFlattened };
   }
 
-  // Check if a token exists (in either custom or default)
   has(path: string): boolean {
     return path in this.customFlattened || path in this.defaultFlattened;
   }
 
-  // Generate CSS variables from tokens (combines both custom and default)
   toCSSVariables(prefix: string = 'chain'): string {
     let css = ':root {\n';
-    
-    // Combine both token sets (custom overrides default)
     const allTokens = { ...this.defaultFlattened, ...this.customFlattened };
     
     for (const [key, value] of Object.entries(allTokens)) {
+      // Avoid breaking if animations or unneeded keys are flattened
+      if (key.startsWith('animations.')) continue;
       const varName = `--${prefix}-${key.replace(/\./g, '-')}`;
       css += `  ${varName}: ${value};\n`;
     }
@@ -502,34 +480,32 @@ export class DesignTokens {
     return css;
   }
 
-  // Generate media queries from breakpoints
-  toMediaQueries(): Record<string, string> {
+  toMediaQueries(strategy: 'min' | 'max' = 'min'): Record<string, string> {
     const queries: Record<string, string> = {};
-    // Merge default + custom flattened tokens so breakpoints from
-    // the default config are available even if not redefined in customTokens.
     const allTokens = { ...this.defaultFlattened, ...this.customFlattened };
     
     for (const [name, value] of Object.entries(allTokens)) {
       if (name.startsWith('breakpoints.')) {
         const breakpointName = name.replace('breakpoints.', '');
-        queries[breakpointName] = String(value);
+        queries[breakpointName] = strategy === 'max' ? `@media (max-width: ${value})`
+    : `@media (min-width: ${value})`;
       }
     }
+
+    
     
     return queries;
   }
 
-  // Create a theme variant (overrides on top of defaults + custom)
   createTheme(name: string, overrides: Record<string, string>): DesignTokens {
-    // Start with current custom tokens, then apply overrides
     const newCustomTokens = this.deepClone(this.customTokens);
     
-    // Apply overrides to nested structure
     for (const [path, value] of Object.entries(overrides)) {
       const parts = path.split('.');
       let current: any = newCustomTokens;
       
       for (let i = 0; i < parts.length - 1; i++) {
+        if (['__proto__','constructor','prototype'].includes(parts[i])) continue;
         if (!current[parts[i]]) {
           current[parts[i]] = {};
         }
@@ -542,13 +518,13 @@ export class DesignTokens {
     return new DesignTokens(newCustomTokens);
   }
 
-  // Merge with another token set
   merge(tokens: Partial<TokensStructure>): DesignTokens {
     const merged = this.deepClone(this.customTokens);
     
     const deepMerge = (target: any, source: any) => {
       for (const key in source) {
-        if (source.hasOwnProperty(key)) {
+        if (['__proto__','constructor','prototype'].includes(key)) continue;
+        if (Object.prototype.hasOwnProperty.call(source, key)) {
           if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
             if (!target[key]) target[key] = {};
             deepMerge(target[key], source[key]);
@@ -563,12 +539,10 @@ export class DesignTokens {
     return new DesignTokens(merged);
   }
 
-  // Clear cache
   clearCache(): void {
     this.tokenCache.clear();
   }
 
-  // Get token path suggestions for autocomplete
   getSuggestions(partialPath: string): string[] {
     const allTokens = { ...this.defaultFlattened, ...this.customFlattened };
     const suggestions: string[] = [];
@@ -583,34 +557,30 @@ export class DesignTokens {
   }
 }
 
-// Singleton instance with default tokens
-export const tokens = new DesignTokens(defaultTokens);
+// Singleton instances - initialized efficiently without double flattening
+export const tokens = new DesignTokens();
 
-// Token utility functions
 export function createTokens(customTokens: Partial<TokensStructure>): DesignTokens {
   return new DesignTokens(customTokens);
 }
 
-// Helper to resolve token references in strings
 export function resolveTokenReferences(
   value: string, 
-  tokens: DesignTokens, 
+  tokensInstance: DesignTokens, 
   prefix: string = '$'
 ): string {
   if (typeof value !== 'string') return String(value);
   
-  const tokenRegex = new RegExp(`${prefix}([a-zA-Z0-9.-]+)`, 'g');
-  
+  // Captures alphanumeric character segments, hyphens, or periods following the prefix
+  const tokenRegex = new RegExp(`\\${prefix}([a-zA-Z0-9._-]+)`, 'g');
+
   return value.replace(tokenRegex, (match, tokenPath) => {
-    const resolved = tokens.get(tokenPath);
-    return resolved !== undefined ? resolved : match;
+    return tokensInstance.has(tokenPath) ? tokensInstance.get(tokenPath) : match;
   });
 }
 
-// Type guard to check if value is a token reference
 export function isTokenReference(value: any, prefix: string = '$'): boolean {
   return typeof value === 'string' && value.startsWith(prefix);
 }
 
-// ESM Export
 export { DesignTokens as default };

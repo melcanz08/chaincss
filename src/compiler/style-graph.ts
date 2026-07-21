@@ -1,3 +1,9 @@
+/**
+ * @deprecated Use Pipeline + StyleIR instead.
+ * Kept for graph analysis / debugging only.
+ * Will be removed in 3.0.
+ */
+
 // ============================================================================
 // FILE: src/compiler/style-graph.ts
 // Style Graph Compiler — Dependency Graph, Dead Elimination, Rule Merging

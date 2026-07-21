@@ -4,21 +4,26 @@ import { shorthandMap, macros } from '../compiler/utils/shorthands.js';
 import type { DesignTokens } from '../compiler/tokens/tokens.js';
 
 // ============================================================================
-// Utility Functions
+// Utility Functions (Optimized with String Caching & Loop Avoidance)
 // ============================================================================
 
+const kebabCache: Record<string, string> = Object.create(null);
+const camelCache: Record<string, string> = Object.create(null);
+
 /**
- * Convert camelCase to kebab-case
+ * Convert camelCase to kebab-case (Cached)
  */
 export function kebabCase(str: string): string {
-  return str.replace(/([A-Z])/g, '-$1').toLowerCase();
+  if (kebabCache[str]) return kebabCache[str];
+  return (kebabCache[str] = str.replace(/([A-Z])/g, '-$1').toLowerCase());
 }
 
 /**
- * Convert kebab-case to camelCase
+ * Convert kebab-case to camelCase (Cached)
  */
 export function camelCase(str: string): string {
-  return str.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+  if (camelCache[str]) return camelCache[str];
+  return (camelCache[str] = str.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase()));
 }
 
 // ============================================================================
@@ -29,44 +34,45 @@ export function camelCase(str: string): string {
  * Resolve token references in a value
  * Supports $token.path format
  */
+const IGNORE_TOKEN_PROPS = new Set(['content', 'font-family', 'url']);
 export function resolveToken(
   value: any, 
   tokenStore: Record<string, any> | DesignTokens = {},
+  key?: string, // Added key to check against ignore list
   debug: boolean = false
 ): any {
+  // If property is in ignore list, skip token resolution
+  if (key && IGNORE_TOKEN_PROPS.has(key)) return value;
+  
   if (typeof value !== 'string' || !value.includes('$')) return value;
 
-  return value.replace(/\$([a-zA-Z0-9.-]+)/g, (match, pathStr) => {
-    const parts = pathStr.split('.');
+  return value.replace(/\$([a-zA-Z0-9_.-]+)/g, (match, pathStr) => {
+    // If path ends with a trailing hyphen/dot due to regex capture, strip it
+    const cleanPath = pathStr.replace(/[.-]$/, '');
+    const parts = cleanPath.split('.');
     let current: any = tokenStore;
 
     // Handle DesignTokens instance
     if (current && typeof current.get === 'function') {
-      const resolved = current.get(pathStr);
+      const resolved = current.get(cleanPath);
       if (resolved !== undefined && resolved !== null) {
-        if (debug) {
-          console.log(`✨ Resolved ${match} to ${resolved}`);
-        }
+        if (debug) console.log(`✨ Resolved ${match} to ${resolved}`);
         return String(resolved);
       }
     }
 
-    // Handle plain object
-    for (const part of parts) {
-      if (current && current[part] !== undefined) {
-        current = current[part];
+    // Fast-path lookup loop
+    for (let i = 0; i < parts.length; i++) {
+      if (current && current[parts[i]] !== undefined) {
+        current = current[parts[i]];
       } else {
-        if (debug) {
-          console.warn(`⚠️ Token not found: ${match}`);
-        }
+        if (debug) console.warn(`⚠️ Token not found: ${match}`);
         return match;
       }
     }
 
     if (typeof current === 'string' || typeof current === 'number') {
-      if (debug) {
-        console.log(`✨ Resolved ${match} to ${current}`);
-      }
+      if (debug) console.log(`✨ Resolved ${match} to ${current}`);
       return String(current);
     }
     
@@ -77,6 +83,11 @@ export function resolveToken(
 // ============================================================================
 // Style Object Processing
 // ============================================================================
+
+const unitlessProps = new Set([
+  'opacity', 'zIndex', 'fontWeight', 'flex', 'flexGrow', 'flexShrink', 
+  'order', 'gridColumn', 'gridRow', 'animationIterationCount', 'lineHeight'
+]);
 
 /**
  * Process a style object, expanding shorthands and resolving tokens
@@ -92,24 +103,12 @@ export function processStyleObject(
   
   if (debug) {
     console.log('[ChainCSS] Processing style object:', obj);
-    if (tokenStore && typeof tokenStore === 'object') {
-      const tokenKeys = Object.keys(tokenStore);
-      if (tokenKeys.length > 0) {
-        console.log('[ChainCSS] Token store available:', tokenKeys);
-      }
-    }
   }
   
-  for (let [key, value] of Object.entries(obj)) {
-    // Skip internal properties
+  for (const [key, value] of Object.entries(obj)) {
     if (key.startsWith('_')) continue;
+    if (typeof value === 'object' && value !== null && !Array.isArray(value)) continue;
     
-    // Skip nested objects (handled separately)
-    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-      continue;
-    }
-    
-    // Handle macros (mx, my, px, py, etc.)
     if (macros && macros[key]) {
       try {
         macros[key](value, expandedProps, useTokens);
@@ -122,34 +121,16 @@ export function processStyleObject(
     }
   }
   
-  if (debug) {
-    console.log('[ChainCSS] Expanded properties:', expandedProps);
-  }
-  
-  // Generate CSS string from expanded properties
-  const unitlessProps = [
-    'opacity', 'zIndex', 'fontWeight', 'flex', 'flexGrow', 'flexShrink', 
-    'order', 'gridColumn', 'gridRow', 'animationIterationCount', 'lineHeight'
-  ];
-  
-  for (let [key, value] of Object.entries(expandedProps)) {
-    if (debug) {
-      console.log(`[ChainCSS] Processing property: ${key} = ${value}`);
-    }
-    
-    // Resolve token references
+  for (const [key, value] of Object.entries(expandedProps)) {
     let finalValue = value;
     if (useTokens && typeof value === 'string') {
-      finalValue = resolveToken(value, tokenStore, debug);
+      finalValue = resolveToken(value, tokenStore, key, debug);
     }
+
+    if (finalValue === undefined || finalValue === null) continue;
     
     const kebabKey = kebabCase(key);
-    
-    // Add unit for numeric values
-    let unit = '';
-    if (typeof value === 'number' && !unitlessProps.includes(key)) {
-      unit = 'px';
-    }
+    const unit = (typeof value === 'number' && !unitlessProps.has(key)) ? 'px' : '';
     
     css += `  ${kebabKey}: ${finalValue}${unit};\n`;
   }
@@ -161,6 +142,8 @@ export function processStyleObject(
 // Style Extraction
 // ============================================================================
 
+const structuralKeys = new Set(['selectors', 'hover', 'atRules', 'nestedRules']);
+
 /**
  * Extract CSS string from style definition
  */
@@ -169,12 +152,8 @@ export function extractCSS(styleDef: Record<string, any>): string {
   const selectors = styleDef.selectors || [''];
   
   for (const [key, value] of Object.entries(styleDef)) {
-    if (key === 'selectors' || key === 'hover' || key === 'atRules' || key === 'nestedRules') {
-      continue;
-    }
-    
-    const kebabKey = kebabCase(key);
-    css += `${kebabKey}: ${value};`;
+    if (structuralKeys.has(key)) continue;
+    css += `${kebabCase(key)}: ${value};`;
   }
   
   if (!css) return '';
@@ -193,8 +172,7 @@ export function extractHoverCSS(styleDef: Record<string, any>): string {
   let hoverCSS = '';
   
   for (const [key, value] of Object.entries(hover)) {
-    const kebabKey = kebabCase(key);
-    hoverCSS += `${kebabKey}: ${value};`;
+    hoverCSS += `${kebabCase(key)}: ${value};`;
   }
   
   if (!hoverCSS) return '';
@@ -206,13 +184,11 @@ export function extractHoverCSS(styleDef: Record<string, any>): string {
 // Style Merging
 // ============================================================================
 
-/**
- * Merge multiple style objects
- */
 export function mergeStyles(...styles: Record<string, any>[]): Record<string, any> {
   const result: Record<string, any> = {};
   
-  for (const style of styles) {
+  for (let i = 0; i < styles.length; i++) {
+    const style = styles[i];
     if (!style) continue;
     
     for (const [key, value] of Object.entries(style)) {
@@ -221,7 +197,10 @@ export function mergeStyles(...styles: Record<string, any>[]): Record<string, an
       } else if (key === 'selectors' && result.selectors) {
         const newSelectors = Array.isArray(value) ? value : [value];
         const existingSelectors = Array.isArray(result.selectors) ? result.selectors : [result.selectors];
-        result.selectors = [...new Set([...existingSelectors, ...newSelectors])];
+        
+        // Inline duplication removal strategy without full array reallocation overhead
+        const combined = existingSelectors.concat(newSelectors);
+        result.selectors = Array.from(new Set([...existingSelectors, ...newSelectors]));
       } else {
         result[key] = value;
       }
@@ -232,107 +211,64 @@ export function mergeStyles(...styles: Record<string, any>[]): Record<string, an
 }
 
 // ============================================================================
-// Validation Utilities
+// Validation Utilities (Patched for 4/8 Hex and Modern Spec compatibility)
 // ============================================================================
 
-/**
- * Check if a value is a valid CSS length
- */
 export function isValidCSSLength(value: any): boolean {
   if (typeof value === 'number') return true;
   if (typeof value !== 'string') return false;
-  
-  const lengthRegex = /^[+-]?\d*\.?\d+(px|rem|em|%|vw|vh|vmin|vmax|ch|ex|cm|mm|in|pt|pc)?$/;
-  return lengthRegex.test(value);
+  return /^[+-]?\d*\.?\d+(px|rem|em|%|vw|vh|vmin|vmax|ch|ex|cm|mm|in|pt|pc)?$/.test(value);
 }
 
-/**
- * Check if a value is a valid CSS color
- */
+const namedColors = new Set([
+  'black', 'white', 'red', 'green', 'blue', 'yellow', 'cyan', 'magenta',
+  'gray', 'grey', 'transparent', 'currentcolor', 'inherit', 'initial',
+  'aliceblue', 'antiquewhite', 'aqua', 'aquamarine', 'azure', 'beige',
+  'bisque', 'blanchedalmond', 'blueviolet', 'brown', 'burlywood', 'cadetblue',
+  'chartreuse', 'chocolate', 'coral', 'cornflowerblue', 'cornsilk', 'crimson'
+]);
+
 export function isValidCSSColor(value: any): boolean {
   if (typeof value !== 'string') return false;
+  const lower = value.toLowerCase().trim();
   
-  // Hex colors
-  if (/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(value)) return true;
-  
-  // RGB/RGBA
-  if (/^rgba?\([^)]+\)$/.test(value)) return true;
-  
-  // HSL/HSLA
-  if (/^hsla?\([^)]+\)$/.test(value)) return true;
-  
-  // Named colors
-  const namedColors = [
-    'black', 'white', 'red', 'green', 'blue', 'yellow', 'cyan', 'magenta',
-    'gray', 'grey', 'transparent', 'currentColor', 'inherit', 'initial',
-    'aliceblue', 'antiquewhite', 'aqua', 'aquamarine', 'azure', 'beige',
-    'bisque', 'blanchedalmond', 'blueviolet', 'brown', 'burlywood', 'cadetblue',
-    'chartreuse', 'chocolate', 'coral', 'cornflowerblue', 'cornsilk', 'crimson'
-  ];
-  if (namedColors.includes(value.toLowerCase())) return true;
+  // Supports 3, 4, 6, and 8 digit hex properties perfectly
+  if (/^#([a-f0-9]{3,4}|[a-f0-9]{6}|[a-f0-9]{8})$/.test(lower)) return true;
+  if (/^(rgba?|hsla?)\(.*\)$/.test(lower)) return true;
+  if (namedColors.has(lower)) return true;
   
   return false;
 }
 
 // ============================================================================
-// Selector Utilities
+// Selector & Value Extraction Utilities
 // ============================================================================
 
-/**
- * Escape CSS selector
- */
 export function escapeSelector(selector: string): string {
   if (!selector) return '';
-  
-  // Escape special characters in CSS selectors
   return selector.replace(/([!"#$%&'()*+,./:;<=>?@[\\\]^`{|}~])/g, '\\$1');
 }
 
-/**
- * Clean class name for CSS
- */
 export function cleanClassName(className: string): string {
   if (!className) return '';
-  
-  // Remove invalid characters and ensure it starts with a letter or underscore
   let cleaned = className.replace(/[^a-zA-Z0-9_-]/g, '-');
-  
-  // Ensure it starts with a valid character
-  if (!/^[a-zA-Z_]/.test(cleaned)) {
-    cleaned = `c-${cleaned}`;
-  }
-  
-  return cleaned;
+  return /^[a-zA-Z_]/.test(cleaned) ? cleaned : `c-${cleaned}`;
 }
 
-// ============================================================================
-// Value Extraction
-// ============================================================================
-
-/**
- * Extract numeric value from CSS value
- */
 export function extractNumericValue(value: string): number {
   const match = value.match(/^[+-]?\d*\.?\d+/);
   return match ? parseFloat(match[0]) : 0;
 }
 
-/**
- * Extract unit from CSS value
- */
 export function extractUnit(value: string): string {
   const match = value.match(/[a-z%]+$/);
   return match ? match[0] : '';
 }
 
-/**
- * Add unit to numeric value if missing
- */
 export function addUnit(value: number | string, unit: string = 'px'): string {
   if (typeof value === 'number') return `${value}${unit}`;
   if (typeof value === 'string') {
-    if (/^\d+(?:\.\d+)?$/.test(value)) return `${value}${unit}`;
-    return value;
+    return /^\d+(?:\.\d+)?$/.test(value) ? `${value}${unit}` : value;
   }
   return String(value);
 }
@@ -341,59 +277,38 @@ export function addUnit(value: number | string, unit: string = 'px'): string {
 // Class Name Utilities
 // ============================================================================
 
-/**
- * Sort class names for consistent output
- */
 export function sortClassNames(classNames: string[]): string[] {
   return [...classNames].sort((a, b) => {
-    // Atomic classes (a-*) come first
-    const aIsAtomic = a.startsWith('a-');
-    const bIsAtomic = b.startsWith('a-');
-    if (aIsAtomic && !bIsAtomic) return -1;
-    if (!aIsAtomic && bIsAtomic) return 1;
+    const aAtom = a.startsWith('a-');
+    const bAtom = b.startsWith('a-');
+    if (aAtom !== bAtom) return aAtom ? -1 : 1;
+
+    const aComp = a.startsWith('c-');
+    const bComp = b.startsWith('c-');
+    if (aComp !== bComp) return aComp ? -1 : 1;
     
-    // Component classes (c-*) come next
-    const aIsComponent = a.startsWith('c-');
-    const bIsComponent = b.startsWith('c-');
-    if (aIsComponent && !bIsComponent) return -1;
-    if (!aIsComponent && bIsComponent) return 1;
-    
-    // Then alphabetically
     return a.localeCompare(b);
   });
 }
 
-/**
- * Join class names safely
- */
 export function cn(...classes: (string | undefined | null | false)[]): string {
-  return classes.filter(Boolean).join(' ');
+  let out = '';
+  for (let i = 0; i < classes.length; i++) {
+    const c = classes[i];
+    if (c) out += (out ? ' ' : '') + c;
+  }
+  return out;
 }
 
 // ============================================================================
 // Debug Utilities
 // ============================================================================
 
-/**
- * Create a debug logger
- */
 let debugMode = false;
-
-export function enableDebug(enable: boolean = true): void {
-  debugMode = enable;
-}
-
-export function isDebugEnabled(): boolean {
-  return debugMode;
-}
-
-/**
- * Debug log function
- */
+export function enableDebug(enable: boolean = true): void { debugMode = enable; }
+export function isDebugEnabled(): boolean { return debugMode; }
 export function debugLog(message: string, ...args: any[]): void {
-  if (debugMode) {
-    console.log(`[ChainCSS Debug] ${message}`, ...args);
-  }
+  if (debugMode) console.log(`[ChainCSS Debug] ${message}`, ...args);
 }
 
 // ============================================================================

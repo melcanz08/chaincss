@@ -1,6 +1,8 @@
 // @ts-nocheck — optional peer dependency
 // src/runtime/types.ts
 
+import type { StyleObject } from '../core/style-compiler.js';
+
 /**
  * Runtime ChainCSS Type Definitions
  * Only needed if using runtime mode
@@ -9,14 +11,6 @@
 // ============================================================================
 // Core Runtime Types
 // ============================================================================
-
-export interface RuntimeStyleDefinition {
-  selectors?: string[];
-  hover?: Record<string, string | number>;
-  _classes?: string[];
-  _name?: string;
-  [cssProperty: string]: any;
-}
 
 export interface UseChainStylesOptions {
   /** Cache compiled styles */
@@ -31,24 +25,33 @@ export interface UseChainStylesOptions {
   ssr?: boolean;
 }
 
+// Fixes Issue 3: Added clean explicitly exported hook return type
+export interface UseChainStylesReturn {
+  classes: Record<string, string>;
+  cx: (...names: string[]) => string;
+  cn: (...names: string[]) => string;
+}
+
 export interface RuntimeCompiledResult {
   [key: string]: string;
 }
 
 // ============================================================================
-// Style Injector Types
+// Style Injector Public Interface
 // ============================================================================
 
 export interface StyleInjector {
-  inject(styleId: string, style: RuntimeStyleDefinition): string;
-  injectMultiple(styles: Record<string, RuntimeStyleDefinition>, moduleId?: string): Record<string, string>;
-  update(styleId: string, style: RuntimeStyleDefinition): string;
-  remove(styleId: string): void;
+  inject(className: string, css: string, debug?: boolean): void;
+  injectMultiple(styles: Record<string, StyleObject>, moduleId?: string): Record<string, string>;
+  remove(className: string): void;
   removeModule(moduleId: string): void;
-  clear(): void;
+  removeAll(): void;
+  enableDebug(enable?: boolean): void;
   setTokens(tokens: TokenStore): void;
+  getToken(path: string): any;
+  resolveTokens(value: any): any;
   getStyleElement(): HTMLStyleElement | null;
-  getStats(): { injectedStyles: number; modules: number };
+  getStats(): { injectedStyles: number; modules: number; deduplicatedHashes: number };
 }
 
 // ============================================================================
@@ -90,14 +93,16 @@ export interface ChainCSSManifest {
 }
 
 // ============================================================================
-// Framework-Specific Types (optional imports)
+// Framework-Specific Reference Adaptations (Safe without dependencies)
 // ============================================================================
 
+// Local type placeholders to solve Issue 1 (Zero-dependency compiler fallback layers)
+type VueRef<T> = { value: T };
+type VueComputedRef<T> = { readonly value: T };
+type SvelteReadable<T> = { subscribe: (callback: (value: T) => void) => () => void };
+
 // React-specific types
-export interface UseAtomicClassesReturn {
-  classes: Record<string, string>;
-  cx: (name: string) => string;
-  cn: (...names: string[]) => string;
+export interface UseAtomicClassesReturn extends UseChainStylesReturn {
   inject?: (styles: Record<string, any>) => void;
 }
 
@@ -112,15 +117,15 @@ export interface UseThemeChainStylesReturn extends UseAtomicClassesReturn {
 
 // Vue-specific types
 export interface UseAtomicClassesReturnVue {
-  classes: import('vue').Ref<Record<string, string>>;
+  classes: VueRef<Record<string, string>>;
   cx: (name: string) => string;
   cn: (...names: string[]) => string;
   inject: (styles: Record<string, any>) => void;
 }
 
 export interface UseComputedStylesReturnVue {
-  classes: import('vue').Ref<Record<string, string>>;
-  rootClass: import('vue').ComputedRef<string>;
+  classes: VueRef<Record<string, string>>;
+  rootClass: VueComputedRef<string>;
 }
 
 // Svelte-specific types
@@ -133,12 +138,11 @@ export interface UseAtomicClassesReturnSvelte {
 
 export interface UseComputedStylesReturnSvelte {
   classes: UseAtomicClassesReturnSvelte;
-  rootClass: import('svelte/store').Readable<string>;
+  rootClass: SvelteReadable<string>;
 }
 
-// Solid-specific types (using type alias to avoid direct import error)
-// These will work if solid-js is installed, otherwise they default to any
-type SolidAccessor<T> = T extends any ? (() => T) : never;
+// Solid-specific types (Fixes Issue 2: Streamlined basic function declaration)
+type SolidAccessor<T> = () => T;
 
 export interface UseAtomicClassesReturnSolid {
   classes: SolidAccessor<Record<string, string>>;
@@ -215,7 +219,7 @@ export type TokenValue<T = string> = T | `$${string}`;
 
 declare global {
   interface Window {
-    __CHAINCSS_V2_TOKENS__?: TokenStore;
+    __CHAINCSS_TOKENS__?: TokenStore;
     __CHAINCSS_MANIFEST__?: ChainCSSManifest;
     __CHAINCSS_DEBUG__?: boolean;
     __CHAINCSS_VUE_DEBUG__?: boolean;
@@ -228,10 +232,6 @@ declare global {
 // ============================================================================
 // Type Guards
 // ============================================================================
-
-export function isRuntimeStyleDefinition(obj: any): obj is RuntimeStyleDefinition {
-  return obj && typeof obj === 'object' && (obj.selectors === undefined || Array.isArray(obj.selectors));
-}
 
 export function isStyleInjector(obj: any): obj is StyleInjector {
   return obj && typeof obj === 'object' && 
@@ -247,6 +247,13 @@ export function isChainCSSManifest(obj: any): obj is ChainCSSManifest {
 
 export function isTokenStore(obj: any): obj is TokenStore {
   return obj && typeof obj === 'object';
+}
+
+export interface RuntimeStyleDefinition {
+  className?: string;
+  selectors?: string[];
+  dynamic?: Record<string, () => string | number>;
+  [key: string]: any;
 }
 
 export function isHMRPayload(obj: any): obj is HMRPayload {

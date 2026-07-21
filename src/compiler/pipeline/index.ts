@@ -1,20 +1,30 @@
-// src/compiler/pipeline/index.ts
+// ============================================================================
+// FILE: src/compiler/pipeline/index.ts
+// ============================================================================
 
 /**
  * ChainCSS Pipeline
  * 
- * Unified 5-stage compilation pipeline.
- * All exports from this module are the canonical pipeline API.
+ * Unified 5-stage compilation pipeline and analysis engine.
+ * All exports from this module form the canonical pipeline public API.
  */
 
+// Core Runners
 export { Pipeline } from './pipeline.js';
 export { 
   createDefaultPipeline,
   createFullPipeline,
   createPipeline,
 } from './unified-pipeline.js';
+
+// Observability & Telemetry System (Inspector)
+export { InspectorStore } from './inspector/store.js';
+export { serializeForInspector } from './inspector/serializer.js';
+
+// Shared Runtime Configurations
 export type { PipelinePreset } from './unified-pipeline.js';
 
+// Public Pipeline Schema Types
 export type {
   PipelineConfig,
   PipelineResult,
@@ -29,6 +39,13 @@ export type {
   OptimizationResult,
   LoweringPass,
   LoweringResult,
-  Diagnostic,
+  PipelineDiagnostic,
   Correction,
 } from './pipeline-types.js';
+
+export type {
+  InspectorRule,
+  InspectorExport,
+  InspectorSnapshot,
+  InspectorStats,
+} from './inspector/types.js';

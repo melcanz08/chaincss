@@ -1,17 +1,29 @@
-// src/cli/commands/dev.ts — Extension-driven, framework-agnostic dev server
+// ============================================================================
+// FILE: src/cli/commands/dev.ts
+// ChainCSS - Extension-Driven, Framework-Agnostic Dev Server
+// ============================================================================
+
 import path from 'path';
 import fs from 'fs';
-import { spawn, ChildProcess } from 'child_process';
+import { spawn } from 'child_process';
 import { createServer, IncomingMessage, ServerResponse } from 'http';
 import { createLogger } from '../utils/logger.js';
 import { loadConfig } from '../utils/config-loader.js';
 import type { DevOptions } from '../types.js';
 
 const MIME_TYPES: Record<string, string> = {
-  '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
-  '.js': 'application/javascript; charset=utf-8', '.mjs': 'application/javascript; charset=utf-8',
-  '.json': 'application/json; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg',
-  '.svg': 'image/svg+xml', '.ico': 'image/x-icon',
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.mjs': 'application/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2',
+  '.map': 'application/json; charset=utf-8'
 };
 
 const LIVE_RELOAD_SCRIPT = `<script>
@@ -19,11 +31,14 @@ const LIVE_RELOAD_SCRIPT = `<script>
   if (window.__chaincss_reloading) return;
   var es = new EventSource('/__chaincss_reload');
   var debounce = null, connected = false;
-  es.onopen = function() { connected = true; };
-  es.onmessage = function() {
-    if (!connected) return;
+  es.onopen = function() { connected = true; console.log('[ChainCSS] Hot-reload channel established.'); };
+  es.onmessage = function(e) {
+    if (!connected || e.data === 'heartbeat') return;
     if (debounce) clearTimeout(debounce);
-    debounce = setTimeout(function() { window.__chaincss_reloading = true; window.location.reload(); }, 150);
+    debounce = setTimeout(function() { 
+      window.__chaincss_reloading = true; 
+      window.location.reload(); 
+    }, 100);
   };
   es.onerror = function() { if (connected) es.close(); };
 })();
@@ -49,29 +64,12 @@ function getDeps(): Record<string, string> {
   } catch { return {}; }
 }
 
-function getBundlerArgs(entry: string, outfile: string, deps: Record<string, string>): string[] {
-  const ext = path.extname(entry);
-  const args = ['esbuild', entry, '--bundle', `--outfile=${outfile}`, '--format=iife'];
-
-  if (ext.endsWith('x') || deps['react'] || deps['solid-js']) {
-    args.push('--jsx=transform');
-    if (deps['solid-js']) args.push('--jsx-import-source=solid-js');
-    if (deps['react']) args.push('--external:react', '--external:react-dom', '--external:react-dom/client');
-  }
-  if (deps['vue']) args.push('--external:vue');
-
-  return args;
-}
-
-class ReloadDebouncer {
-  private lastReload = 0; private timer: any = null; private pending = false;
-  constructor(private cooldown = 2000) {}
-  schedule(fn: () => void) {
-    const now = Date.now(), elapsed = now - this.lastReload;
-    if (elapsed >= this.cooldown) { this.lastReload = now; this.pending = false; fn(); }
-    else if (!this.pending) { this.pending = true; this.timer = setTimeout(() => { this.lastReload = Date.now(); this.pending = false; fn(); }, this.cooldown - elapsed + 100); }
-  }
-  destroy() { if (this.timer) { clearTimeout(this.timer); this.timer = null; } }
+/**
+ * Safely guards against Path Traversal attacks (e.g., /../../etc/passwd)
+ */
+function isSafePath(target: string, safeRoot: string): boolean {
+  const relative = path.relative(safeRoot, target);
+  return !!relative && !relative.startsWith('..') && !path.isAbsolute(relative);
 }
 
 export async function devCommand(options: DevOptions): Promise<void> {
@@ -81,134 +79,252 @@ export async function devCommand(options: DevOptions): Promise<void> {
   const config = await loadConfig(options.config);
   const PORT = options.port || config.dev?.port || 3000;
   const publicDir = config.dev?.publicDir || '.';
-  const distDir = typeof config.output === 'object' ? path.dirname(config.output.cssFile || 'dist/styles.css') : typeof config.output === 'string' ? config.output : 'dist';
+  const distDir = typeof config.output === 'object' 
+    ? path.dirname(config.output.cssFile || 'dist/styles.css') 
+    : typeof config.output === 'string' ? config.output : 'dist';
 
   const entryFile = resolveEntry();
   const jsBundlePath = entryFile ? path.join(distDir, 'bundle.js') : null;
   const deps = getDeps();
+  const rootDir = process.cwd();
 
-  const locations = [path.join(process.cwd(), publicDir, 'index.html'), path.join(process.cwd(), 'index.html'), path.join(process.cwd(), 'public', 'index.html')];
+  const locations = [
+    path.join(rootDir, publicDir, 'index.html'),
+    path.join(rootDir, 'index.html'),
+    path.join(rootDir, 'public', 'index.html')
+  ];
   const indexHtml = locations.find(l => fs.existsSync(l)) || null;
-  if (indexHtml) logger.info(`📄 Serving: ${path.relative(process.cwd(), indexHtml)}`);
+  if (indexHtml) {
+    logger.info(`📄 Serving entry-point: ${path.relative(rootDir, indexHtml)}`);
+  }
 
-  logger.info('🎨 Starting CSS compiler...');
-  const cssWatcher = spawn('npx', ['chaincss', 'build', '--watch', ...(options.config ? ['--config', options.config] : [])], { stdio: ['inherit', 'pipe', 'pipe'], shell: true, env: { ...process.env, NODE_ENV: 'development' } });
+  logger.info('🎨 Invoking CSS compiler watch engine...');
 
-  // Deterministic CSS-ready detection via filesystem polling
+  // RESOLUTION FIX: Bypass slow shell/npx lookups by spawning the active Node binary directly 
+  // on your built local CLI entry point. This makes cold starts instantaneous.
+  const cliEntryPoint = path.join(rootDir, 'dist', 'cli', 'index.js');
+  const cssWatcher = spawn(
+    process.execPath, 
+    [cliEntryPoint, 'build', '--watch', ...(options.config ? ['--config', options.config] : [])], 
+    {
+      stdio: ['inherit', 'pipe', 'pipe'],
+      shell: false,
+      env: { ...process.env, NODE_ENV: 'development' }
+    }
+  );
+
   const cssReady = new Promise<void>((resolve) => {
     if (!entryFile) return resolve();
-    const artifact = path.join(process.cwd(), entryFile.replace(/\.(ts|js)x?$/, '.class.js'));
+    const ext = path.extname(entryFile);
+    const isTS = ext === '.ts' || ext === '.tsx';
+    const artifactName = entryFile.replace(/\.(ts|js)x?$/, `.class.${isTS ? 'ts' : 'js'}`);
+    const artifact = path.join(rootDir, artifactName);
     const start = Date.now();
+
     function poll() {
-      try { if (fs.existsSync(artifact) && fs.readFileSync(artifact, 'utf8').trim().length > 0) { logger.info(`✅ CSS ready`); return resolve(); } } catch {}
-      if (Date.now() - start > 10000) return resolve();
+      try {
+        if (fs.existsSync(artifact) && fs.readFileSync(artifact, 'utf8').trim().length > 0) {
+          logger.info(`✅ CSS Ready (${path.basename(artifactName)})`);
+          return resolve();
+        }
+      } catch {}
+      if (Date.now() - start > 10000) {
+        logger.warn(`⚠️ Timeout waiting for: ${path.basename(artifactName)}. Starting anyway.`);
+        return resolve();
+      }
       setTimeout(poll, 30);
     }
     poll();
   });
 
-  // Check if esbuild is available (local or global)
-  let esbuildAvailable = false;
-  try {
-    import.meta.resolve('esbuild');
-    esbuildAvailable = true;
-  } catch {
-    try {
-      // Check if npx can find it
-      const check = spawn('npx', ['esbuild', '--version'], { stdio: 'pipe', shell: true });
-      check.on('close', (code) => { esbuildAvailable = code === 0; });
-    } catch { esbuildAvailable = false; }
-  }
-
-  let jsBuilt = false;
+  // Client connection pool
+  let reloadClients = new Set<ServerResponse>();
   let jsBuildError: string | null = null;
+  let esbuildContext: any = null;
 
-  function buildJS() {
-    if (!entryFile || !jsBundlePath) return;
-    if (!esbuildAvailable) {
-      logger.warn('⚠️  esbuild not found — skipping JS bundle. Install with: npm install esbuild');
-      return;
-    }
-    jsBuilt = true;
-    jsBuildError = null;
-    const args = getBundlerArgs(entryFile, jsBundlePath, deps);
-    logger.info(`📦 Building: ${entryFile} → ${jsBundlePath}`);
-    const p = spawn('npx', args, { stdio: 'pipe', shell: true, env: { ...process.env, NODE_ENV: 'development' } });
-    let stderr = '';
-    p.stderr?.on('data', (d: Buffer) => { stderr += d.toString(); });
-    p.on('close', code => {
-      if (code === 0) {
-        logger.info('✅ JS bundle built');
-        jsBuildError = null;
-      } else {
-        jsBuildError = stderr || `JS build failed (exit code ${code})`;
-        logger.error(jsBuildError!);
+  const notifyReload = () => {
+    for (const client of reloadClients) {
+      try {
+        // Only write if the connection socket is writable
+        if (client.writable && !client.destroyed) {
+          client.write('data: reload\n\n');
+        }
+      } catch {
+        reloadClients.delete(client);
       }
-    });
+    }
+  };
+
+  // Attempt programmatic load of esbuild for instant in-memory rebuilds
+  let esbuild: any = null;
+  try {
+    esbuild = await import('esbuild');
+  } catch {
+    logger.warn('⚠️  esbuild dependency missing. Run: npm install -D esbuild');
   }
 
-  function rebuildJS() {
-    jsBuilt = false;
-    buildJS();
+  async function initializeBundler() {
+    if (!entryFile || !jsBundlePath || !esbuild) return;
+
+    const ext = path.extname(entryFile);
+    const isJSX = ext.endsWith('x') || deps['react'] || deps['solid-js'];
+
+    try {
+      esbuildContext = await esbuild.context({
+        entryPoints: [entryFile],
+        bundle: true,
+        outfile: jsBundlePath,
+        format: 'iife',
+        sourcemap: 'inline',
+        jsx: isJSX ? 'transform' : undefined,
+        jsxImportSource: deps['solid-js'] ? 'solid-js' : undefined,
+        external: [
+          ...(deps['react'] ? ['react', 'react-dom', 'react-dom/client'] : []),
+          ...(deps['vue'] ? ['vue'] : [])
+        ],
+        plugins: [{
+          name: 'chaincss-bundler-logger',
+          setup(build: any) {
+            build.onStart(() => {
+              logger.info(`📦 Compiling bundle: ${entryFile}`);
+            });
+            build.onEnd((result: any) => {
+              if (result.errors.length > 0) {
+                jsBuildError = result.errors.map((e: any) => `${e.text} (${e.location?.file}:${e.location?.line})`).join('\n');
+                logger.error(`❌ Bundle Failed:\n${jsBuildError}`);
+              } else {
+                jsBuildError = null;
+                logger.success('✅ JS Bundle compiled successfully');
+              }
+              notifyReload();
+            });
+          }
+        }]
+      });
+
+      // Let esbuild natively watch application source changes (runs programmatically)
+      await esbuildContext.watch();
+    } catch (err) {
+      logger.error(`Fatal: Failed to start bundling context: ${(err as Error).message}`);
+    }
   }
 
-  cssReady.then(() => buildJS());
-
-  let reloadClients: ServerResponse[] = [];
-  const debouncer = new ReloadDebouncer(3000);
-  let watchPhase = false;
-
-  function notify() { reloadClients = reloadClients.filter(c => { try { c.write('data: reload\n\n'); return true; } catch { return false; } }); }
-
+  // Bind watch streams and output redirection
   cssWatcher.stdout?.on('data', (d: Buffer) => {
-    const o = d.toString(); process.stdout.write(o);
-    if (o.includes('Watching for changes...')) setTimeout(() => { watchPhase = true; }, 1000);
-    if (watchPhase && o.includes('Complete!')) {
-      // Rebuild JS when CSS changes (class mappings may have updated)
-      rebuildJS();
-      debouncer.schedule(() => notify());
+    const output = d.toString();
+    process.stdout.write(output);
+    
+    // Notify reload clients only when CSS compiler outputs a successful compilation run
+    if (output.includes('✓ Updated') || output.includes('Complete!')) {
+      notifyReload();
     }
   });
   cssWatcher.stderr?.on('data', (d: Buffer) => process.stderr.write(d.toString()));
 
+  // Start compilers sequentially
+  cssReady.then(() => initializeBundler());
+
   const server = createServer((req, res) => {
+    // Live Reload Endpoint
     if (req.url === '/__chaincss_reload') {
-      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
-      reloadClients.push(res);
-      req.on('close', () => { reloadClients = reloadClients.filter(c => c !== res); });
-      // Aggressive cleanup: remove after 30s idle to prevent zombie accumulation
-      const cleanupTimer = setTimeout(() => {
-        reloadClients = reloadClients.filter(c => c !== res);
-        try { res.end(); } catch {}
-      }, 30000);
-      req.on('close', () => clearTimeout(cleanupTimer));
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*'
+      });
+      res.write(': ok\n\n');
+      reloadClients.add(res);
+
+      const heartbeat = setInterval(() => {
+        try {
+          if (res.writable && !res.destroyed) {
+            res.write('data: heartbeat\n\n');
+          } else {
+            clearInterval(heartbeat);
+            reloadClients.delete(res);
+          }
+        } catch {
+          clearInterval(heartbeat);
+          reloadClients.delete(res);
+        }
+      }, 15000);
+
+      req.on('close', () => {
+        clearInterval(heartbeat);
+        reloadClients.delete(res);
+      });
       return;
     }
-    let url = req.url || '/'; if (url === '/') url = '/index.html';
-    const lookups = [path.join(process.cwd(), publicDir, url), path.join(process.cwd(), url), path.join(process.cwd(), 'public', url), path.join(process.cwd(), distDir, ...url.split('/').filter(Boolean))];
-    const fp = lookups.find(l => { try { return fs.existsSync(l) && fs.statSync(l).isFile(); } catch { return false; } }) || indexHtml;
-    if (!fp) { res.writeHead(404); res.end('404'); return; }
-    const ext = path.extname(fp);
+
+    let url = req.url || '/';
+    // Strip query parameters for correct file lookup
+    const qIndex = url.indexOf('?');
+    if (qIndex !== -1) {
+      url = url.substring(0, qIndex);
+    }
+    if (url === '/') url = '/index.html';
+
+    const lookups = [
+      path.join(rootDir, publicDir, url),
+      path.join(rootDir, url),
+      path.join(rootDir, 'public', url),
+      path.join(rootDir, distDir, ...url.split('/').filter(Boolean))
+    ];
+
+    const targetFile = lookups.find(l => {
+      try {
+        // SECURITY FIX: Ensure the file path doesn't break out of the workspace directory
+        if (!isSafePath(l, rootDir)) return false;
+        return fs.existsSync(l) && fs.statSync(l).isFile();
+      } catch { return false; }
+    }) || indexHtml;
+
+    if (!targetFile) {
+      res.writeHead(404);
+      res.end('404 Not Found');
+      return;
+    }
+
+    const ext = path.extname(targetFile);
     try {
-      let c = fs.readFileSync(fp);
+      let content = fs.readFileSync(targetFile);
+
       if (ext === '.html') {
-        let html = c.toString();
-        // Inject live reload script
+        let html = content.toString();
         html = html.replace('</body>', `${LIVE_RELOAD_SCRIPT}</body>`);
-        // Inject build error banner if JS build failed
+
         if (jsBuildError) {
-          const errorBanner = `<div style="position:fixed;top:0;left:0;right:0;background:#dc2626;color:white;padding:12px 24px;font-family:monospace;font-size:14px;z-index:99999;white-space:pre-wrap;">⚠️ JS Build Error: ${jsBuildError.replace(/</g, '&lt;')}</div>`;
-          html = html.replace('<body>', `<body>${errorBanner}`);
+          const banner = `<div style="position:fixed;top:0;left:0;right:0;background:#e11d48;color:white;padding:14px;font-family:monospace;font-size:13px;z-index:999999;box-shadow:0 4px 6px -1px rgb(0 0 0 / 0.1);white-space:pre-wrap;">⚠️ JS Compilation Error:<br/>${jsBuildError.replace(/</g, '&lt;')}</div>`;
+          html = html.replace('<body>', `<body>${banner}`);
         }
-        c = Buffer.from(html);
+        content = Buffer.from(html);
       }
-      res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] || 'application/octet-stream' });
-      res.end(c);
-    } catch { res.writeHead(500); res.end(); }
+
+      // STREAM SAFETY FIX: Set explicitly computed response lengths to avoid truncation
+      res.writeHead(200, { 
+        'Content-Type': MIME_TYPES[ext] || 'application/octet-stream',
+        'Cache-Control': 'no-cache, must-revalidate',
+        'Content-Length': Buffer.byteLength(content).toString()
+      });
+      res.end(content);
+    } catch {
+      res.writeHead(500);
+      res.end('Internal Server Error');
+    }
   });
 
-  server.listen(PORT, () => console.log(`\n🚀 http://localhost:${PORT}\n`));
+  server.listen(PORT, () => {
+    logger.success(`🚀 Development Server active: http://localhost:${PORT}`);
+  });
 
-  const cleanup = () => { debouncer.destroy(); cssWatcher.kill(); server.close(); process.exit(0); };
-  process.on('SIGINT', cleanup); process.on('SIGTERM', cleanup);
+  const cleanup = async () => {
+    logger.info('Shutting down compilers and asset server...');
+    cssWatcher.kill();
+    if (esbuildContext) await esbuildContext.dispose();
+    server.close(() => process.exit(0));
+  };
+
+  process.on('SIGINT', cleanup);
+  process.on('SIGTERM', cleanup);
 }

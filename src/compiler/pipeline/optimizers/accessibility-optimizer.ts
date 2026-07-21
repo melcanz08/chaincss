@@ -1,10 +1,11 @@
-// src/compiler/pipeline/optimizers/accessibility-optimizer.ts
+// ============================================================================
+// FILE: src/compiler/pipeline/optimizers/accessibility-optimizer.ts
+// ============================================================================
 
 import { recordHistory } from '../ir/utils.js';
-
-import type { StyleIR } from '../ir/types.js';
-import type { OptimizationPass, OptimizationResult } from '../pipeline-types.js';
 import { createDeclaration } from '../ir/factory.js';
+import type { StyleIR, IRRule } from '../ir/types.js';
+import type { OptimizationPass, OptimizationResult } from '../pipeline-types.js';
 
 const WCAG = {
   MIN_FONT_SIZE: 12,
@@ -16,15 +17,11 @@ function extractPx(value: string): number {
   return match ? parseFloat(match[1]) : Infinity;
 }
 
-/**
- * Check if a rule already has adequate touch target sizing.
- * Looks for min-width/min-height >= 44px OR explicit width/height >= 44px.
- */
-function hasAdequateTouchTarget(rule: any): { width: boolean; height: boolean } {
+function hasAdequateTouchTarget(rule: IRRule): { width: boolean; height: boolean } {
+  const declarations = rule.declarations || [];
   const checkProp = (props: string[]) => {
-    for (const decl of rule.declarations) {
-      const propName = decl.property;
-      if (props.includes(propName) && extractPx(String(decl.value)) >= WCAG.MIN_TOUCH_TARGET) {
+    for (const decl of declarations) {
+      if (props.includes(decl.property) && extractPx(String(decl.value)) >= WCAG.MIN_TOUCH_TARGET) {
         return true;
       }
     }
@@ -37,11 +34,8 @@ function hasAdequateTouchTarget(rule: any): { width: boolean; height: boolean } 
   };
 }
 
-/**
- * Check if the rule is a small inline element that would be visually
- * distorted by forced min-width/min-height (e.g., icons, breadcrumbs, badges).
- */
-function isSmallElement(rule: any): boolean {
+function isSmallElement(rule: IRRule): boolean {
+  if (!rule.selector) return false;
   const selector = rule.selector.toLowerCase();
   const smallPatterns = [
     'icon', 'close', 'x-btn', 'badge', 'tag', 'chip',
@@ -49,18 +43,16 @@ function isSmallElement(rule: any): boolean {
     'avatar-xs', 'avatar-sm',
   ];
   
-  // Check selector patterns
   if (smallPatterns.some(p => selector.includes(p))) return true;
 
-  // Check if element has explicit small dimensions
-  for (const decl of rule.declarations) {
-    if ((decl.property === 'width' || decl.property === 'height') &&
-        typeof decl.value === 'string') {
+  const declarations = rule.declarations || [];
+  for (const decl of declarations) {
+    const prop = decl.property;
+    if ((prop === 'width' || prop === 'height') && typeof decl.value === 'string') {
       const px = extractPx(decl.value);
       if (px > 0 && px < 30) return true;
     }
-    if ((decl.property === 'fontSize' || decl.property === 'font-size') &&
-        typeof decl.value === 'string') {
+    if ((prop === 'fontSize' || prop === 'font-size') && typeof decl.value === 'string') {
       const px = extractPx(decl.value);
       if (px > 0 && px < 14) return true;
     }
@@ -77,60 +69,71 @@ export const accessibilityOptimizer: OptimizationPass = {
   optimize(ir: StyleIR): OptimizationResult {
     let changes = 0;
 
-    for (const rule of ir.rules) {
-      if (rule.isDead) continue;
+    if (!ir || !ir.rules) {
+      return { ir, savings: { rulesEliminated: 0, declarationsEliminated: 0, bytesSaved: 0 }, changes: 0 };
+    }
 
-      // Auto-fix font sizes that are too small
+    for (const rule of ir.rules) {
+      if (rule.isDead || !rule.declarations) continue;
+
+      // Ensure pseudoClasses array structure exists safely
+      if (!rule.pseudoClasses) {
+        rule.pseudoClasses = [];
+      }
+
+      // 1. Auto-fix font sizes safely using CSS max() fallback structures
       for (const decl of rule.declarations) {
         if ((decl.property === 'fontSize' || decl.property === 'font-size') && typeof decl.value === 'string') {
           const pxMatch = decl.value.match(/^(\d+(\.\d+)?)px$/);
           if (pxMatch && parseFloat(pxMatch[1]) < WCAG.MIN_FONT_SIZE) {
-            decl.value = `max(${WCAG.MIN_FONT_SIZE}px, ${decl.value})`;
-            recordHistory(decl, 'accessibility-optimizer', 'auto-fix-min-font', undefined, `Ensured minimum font size of ${WCAG.MIN_FONT_SIZE}px`);
+            const originalValue = decl.value;
+            decl.value = `max(${WCAG.MIN_FONT_SIZE}px, ${originalValue})`;
+            recordHistory(decl as any, 'accessibility-optimizer', 'auto-fix-min-font', undefined, `Ensured minimum font size of ${WCAG.MIN_FONT_SIZE}px`);
             changes++;
           }
         }
       }
 
-      // Auto-fix touch targets on interactive elements
+      // 2. Touch target parsing infrastructure validation
       const isInteractive = rule.declarations.some(d => d.property === 'cursor' && d.value === 'pointer');
-      const isButton = rule.selector.includes('btn') || rule.selector.includes('button');
+      const isButton = rule.selector && /(\bbutton\b|\[role=["']button["']\]|btn)/i.test(rule.selector);
 
       if (isInteractive || isButton) {
         const small = isSmallElement(rule);
         const targets = hasAdequateTouchTarget(rule);
 
         if (small) {
-          // Small elements: use invisible ::after pseudo-element to expand touch area
-          // without distorting visual layout
           if (!targets.width || !targets.height) {
             const existingAfter = rule.pseudoClasses.find(pc => pc.name === 'after' &&
-              pc.declarations.some(d => d.meta?.a11yTouchTarget));
+              pc.declarations?.some(d => d.meta?.a11yTouchTarget));
 
             if (!existingAfter) {
+              // Centered dynamic hit-box enlargement structure to avoid small bounds skewing
               const afterDecls = [
                 createDeclaration('content', '""', rule.source, { a11yTouchTarget: true }),
                 createDeclaration('position', 'absolute', rule.source, { a11yTouchTarget: true }),
-                createDeclaration('top', '-4px', rule.source, { a11yTouchTarget: true }),
-                createDeclaration('left', '-4px', rule.source, { a11yTouchTarget: true }),
-                createDeclaration('width', `${WCAG.MIN_TOUCH_TARGET}px`, rule.source, { a11yTouchTarget: true }),
-                createDeclaration('height', `${WCAG.MIN_TOUCH_TARGET}px`, rule.source, { a11yTouchTarget: true }),
+                createDeclaration('top', '50%', rule.source, { a11yTouchTarget: true }),
+                createDeclaration('left', '50%', rule.source, { a11yTouchTarget: true }),
+                createDeclaration('minWidth', `${WCAG.MIN_TOUCH_TARGET}px`, rule.source, { a11yTouchTarget: true }),
+                createDeclaration('minHeight', `${WCAG.MIN_TOUCH_TARGET}px`, rule.source, { a11yTouchTarget: true }),
+                createDeclaration('transform', 'translate(-50%, -50%)', rule.source, { a11yTouchTarget: true }),
               ];
 
               rule.pseudoClasses.push({
                 id: `a11y-touch-${rule.id}`,
                 name: 'after',
+                parentId: rule.id,
                 declarations: afterDecls,
                 source: rule.source,
                 history: [{
                   pass: 'accessibility-optimizer',
                   action: 'auto-fix-touch-target',
                   timestamp: Date.now(),
-                  reason: `Added invisible ::after pseudo-element for ${WCAG.MIN_TOUCH_TARGET}px touch target (element too small for min-width/min-height)`,
+                  reason: `Added center-aligned absolute ::after pseudo-element for reliable ${WCAG.MIN_TOUCH_TARGET}px touch scaling`,
                 }],
               });
 
-              // Ensure parent has position: relative for the absolute ::after
+              // Guarantee relative bounding context mapping on host layer
               const hasPosition = rule.declarations.some(d =>
                 d.property === 'position' && ['relative', 'absolute', 'fixed', 'sticky'].includes(String(d.value))
               );
@@ -144,34 +147,36 @@ export const accessibilityOptimizer: OptimizationPass = {
             }
           }
         } else {
-          // Normal-sized elements: use min-width/min-height (safe, won't distort)
+          // Standard structural layouts get safe min boundaries
           if (!targets.width) {
-            rule.declarations.push(
-              createDeclaration('min-width', `${WCAG.MIN_TOUCH_TARGET}px`, rule.source, { a11y: true })
-            );
+            rule.declarations.push(createDeclaration('min-width', `${WCAG.MIN_TOUCH_TARGET}px`, rule.source, { a11y: true }));
             changes++;
           }
           if (!targets.height) {
-            rule.declarations.push(
-              createDeclaration('min-height', `${WCAG.MIN_TOUCH_TARGET}px`, rule.source, { a11y: true })
-            );
+            rule.declarations.push(createDeclaration('min-height', `${WCAG.MIN_TOUCH_TARGET}px`, rule.source, { a11y: true }));
             changes++;
           }
         }
       }
 
-      // Auto-fix missing focus indicators
-      const outline = rule.declarations.find(d => d.property === 'outline');
-      const hasFocusStyle = rule.pseudoClasses.some(pc =>
-        (pc.name === 'focus' || pc.name === 'focus-visible') && pc.declarations.length > 0
+      // 3. Robust validation of missing focus rings (catches none, 0, transparent, outline-style)
+      const explicitlyStripsOutline = rule.declarations.some(d => 
+        (d.property === 'outline' && ['none', '0', 'transparent'].includes(String(d.value).trim())) ||
+        (d.property === 'outline-style' && String(d.value).trim() === 'none')
       );
 
-      if (outline && String(outline.value) === 'none' && !hasFocusStyle) {
+      const hasFocusStyle = rule.pseudoClasses.some(pc =>
+        (pc.name === 'focus' || pc.name === 'focus-visible') && pc.declarations && pc.declarations.length > 0
+      );
+
+      if (explicitlyStripsOutline && !hasFocusStyle) {
         rule.pseudoClasses.push({
           id: `a11y-focus-${rule.id}`,
           name: 'focus-visible',
+          parentId: rule.id,
+          // Utilizes currentcolor fallback mapping to stay highly context-agnostic and accessible
           declarations: [
-            createDeclaration('outline', '2px solid #3b82f6', rule.source),
+            createDeclaration('outline', '2px dashed currentColor', rule.source),
             createDeclaration('outlineOffset', '2px', rule.source),
           ],
           source: rule.source,
@@ -179,7 +184,7 @@ export const accessibilityOptimizer: OptimizationPass = {
             pass: 'accessibility-optimizer',
             action: 'auto-fix-focus',
             timestamp: Date.now(),
-            reason: 'Added visible focus indicator for keyboard accessibility',
+            reason: 'Injected adaptive currentColor dashed ring into :focus-visible scope to replace stripped outline',
           }],
         });
         changes++;
@@ -188,11 +193,7 @@ export const accessibilityOptimizer: OptimizationPass = {
 
     return {
       ir,
-      savings: {
-        rulesEliminated: 0,
-        declarationsEliminated: 0,
-        bytesSaved: 0,
-      },
+      savings: { rulesEliminated: 0, declarationsEliminated: 0, bytesSaved: 0 },
       changes,
     };
   },

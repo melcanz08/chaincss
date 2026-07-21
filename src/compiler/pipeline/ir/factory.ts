@@ -1,19 +1,25 @@
-// src/compiler/pipeline/ir/factory.ts
-/** Factory functions for creating IR nodes safely. */
+// ============================================================================
+// FILE: src/compiler/pipeline/ir/factory.ts
+// ============================================================================
 
 import type {
-  IRNodeId, IRDeclaration, IRRule, IRPseudoClass,
-  IRAtRule, IRCondition, IRTransformRecord, StyleIR,
-  SourceLocation, ParsedValue
+  IRNodeId,
+  IRDeclaration,
+  IRRule,
+  IRTransformRecord,
+  StyleIR,
+  SourceLocation,
+  ParsedValue,
+  IRKeyframeFrame
 } from './types.js';
 
-
-/** Split function arguments respecting nested parens */
+/** Split function arguments respecting nested parentheses */
 function splitFuncArgs(args: string): string[] {
   const result: string[] = [];
   let depth = 0;
   let current = '';
-  for (const char of args) {
+  for (let i = 0; i < args.length; i++) {
+    const char = args[i];
     if (char === '(') depth++;
     if (char === ')') depth--;
     if (char === ',' && depth === 0) {
@@ -28,7 +34,7 @@ function splitFuncArgs(args: string): string[] {
 }
 
 // ============================================================================
-// Value Parser — lightweight, best-effort
+// Value Parser — lightweight, token-safe tokenizer
 // ============================================================================
 
 /**
@@ -37,7 +43,6 @@ function splitFuncArgs(args: string): string[] {
  * Falls back to { kind: 'raw' } for unparseable values — no errors thrown.
  */
 export function parseValue(raw: string | number): ParsedValue {
-  // Numbers pass through directly
   if (typeof raw === 'number') {
     return { kind: 'number', value: raw };
   }
@@ -48,7 +53,7 @@ export function parseValue(raw: string | number): ParsedValue {
   }
 
   // Dimension: 16px, 2rem, 100vh, 50%, 0.5fr
-  const dimMatch = trimmed.match(/^([+-]?\d*\.?\d+)(px|rem|em|vh|vw|vmin|vmax|%|ch|ex|fr|cm|mm|in|pt|pc)$/);
+  const dimMatch = trimmed.match(/^([+-]?\d*\.?\d+)(px|rem|em|vh|vw|vmin|vmax|dvh|dvw|svh|svw|lvh|lvw|%|ch|ex|fr|cm|mm|in|pt|pc)$/);
   if (dimMatch) {
     return {
       kind: 'dimension',
@@ -78,12 +83,30 @@ export function parseValue(raw: string | number): ParsedValue {
     };
   }
 
-  // Space or comma-separated list (e.g., "1px solid red", "0 1px 2px")
+  // Space or comma-separated list handling without fracturing nested functions
   if (trimmed.includes(' ') || trimmed.includes(',')) {
-    const items = trimmed
-      .split(/[,\s]+/)
-      .filter(s => s.length > 0)
-      .map(parseValue);
+    const items: ParsedValue[] = [];
+    let current = '';
+    let depth = 0;
+
+    for (let i = 0; i < trimmed.length; i++) {
+      const char = trimmed[i];
+      if (char === '(') depth++;
+      if (char === ')') depth--;
+
+      if ((char === ' ' || char === ',') && depth === 0) {
+        if (current.trim()) {
+          items.push(parseValue(current.trim()));
+          current = '';
+        }
+      } else {
+        current += char;
+      }
+    }
+    if (current.trim()) {
+      items.push(parseValue(current.trim()));
+    }
+
     if (items.length > 1) {
       return { kind: 'list', items };
     }
@@ -99,7 +122,7 @@ export function parseValue(raw: string | number): ParsedValue {
 
 let idCounter = 0;
 export function nextId(prefix: string = 'ir'): IRNodeId {
-  return prefix + '-' + (idCounter++).toString(36) + '-' + Date.now().toString(36);
+  return prefix + "-" + (idCounter++).toString(36);
 }
 
 let _resetCount = 0;
@@ -107,7 +130,7 @@ export function resetIdCounter(): void {
   idCounter = 0;
   _resetCount++;
   if (_resetCount > 1 && typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production' && process.env?.NODE_ENV !== 'test') {
-    console.warn('[ChainCSS] resetIdCounter() called multiple times — possible dual-import of factory.ts. Import from a single canonical path.');
+    console.warn('[ChainCSS] resetIdCounter() called multiple times — possible dual-import of factory.ts.');
   }
 }
 
@@ -138,7 +161,6 @@ export function createDeclaration(
     history: [record('parser', 'created', undefined, 'Parsed from StyleDefinition')],
     meta: {
       ...meta,
-      // Attach parsed value to meta — non-breaking addition
       parsed: parseValue(value),
     },
   };
@@ -146,10 +168,12 @@ export function createDeclaration(
 
 export function createRule(
   selector: string,
-  source?: SourceLocation
+  source?: SourceLocation,
+  parentId?: IRNodeId
 ): IRRule {
   return {
     id: nextId('rule'),
+    parentId,
     selector,
     declarations: [],
     pseudoClasses: [],
@@ -166,13 +190,25 @@ export function createRule(
   };
 }
 
+export function createKeyframeFrame(
+  keyText: string,
+  source?: SourceLocation
+): IRKeyframeFrame {
+  return {
+    id: nextId('frame'),
+    keyText,
+    declarations: [],
+    source: source || {}
+  };
+}
+
 export function createIR(sourceFiles: string[] = []): StyleIR {
   return {
     id: nextId('ir'),
     rules: [],
     diagnostics: [],
     meta: {
-      version: '1.0.0',
+      version: '2.10.0', // Updated version flag for tracking structural frames
       createdAt: Date.now(),
       sourceFiles,
       passCount: 0,

@@ -1,12 +1,12 @@
-// src/compiler/pipeline/ir/index.ts
-
-// Canonical entry point for the ChainCSS IR.
-// Import from 'chaincss/ir' or './pipeline/ir/'.
+// ============================================================================
+// FILE: src/compiler/pipeline/ir/index.ts
+// ============================================================================
 
 // Factory
 export {
   createDeclaration,
   createRule,
+  createKeyframeFrame, // Added structural frame factory for Phase 2 layouts
   createIR,
   resetIdCounter,
 } from './factory.js';
@@ -15,7 +15,7 @@ export {
 export { parseIR } from './parser.js';
 
 // CSS Printer
-export { generateCSS } from './css-printer.js';
+export { generateCSS, compileIR } from './css-printer.js';
 
 // Utilities
 export {
@@ -33,6 +33,7 @@ export type {
   IRRule,
   IRPseudoClass,
   IRAtRule,
+  IRKeyframeFrame, // Added structural frame model type definition
   IRCondition,
   IRTransformRecord,
   StyleIR,

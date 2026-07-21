@@ -1,5 +1,6 @@
-// src/cli/commands/create.ts — npx chaincss create app --template entangled
-// Scaffolds a full Vite + ChainCSS + Figma Sync + Entanglement app in one command
+// ============================================================================
+// FILE: src/cli/commands/create.ts
+// ============================================================================
 
 import fs from 'fs'
 import path from 'path'
@@ -7,24 +8,44 @@ import chalk from 'chalk'
 import { execSync } from 'child_process'
 
 interface CreateOptions {
-  template?: 'minimal' | 'entangled' | 'react' | 'vue'
+  template?: 'minimal' | 'entangled' | 'react'
   pm?: 'npm' | 'pnpm' | 'yarn' | 'bun'
   install?: boolean
   verbose?: boolean
 }
 
-function ensureDir(p: string) { fs.mkdirSync(p, { recursive: true }) }
-function write(p: string, content: string) { ensureDir(path.dirname(p)); fs.writeFileSync(p, content, 'utf8') }
+function ensureDir(p: string) { 
+  fs.mkdirSync(p, { recursive: true }) 
+}
+
+function write(p: string, content: string) { 
+  ensureDir(path.dirname(p))
+  fs.writeFileSync(p, content, 'utf8') 
+}
 
 function pkgJson(name: string, template: string) {
-  const deps: Record<string, string> = {
+  const isReact = template === 'react'
+  
+  const devDeps: Record<string, string> = {
     vite: "^5.4.0",
-    chaincss: "workspace:*",
+    chaincss: "^2.13.1", // Uses latest release baseline
     typescript: "^5.5.0"
   }
-  if (template.includes('react')) { deps['react'] = "^18.3.0"; deps['react-dom'] = "^18.3.0"; deps['@types/react'] = "^18.3.0" }
+
+  const deps: Record<string, string> = {}
+
+  if (isReact) {
+    deps['react'] = "^18.3.0"
+    deps['react-dom'] = "^18.3.0"
+    devDeps['@types/react'] = "^18.3.0"
+    devDeps['@types/react-dom'] = "^18.3.0"
+    devDeps['@vitejs/plugin-react'] = "^4.3.0"
+  }
+
   return JSON.stringify({
-    name, type: "module", private: true,
+    name,
+    type: "module",
+    private: true,
     scripts: {
       dev: "vite",
       build: "vite build",
@@ -33,20 +54,30 @@ function pkgJson(name: string, template: string) {
       "tokens:fix": "chaincss entanglement --input tokens/global.json --fix",
       "audit": "chaincss audit --fix --write"
     },
-    dependencies: {},
-    devDependencies: deps
+    dependencies: deps,
+    devDependencies: devDeps
   }, null, 2)
 }
 
 function viteConfig(template: string) {
-  const hasFigma = template === 'entangled'
+  const hasFigma = template === 'entangled' || template === 'react'
+  const isReact = template === 'react'
+  
   return `import { defineConfig } from 'vite'
 import chaincss from 'chaincss/vite'
-${hasFigma ? `import figmaSync from 'chaincss/figma-sync'` : '// import figmaSync from \'chaincss/figma-sync\''}
-
+${isReact ? "import react from '@vitejs/plugin-react'\n" : ""}${hasFigma ? "import figmaSync from 'chaincss/figma-sync'\n" : "// import figmaSync from 'chaincss/figma-sync'\n"}
 export default defineConfig({
   plugins: [
-    ${hasFigma ? `figmaSync({\n      mode: 'url',\n      // Replace with your Tokens Studio GitHub raw URL\n      url: process.env.TOKENS_URL || 'https://raw.githubusercontent.com/your-org/design-tokens/main/tokens.json',\n      output: 'tokens/global.json',\n      pollMs: 3000,\n      autoFix: true,\n      verbose: true\n    }),` : '// figmaSync({ mode: \'url\', url: \'https://.../tokens.json\' }),'}
+    ${isReact ? "react()," : ""}
+    ${hasFigma ? `figmaSync({
+      mode: 'url',
+      // Replace with your Tokens Studio GitHub raw URL
+      url: 'https://raw.githubusercontent.com/your-org/design-tokens/main/tokens.json',
+      output: 'tokens/global.json',
+      pollMs: 3000,
+      autoFix: true,
+      verbose: true
+    }),` : "// figmaSync({ mode: 'url', url: 'https://.../tokens.json' }),"}
     chaincss({
       verbose: true,
       atomic: true,
@@ -63,35 +94,57 @@ export default defineConfig({
 `
 }
 
+function tsConfig() {
+  return JSON.stringify({
+    compilerOptions: {
+      target: "ES2022",
+      useDefineForClassFields: true,
+      module: "ESNext",
+      lib: ["DOM", "DOM.Iterable", "ES2022"],
+      skipLibCheck: true,
+
+      /* Bundler mode */
+      moduleResolution: "bundler",
+      allowImportingTsExtensions: true,
+      resolveJsonModule: true,
+      isolatedModules: true,
+      noEmit: true,
+      jsx: "react-jsx",
+
+      /* Linting */
+      strict: true,
+      noUnusedLocals: true,
+      noUnusedParameters: true,
+      noImplicitReturns: true
+    },
+    include: ["src"]
+  }, null, 2)
+}
+
 function chaincssConfig() {
   return `import { defineConfig } from 'chaincss'
 
 export default defineConfig({
-  inputs: ['src/**/*.{chain.ts,chain.tsx}'],
+  inputs: ['src/**/*.{chain.ts,chain.tsx,ts,tsx}'],
   output: { cssFile: 'dist/styles.css' },
   atomic: { enabled: true },
   prefixer: { enabled: true },
   tokens: {
     relationships: [
-      // Derived: changing primary.500 auto updates 100 and 600
       { type: 'derived', source: 'colors.primary.500', target: 'colors.primary.100', method: 'mix-white 80%' },
       { type: 'derived', source: 'colors.primary.500', target: 'colors.primary.50', method: 'tint 90%' },
       { type: 'derived', source: 'colors.primary.500', target: 'colors.primary.600', method: 'shade 20%' },
-      // Contrast: keeps text readable automatically
       { type: 'contrast', foreground: 'colors.text.onPrimary', background: 'colors.primary.500', target: 4.5, autoFix: 'auto', priority: 10 },
       { type: 'contrast', foreground: 'colors.text.muted', background: 'colors.background', target: 4.5, autoFix: 'lighten' }
     ]
   },
-  // Breakpoints available as intents: sm:, md:, lg:
   breakpoints: { sm: '640px', md: '768px', lg: '1024px' }
 })
 `
 }
 
 function appChainTs() {
-  return `// src/App.chain.ts — Entangled example
-// Change tokens/global.json colors.primary.500 and watch everything update with contrast fix
-
+  return `// src/App.chain.ts — Entangled style layers
 export const page = {
   selectors: ['.page'],
   minHeight: '100vh',
@@ -128,49 +181,59 @@ export const button = {
   },
   '&:active': {
     transform: 'translateY(0px)'
-  },
-  '&[data-loading=true]': {
-    intent: 'shimmer pointerEventsNone opacity70'
   }
 }
 
 export const badge = {
   selectors: ['.badge'],
-  intent: 'bgPrimary100 textPrimary700 roundedFull px3 py1 textSm fontMedium',
-  // This badge is entangled: primary.100 is derived from primary.500 via mix-white 80%
-  // So when Figma changes primary.500, this badge auto updates and keeps contrast
+  intent: 'bgPrimary100 textPrimary700 roundedFull px3 py1 textSm fontMedium'
 }
 `
 }
 
-function indexHtml(name: string) {
+function indexHtml(name: string, template: string) {
+  const entryScript = template === 'react' ? '/src/main.tsx' : '/src/main.ts'
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${name} — ChainCSS Entangled</title>
+  <title>${name} — ChainCSS</title>
 </head>
 <body>
+  ${template === 'react' ? '<div id="root"></div>' : `
   <div class="page">
     <div class="card">
       <span class="badge">Entangled</span>
       <h1 style="margin:0;font-size:24px;font-weight:700">ChainCSS + Figma Live</h1>
-      <p style="margin:0;opacity:0.7;line-height:1.5">Change <code>colors.primary.500</code> in Figma Tokens Studio. Watch this button and badge auto update with AA contrast fix, no reload.</p>
+      <p style="margin:0;opacity:0.7;line-height:1.5">Modify your design token parameters and watch compilation mechanics run in real-time.</p>
       <button class="btn">Primary Action</button>
-      <p style="margin:0;font-size:12px;opacity:0.5">Run <code>npm run tokens:watch</code> alongside <code>npm run dev</code></p>
     </div>
-  </div>
-  <script type="module" src="/src/main.ts"></script>
+  </div>`}
+  <script type="module" src="${entryScript}"></script>
 </body>
 </html>
 `
 }
 
-function mainTs() {
-  return `import './App.chain.css'
-// HMR is handled by chaincss/vite + figmaSync
-console.log('[ChainCSS] Entangled app ready — change tokens/global.json to see live update')
+function reactBoilerplate() {
+  return `import React from 'react'
+import './App.chain.css'
+
+export function App() {
+  return (
+    <div className="page">
+      <div className="card">
+        <span className="badge">Entangled React</span>
+        <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 700 }}>ChainCSS + Figma Live</h1>
+        <p style={{ margin: 0, opacity: 0.7, lineHeight: 1.5 }}>
+          Change colors.primary.500 in tokens. Watch HMR update components automatically.
+        </p>
+        <button className="btn">Primary Action</button>
+      </div>
+    </div>
+  )
+}
 `
 }
 
@@ -187,29 +250,39 @@ export async function createCommand(appName?: string, opts: CreateOptions = {}) 
 
   console.log(chalk.cyan(`\n✨ Creating ChainCSS app: ${name} (${template})\n`))
 
-  // dirs
   ensureDir(path.join(root, 'src'))
   ensureDir(path.join(root, 'tokens'))
   ensureDir(path.join(root, '.tokensstudio'))
   ensureDir(path.join(root, '.github', 'workflows'))
 
-  // package.json
+  // Structural Configuration Files
   write(path.join(root, 'package.json'), pkgJson(name, template))
+  write(path.join(root, 'tsconfig.json'), tsConfig())
   write(path.join(root, 'vite.config.ts'), viteConfig(template))
   write(path.join(root, 'chaincss.config.ts'), chaincssConfig())
-  write(path.join(root, 'index.html'), indexHtml(name))
-  write(path.join(root, 'src', 'main.ts'), mainTs())
+  write(path.join(root, 'index.html'), indexHtml(name, template))
   write(path.join(root, 'src', 'App.chain.ts'), appChainTs())
 
-  // tokens
+  // BUNDLER WORKAROUND: Generate empty CSS file to prevent immediate cold boot resolution crashes
+  write(path.join(root, 'src', 'App.chain.css'), '/* Generated fallback baseline for Vite cold starts */\n')
+
+  // Core Application Mount Setup
+  if (template === 'react') {
+    write(path.join(root, 'src', 'App.tsx'), reactBoilerplate())
+    write(path.join(root, 'src', 'main.tsx'), `import React from 'react'\nimport ReactDOM from 'react-dom/client'\nimport { App } from './App.tsx'\n\nReactDOM.createRoot(document.getElementById('root')!).render(\n  <React.StrictMode>\n    <App />\n  </React.StrictMode>\n)\n`)
+  } else {
+    write(path.join(root, 'src', 'main.ts'), `import './App.chain.css'\nconsole.log('[ChainCSS] Runtime baseline ready.')\n`)
+  }
+
+  // Token Baselines
   write(path.join(root, 'tokens', '$metadata.json'), JSON.stringify({ tokenSetOrder: ['global', 'light', 'dark'] }, null, 2))
   write(path.join(root, 'tokens', '$themes.json'), JSON.stringify([{ id: 'light', name: 'Light', selectedTokenSets: { global: 'enabled' } }], null, 2))
   write(path.join(root, 'tokens', 'global.json'), JSON.stringify({
     colors: {
       primary: {
-        "500": { value: "#6366f1", type: "color", description: "Source - entangled" },
-        "100": { value: "#e0e7ff", type: "color", description: "derived mix-white 80% - auto" },
-        "600": { value: "#4f46e5", type: "color", description: "derived shade 20% - auto" }
+        "500": { value: "#6366f1", type: "color", description: "Source token" },
+        "100": { value: "#e0e7ff", type: "color", description: "Auto-derived" },
+        "600": { value: "#4f46e5", type: "color", description: "Auto-derived" }
       },
       background: { value: "#ffffff", type: "color" },
       surface: { value: "#f8fafc", type: "color" },
@@ -222,31 +295,12 @@ export async function createCommand(appName?: string, opts: CreateOptions = {}) 
     }
   }, null, 2))
 
-  // .env.example
   write(path.join(root, '.env.example'), `FIGMA_TOKEN=figd_xxx\nTOKENS_URL=https://raw.githubusercontent.com/your-org/design-tokens/main/tokens.json\n`)
-
-  // .gitignore
+  write(path.join(root, '.env'), `FIGMA_TOKEN=\nTOKENS_URL=\n`)
   write(path.join(root, '.gitignore'), `node_modules\ndist\n.chaincss-cache\n*.class.js\n*.chain.css\n.env\n`)
 
-  // Tokens Studio README
-  write(path.join(root, '.tokensstudio', 'README.md'), `# Connect Figma
-
-1. Figma -> Plugins -> Tokens Studio -> Settings -> Sync -> GitHub
-   Repo: your-org/design-tokens
-   Branch: main
-   File: tokens/global.json
-
-2. Set TOKENS_URL in .env to your raw URL:
-   https://raw.githubusercontent.com/your-org/design-tokens/main/tokens/global.json
-
-3. Run:
-   npm run dev
-   npm run tokens:watch
-
-ChainCSS will poll, entangle, and HMR update the browser.
-`)
-
-  // GitHub Action
+  // Documentation & Automation Actions
+  write(path.join(root, '.tokensstudio', 'README.md'), `# Connect Figma Studio Configuration\nRefer to standard deployment docs to set up repository webhooks.\n`)
   write(path.join(root, '.github', 'workflows', 'chaincss-tokens.yml'), `name: Entanglement Fix
 on:
   push:
@@ -255,6 +309,8 @@ on:
 jobs:
   fix:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -272,26 +328,34 @@ jobs:
 `)
 
   console.log(chalk.green(`\n✓ Created ${name}/`))
-  console.log(chalk.gray(`  ├─ vite.config.ts (with figmaSync + chaincss)`))
-  console.log(chalk.gray(`  ├─ chaincss.config.ts (entanglement relationships)`))
-  console.log(chalk.gray(`  ├─ tokens/global.json (entangled tokens)`))
-  console.log(chalk.gray(`  ├─ src/App.chain.ts (example)`))
-  console.log(chalk.gray(`  └─ .github/workflows/chaincss-tokens.yml`))
+  console.log(chalk.gray(`  ├─ tsconfig.json (TypeScript base setup)`))
+  console.log(chalk.gray(`  ├─ vite.config.ts (Pre-wired environments)`))
+  console.log(chalk.gray(`  ├─ src/App.chain.css (Fallback baseline)`))
+  console.log(chalk.gray(`  └─ tokens/global.json (Entanglement token configuration)`))
 
+  let installSuccess = false
   if (opts.install) {
-    console.log(chalk.cyan(`\n📦 Installing with ${pm}...`))
-    try { execSync(`${pm} install`, { cwd: root, stdio: 'inherit' }) } catch {}
+    console.log(chalk.cyan(`\n📦 Installing project elements with ${pm}...`))
+    try { 
+      execSync(`${pm} install`, { cwd: root, stdio: 'inherit' }) 
+      installSuccess = true
+    } catch {
+      console.log(chalk.yellow(`\n⚠️ Automatic install failed. Your system may be missing ${pm} globally, or there is a local network issue.`))
+    }
   }
 
-  console.log(chalk.cyan(`\nNext:\n`))
+  // Format runner execution feedback to dynamically reflect designated package manager tool
+  const runCmd = pm === 'npm' ? 'npm run' : pm === 'yarn' ? 'yarn' : `${pm} run`
+  
+  console.log(chalk.cyan(`\nNext execution configurations:\n`))
   console.log(chalk.white(`  cd ${name}`))
-  if (!opts.install) console.log(chalk.white(`  ${pm} install`))
-  console.log(chalk.white(`  ${pm} run dev`))
-  console.log(chalk.gray(`  # in another terminal`))
-  console.log(chalk.white(`  ${pm} run tokens:watch`))
-  console.log(chalk.gray(`\n  Change tokens/global.json colors.primary.500 -> browser updates with contrast fix\n`))
+  if (!installSuccess) {
+    console.log(chalk.white(`  ${pm} install`))
+  }
+  console.log(chalk.white(`  ${runCmd} dev`))
+  console.log(chalk.gray(`  # in a separate terminal process to watch configuration state transformations`))
+  console.log(chalk.white(`  ${runCmd} tokens:watch\n`))
   console.log(chalk.green(`✨ Happy entangling!\n`))
 }
 
 export default createCommand
-

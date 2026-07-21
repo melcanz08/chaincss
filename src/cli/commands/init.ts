@@ -1,10 +1,12 @@
-// src/cli/commands/init.ts
+// ============================================================================
+// FILE: src/cli/commands/init.ts
+// ChainCSS CLI Initialization Subcommand Processor
+// ============================================================================
 
 import fs from 'fs';
 import path from 'path';
 import chalk from 'chalk';
 import { createLogger } from '../utils/logger.js';
-import { saveConfigTemplate } from '../utils/config-loader.js';
 
 export interface InitOptions {
   force?: boolean;
@@ -14,217 +16,188 @@ export interface InitOptions {
   framework?: 'react' | 'vue' | 'svelte' | 'solid';
 }
 
-export async function initCommand(options: InitOptions): Promise<void> {
-  const logger = createLogger(options.verbose);
-  
-  logger.header('ChainCSS Initialization');
-  
-  const configPath = path.join(process.cwd(), 'chaincss.config.js');
-  
-  if (fs.existsSync(configPath) && !options.force) {
-    logger.warn('Config file already exists. Use --force to overwrite.');
-    return;
-  }
-  
-  logger.step('Creating chaincss.config.js...');
-  
-  // Save config template with options
-  saveConfigTemplate(configPath);
-  
-  logger.success(`Created ${configPath}`);
-  
-  // Create example style file
-  const exampleDir = path.join(process.cwd(), 'src');
-  const examplePath = path.join(exampleDir, 'styles.chain.js');
-  const isTypeScript = options.typescript || false;
-  const exampleExt = isTypeScript ? 'ts' : 'js';
-  const finalExamplePath = isTypeScript 
-    ? path.join(exampleDir, 'styles.chain.ts')
-    : examplePath;
-  
-  if (!fs.existsSync(finalExamplePath) || options.force) {
-    if (!fs.existsSync(exampleDir)) {
-      fs.mkdirSync(exampleDir, { recursive: true });
-    }
-    
-    // Framework-specific example
-    let frameworkImport = "import { $, recipe } from 'chaincss';";
-    let frameworkSpecificCode = '';
-    
-    if (options.framework === 'react') {
-      frameworkSpecificCode = `
-// React component example
-import React from 'react';
+/**
+ * Generates the clean interior layout for the ChainCSS configuration template.
+ */
+function generateConfigContent(options: InitOptions): string {
+  const isTS = !!options.typescript;
+  const importStatement = "import { defineConfig } from 'chaincss';\n";
 
-export const Button = ({ children, variant = 'primary' }) => {
-  const className = buttonVariants({ color: variant });
-  return <button className={className}>{children}</button>;
-};`;
-    } else if (options.framework === 'vue') {
-      frameworkSpecificCode = `
-// Vue component example
-export default {
-  name: 'Button',
-  props: {
-    variant: { type: String, default: 'primary' }
+  if (options.template === 'minimal') {
+    return `${importStatement}
+export default defineConfig({
+  inputs: ['src/**/*.chain.${isTS ? '{ts,tsx}' : '{js,jsx}'}'],
+  output: {
+    cssFile: 'dist/styles.css'
+  }
+});\n`;
+  }
+
+  return `${importStatement}
+export default defineConfig({
+  namespace: 'chain-',
+  inputs: ['src/**/*.chain.{ts,tsx,js,jsx}'],
+  output: {
+    cssFile: 'dist/styles.css',
+    minify: false
   },
-  computed: {
-    buttonClass() {
-      return buttonVariants({ color: this.variant });
-    }
+  atomic: {
+    enabled: true
+  },
+  tokens: {
+    relationships: [
+      {
+        type: 'derived',
+        source: 'colors.primary.500',
+        target: 'colors.primary.100',
+        method: 'mix-white 80%'
+      }
+    ]
   }
-};`;
-    } else if (options.framework === 'svelte') {
-      frameworkSpecificCode = `
-<!-- Svelte component example -->
-<script>
-  import { buttonVariants } from './styles.chain';
-  export let variant = 'primary';
-  $: buttonClass = buttonVariants({ color: variant });
-</script>
+});\n`;
+}
 
-<button class={buttonClass}>
-  <slot />
-</button>`;
-    }
-    
-    const exampleContent = `/**
+/**
+ * Returns the standard functional style blueprints for example stylesheets.
+ */
+function generateStyleContent(): string {
+  return `/**
  * ChainCSS Example Style File
- * 
- * This file demonstrates ChainCSS syntax.
- * Run \`npx chaincss build\` to compile all styles.
+ * v3.0 Strict - 16 typed methods + raw()
  */
 
-${frameworkImport}
+import { chain, recipe } from 'chaincss';
 
-// Simple button style
-export const button = $()
-  .backgroundColor('#667eea')
-  .color('white')
-  .padding('12px 24px')
-  .borderRadius('8px')
-  .border('none')
-  .fontSize('16px')
-  .fontWeight('600')
-  .cursor('pointer')
+// Simple atom-level element styling mapping
+export const button = chain()
+  .background('#667eea')
+  .typography({color:'white', size:'16px', weight:'600'})
+  .box({p:'12px 24px', radius:'8px', border:'none'})
+  .raw({cursor:'pointer'})
   .transition('all 0.2s ease')
   .hover()
-    .backgroundColor('#5a67d8')
+    .background('#5a67d8')
     .transform('scale(1.05)')
   .end()
   .$el('button');
 
-// Card style
-export const card = $()
-  .backgroundColor('white')
-  .borderRadius('12px')
-  .padding('24px')
-  .boxShadow('0 10px 15px -3px rgba(0,0,0,0.1)')
-  .transition('all 0.3s ease')
-  .hover()
-    .boxShadow('0 20px 25px -5px rgba(0,0,0,0.15)')
-    .transform('translateY(-4px)')
-  .end()
-  .$el('.card');
-
-// Container style
-export const container = $()
-  .maxWidth('1200px')
-  .margin('0 auto')
-  .padding('0 1rem')
-  .$el('.container');
-
-// Responsive design
-export const responsive = $()
-  .display('grid')
-  .gridTemplateColumns('1fr')
-  .gap('1rem')
-  .media("(min-width: 768px)", (c) => c)
-    .gridTemplateColumns('repeat(2, 1fr)')
-  .end()
-  .media("(min-width: 1024px)", (c) => c)
-    .gridTemplateColumns('repeat(3, 1fr)')
-  .end()
-  .$el('.grid');
-
-// Variant-based button component
+// Variant-driven component styling definitions
 export const buttonVariants = recipe({
-  base: $()
-    .padding('8px 16px')
-    .borderRadius('4px')
-    .fontWeight('500')
-    .cursor('pointer')
+  base: chain()
+    .box({p:'8px 16px', radius:'4px', border:'none'})
+    .typography({weight:'500'})
+    .raw({cursor:'pointer'})
     .transition('all 0.2s')
-    .border('none')
     .$el('button'),
   
   variants: {
     color: {
-      primary: $().backgroundColor('#667eea').color('white').hover().backgroundColor('#5a67d8').end().$el(),
-      secondary: $().backgroundColor('#48bb78').color('white').hover().backgroundColor('#38a169').end().$el(),
-      danger: $().backgroundColor('#f56565').color('white').hover().backgroundColor('#e53e3e').end().$el(),
-      outline: $()
-        .backgroundColor('transparent')
-        .color('#667eea')
-        .border('2px solid #667eea')
-        .hover()
-          .backgroundColor('#667eea')
-          .color('white')
-        .end()
-        .$el()
+      primary: chain().background('#667eea').typography({color:'white'}).hover().background('#5a67d8').end().$el(),
+      secondary: chain().background('#48bb78').typography({color:'white'}).hover().background('#38a169').end().$el(),
+      danger: chain().background('#f56565').typography({color:'white'}).hover().background('#e53e3e').end().$el(),
     },
     size: {
-      sm: $().padding('4px 8px').fontSize('12px').$el(),
-      md: $().padding('8px 16px').fontSize('14px').$el(),
-      lg: $().padding('12px 24px').fontSize('16px').$el()
-    },
-    fullWidth: {
-      true: $().width('100%').$el()
+      sm: chain().box({p:'4px 8px'}).typography({size:'12px'}).$el(),
+      md: chain().box({p:'8px 16px'}).typography({size:'14px'}).$el(),
+      lg: chain().box({p:'12px 24px'}).typography({size:'16px'}).$el()
     }
   },
-  
-  compoundVariants: [
-    {
-      variants: { color: 'outline', size: 'lg' },
-      style: $().borderWidth('3px').$el()
-    }
-  ],
   
   defaultVariants: {
     color: 'primary',
     size: 'md'
   }
 });
-${frameworkSpecificCode}
 `;
-    
-    fs.writeFileSync(finalExamplePath, exampleContent, 'utf8');
-    logger.success(`Created example: ${finalExamplePath}`);
-  } else {
-    logger.info(`Example file already exists at ${finalExamplePath}`);
+}
+
+export async function initCommand(options: InitOptions): Promise<void> {
+  const logger = createLogger(options.verbose);
+  logger.header('ChainCSS Project Initialization Framework');
+
+  const isTypeScript = !!options.typescript;
+  const configFilename = isTypeScript ? 'chaincss.config.ts' : 'chaincss.config.js';
+  const configPath = path.join(process.cwd(), configFilename);
+
+  // 1. Process project configuration files
+  if (fs.existsSync(configPath) && !options.force) {
+    logger.warn(`Configuration asset [${configFilename}] already exists. Run with --force to overwrite.`);
+    return;
   }
-  
-  // Create .gitignore entry for cache if needed
-  const gitignorePath = path.join(process.cwd(), '.gitignore');
-  const cacheIgnore = '\n# ChainCSS cache\n.chaincss-cache/\n.chaincss/\n';
-  
-  if (fs.existsSync(gitignorePath)) {
-    const gitignore = fs.readFileSync(gitignorePath, 'utf8');
-    if (!gitignore.includes('.chaincss-cache')) {
-      fs.appendFileSync(gitignorePath, cacheIgnore);
-      logger.info('Added cache directories to .gitignore');
+
+  logger.step(`Writing configuration resource file: ${configFilename}...`);
+  fs.writeFileSync(configPath, generateConfigContent(options), 'utf8');
+  // CHANGED: Restored the exact "Created" hook keyword so your integration tests pass gracefully
+  logger.success(`✓ Created configuration: ${configPath}`);
+
+  // 2. Process core style assets
+  const srcDirectory = path.join(process.cwd(), 'src');
+  const styleExtension = isTypeScript ? 'ts' : 'js';
+  const finalStylePath = path.join(srcDirectory, `styles.chain.${styleExtension}`);
+
+  if (!fs.existsSync(srcDirectory)) {
+    fs.mkdirSync(srcDirectory, { recursive: true });
+  }
+
+  if (!fs.existsSync(finalStylePath) || options.force) {
+    fs.writeFileSync(finalStylePath, generateStyleContent(), 'utf8');
+    // CHANGED: Uses the explicit "Created" trigger word for test suite assertions
+    logger.success(`✓ Created styling example module: ${finalStylePath}`);
+  } else {
+    logger.info(`Styling framework rules already established at: ${finalStylePath}`);
+  }
+
+  // 3. Process framework integration component examples safely without file type pollution
+  if (options.framework) {
+    const compDir = path.join(srcDirectory, 'components');
+    if (!fs.existsSync(compDir)) {
+      fs.mkdirSync(compDir, { recursive: true });
+    }
+
+    let compPath = '';
+    let compContent = '';
+
+    switch (options.framework) {
+      case 'react':
+      case 'solid':
+        compPath = path.join(compDir, `Button.${isTypeScript ? 'tsx' : 'jsx'}`);
+        compContent = `import React from 'react';\nimport { buttonVariants } from '../styles.chain';\n\nexport const Button = ({ children, variant = 'primary' }) => {\n  const className = buttonVariants({ color: variant });\n  return <button className={className}>{children}</button>;\n};\n`;
+        break;
+
+      case 'vue':
+        compPath = path.join(compDir, 'Button.vue');
+        compContent = `<template>\n  <button :class="buttonClass">\n    <slot />\n  </button>\n</template>\n\n<script>\nimport { buttonVariants } from '../styles.chain';\n\nexport default {\n  name: 'Button',\n  props: {\n    variant: { type: String, default: 'primary' }\n  },\n  computed: {\n    buttonClass() {\n      return buttonVariants({ color: this.variant });\n    }\n  }\n};\n</script>\n`;
+        break;
+
+      case 'svelte':
+        compPath = path.join(compDir, 'Button.svelte');
+        compContent = `<script>\n  import { buttonVariants } from '../styles.chain';\n  export let variant = 'primary';\n  $: buttonClass = buttonVariants({ color: variant });\n</script>\n\n<button class={buttonClass}>\n  <slot />\n</button>\n`;
+        break;
+    }
+
+    if (compPath && (!fs.existsSync(compPath) || options.force)) {
+      fs.writeFileSync(compPath, compContent, 'utf8');
+      logger.success(`✓ Created framework component wrapper: ${compPath}`);
     }
   }
-  
+
+  // 4. Update project version control rules
+  const gitignorePath = path.join(process.cwd(), '.gitignore');
+  const cacheIgnoreEntries = '\n# ChainCSS Cache and Log Boundaries\n.chaincss-cache/\n.chaincss/\n';
+
+  if (fs.existsSync(gitignorePath)) {
+    const gitignoreContent = fs.readFileSync(gitignorePath, 'utf8');
+    if (!gitignoreContent.includes('.chaincss-cache')) {
+      fs.appendFileSync(gitignorePath, cacheIgnoreEntries, 'utf8');
+      logger.info('Updated .gitignore to exclude internal caching layers.');
+    }
+  }
+
   logger.divider();
-  logger.success('ChainCSS initialized successfully!');
-  logger.info('\n📚 Next steps:');
-  logger.info(`  1. Edit ${chalk.cyan('chaincss.config.js')} to customize settings`);
-  logger.info(`  2. Write styles in ${chalk.cyan(finalExamplePath)}`);
-  logger.info(`  3. Run ${chalk.cyan('npx chaincss build')} to compile all styles`);
-  logger.info('');
-  logger.info(`  Or watch for changes:`);
-  logger.info(`  ${chalk.cyan('npx chaincss watch')}`);
-  logger.info('');
-  logger.info(`  For more information, visit: ${chalk.blue('https://chaincss.dev')}\n`);
+  logger.success('🚀 ChainCSS project workspace successfully initialized!');
+  logger.info('\n📚 Next Steps:');
+  logger.info(`  1. Open and adjust parameters within ${chalk.cyan(configFilename)}`);
+  logger.info(`  2. Add utility declaration blocks inside ${chalk.cyan(path.relative(process.cwd(), finalStylePath))}`);
+  logger.info(`  3. Execute production asset build passes: ${chalk.cyan('npx chaincss build')}`);
+  logger.info(`  4. Launch live directory development loops: ${chalk.cyan('npx chaincss watch')}\n`);
 }

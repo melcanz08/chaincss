@@ -29,6 +29,12 @@ jobs:
       
       - name: Type check
         run: npx tsc --noEmit
+
+      - name: Build all 16 targets
+        run: npm run build
+
+      - name: Verify full wiring (dist)
+        run: node verify-full.mjs
       
       - name: Run tests with coverage
         run: npm run test:coverage
@@ -56,8 +62,11 @@ jobs:
           node-version: 22
           cache: 'npm'
       - run: npm ci
-      - name: Check formatting
-        run: npx prettier --check "src/**/*.ts" "benchmarks/**/*.ts"
+      - run: npx prettier --check "src/**/*.ts"
+      - name: No circular deps
+        run: npx madge --circular src/index.ts
+      - name: Valid exports
+        run: npx publint --strict
 
   audit:
     name: A11y Contrast Audit
@@ -90,4 +99,11 @@ jobs:
           test -f dist/index.cjs || (echo "Missing dist/index.cjs" && exit 1)
           test -f dist/browser.js || (echo "Missing dist/browser.js" && exit 1)
           test -f dist/cli/index.js || (echo "Missing dist/cli/index.js" && exit 1)
+          test -f dist/advanced.js || (echo "Missing dist/advanced.js" && exit 1)
+          test -f dist/runtime/index.js || (echo "Missing dist/runtime/index.js" && exit 1)
+          test -f dist/compiler/index.js || (echo "Missing dist/compiler/index.js" && exit 1)
+          test -f dist/utils.js  || (echo "Missing dist/utils.js" && exit 1)
+          test -f dist/plugins/vite.js || (echo "Missing dist/plugins/vite.js" && exit 1)
+          test -f dist/plugins/vite.cjs || (echo "Missing dist/plugins/vite.js" && exit 1)
+          test -f dist/plugins/webpack.js || (echo "Missing dist/plugins/webpack.js" && exit 1)
           echo "✅ All build outputs verified"

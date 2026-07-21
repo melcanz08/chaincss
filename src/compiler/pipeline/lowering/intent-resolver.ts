@@ -1,5 +1,6 @@
-// src/compiler/pipeline/lowering/intent-resolver.ts 
-// Now supports custom intents from chaincss.config.ts via registerIntent
+// ============================================================================
+// FILE: src/compiler/pipeline/lowering/intent-resolver.ts 
+// ============================================================================
 
 import { recordHistory } from '../ir/utils.js';
 import type { StyleIR } from '../ir/types.js';
@@ -7,7 +8,7 @@ import type { LoweringPass, LoweringResult, LoweringContext } from '../pipeline-
 import { createDeclaration } from '../ir/factory.js';
 import { resolveSemantic } from '../../tokens/semantic-tokens.js';
 
-interface IntentDefinition {
+export interface IntentDefinition {
   name: string;
   category: "layout" | "component" | "semantic" | "interaction" | string;
   description: string;
@@ -17,7 +18,6 @@ interface IntentDefinition {
   responsive?: Record<string, Record<string, string | number>>;
   a11y?: string[];
 }
-
 
 const BUILTIN_INTENT_CATALOG: Record<string, IntentDefinition> = {
   'center-content': {
@@ -102,22 +102,31 @@ const BUILTIN_INTENT_CATALOG: Record<string, IntentDefinition> = {
   },
 };
 
-// Mutable catalog that merges builtins + customs
-const INTENT_CATALOG: Record<string, IntentDefinition> = { ...BUILTIN_INTENT_CATALOG };
+export const INTENT_CATALOG: Record<string, IntentDefinition> = { ...BUILTIN_INTENT_CATALOG };
+export const BUILTIN_CATALOG = BUILTIN_INTENT_CATALOG;
 
 export function registerIntent(name: string, def: IntentDefinition, allowOverride = false) {
   if (!allowOverride && BUILTIN_INTENT_CATALOG[name]) {
     console.warn(`[ChainCSS] intent '${name}' overrides builtin. Use allowOverride:true to silence.`);
   }
-  INTENT_CATALOG[name] = {...def,name};
+  INTENT_CATALOG[name] = { ...def, name };
 }
+
 export function registerIntents(intents: Record<string, IntentDefinition>, allowOverride = false) {
-  for (const [k, v] of Object.entries(intents || {})) registerIntent(k, v, allowOverride);
+  // Guard entry mutation by flushing non-builtin allocations before merging new cycles
+  //resetIntents(); // <- delete this line -  BUG: this flushes previous custom intents
+  for (const [k, v] of Object.entries(intents || {})) {
+    registerIntent(k, v, allowOverride);
+  }
 }
+
 export function resetIntents() {
-  for (const k of Object.keys(INTENT_CATALOG)) delete INTENT_CATALOG[k];
+  for (const k of Object.keys(INTENT_CATALOG)) {
+    delete INTENT_CATALOG[k];
+  }
   Object.assign(INTENT_CATALOG, BUILTIN_INTENT_CATALOG);
 }
+
 export function getIntentCatalog() { return { ...INTENT_CATALOG }; }
 
 interface ResolvedIntent {
@@ -131,9 +140,11 @@ interface ResolvedIntent {
 function resolveIntent(intentName: string, theme?: 'light' | 'dark' | 'high-contrast'): ResolvedIntent | null {
   const intent = INTENT_CATALOG[intentName];
   if (!intent) return null;
+  
   const properties: Record<string, string | number> = {};
   const states: Record<string, Record<string, string | number>> = {};
   const responsive: Record<string, Record<string, string | number>> = {};
+  
   if (intent.semantics) {
     for (const sem of intent.semantics) {
       const resolved = resolveSemantic(sem.category as any, sem.intent, { mode: theme || 'light' });
@@ -150,7 +161,12 @@ function resolveIntent(intentName: string, theme?: 'light' | 'dark' | 'high-cont
     }
   }
   if (intent.properties) Object.assign(properties, intent.properties);
-  if (intent.states) for (const [s, p] of Object.entries(intent.states)) { if (!states[s]) states[s] = {}; Object.assign(states[s], p); }
+  if (intent.states) {
+    for (const [s, p] of Object.entries(intent.states)) { 
+      if (!states[s]) states[s] = {}; 
+      Object.assign(states[s], p); 
+    }
+  }
   if (intent.responsive) Object.assign(responsive, intent.responsive);
   return { properties, states, responsive, a11y: intent.a11y || [], description: intent.description };
 }
@@ -159,30 +175,42 @@ export const intentResolver: LoweringPass = {
   name: 'intent-resolver',
   generate(ir: StyleIR, context: LoweringContext): LoweringResult {
     let generatedNodes = 0;
+    
     for (const rule of ir.rules) {
       const intentName: string = (rule.meta as any)._intent as string;
       if (!intentName) continue;
+      
       const resolved = resolveIntent(intentName);
       if (!resolved) continue;
+      
       for (const [prop, value] of Object.entries(resolved.properties)) {
         rule.declarations.push(createDeclaration(prop, value, rule.source, { intent: intentName, category: 'lowered-intent' }));
         const decl = rule.declarations[rule.declarations.length - 1];
         recordHistory(decl, 'intent-resolver', 'lowered-intent', undefined, `intent("${intentName}") → ${prop}: ${value}`);
         generatedNodes++;
       }
+      
       for (const [stateName, stateProps] of Object.entries(resolved.states)) {
-        rule.pseudoClasses.push({
-          id: `intent-state-${rule.id}-${stateName}`,
-          name: stateName,
-          declarations: Object.entries(stateProps).map(([prop, value]) => {
-            const decl = createDeclaration(prop, value, rule.source, { intent: intentName });
-            recordHistory(decl, 'intent-resolver', 'lowered-state', undefined, `intent("${intentName}") state:${stateName}`);
-            generatedNodes++;
-            return decl;
-          }),
-          source: rule.source,
-          history: [{ pass: 'intent-resolver', action: 'created-pseudo-class', timestamp: Date.now(), reason: `Lowered intent state: ${stateName}` }],
-        });
+        const pseudoClass = rule.pseudoClasses.find(pc => pc.name === stateName);
+        if (pseudoClass) {
+          for (const [p, v] of Object.entries(stateProps)) {
+            const existingDecl = pseudoClass.declarations.find(d => d.property === p);
+            if (!existingDecl) {
+              pseudoClass.declarations.push(createDeclaration(p, v, rule.source));
+            }
+          }
+        } else {
+          rule.pseudoClasses.push({
+            id: `intent-state-${rule.id}-${stateName}`,
+            name: stateName,
+            parentId: rule.id,
+            source: rule.source,
+            history: [],
+            declarations: Object.entries(stateProps).map(([p, v]) => 
+              createDeclaration(p, v, rule.source)
+            ),
+          });
+        }
       }
       if (Object.keys(resolved.responsive).length > 0) (rule.meta as any)._responsiveIntents = resolved.responsive;
       if (resolved.a11y.length > 0) (rule.meta as any)._a11yRequirements = resolved.a11y;

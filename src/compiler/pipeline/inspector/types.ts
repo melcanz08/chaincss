@@ -1,4 +1,4 @@
-// src/compiler/pipeline/inspector/inspector-types.ts
+// src/compiler/pipeline/inspector/types.ts
 // Shared types for the ChainCSS inspector system
 
 export interface InspectorRule {

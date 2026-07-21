@@ -1,260 +1,200 @@
 // src/core/style-proxy.ts
-
 /**
- * StyleProxy — Creates the chainable proxy for StyleCollector.
- * Uses a dispatch map for method routing instead of a giant if/else chain.
- * 
- * IMPORTANT: This file does NOT import StyleCollector to avoid circular deps.
- * It uses a minimal interface that StyleCollector satisfies.
+ * StyleProxy — v3 fixed
+ * - Handles static and mixed runtime
+ * - Returns {className, style} for dynamic
  */
 
-// Minimal interface — StyleCollector satisfies this
+import { styleInjector } from '../runtime/injector.js';
+import { partitionForBuild, compileToCSS} from './style-compiler.js';
+
 interface StyleCollectorLike {
   set(prop: string, value: any): any;
-  hover(): any;
-  end(): any;
+  hover(): any; focus(): any; active(): any; checked(): any; disabled(): any;
+  before(): any; after(): any; placeholder(): any; end(): any;
   $el(...selectors: string[]): any;
   build(selectors?: string[] | string): any;
-  explain(): any;
-  addClass(name: string): any;
-  enableDebug(): any;
-  isMixed(): boolean;
-  media(query: string, fn: any): any;
-  supports(condition: string, fn: any): any;
-  container(query: string, fn: any): any;
-  layer(name: string, fn: any): any;
-  nest(selector: string, fn: any): any;
-  children(fn: any): any;
-  when(condition: boolean, fn: any): any;
-  keyframes(name: string, steps: any): any;
-  fontFace(props: any): any;
-  focus(): any;
-  active(): any;
-  checked(): any;
-  disabled(): any;
-  before(): any;
-  after(): any;
-  placeholder(): any;
-  // Shorthand methods
-  grid(options?: any): any;
-  flex(options?: any): any;
-  background(options?: any): any;
-  animation(options: any): any;
-  typography(options: any): any;
-  box(options: any): any;
-  position(options: any): any;
-  transform(options?: any): any;
-  transition(options?: any): any;
-  filter(options: any): any;
-  shadow(options: any): any;
-  containerQuery(options: any): any;
-  outline(options: any): any;
-  scroll(options: any): any;
-  list(options: any): any;
-  raw(prop: string | Record<string, any>, value?: any): any;
+  explain(): any; addClass(name: string): any;
+  enableDebug(): any; isMixed(): boolean;
+  media(q: string, fn: any): any; supports(c: string, fn: any): any;
+  container(q: string, fn: any): any; layer(n: string, fn: any): any;
+  nest(s: string, fn: any): any; children(fn: any): any;
+  when(c: boolean, fn: any): any; keyframes(n: string, s: any): any;
+  fontFace(p: any): any; grid(o?: any): any; flex(o?: any): any;
+  background(o?: any): any; animation(o: any): any; typography(o: any): any;
+  box(o: any): any; position(o: any): any; transform(o?: any): any;
+  transition(o?: any): any; filter(o: any): any; shadow(o: any): any;
+  containerQuery(o: any): any; outline(o: any): any; scroll(o: any): any;
+  list(o: any): any; raw(prop: string | Record<string, any>, value?: any): any;
+  [key: string]: any;
 }
 
-// ============================================================================
-// Handler Map
-// ============================================================================
+type Handler = (target: StyleCollectorLike, proxy: any,...args: any[]) => any;
 
-type ProxyHandler = (target: StyleCollectorLike, proxy: any, ...args: any[]) => any;
+const chain0 = (m: string): Handler => (t, p) => { t[m](); return p; };
+const chain1 = (m: string): Handler => (t, p, a) => { t[m](a); return p; };
+const builder2 = (m: string): Handler => (t, p, a, b) => { t[m](a, b); return p; };
 
-const TERMINAL_HANDLERS: Record<string, ProxyHandler> = {
-  $el: (target, _proxy, ...args: string[]) => target.$el(...args),
-  build: (target, _proxy, ...args: any[]) => {
-    const selectors = args.length === 1 && Array.isArray(args[0]) ? args[0] : args;
-    return target.build(selectors);
-  },
-  explain: (target) => target.explain(),
-};
+function extractClassName(styleObj: any, fallback = 'chain-el'): string {
+  const sel = styleObj?.selectors?.[0] || styleObj?.selectors || fallback;
+  if (Array.isArray(sel)) {
+    const first = sel[0] || fallback;
+    return first.replace(/^\./, '');
+  }
+  if (typeof sel === 'string') return sel.replace(/^\./, '');
+  // build() may return selectors as.chain-xxx
+  return fallback;
+}
 
-const CHAINABLE_HANDLERS: Record<string, ProxyHandler> = {
-  hover: (target, proxy) => { target.hover(); return proxy; },
-  focus: (target, proxy) => { target.focus(); return proxy; },
-  active: (target, proxy) => { target.active(); return proxy; },
-  checked: (target, proxy) => { target.checked(); return proxy; },
-  disabled: (target, proxy) => { target.disabled(); return proxy; },
-  before: (target, proxy) => { target.before(); return proxy; },
-  after: (target, proxy) => { target.after(); return proxy; },
-  end: (target, proxy) => { target.end(); return proxy; },
-  debug: (target, proxy) => { target.enableDebug(); return proxy; },
-  addClass: (target, proxy, name: string) => { target.addClass(name); return proxy; },
-  isMixed: (target, _proxy) => target.isMixed(),
-  placeholder: (target, proxy) => { target.placeholder(); return proxy; },
+function buildRuntimeResult(styleObj: any) {
+  const rawSelectors = styleObj.selectors || [];
+  const firstSel = Array.isArray(rawSelectors)? rawSelectors[0] : rawSelectors;
+  const className = typeof firstSel === 'string'? firstSel.replace(/^\./, '') : 'chain-el';
+  const scope = `.${className}`;
+  const partitioned = partitionForBuild(styleObj, { scopeSelector: scope, minify: false });
+  const cssWithVars = compileToCSS(styleObj, { scopeSelector: scope });
+  if (cssWithVars) styleInjector.inject(className, cssWithVars);
+  if (!partitioned.hasDynamic) return className;
+  const style: Record<string, any> = {};
+  for (const [k,v] of Object.entries(partitioned.dynamicValues)) {
+    if (k.startsWith('_')) continue;
+    if (typeof v === 'object' && v!== null && typeof v!== 'function') continue;
+    style[`--chain-dynamic-${k}`] = typeof v === 'function'? (v as any)() : v;
+  }
+  return { className, style };
+}
 
-  // Shorthand methods — each returns the proxy for chaining
-  animation: (target, proxy, options: any) => {
-    target.animation(options);
-    return proxy;
-  },
-  typography: (target, proxy, options: any) => {
-    target.typography(options);
-    return proxy;
-  },
-  box: (target, proxy, options: any) => {
-    target.box(options);
-    return proxy;
-  },
-  position: (target, proxy, options: any) => {
-    target.position(options);
-    return proxy;
-  },
-  transition: (target, proxy, ...args: any[]) => {
-    if (args.length === 0) return proxy;
-    if (typeof args[0] === 'string') target.transition(args[0]);
-    else target.transition(args[0]);
-    return proxy;
-  },
-  transform: (target, proxy, ...args: any[]) => {
-    if (args.length === 0) return proxy;
-    if (typeof args[0] === 'string') target.transform(args[0]);
-    else target.transform(args[0]);
-    return proxy;
-  },
-  filter: (target, proxy, options: any) => {
-    target.filter(options);
-    return proxy;
-  },
-  shadow: (target, proxy, options: any) => {
-    target.shadow(options);
-    return proxy;
-  },
-  containerQuery: (target, proxy, options: any) => {
-    target.containerQuery(options);
-    return proxy;
-  },
-  grid: (target, proxy, ...args: any[]) => {
-    if (args.length === 0) target.grid();
-    else if (typeof args[0] === 'string') target.grid(args[0]);
-    else target.grid(args[0]);
-    return proxy;
-  },
-  flex: (target, proxy, ...args: any[]) => {
-    if (args.length === 0) target.flex();
-    else if (typeof args[0] === 'string') target.flex(args[0]);
-    else target.flex(args[0]);
-    return proxy;
-  },
-  background: (target, proxy, ...args: any[]) => {
-    if (args.length === 0) target.background();
-    else if (typeof args[0] === 'string') target.background(args[0]);
-    else target.background(args[0]);
-    return proxy;
-  },
-  outline: (target, proxy, options: any) => { target.outline(options); return proxy; },
-  scroll: (target, proxy, options: any) => { target.scroll(options); return proxy; },
-  list: (target, proxy, options: any) => { target.list(options); return proxy; },
-  raw: (target, proxy, ...args: any[]) => {
-    if (args.length === 1 && typeof args[0] === 'object') {
-      // Object form: .raw({ outline: 'none', resize: 'vertical' })
-      for (const [key, val] of Object.entries(args[0])) {
-        target.set(key, val);
-      }
-    } else if (args.length === 2) {
-      // Key-value form: .raw('outline', 'none')
-      target.set(args[0], args[1]);
+const TERMINAL = new Map<string, Handler>([
+  ['$el', (t, _p,...a: string[]) => {
+    const styleObj = t.$el(...a);
+    // v3 runtime path
+    if (typeof document!== 'undefined') {
+      return buildRuntimeResult(styleObj);
     }
-    return proxy;
-  },
-};
+    // SSR / build-time path - return raw object for vite plugin to handle
+    return styleObj;
+  }],
+  ['build', (t, _p,...a: any[]) => {
+    if (a.length === 0) return t.build();
+    const sel = a.length === 1 && Array.isArray(a[0])? a[0] : a;
+    const styleObj = t.build(sel);
+    if (typeof document!== 'undefined' && t.isMixed()) {
+      return buildRuntimeResult(styleObj);
+    }
+    return styleObj;
+  }],
+  ['explain', (t) => t.explain()],
+  ['isMixed', (t) => t.isMixed()],
+]);
 
-const CHILD_BUILDER_HANDLERS: Record<string, ProxyHandler> = {
-  media: (target, proxy, query: string, fn: Function) => {
-    target.media(query, fn);
-    return proxy;
-  },
-  supports: (target, proxy, condition: string, fn: Function) => {
-    target.supports(condition, fn);
-    return proxy;
-  },
-  container: (target, proxy, query: string, fn: Function) => {
-    target.container(query, fn);
-    return proxy;
-  },
-  layer: (target, proxy, name: string, fn: Function) => {
-    target.layer(name, fn);
-    return proxy;
-  },
-  nest: (target, proxy, selector: string, fn: Function) => {
-    target.nest(selector, fn);
-    return proxy;
-  },
-  children: (target, proxy, fn: Function) => {
-    target.children(fn);
-    return proxy;
-  },
-  when: (target, proxy, condition: boolean, fn: Function) => {
-    target.when(condition, fn);
-    return proxy;
-  },
-};
+const CHAINABLE = new Map<string, Handler>([
+...['hover','focus','active','checked','disabled','before','after','end','placeholder'].map(k => [k, chain0(k)] as const),
+  ['debug', (t,p) => { t.enableDebug(); return p; }],
+  ['addClass', (t,p,n:string) => { t.addClass(n); return p; }],
+...['grid','flex','background','animation','typography','box','position','transform','transition','filter','shadow','containerQuery','outline','scroll','list'].map(k => [k, chain1(k)] as const),
+  ['raw', (t,p,...a:any[]) => {
+    if (a.length === 1 && typeof a[0] === 'object') {
+      for (const [k,v] of Object.entries(a[0])) t.set(k,v);
+    } else if (a.length === 2) t.set(a[0], a[1]);
+    return p;
+  }],
+]);
 
-const SPECIAL_HANDLERS: Record<string, ProxyHandler> = {
-  keyframes: (target, proxy, name: string, steps: any) => {
-    target.keyframes(name, steps);
-    return proxy;
-  },
-  fontFace: (target, proxy, props: any) => {
-    target.fontFace(props);
-    return proxy;
-  },
-};
+const CHILD = new Map<string, Handler>([
+...['media','supports','container','layer','nest'].map(k => [k, builder2(k)] as const),
+  ['children', (t,p,fn:Function) => { t.children(fn); return p; }],
+  ['when', (t,p,c:boolean,fn:Function) => { t.when(c,fn); return p; }],
+]);
 
-// ============================================================================
-// Proxy Factory
-// ============================================================================
+const SPECIAL = new Map<string, Handler>([
+  ['keyframes', (t,p,n:string,s:any) => { t.keyframes(n,s); return p; }],
+  ['fontFace', (t,p,pr:any) => { t.fontFace(pr); return p; }],
+]);
 
-export function createStyleProxy(
-  collector: StyleCollectorLike,
-  macros: Record<string, Function>
-): StyleCollectorLike & Record<string, any> {
+const cache = new WeakMap<StyleCollectorLike, Map<string|symbol, Function>>();
+
+export function createStyleProxy(collector: StyleCollectorLike, macros: Record<string, Function>) {
   let proxy: any;
-
   proxy = new Proxy(collector, {
-    get(target: StyleCollectorLike, prop: string) {
-      if (prop in TERMINAL_HANDLERS) {
-        return (...args: any[]) => TERMINAL_HANDLERS[prop](target, proxy, ...args);
-      }
-      if (prop in CHAINABLE_HANDLERS) {
-        return (...args: any[]) => CHAINABLE_HANDLERS[prop](target, proxy, ...args);
-      }
-      if (prop in CHILD_BUILDER_HANDLERS) {
-        return (...args: any[]) => CHILD_BUILDER_HANDLERS[prop](target, proxy, ...args);
-      }
-      if (prop in SPECIAL_HANDLERS) {
-        return (...args: any[]) => SPECIAL_HANDLERS[prop](target, proxy, ...args);
-      }
+    get(target, prop: string | symbol) {
+      if (typeof prop === 'symbol') return (target as any)[prop];
       if (prop === 'then') return undefined;
-      if (prop === '_mixed') return target.isMixed();
+      if (prop === '_mixed') return (target as any).isMixed?.();
 
-      if (macros[prop]) {
-        return (value: any) => {
-          target.set(prop, value);
-          return proxy;
-        };
-      }
-
-      if (typeof (target as any)[prop] === 'function' &&
-          !['set', 'build', '$el', 'hover', 'end'].includes(prop)) {
-        return (...args: any[]) => {
-          (target as any)[prop](...args);
-          return proxy;
-        };
-      }
-
-      // Guard against runtime symbol inspection (Symbol.iterator, etc.)
-      if (typeof prop === 'symbol' || (typeof prop === 'string' && prop.startsWith('__'))) {
+      if (typeof prop === 'string' && prop.startsWith('__')) {
         return (target as any)[prop];
       }
 
-      // Default: treat as CSS property setter
-      return (value: any) => {
-        target.set(prop, value);
-        return proxy;
-      };
+      let m = cache.get(target);
+      if (!m) { m = new Map(); cache.set(target, m); }
+      if (m.has(prop)) return m.get(prop)!;
+
+      let fn: Function | undefined;
+
+      if (TERMINAL.has(prop as string)) {
+        const h = TERMINAL.get(prop as string)!;
+        fn = (...a: any[]) => h(target, proxy,...a);
+      } else if (CHAINABLE.has(prop as string)) {
+        const h = CHAINABLE.get(prop as string)!;
+        fn = (...a: any[]) => h(target, proxy,...a);
+      } else if (CHILD.has(prop as string)) {
+        const h = CHILD.get(prop as string)!;
+        fn = (...a: any[]) => h(target, proxy,...a);
+      } else if (SPECIAL.has(prop as string)) {
+        const h = SPECIAL.get(prop as string)!;
+        fn = (...a: any[]) => h(target, proxy,...a);
+      } else if (macros[prop as string]) {
+        const macroFn = macros[prop as string];
+        fn = (...args: any[]) => {
+          const val = args[0];
+          const ensure = (k: string) => {
+            if (!(target as any)[k]) (target as any)[k] = [];
+            return (target as any)[k];
+          };
+          const sink = new Proxy(target, {
+            get(t, p) {
+              if (p === 'nestedRules' || p === 'atRules') return ensure(p as string);
+              return (t as any)[p];
+            },
+            set(t, p, v) {
+              const k = p as string;
+              if (k === 'nestedRules' || k === 'atRules' || k === '_transforms') {
+                (t as any)[k] = v;
+              } else {
+                t.set(k, v);
+              }
+              return true;
+            }
+          }) as any;
+
+          const res = macroFn(val, sink);
+          if (res && typeof res === 'object' && res!== sink && res!== target) {
+            for (const [k,v] of Object.entries(res)) {
+              if (k === 'nestedRules' && Array.isArray(v)) {
+                for (const r of v as any[]) target.nest(r.selector, r.styles);
+              } else if (k === 'atRules' && Array.isArray(v)) {
+                for (const r of v as any[]) {
+                  if (r.type === 'keyframes') target.keyframes(r.name, r.steps);
+                  else target.fontFace(r.properties);
+                }
+              } else {
+                target.set(k, v);
+              }
+            }
+          }
+          return proxy;
+        };
+      } else if (typeof (target as any)[prop] === 'function') {
+        fn = (...a: any[]) => { (target as any)[prop](...a); return proxy; };
+      } else {
+        fn = () => {
+          throw new Error(`[ChainCSS v3.0].${String(prop)}() removed. Use your 16 typed methods or.raw('${String(prop)}', value)`);
+        };
+      }
+
+      m.set(prop, fn);
+      return fn;
     }
   });
-
   return proxy;
 }

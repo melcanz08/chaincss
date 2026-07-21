@@ -1,67 +1,100 @@
-// src/compiler/pipeline/ir/utils.ts
-/** IR utility functions. */
-
-import type { StyleIR, IRRule } from './types.js';
-
 // ============================================================================
-// IR Utilities
+// FILE: src/compiler/pipeline/ir/utils.ts
 // ============================================================================
 
-/** Count all nodes in the IR */
+import type { StyleIR, IRRule, IRDeclaration, IRAtRule, IRKeyframeFrame } from './types.js';
+
+/** Count all nodes in the IR recursively */
 export function countNodes(ir: StyleIR): { rules: number; declarations: number; pseudoClasses: number; atRules: number; conditions: number } {
-  let declarations = 0, pseudoClasses = 0, atRules = 0, conditions = 0;
-  for (const rule of ir.rules) {
-    declarations += rule.declarations.length;
-    pseudoClasses += rule.pseudoClasses.length;
-    atRules += rule.atRules.length;
-    conditions += rule.conditions.length;
+  const counts = { rules: 0, declarations: 0, pseudoClasses: 0, atRules: 0, conditions: 0 };
+  
+  function visitRule(rule: IRRule): void {
+    counts.rules++;
+    counts.declarations += rule.declarations.length;
+    counts.pseudoClasses += rule.pseudoClasses.length;
+    counts.conditions += rule.conditions.length;
+    counts.atRules += rule.atRules.length;
+
+    // Handle deep traversal for nested layout rules
+    for (let i = 0; i < rule.atRules.length; i++) {
+      const at = rule.atRules[i];
+      if (at.nestedRules) {
+        for (let j = 0; j < at.nestedRules.length; j++) {
+          visitRule(at.nestedRules[j]);
+        }
+      }
+    }
+
+    for (let i = 0; i < rule.nestedRules.length; i++) {
+      visitRule(rule.nestedRules[i]);
+    }
   }
-  return { rules: ir.rules.length, declarations, pseudoClasses, atRules, conditions };
+
+  for (let i = 0; i < ir.rules.length; i++) {
+    visitRule(ir.rules[i]);
+  }
+
+  return counts;
 }
 
-/** Find a rule by selector */
+/** Find a rule by selector (shallow top-level match) */
 export function findRule(ir: StyleIR, selector: string): IRRule | undefined {
   return ir.rules.find(r => r.selector === selector);
 }
 
-/** Clone an IR (deep copy) */
+function cloneDecl(decl: IRDeclaration): IRDeclaration {
+  return {
+    ...decl,
+    history: [...decl.history],
+    meta: decl.meta ? { ...decl.meta } : {},
+  };
+}
+
+function cloneKeyframeFrame(frame: IRKeyframeFrame): IRKeyframeFrame {
+  return {
+    ...frame,
+    declarations: frame.declarations.map(cloneDecl),
+  };
+}
+
+function cloneAtRule(atRule: IRAtRule): IRAtRule {
+  const cloned: IRAtRule = {
+    ...atRule,
+    declarations: atRule.declarations.map(cloneDecl),
+    nestedRules: atRule.nestedRules ? atRule.nestedRules.map(cloneRule) : [],
+    history: [...atRule.history],
+  };
+
+  if (atRule.keyframes) {
+    cloned.keyframes = atRule.keyframes.map(cloneKeyframeFrame);
+  }
+
+  return cloned;
+}
+
+function cloneRule(rule: IRRule): IRRule {
+  return {
+    ...rule,
+    declarations: rule.declarations.map(cloneDecl),
+    pseudoClasses: rule.pseudoClasses.map(pc => ({
+      ...pc,
+      declarations: pc.declarations.map(cloneDecl),
+      history: [...pc.history],
+    })),
+    atRules: rule.atRules.map(cloneAtRule),
+    nestedRules: rule.nestedRules.map(cloneRule),
+    conditions: rule.conditions.map(cond => ({ ...cond })),
+    history: [...rule.history],
+    meta: rule.meta ? { ...rule.meta } : {},
+  };
+}
+
+/** Clone an IR (deep copy) preserving structural relationships */
 export function cloneIR(ir: StyleIR): StyleIR {
-  // Deep clone that preserves Map objects, arrays, and nested structures.
-  // JSON.parse(JSON.stringify()) strips prototypes and Map entries.
   return {
     ...ir,
     id: ir.id,
-    rules: ir.rules.map(rule => ({
-      ...rule,
-      declarations: rule.declarations.map(decl => ({
-        ...decl,
-        history: [...decl.history],
-        meta: decl.meta ? { ...decl.meta } : {},
-      })),
-      pseudoClasses: rule.pseudoClasses.map(pc => ({
-        ...pc,
-        declarations: pc.declarations.map(decl => ({
-          ...decl,
-          history: [...decl.history],
-          meta: decl.meta ? { ...decl.meta } : {},
-        })),
-        history: [...pc.history],
-      })),
-      atRules: rule.atRules.map(atRule => ({
-        ...atRule,
-        declarations: atRule.declarations.map(decl => ({
-          ...decl,
-          history: [...decl.history],
-          meta: decl.meta ? { ...decl.meta } : {},
-        })),
-        nestedRules: atRule.nestedRules.map(nr => ({ ...nr })),
-        history: [...atRule.history],
-      })),
-      nestedRules: rule.nestedRules.map(nr => ({ ...nr })),
-      conditions: rule.conditions.map(cond => ({ ...cond })),
-      history: [...rule.history],
-      meta: rule.meta ? { ...rule.meta } : {},
-    })),
+    rules: ir.rules.map(cloneRule),
     diagnostics: ir.diagnostics.map(diag => ({ ...diag })),
     meta: {
       ...ir.meta,
@@ -90,7 +123,7 @@ export function debugIR(ir: StyleIR): string {
 
 /** Record a transform in a declaration's history — only in development. */
 export function recordHistory(decl: { history: any[] }, pass: string, action: string, previous?: any, reason?: string): void {
-  if (process.env.NODE_ENV === 'production') return;
+  if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'production') return;
   decl.history.push({
     pass,
     action,

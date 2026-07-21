@@ -1,11 +1,12 @@
-// chaincss/src/cli/commands/cache.ts
+// ============================================================================
+// FILE: chaincss/src/cli/commands/cache.ts
+// ============================================================================
 
 import chalk from 'chalk';
 import { formatBytes, formatDuration } from "../utils/format.js";
 import fs from 'fs';
 import path from 'path';
 import { PersistentCache } from '../../compiler/cache/content-addressable-cache.js';
-
 
 // Display cache entry details
 function displayCacheEntry(key: string, entry: any, index: number): void {
@@ -22,9 +23,33 @@ function displayCacheEntry(key: string, entry: any, index: number): void {
   }
 }
 
+// Throttled Promise Pool helper to prevent EMFILE system crashes
+async function poolPromises<T, R>(
+  items: T[], 
+  fn: (item: T) => Promise<R>, 
+  concurrencyLimit = 50
+): Promise<R[]> {
+  const results: R[] = [];
+  const executing = new Set<Promise<void>>();
+
+  for (const item of items) {
+    const p = Promise.resolve().then(() => fn(item));
+    results.push(p as any); // Track placeholder reference
+
+    const e: Promise<void> = p.then(() => { executing.delete(e); });
+    executing.add(e);
+
+    if (executing.size >= concurrencyLimit) {
+      await Promise.race(executing);
+    }
+  }
+
+  return Promise.all(results);
+}
+
 export async function cacheCommand(action: string, options: any) {
-  const cacheDir = options.cacheDir || './.chaincss-cache';
-  const persistentCacheDir = options.persistentCacheDir || './.chaincss/persistent-cache';
+  const cacheDir = path.resolve(process.cwd(), options.cacheDir || './.chaincss-cache');
+  const persistentCacheDir = path.resolve(process.cwd(), options.persistentCacheDir || './.chaincss/persistent-cache');
   
   // Create cache instances
   const persistentCache = new PersistentCache({
@@ -39,7 +64,7 @@ export async function cacheCommand(action: string, options: any) {
     case 'clear':
       console.log(chalk.yellow('\n⚠️  This will delete all cached data'));
       if (!options.force) {
-        console.log(chalk.gray('   Use --force to confirm\n'));
+        console.log(chalk.gray('    Use --force to confirm\n'));
         return;
       }
       
@@ -53,8 +78,8 @@ export async function cacheCommand(action: string, options: any) {
         }
         
         console.log(chalk.green('\n✓ All cache cleared'));
-        console.log(chalk.gray(`   Removed: ${cacheDir}`));
-        console.log(chalk.gray(`   Removed: ${persistentCacheDir}\n`));
+        console.log(chalk.gray(`    Removed: ${path.relative(process.cwd(), cacheDir)}`));
+        console.log(chalk.gray(`    Removed: ${path.relative(process.cwd(), persistentCacheDir)}\n`));
       } catch (error) {
         console.log(chalk.red(`\n❌ Failed to clear cache: ${(error as Error).message}\n`));
       }
@@ -86,7 +111,7 @@ export async function cacheCommand(action: string, options: any) {
           }
           
           if (stats.hitRate !== undefined) {
-            const hitRateColor = stats.hitRate > 80 ? chalk.green : stats.hitRate > 50 ? chalk.yellow : chalk.red;
+            const hitRateColor = stats.hitRate > 0.8 ? chalk.green : stats.hitRate > 0.5 ? chalk.yellow : chalk.red;
             console.log(`  Cache hit rate: ${hitRateColor(`${(stats.hitRate * 100).toFixed(1)}%`)}`);
           }
         }
@@ -99,21 +124,30 @@ export async function cacheCommand(action: string, options: any) {
           let totalSize = 0;
           let fileCount = 0;
           
-          const calculateSize = async (dir: string) => {
-            const files = fs.readdirSync(dir);
-            for (const file of files) {
-              const filePath = path.join(dir, file);
-              const stat = fs.statSync(filePath);
-              if (stat.isDirectory()) {
-                await calculateSize(filePath);
-              } else {
-                totalSize += stat.size;
-                fileCount++;
+          // Made synchronous, defensively wrapped for file deletion races
+          const calculateSize = (dir: string) => {
+            try {
+              const files = fs.readdirSync(dir);
+              for (const file of files) {
+                const filePath = path.join(dir, file);
+                try {
+                  const stat = fs.statSync(filePath);
+                  if (stat.isDirectory()) {
+                    calculateSize(filePath);
+                  } else {
+                    totalSize += stat.size;
+                    fileCount++;
+                  }
+                } catch {
+                  // Guarded file access: Ignore files deleted midway
+                }
               }
+            } catch {
+              // Guarded directory access
             }
           };
           
-          await calculateSize(cacheDir);
+          calculateSize(cacheDir);
           console.log(`  File count: ${chalk.white(fileCount)}`);
           console.log(`  Total size: ${chalk.white(formatBytes(totalSize))}`);
         }
@@ -122,9 +156,9 @@ export async function cacheCommand(action: string, options: any) {
         console.log(chalk.white.bold('\nSettings:'));
         console.log(`  Max age: ${chalk.white(options.maxAge || 30)} days`);
         console.log(`  Max size: ${chalk.white(options.maxSize || 500)} MB`);
-        console.log(`  Cache directory: ${chalk.gray(persistentCacheDir)}`);
+        console.log(`  Cache directory: ${chalk.gray(path.relative(process.cwd(), persistentCacheDir))}`);
         
-        console.log(); // Empty line
+        console.log();
       } catch (error) {
         console.log(chalk.red(`\n❌ Failed to get cache stats: ${(error as Error).message}\n`));
       }
@@ -137,10 +171,10 @@ export async function cacheCommand(action: string, options: any) {
         const beforeSize = beforeStats.totalSizeMB || 0;
         
         console.log(chalk.yellow(`\n🧹 Pruning cache...`));
-        console.log(chalk.gray(`   Before: ${beforeCount} entries, ${beforeSize.toFixed(2)} MB`));
+        console.log(chalk.gray(`    Before: ${beforeCount} entries, ${beforeSize.toFixed(2)} MB`));
         
         await persistentCache.prune();
-        await persistentCache.enforceSizeLimit(); // Also enforce size limit
+        await persistentCache.enforceSizeLimit();
         
         const afterStats = await persistentCache.getStats();
         const afterCount = afterStats.entryCount || 0;
@@ -151,10 +185,10 @@ export async function cacheCommand(action: string, options: any) {
         
         if (removedCount > 0) {
           console.log(chalk.green(`✓ Cache pruned successfully`));
-          console.log(chalk.gray(`   Removed: ${removedCount} entries, ${removedSize.toFixed(2)} MB`));
-          console.log(chalk.gray(`   Remaining: ${afterCount} entries, ${afterSize.toFixed(2)} MB`));
+          console.log(chalk.gray(`    Removed: ${removedCount} entries, ${removedSize.toFixed(2)} MB`));
+          console.log(chalk.gray(`    Remaining: ${afterCount} entries, ${afterSize.toFixed(2)} MB`));
         } else {
-          console.log(chalk.gray(`   No entries to prune`));
+          console.log(chalk.gray(`    No entries to prune`));
         }
         console.log();
       } catch (error) {
@@ -177,7 +211,7 @@ export async function cacheCommand(action: string, options: any) {
           displayCacheEntry(entry.key, entry, index);
         });
         
-        console.log(); // Empty line
+        console.log();
       } catch (error) {
         console.log(chalk.red(`\n❌ Failed to list cache entries: ${(error as Error).message}\n`));
       }
@@ -187,7 +221,7 @@ export async function cacheCommand(action: string, options: any) {
       const key = options.key;
       if (!key) {
         console.log(chalk.red('\n❌ Please provide a cache key to inspect'));
-        console.log(chalk.gray('   Usage: chaincss cache inspect --key <key>\n'));
+        console.log(chalk.gray('    Usage: chaincss cache inspect --key <key>\n'));
         return;
       }
       
@@ -209,7 +243,6 @@ export async function cacheCommand(action: string, options: any) {
           console.log(`  Size: ${chalk.gray(formatBytes(entry.size))}`);
         }
         
-        // Display content preview
         if (entry.value) {
           console.log(chalk.white.bold('\nContent Preview:'));
           const valueStr = JSON.stringify(entry.value, null, 2);
@@ -227,13 +260,13 @@ export async function cacheCommand(action: string, options: any) {
       const deleteKey = options.key;
       if (!deleteKey) {
         console.log(chalk.red('\n❌ Please provide a cache key to delete'));
-        console.log(chalk.gray('   Usage: chaincss cache delete --key <key>\n'));
+        console.log(chalk.gray('    Usage: chaincss cache delete --key <key>\n'));
         return;
       }
       
       if (!options.force) {
         console.log(chalk.yellow(`\n⚠️  This will delete cache entry: ${deleteKey}`));
-        console.log(chalk.gray('   Use --force to confirm\n'));
+        console.log(chalk.gray('    Use --force to confirm\n'));
         return;
       }
       
@@ -259,8 +292,13 @@ export async function cacheCommand(action: string, options: any) {
         let invalidCount = 0;
         let totalSize = 0;
         
-        for (const entry of entries) {
+        // CONCURRENCY-SAFE RESOLVER: Throttles to 50 concurrent lookups to protect file system EMFILE limit
+        const validationResults = await poolPromises(entries, async (entry: any) => {
           const isValid = await persistentCache.validate(entry.key);
+          return { entry, isValid };
+        }, 50);
+        
+        for (const { entry, isValid } of validationResults) {
           if (isValid) {
             validCount++;
             totalSize += entry.size || 0;
@@ -286,46 +324,37 @@ export async function cacheCommand(action: string, options: any) {
       break;
       
     case 'backup':
-      const backupPath = options.output || `./.chaincss-cache-backup-${Date.now()}`;
+      const rawBackupPath = options.output || `./.chaincss-cache-backup-${Date.now()}`;
+      const resolvedBackupPath = path.resolve(process.cwd(), rawBackupPath);
       
       try {
         console.log(chalk.cyan.bold('\n💾 Creating Cache Backup\n'));
         
-        // This would require archiving the cache directory
-        // For now, just copy the directory
-        const backupDir = path.dirname(backupPath);
+        // LOOP PREVENTION GUARD: Check if backup destination is inside either of the cache paths
+        const isNestedInCache = resolvedBackupPath.startsWith(cacheDir + path.sep) || resolvedBackupPath === cacheDir;
+        const isNestedInPersistent = resolvedBackupPath.startsWith(persistentCacheDir + path.sep) || resolvedBackupPath === persistentCacheDir;
+        
+        if (isNestedInCache || isNestedInPersistent) {
+          throw new Error("Target backup directory cannot be nested within the cache folders being backed up.");
+        }
+
+        const backupDir = path.dirname(resolvedBackupPath);
         if (!fs.existsSync(backupDir)) {
           fs.mkdirSync(backupDir, { recursive: true });
         }
         
-        // Copy cache directories
-        const copyDir = (src: string, dest: string) => {
-          if (!fs.existsSync(src)) return;
-          
-          if (!fs.existsSync(dest)) {
-            fs.mkdirSync(dest, { recursive: true });
-          }
-          
-          const entries = fs.readdirSync(src, { withFileTypes: true });
-          
-          for (const entry of entries) {
-            const srcPath = path.join(src, entry.name);
-            const destPath = path.join(dest, entry.name);
-            
-            if (entry.isDirectory()) {
-              copyDir(srcPath, destPath);
-            } else {
-              fs.copyFileSync(srcPath, destPath);
-            }
-          }
-        };
+        const backupCacheDir = resolvedBackupPath.replace(/\.tar\.gz$/, '');
         
-        const backupCacheDir = backupPath.replace(/\.tar\.gz$/, '');
-        copyDir(cacheDir, backupCacheDir);
-        copyDir(persistentCacheDir, path.join(backupCacheDir, 'persistent'));
+        if (fs.existsSync(cacheDir)) {
+          fs.cpSync(cacheDir, backupCacheDir, { recursive: true, force: true });
+        }
         
-        console.log(chalk.green(`✓ Cache backed up to ${backupCacheDir}`));
-        console.log(chalk.gray(`   To restore, copy the contents back to the cache directory\n`));
+        if (fs.existsSync(persistentCacheDir)) {
+          fs.cpSync(persistentCacheDir, path.join(backupCacheDir, 'persistent'), { recursive: true, force: true });
+        }
+        
+        console.log(chalk.green(`✓ Cache backed up to ${path.relative(process.cwd(), backupCacheDir)}`));
+        console.log(chalk.gray(`    To restore, copy the contents back to the cache directory\n`));
       } catch (error) {
         console.log(chalk.red(`\n❌ Failed to backup cache: ${(error as Error).message}\n`));
       }
@@ -334,20 +363,13 @@ export async function cacheCommand(action: string, options: any) {
     default:
       console.log(chalk.yellow(`\n❌ Unknown action: ${action}`));
       console.log(chalk.gray('\nAvailable actions:'));
-      console.log(chalk.cyan('  clear    ') + chalk.gray('- Clear all cache data'));
-      console.log(chalk.cyan('  stats    ') + chalk.gray('- Show cache statistics'));
-      console.log(chalk.cyan('  prune    ') + chalk.gray('- Remove expired entries'));
-      console.log(chalk.cyan('  list     ') + chalk.gray('- List all cache entries'));
-      console.log(chalk.cyan('  inspect  ') + chalk.gray('- Inspect a specific cache entry'));
-      console.log(chalk.cyan('  delete   ') + chalk.gray('- Delete a specific cache entry'));
-      console.log(chalk.cyan('  validate ') + chalk.gray('- Validate cache integrity'));
-      console.log(chalk.cyan('  backup   ') + chalk.gray('- Backup cache to file'));
-      console.log(chalk.gray('\nOptions:'));
-      console.log(chalk.gray('  --key <key>      Cache key for inspect/delete'));
-      console.log(chalk.gray('  --force          Skip confirmation prompts'));
-      console.log(chalk.gray('  --max-age <days> Max age for cache entries'));
-      console.log(chalk.gray('  --max-size <MB>  Max cache size in MB'));
-      console.log(chalk.gray('  --output <path>  Output path for backup'));
-      console.log(chalk.gray('  --verbose        Verbose output\n'));
+      console.log(chalk.cyan('  clear     ') + chalk.gray('- Clear all cache data'));
+      console.log(chalk.cyan('  stats     ') + chalk.gray('- Show cache statistics'));
+      console.log(chalk.cyan('  prune     ') + chalk.gray('- Remove expired entries'));
+      console.log(chalk.cyan('  list      ') + chalk.gray('- List all cache entries'));
+      console.log(chalk.cyan('  inspect   ') + chalk.gray('- Inspect a specific cache entry'));
+      console.log(chalk.cyan('  delete    ') + chalk.gray('- Delete a specific cache entry'));
+      console.log(chalk.cyan('  validate  ') + chalk.gray('- Validate cache integrity'));
+      console.log(chalk.cyan('  backup    ') + chalk.gray('- Backup cache to file'));
   }
 }

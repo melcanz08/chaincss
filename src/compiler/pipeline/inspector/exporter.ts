@@ -1,16 +1,43 @@
-// src/compiler/pipeline/inspector/inspector-exporter.ts
-// Builds the final InspectorExport from accumulated rules
+// ============================================================================
+// FILE: src/compiler/pipeline/inspector/exporter.ts
+// ============================================================================
 
 import type { InspectorRule, InspectorExport } from './types.js';
 import { VERSION } from '../../../core/constants.js';
 
-export function buildInspectorExport(rules: Map<string, InspectorRule>): InspectorExport | null {
-  if (rules.size === 0) return null;
+export interface ExporterOptions {
+  /** Target execution context layout tag (e.g., 'dev', 'prod', 'ci') */
+  pipelinePreset?: string;
+  /** Deterministic fallback timestamp string from core compilation metadata records */
+  compiledAt?: string;
+}
+
+/**
+ * Packs accumulated pipeline analysis telemetry records into a standardized export payload.
+ * Modeled to run as a deterministic, cache-safe transformation layer.
+ */
+export function buildInspectorExport(
+  rules: Map<string, InspectorRule>,
+  options: ExporterOptions = {}
+): InspectorExport | null {
+  if (!rules || rules.size === 0) return null;
+
+  // 1. Enforce strict build determinism: 
+  // Prioritize compilation meta context timestamps over volatile live environment run clocks.
+  const finalTimestamp = options.compiledAt 
+    ? String(options.compiledAt) 
+    : new Date().toISOString();
+
+  // 2. Resolve environment mode settings cleanly
+  const currentPipeline = options.pipelinePreset 
+    ? String(options.pipelinePreset).trim() 
+    : 'standard-build';
+
   return {
     schemaVersion: 1,
-    compilerVersion: VERSION,
-    pipeline: 'ci',  // TODO: pass actual preset from context
-    generatedAt: new Date().toISOString(),  // TODO: use ir.meta.compiledAt for determinism
+    compilerVersion: VERSION || 'unknown-version',
+    pipeline: currentPipeline,
+    generatedAt: finalTimestamp,
     rules: Array.from(rules.values()),
   };
 }

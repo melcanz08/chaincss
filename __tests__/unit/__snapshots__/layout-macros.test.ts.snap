@@ -1,0 +1,32 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Layout Macros — Revamped Robust > Discovery & Safety > snapshot - stickyHeader stable 1`] = `
+{
+  "--header-bg": "white",
+  "--header-shadow": "0 4px 12px rgba(0,0,0,0.1)",
+  "atRules": [
+    {
+      "nestedRules": [],
+      "query": "(max-width: 768px)",
+      "styles": {
+        "padding": "12px 16px",
+      },
+      "type": "media",
+    },
+    {
+      "nestedRules": [],
+      "query": "(min-width: 769px)",
+      "styles": {
+        "padding": "16px 32px",
+      },
+      "type": "media",
+    },
+  ],
+  "backdropFilter": "blur(8px)",
+  "backgroundColor": "var(--header-bg, white)",
+  "borderBottom": "1px solid transparent",
+  "position": "sticky",
+  "top": "0",
+  "zIndex": "50",
+}
+`;

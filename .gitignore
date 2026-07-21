@@ -1,42 +1,30 @@
-cd /home/melcanz/dev/chaincss
-
-# Remove duplicate entries and add missing ones
-cat > .gitignore << 'EOF'
 node_modules/
+dist/
+.chaincss/
+.chaincss-cache/
+.chaincss-cache.tmp
+.chaincss-webpack-tmp
+.chaincss-cache.tmp
+*.class.js
+*.class.ts
+
+# temp / os
 *.log
 .DS_Store
 .env
 *.tgz
 npm-debug.log*
-.npmrc
-
-# Build output
-dist/
-
-# ChainCSS generated files
-*.class.js
-*.class.ts
-
-# Cache
-.chaincss-cache
-.chaincss-cache/
-.chaincss/
-
-# Backup files
 *.bak
 *.bck
+*.tmp
 
-# Benchmark results (keep baseline)
-benchmarks/results/*
-!benchmarks/results/baseline.json
+# benchmarks - keep baseline.json, ignore everything else generated
+benchmarks/results/
+benchmarks/baseline.json
+!benchmarks/baseline.json
 benchmarks/node_modules/
-benchmarks/package-lock.json
 
-# Tests
-__tests__/
-
-# Docs / Temp
+# local playgrounds
 demo/
 demo-website/
 review.md
-EOF

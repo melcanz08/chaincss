@@ -1,75 +1,159 @@
 // src/compiler/services/module-loader.ts
-// Adds jiti for TS, content hash for change detection, and safer require cache handling
 
-import fs from 'fs';
+import fs from 'fs/promises';
+import { existsSync, readFileSync, statSync } from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { pathToFileURL } from 'url';
 import { createRequire } from 'module';
 
-export class ModuleLoader {
-  private importedModules = new Map<string, { timestamp: number; hash: string; size: number }>();
-  private dependencyGraph = new Map<string, Set<string>>();
+interface CacheEntry {
+  timestamp: number;
+  hash: string;
+  size: number;
+  version: number;
+}
 
-  private hashContent(content: string): string {
-    return crypto.createHash('sha256').update(content).digest('hex').slice(0, 16);
+export class ModuleLoader {
+  private importedModules = new Map<string, CacheEntry>();
+  private dependencyGraph = new Map<string, Set<string>>();
+  private jitiInstance: any = null;
+  private instanceSeed = crypto.randomUUID().slice(0, 8);
+
+  private hashContent(c: string): string {
+    return crypto.createHash('sha256').update(c).digest('hex').slice(0, 16);
   }
 
-  private async loadWithJiti(filePath: string): Promise<any | null> {
+  private async getJiti(parentPath: string): Promise<any> {
+    if (this.jitiInstance) return this.jitiInstance;
     try {
       const jitiMod: any = await import('jiti').catch(() => null);
-      const createJiti = jitiMod?.createJiti || jitiMod?.default?.createJiti || jitiMod?.default;
-      if (!createJiti) return null;
-      const jiti = createJiti(process.cwd(), { interopDefault: true, fsCache: false, moduleCache: false });
-      return await jiti.import(filePath, { default: true });
-    } catch { return null; }
+      if (!jitiMod) return null;
+
+      const createJiti = jitiMod.createJiti || jitiMod.default?.createJiti || jitiMod.default;
+      if (typeof createJiti!== 'function') return null;
+
+      // Use the file being imported as parent for correct relative resolution
+      const parentURL = pathToFileURL(parentPath).href;
+      this.jitiInstance = createJiti(parentURL, {
+        interopDefault: true,
+        fsCache: true,
+        moduleCache: false
+      });
+      return this.jitiInstance;
+    } catch {
+      return null;
+    }
+  }
+
+  private purgeRequireCache(resolvedPath: string, projectRequire: NodeRequire, seen = new Set<string>()): void {
+    if (seen.has(resolvedPath) || resolvedPath.includes('node_modules')) return;
+    seen.add(resolvedPath);
+
+    const cached = projectRequire.cache[resolvedPath];
+    if (cached) {
+      for (const child of cached.children) {
+        this.purgeRequireCache(child.id, projectRequire, seen);
+      }
+      delete projectRequire.cache[resolvedPath];
+    }
+  }
+
+  private interopModule(mod: any) {
+    if (!mod || mod.default == null) return mod
+    const def = mod.default
+    if (Object.isFrozen(def)) return def
+    // don't mutate original, create wrapper
+    const out = (typeof def === 'function')? Object.assign(def.bind({}), def) : {...def }
+    for (const k of Object.keys(mod)) {
+      if (k!== 'default' &&!(k in out)) (out as any)[k] = mod[k]
+    }
+    out.default = def
+    return out
   }
 
   async import(filePath: string): Promise<Record<string, any>> {
     const absolutePath = path.resolve(filePath);
-    if (!fs.existsSync(absolutePath)) throw new Error(`File not found: ${absolutePath}`);
-    if (filePath.endsWith('.tsx') || filePath.endsWith('.jsx')) {
+    try {
+      await fs.access(absolutePath);
+    } catch {
+      throw new Error(`File not found: ${absolutePath}`);
+    }
+
+    if (/\.(tsx|jsx)$/.test(absolutePath)) {
       throw new Error(`Component file ${path.basename(filePath)} will be processed by scanner`);
     }
 
-    // v3.2: try jiti first for .ts/.mts/.cts — avoids ESM/CJS issues with $ Proxy
+    const stat = await fs.stat(absolutePath);
+    const content = await fs.readFile(absolutePath, 'utf8');
+    const contentHash = this.hashContent(content);
+
+    const existingCache = this.importedModules.get(absolutePath);
+    let currentVersion = 0;
+
+    if (existingCache) {
+      currentVersion = existingCache.hash!== contentHash
+       ? existingCache.version + 1
+        : existingCache.version;
+    }
+
+    const cachePayload: CacheEntry = {
+      timestamp: stat.mtimeMs,
+      hash: contentHash,
+      size: stat.size,
+      version: currentVersion
+    };
+
+    // Attempt 1: Jiti compilation path
     if (/\.(ts|mts|cts|js|cjs|mjs)$/.test(absolutePath)) {
-      const jitiResult = await this.loadWithJiti(absolutePath);
-      if (jitiResult) {
-        const content = fs.readFileSync(absolutePath, 'utf8');
-        this.importedModules.set(absolutePath, {
-          timestamp: Date.now(),
-          hash: this.hashContent(content),
-          size: content.length,
-        });
-        return jitiResult.default && typeof jitiResult.default === 'object' ? { ...jitiResult.default, ...jitiResult } : jitiResult;
+      const jiti = await this.getJiti(absolutePath);
+      if (jiti) {
+        try {
+          const r = await (typeof jiti.import === 'function'
+           ? jiti.import(absolutePath, { default: true })
+            : jiti(absolutePath));
+
+          this.dependencyGraph.delete(absolutePath);
+          this.importedModules.set(absolutePath, cachePayload);
+          return this.interopModule(r);
+        } catch (jitiError: any) {
+          if (jitiError.name === 'SyntaxError' || jitiError.message?.includes('Transform')) {
+            throw new Error(`Compilation error in ${path.basename(filePath)}: ${jitiError.message}`);
+          }
+        }
       }
     }
 
+    // Attempt 2: Standard Node.js CommonJS Require
     try {
-      const projectRequire = createRequire(path.join(process.cwd(), 'package.json'));
-      try { delete projectRequire.cache[projectRequire.resolve(absolutePath)]; } catch {}
+      const pkgPath = path.join(process.cwd(), 'package.json');
+      const baseRequire = existsSync(pkgPath)? pkgPath : absolutePath;
+      const projectRequire = createRequire(baseRequire);
+      const resolvedPath = projectRequire.resolve(absolutePath);
+
+      this.purgeRequireCache(resolvedPath, projectRequire);
       const imported = projectRequire(absolutePath);
-      const stat = fs.statSync(absolutePath);
-      const content = fs.readFileSync(absolutePath, 'utf8');
-      this.importedModules.set(absolutePath, { timestamp: stat.mtimeMs, hash: this.hashContent(content), size: content.length });
-      return imported.default && typeof imported.default === 'object' ? { ...imported.default, ...imported } : imported;
+
+      this.dependencyGraph.delete(absolutePath);
+      this.importedModules.set(absolutePath, cachePayload);
+      return this.interopModule(imported);
     } catch (error: any) {
+      // Attempt 3: Native ESM Fallback via cache-busted URL
+      // NOTE: each?v= creates a new module instance that stays in memory
       if (error.code === 'ERR_REQUIRE_ESM') {
         try {
-          const fileUrl = pathToFileURL(absolutePath).href + `?t=${Date.now()}`;
+          const uniqueQuery = `v=${this.instanceSeed}-${currentVersion}`;
+          const fileUrl = `${pathToFileURL(absolutePath).href}?${uniqueQuery}`;
+
           const imported = await import(fileUrl);
-          const stat = fs.statSync(absolutePath);
-          const content = fs.readFileSync(absolutePath, 'utf8');
-          this.importedModules.set(absolutePath, { timestamp: stat.mtimeMs, hash: this.hashContent(content), size: content.length });
-          return imported.default && typeof imported.default === 'object' ? { ...imported.default, ...imported } : imported;
+          this.dependencyGraph.delete(absolutePath);
+          this.importedModules.set(absolutePath, cachePayload);
+          return this.interopModule(imported);
         } catch (importError: any) {
-          importError.message = `Failed to import ${path.basename(filePath)}: ${importError.message}`;
-          throw importError;
+          throw new Error(`Failed to native-import ${path.basename(filePath)}: ${importError.message}`);
         }
       }
-      error.message = `Failed to import ${path.basename(filePath)}: ${error.message}`;
-      throw error;
+      throw new Error(`Failed to import ${path.basename(filePath)}: ${error.message}`);
     }
   }
 
@@ -77,33 +161,54 @@ export class ModuleLoader {
     const absolutePath = path.resolve(filePath);
     const cached = this.importedModules.get(absolutePath);
     if (!cached) return true;
+
     try {
-      const content = fs.readFileSync(absolutePath, 'utf8');
+      const stat = statSync(absolutePath);
+      if (stat.mtimeMs === cached.timestamp && stat.size === cached.size) return false;
+
+      const content = readFileSync(absolutePath, 'utf8');
       const hash = this.hashContent(content);
-      // v3.2: use content hash, not just mtime, to handle python atomic writes (unlink+add)
-      if (hash !== cached.hash) return true;
-      const stat = fs.statSync(absolutePath);
-      return stat.mtimeMs > cached.timestamp + 100; // 100ms grace for FS jitter
-    } catch { return true; }
+
+      if (hash === cached.hash) {
+        cached.timestamp = stat.mtimeMs;
+        cached.size = stat.size;
+        return false;
+      }
+      return true;
+    } catch {
+      return true;
+    }
   }
 
   addDependency(parent: string, child: string): void {
-    if (!this.dependencyGraph.has(parent)) this.dependencyGraph.set(parent, new Set());
-    this.dependencyGraph.get(parent)!.add(child);
+    const p = path.resolve(parent);
+    const c = path.resolve(child);
+
+    if (!this.dependencyGraph.has(p)) {
+      this.dependencyGraph.set(p, new Set());
+    }
+    this.dependencyGraph.get(p)!.add(c);
   }
 
   getDependencies(filePath: string): Set<string> {
+    const absolutePath = path.resolve(filePath);
     const visited = new Set<string>();
+
     const collect = (fp: string) => {
       if (visited.has(fp)) return;
       visited.add(fp);
       const deps = this.dependencyGraph.get(fp);
-      if (deps) for (const dep of deps) collect(dep);
+      if (deps) {
+        for (const dep of deps) collect(dep);
+      }
     };
-    collect(filePath);
+
+    collect(absolutePath);
     return visited;
   }
 
-  clear(): void { this.importedModules.clear(); this.dependencyGraph.clear(); }
+  clear(): void {
+    this.importedModules.clear();
+    this.dependencyGraph.clear();
+  }
 }
-

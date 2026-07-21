@@ -1,7 +1,6 @@
-// src/compiler/pipeline/inspector/inspector-serializer.ts
-// Strips compiler IR down to only what the inspector needs.
-// Each serialization concern is a separate function.
-
+// ============================================================================
+// FILE: src/compiler/pipeline/inspector/serializer.ts
+// ============================================================================
 import type { StyleIR, IRRule } from '../ir/types.js';
 import type {
   InspectorRule,
@@ -15,14 +14,8 @@ import type {
 import type { PipelineReportEntry, PipelineDiagnostic } from '../pipeline-types.js';
 import { computeStats } from './metrics.js';
 import { buildSnapshots } from './snapshots.js';
-
 import { getAffectedDeclarations } from './history.js';
-
 import { collectSuggestions } from './suggestions.js';
-
-// ============================================================================
-// Main Entry Point
-// ============================================================================
 
 export function serializeForInspector(
   ir: StyleIR,
@@ -31,19 +24,32 @@ export function serializeForInspector(
   sourceFile: string,
   componentName: string
 ): InspectorRule[] {
+  if (!ir || !ir.rules) return [];
+  
+  const reportEntries = pipelineReport || [];
+  const globalDiagnostics = diagnostics || [];
   const rules: InspectorRule[] = [];
 
   for (const rule of ir.rules) {
-    if (rule.isDead) continue;
-    rules.push(serializeInspectorRule(rule, pipelineReport, diagnostics, sourceFile, componentName));
+    if (!rule || rule.isDead) continue;
+    
+    const contextualDiagnostics = globalDiagnostics.filter((d: any) => 
+      !d.selector || d.selector === rule.selector || d.nodeId === rule.id
+    );
+
+    rules.push(
+      serializeInspectorRule(
+        rule, 
+        reportEntries, 
+        contextualDiagnostics, 
+        sourceFile, 
+        componentName
+      )
+    );
   }
 
   return rules;
 }
-
-// ============================================================================
-// Rule Serialization
-// ============================================================================
 
 function serializeInspectorRule(
   rule: IRRule,
@@ -60,23 +66,24 @@ function serializeInspectorRule(
     source: { file: sourceFile, component: componentName },
     diagnostics: serializeDiagnostics(diagnostics),
     declarations: serializeDeclarations(rule),
-    stats: computeStats(rule, pipelineReport?.length || 0),
+    stats: computeStats(rule, pipelineReport.length),
     pipeline: serializePipeline(rule, pipelineReport),
     snapshots: serializeSnapshots(rule, pipelineReport),
     suggestions: serializeSuggestions(diagnostics),
   };
 }
 
-// ============================================================================
-// Individual Serializers
-// ============================================================================
-
 function serializeDiagnostics(diagnostics: PipelineDiagnostic[]): InspectorDiagnostic[] {
   return diagnostics
-    .filter(d => !d.message?.includes('Skipped') || !d.message?.includes('pass(es)'))
+    .filter(d => 
+      d && 
+      d.message && 
+      // only hide noisy contrast skips, keep pass(es) logs for pipeline view
+      !d.message.toLowerCase().includes('skipped contrast')
+    )
     .map(d => ({
       severity: d.severity,
-      category: d.category || '',
+      category: d.category || 'general',
       message: d.message || '',
       suggestion: d.suggestion || '',
       wcag: d.wcagCriterion || '',
@@ -85,15 +92,19 @@ function serializeDiagnostics(diagnostics: PipelineDiagnostic[]): InspectorDiagn
 }
 
 function serializeDeclarations(rule: IRRule): InspectorDeclaration[] {
+  if (!rule.declarations) return [];
+  
   return rule.declarations.map(d => ({
     property: d.property,
     value: d.value,
-    history: (d.history || []).map(h => ({
-      pass: h.pass,
-      action: h.action,
-      reason: h.reason,
-      previous: h.previous,
-    })) as InspectorHistoryEntry[],
+    history: (d.history || [])
+      .filter(h => h !== undefined)
+      .map(h => ({
+        pass: h.pass,
+        action: h.action,
+        reason: h.reason,
+        previous: h.previous,
+      })) as InspectorHistoryEntry[],
   }));
 }
 
@@ -101,14 +112,20 @@ function serializePipeline(
   rule: IRRule,
   pipelineReport: PipelineReportEntry[]
 ): InspectorPipelineEntry[] {
-  return (pipelineReport || []).map(entry => ({
-    stage: entry.stage,
-    pass: entry.pass,
-    duration: entry.duration || 0,
-    changes: entry.result?.changes || 0,
-    hasError: entry.result?.diagnostics?.some(d => d.severity === 'error'),
-    affectedDeclarations: getAffectedDeclarations(rule, entry),
-  }));
+  return pipelineReport.map(entry => {
+    const entryChanges = entry.result?.changes !== undefined
+      ? entry.result.changes
+      : ((entry as any).changes || 0);
+
+    return {
+      stage: entry.stage,
+      pass: entry.pass,
+      duration: entry.duration || 0,
+      changes: entryChanges,
+      hasError: entry.result?.diagnostics?.some(d => d.severity === 'error') || false,
+      affectedDeclarations: getAffectedDeclarations(rule, entry),
+    };
+  });
 }
 
 function serializeSnapshots(

@@ -1,4 +1,6 @@
-// src/compiler/pipeline/analyzers/layout-analyzer.ts
+// ============================================================================
+// FILE: src/compiler/pipeline/analyzers/layout-analyzer.ts
+// ============================================================================
 
 import type { StyleIR, IRRule } from '../ir/types.js';
 import type { AnalysisPass, AnalysisResult, AnalysisAnnotation } from '../pipeline-types.js';
@@ -83,7 +85,7 @@ const LAYOUT_PATTERNS: LayoutPattern[] = [
     required: { 'backdrop-filter': 'blur(16px)' },
     minMatches: 1,
   },
-    {
+  {
     name: 'grid-list',
     description: 'Auto-fit responsive grid',
     macro: 'gridList()',
@@ -109,7 +111,7 @@ const LAYOUT_PATTERNS: LayoutPattern[] = [
     description: 'Screen-reader only',
     macro: 'srOnly()',
     required: { position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', clip: 'rect(0, 0, 0, 0)' },
-    minMatches: 1,
+    minMatches: 4, // Correct structural floor constraint for complete safety
   },
   {
     name: 'container-responsive',
@@ -120,17 +122,23 @@ const LAYOUT_PATTERNS: LayoutPattern[] = [
   },
 ];
 
+function toKebab(s: string) {
+  return s.replace(/[A-Z]/g, m => '-' + m.toLowerCase()).toLowerCase();
+}
+
 function matchPattern(rule: IRRule, pattern: LayoutPattern): { confidence: number; matchedProperties: string[] } | null {
-  const propMap = new Map(rule.declarations.map(d => [d.property, String(d.value)]));
+  const propMap = new Map(rule.declarations.map(d => [toKebab(d.property), String(d.value)]));
   const matchedProperties: string[] = [];
   let matched = 0;
   const totalRequired = Object.keys(pattern.required).length;
 
   for (const [prop, expected] of Object.entries(pattern.required)) {
     const actualValue = propMap.get(prop);
-        if (typeof expected === 'function'
-          ? (expected as (val: string) => boolean)(actualValue || '')
-          : actualValue === String(expected)) {
+    const matches = typeof expected === 'function'
+      ? (expected as (val: string) => boolean)(actualValue || '')
+      : actualValue === String(expected);
+
+    if (matches) {
       matched++;
       matchedProperties.push(prop);
     }
@@ -143,7 +151,12 @@ function matchPattern(rule: IRRule, pattern: LayoutPattern): { confidence: numbe
   }
 
   const minMatches = pattern.minMatches || totalRequired;
-  const confidence = matched >= minMatches ? Math.min(1, matched / totalRequired) : 0;
+  
+  // Guard clause ensuring we hit the literal structural floor constraint first
+  if (matched < minMatches) return null;
+
+  // Calculate confidence cleanly relative to total composition size
+  const confidence = matched / totalRequired;
 
   return confidence >= 0.75 ? { confidence, matchedProperties } : null;
 }
@@ -153,10 +166,9 @@ export const layoutAnalyzer: AnalysisPass = {
 
   analyze(ir: StyleIR): AnalysisResult {
     const annotations: AnalysisAnnotation[] = [];
-    const patternCounts = new Map<string, string[]>();
+    const patternCounts = new Map<string, { ids: string[], selectors: string[] }>();
 
     for (const rule of ir.rules) {
-      const matchingRule = rule;
       if (rule.isDead) continue;
 
       for (const pattern of LAYOUT_PATTERNS) {
@@ -174,22 +186,21 @@ export const layoutAnalyzer: AnalysisPass = {
             confidence: result.confidence,
           });
 
-          // Track duplicates
-          const selectors = patternCounts.get(pattern.name) || [];
-          selectors.push(rule.selector);
-          patternCounts.set(pattern.name, selectors);
+          const entry = patternCounts.get(pattern.name) || { ids: [], selectors: [] };
+          entry.ids.push(rule.id);
+          entry.selectors.push(rule.selector);
+          patternCounts.set(pattern.name, entry);
         }
       }
     }
 
-    // Report duplicate patterns
-    for (const [patternName, selectors] of patternCounts) {
+    // Process duplicate collection mappings
+    for (const [patternName, { ids, selectors }] of patternCounts) {
       if (selectors.length >= 2) {
         const pattern = LAYOUT_PATTERNS.find(p => p.name === patternName);
-        // Anchor to the first selector that matched this pattern
         ir.diagnostics.push({
           id: `layout-dup-${patternName}`,
-          nodeId: selectors[0] || ir.id,
+          nodeId: ids[0],
           severity: 'info',
           message: `Layout pattern "${patternName}" found ${selectors.length} times: ${selectors.join(', ')}`,
           suggestion: pattern ? `Consider extracting: ${pattern.macro}` : undefined,

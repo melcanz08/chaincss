@@ -1,0 +1,16 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Power Macros — Revamped Robust > Autocomplete > snapshot — card suggestions stable 1`] = `
+[
+  {
+    "distance": 0,
+    "name": "card",
+    "type": "macro",
+  },
+  {
+    "distance": 2,
+    "name": "dark",
+    "type": "shorthand",
+  },
+]
+`;

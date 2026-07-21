@@ -1,5 +1,6 @@
-// src/compiler/pipeline/normalizers/intent-detector.ts
-// Adds custom shorthands/macros/intents awareness and safer cache invalidation
+// ============================================================================
+// FILE: src/compiler/pipeline/normalizers/intent-detector.ts
+// ============================================================================
 
 import type { CorrectionResult, HealMode, HealResult, IntentContext } from '../../../core/types.js';
 import { detectIfPatterns, emitCSSIf } from '../lowering/css-if-lowering.js';
@@ -38,14 +39,14 @@ export function invalidateIntentCache() { correctionCache.clear(); }
 
 export const intent = {
   correct(property: string, value: string, context?: IntentContext): CorrectionResult | null {
-    // v3.2: never correct user-defined keys — they are intentional
+    // Never correct user-defined keys — they are intentional
     if (customKeys.has(property)) return null;
 
     const normalizedProp = property.toLowerCase();
     const pc = findClosestProperty(property);
 
     if (pc && pc !== normalizedProp) {
-      if (customKeys.has(pc)) return null; // don't correct to a custom key either
+      if (customKeys.has(pc)) return null; // Don't correct to a custom key either
       const cacheKey = `prop-err:${normalizedProp}`;
       const cached = correctionCache.get(cacheKey);
       if (cached !== undefined) return cached;
@@ -88,28 +89,59 @@ export const intent = {
 
   heal(styles: Record<string, any>, mode: HealMode = 'smart', context?: IntentContext): HealResult {
     const corrections: CorrectionResult[] = [], warnings: string[] = [], fixed: Record<string, any> = {};
+    
     for (const [prop, value] of Object.entries(styles)) {
-      if (prop.startsWith('_') || prop === 'selectors' || customKeys.has(prop)) { fixed[prop] = value; continue; }
-      // v3.2: handle all nested pseudo/state objects, not just hover
+      if (prop.startsWith('_') || prop === 'selectors' || customKeys.has(prop)) { 
+        fixed[prop] = value; 
+        continue; 
+      }
+      
       if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-        if (['hover','focus','active','focus-visible','disabled','before','after'].includes(prop) || prop.startsWith(':') || prop.startsWith('&')) {
+        // Phase 2 Upgrade: Natively discover nested blocks, pseudo selectors, structural keyframes, or at-rules
+        const isPseudoState = ['hover','focus','active','focus-visible','disabled','before','after'].includes(prop);
+        const isSelectorToken = prop.startsWith(':') || prop.startsWith('&') || prop.startsWith('@');
+        const isStructuralFrame = !isNaN(Number(prop.replace('%', ''))) || prop === 'from' || prop === 'to' || prop === 'keyframes';
+
+        if (isPseudoState || isSelectorToken || isStructuralFrame) {
           const hr = this.heal(value as Record<string, any>, mode, { ...context, property: prop });
-          fixed[prop] = hr.fixed; corrections.push(...hr.corrections); warnings.push(...hr.warnings); continue;
+          fixed[prop] = hr.fixed; 
+          corrections.push(...hr.corrections); 
+          warnings.push(...hr.warnings); 
+          continue;
         }
       }
-      if (typeof value !== 'string' && typeof value !== 'number') { fixed[prop] = value; continue; }
-      const sv = String(value), corr = this.correct(prop, sv, { ...context, property: prop, value: sv });
+      
+      if (typeof value !== 'string' && typeof value !== 'number') { 
+        fixed[prop] = value; 
+        continue; 
+      }
+      
+      const sv = String(value);
+      const corr = this.correct(prop, sv, { ...context, property: prop, value: sv });
       if (corr) {
         corrections.push(corr);
-        if (mode === 'strict') { warnings.push('[strict] ' + corr.explanation); fixed[prop] = sv; }
-        else if (mode === 'dev') { fixed[prop] = corr.corrected; Object.assign(fixed, corr.defaults); }
-        else { warnings.push('[auto-fix] ' + corr.explanation); fixed[prop] = corr.corrected; Object.assign(fixed, corr.defaults); }
-      } else { fixed[prop] = value; }
+        if (mode === 'strict') { 
+          warnings.push('[strict] ' + corr.explanation); 
+          fixed[prop] = sv; 
+        } else if (mode === 'dev') { 
+          fixed[prop] = corr.corrected; 
+          Object.assign(fixed, corr.defaults); 
+        } else { 
+          warnings.push('[auto-fix] ' + corr.explanation); 
+          fixed[prop] = corr.corrected; 
+          Object.assign(fixed, corr.defaults); 
+        }
+      } else { 
+        fixed[prop] = value; 
+      }
     }
     return { fixed, corrections, warnings, mode };
   },
 
-  getIntent(value: string, ctx?: IntentContext): string | null { const r = detectIntent(value, ctx); return r?.intent || null; },
+  getIntent(value: string, ctx?: IntentContext): string | null { 
+    const r = detectIntent(value, ctx); 
+    return r?.intent || null; 
+  },
 
   validate(property: string, value: string): { valid: boolean; suggestion?: string } {
     if (customKeys.has(property)) return { valid: true };
@@ -131,21 +163,28 @@ export const intent = {
   getKnownProperties(): string[] { return [...KNOWN_PROPERTIES, ...Array.from(customKeys)]; },
 
   macro(name: string): Record<string, any> | null { return expandLayoutMacro(name); },
-  getMacros(): string[] { return [...getAvailableMacros(), ...Array.from(customKeys).filter(k => k.includes('-'))]; },
+  getMacros(): string[] { 
+    return getAvailableMacros().filter(k => !['__proto__','constructor','prototype'].includes(k));
+  },
   autoContrast(bgColor: string): string { return autoContrast(bgColor); },
   getMacroDescription(name: string): string | null { return getMacroDescription(name); },
-  hasMacro(name: string): boolean { return name in LAYOUT_MACROS || customKeys.has(name); },
+  hasMacro(name: string): boolean { 
+    return Object.prototype.hasOwnProperty.call(LAYOUT_MACROS, name); 
+  },
 
   applyMacro(name: string, overrides?: Record<string, any>): Record<string, any> | null {
     const macro = expandLayoutMacro(name);
     if (!macro) return null;
-    // v3.2: structuredClone if available, fallback to JSON clone
     const merged = typeof structuredClone === 'function' ? structuredClone(macro) : JSON.parse(JSON.stringify(macro));
     if (!overrides) return merged;
     for (const [key, value] of Object.entries(overrides)) {
-      if (key === 'atRules' && Array.isArray(value) && Array.isArray(merged.atRules)) merged.atRules = [...merged.atRules, ...value];
-      else if (typeof value === 'object' && value !== null && !Array.isArray(value)) merged[key] = { ...(merged[key] || {}), ...value };
-      else merged[key] = value;
+      if (key === 'atRules' && Array.isArray(value) && Array.isArray(merged.atRules)) {
+        merged.atRules = [...merged.atRules, ...value];
+      } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        merged[key] = { ...(merged[key] || {}), ...value };
+      } else {
+        merged[key] = value;
+      }
     }
     return merged;
   },
@@ -160,4 +199,3 @@ export const applyMacro = intent.applyMacro.bind(intent);
 export const getMacros = intent.getMacros.bind(intent);
 export const hasMacro = intent.hasMacro.bind(intent);
 export default intent;
-

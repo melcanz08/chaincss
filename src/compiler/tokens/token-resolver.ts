@@ -1,38 +1,32 @@
-// src/compiler/tokens/token-resolver.ts
+// ============================================================================
+// FILE: src/compiler/tokens/token-resolver.ts
+// ============================================================================
 
 /**
  * Token Resolver — Resolves design token references in style values.
  * 
  * Supports formats:
- *   $colors.primary       → direct token reference
+ *   $colors.primary        → direct token reference
  *   token('colors.primary') → function-style
  *   $primary 1px solid $border → inline references within strings
- * 
- * IMPORTANT: No global mutable state. Tokens are passed explicitly
- * through constructor parameters or function arguments. This ensures
- * safe parallel builds when multiple .chain.ts files use different themes.
  */
 
 import { tokens as globalTokens } from './tokens.js';
 import type { DesignTokens } from './tokens.js';
+import { createLogger } from '../../cli/utils/logger.js';
+
+const logger = createLogger(false, 'token-resolver');
 
 // ============================================================================
 // Resolution (no global state)
 // ============================================================================
 
-/**
- * Resolve token references in a value.
- * 
- * Fallback order: explicit context → global tokens
- * (No module-level mutable context — safe for parallel builds)
- */
 export function resolveToken(
   value: any,
   useTokens: boolean = true,
   tokenContext?: DesignTokens | null,
   useCSSVariables: boolean = false
 ): any {
-  // Early return if tokens are disabled or value is not a string
   if (!useTokens || typeof value !== 'string') return value;
 
   // Handle function-style: token('colors.primary')
@@ -51,8 +45,6 @@ export function resolveToken(
     return value.replace(/\$([a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)*)/g, (match: string, path: string) => {
       const resolved = resolveTokenPath(path, tokenContext);
       if (resolved !== undefined && resolved !== null) {
-        // Guard: if the resolved value is an object (e.g., $shadows → { sm: '...' }),
-        // we can't inline it into a string. Return the match and warn.
         if (typeof resolved === 'object') {
           console.warn(`[ChainCSS] Token "${path}" resolved to an object, cannot inline into string: "${value}"`);
           return match;
@@ -62,7 +54,6 @@ export function resolveToken(
         }
         return String(resolved);
       }
-      // Token not found — emit var() fallback if dynamic — warn in development only
       if (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production') {
         console.warn(`[ChainCSS] Token not found: ${path}`);
       }
@@ -73,22 +64,27 @@ export function resolveToken(
   return value;
 }
 
-/**
- * Resolve a token path to its value.
- * Tries explicit context first, then falls back to global tokens.
- * No module-level mutable context.
- */
 function resolveTokenPath(
   path: string,
   tokenContext?: DesignTokens | null
 ): any {
-  // First try the explicitly provided token context
   if (tokenContext && typeof tokenContext.get === 'function') {
     const resolved = tokenContext.get(path);
     if (resolved !== undefined && resolved !== null) return resolved;
   }
 
-  // Fall back to global tokens
+  // Handle plain JavaScript objects if a raw object structure is passed down as context
+  if (tokenContext && typeof tokenContext === 'object') {
+    const parts = path.split('.');
+    let cur: any = tokenContext;
+    for (const p of parts) {
+      cur = cur?.[p];
+    }
+    if (cur !== undefined && cur !== null) {
+      return typeof cur === 'object' ? (cur.$value || cur.value || cur) : cur;
+    }
+  }
+
   if (globalTokens && typeof globalTokens.get === 'function') {
     const resolved = globalTokens.get(path);
     if (resolved !== undefined && resolved !== null) return resolved;
@@ -153,15 +149,51 @@ export function resolveBatch(
 }
 
 // ============================================================================
-// TokenResolver Class (cached, per-file)
+// TokenResolver Class (Cached, per-file, theme-aware mapping)
 // ============================================================================
 
 export class TokenResolver {
   private cache: Map<string, any> = new Map();
-  private context: DesignTokens | null;
+  private context: any;
+  private warningCache: Set<string> = new Set();
 
-  constructor(context?: DesignTokens | null) {
-    this.context = context || globalTokens;
+  constructor(context?: any) {
+    // Gracefully unwrap default exports from modular runtime loaders
+    const rawContext = context || globalTokens;
+    this.context = rawContext?.default || rawContext;
+  }
+
+  /**
+   * Safely traverses the token context using theme specificity fallbacks
+   */
+  public getLiteralValue(path: string, themeContext?: string): string | undefined {
+    if (!path) return undefined;
+
+    // 1. Prioritize active theme path namespace (e.g. 'dark.colors.primary')
+    if (themeContext) {
+      const themedPath = `${themeContext}.${path}`;
+      const themedValue = resolveTokenPath(themedPath, this.context);
+      if (themedValue !== undefined && themedValue !== null) return String(themedValue);
+    }
+
+    // 2. Default standard token resolution fallback
+    const defaultValue = resolveTokenPath(path, this.context);
+    if (defaultValue !== undefined && defaultValue !== null) return String(defaultValue);
+
+    // 3. Emit a deduplicated compiler log warning instead of throwing an error
+    this.emitWarning(path);
+    return undefined;
+  }
+
+  private emitWarning(path: string): void {
+    if (this.warningCache.has(path)) return;
+    this.warningCache.add(path);
+
+    if (logger && typeof logger.warn === 'function') {
+      logger.warn(`Token resolution failed for path: "${path}". Custom variable fallback applied.`);
+    } else {
+      console.warn(`\x1b[33m[ChainCSS Warning]\x1b[0m Missing design token path: "${path}"`);
+    }
   }
 
   resolve(value: any): any {
@@ -184,10 +216,14 @@ export class TokenResolver {
     return result;
   }
 
-  clearCache(): void { this.cache.clear(); }
+  clearCache(): void { 
+    this.cache.clear(); 
+    this.warningCache.clear();
+  }
 
-  updateContext(context: DesignTokens | null): void {
-    this.context = context || globalTokens;
+  updateContext(context: any): void {
+    const rawContext = context || globalTokens;
+    this.context = rawContext?.default || rawContext;
     this.clearCache();
   }
 
@@ -195,18 +231,12 @@ export class TokenResolver {
 }
 
 // ============================================================================
-// Deprecated: global context functions (no-ops, kept for backward compat)
+// Deprecated Context Variables
 // ============================================================================
 
 let _legacyContext: DesignTokens | null = null;
-
-/** @deprecated Use TokenResolver or pass tokens to PropertyStore constructor. */
 export function setTokenContext(context: DesignTokens | null): void { _legacyContext = context; }
-
-/** @deprecated Use TokenResolver or pass tokens to PropertyStore constructor. */
 export function getTokenContext(): DesignTokens | null { return _legacyContext; }
-
-/** @deprecated */
 export function clearTokenContext(): void { _legacyContext = null; }
 
 export default {

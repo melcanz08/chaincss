@@ -1,5 +1,10 @@
-// src/compiler/animations.ts
+// ============================================================================
+// FILE: src/compiler/animations.ts
+// ChainCSS Build-Time Animation Utilities & Token Presets
+// ============================================================================
+
 export interface AnimationConfig {
+  name?: string;
   duration?: string;
   delay?: string;
   timing?: string;
@@ -7,24 +12,33 @@ export interface AnimationConfig {
   direction?: 'normal' | 'reverse' | 'alternate' | 'alternate-reverse';
   fillMode?: 'none' | 'forwards' | 'backwards' | 'both';
   playState?: 'running' | 'paused';
-  name?: string; // Custom animation name
 }
 
 export interface KeyframeDefinition {
   [key: string]: Record<string, string | number>;
 }
 
-// Pre-defined animation keyframes
+export interface CombinedAnimationItem {
+  name: string;
+  duration?: string;
+  delay?: string;
+  timing?: string;
+}
+
+export interface AnimationStep {
+  name: string;
+  duration?: string;
+  delay?: string;
+  timing?: string;
+}
+
+// ============================================================================
+// Token Presets
+// ============================================================================
+
 export const animationPresets: Record<string, KeyframeDefinition> = {
-  // Fades
-  fadeIn: {
-    '0%': { opacity: 0 },
-    '100%': { opacity: 1 }
-  },
-  fadeOut: {
-    '0%': { opacity: 1 },
-    '100%': { opacity: 0 }
-  },
+  fadeIn: { '0%': { opacity: 0 }, '100%': { opacity: 1 } },
+  fadeOut: { '0%': { opacity: 1 }, '100%': { opacity: 0 } },
   fadeInUp: {
     '0%': { opacity: 0, transform: 'translateY(20px)' },
     '100%': { opacity: 1, transform: 'translateY(0)' }
@@ -49,34 +63,12 @@ export const animationPresets: Record<string, KeyframeDefinition> = {
     '0%': { opacity: 1, transform: 'translateY(0)' },
     '100%': { opacity: 0, transform: 'translateY(20px)' }
   },
-  
-  // Slides
-  slideInUp: {
-    '0%': { transform: 'translateY(100%)' },
-    '100%': { transform: 'translateY(0)' }
-  },
-  slideInDown: {
-    '0%': { transform: 'translateY(-100%)' },
-    '100%': { transform: 'translateY(0)' }
-  },
-  slideInLeft: {
-    '0%': { transform: 'translateX(-100%)' },
-    '100%': { transform: 'translateX(0)' }
-  },
-  slideInRight: {
-    '0%': { transform: 'translateX(100%)' },
-    '100%': { transform: 'translateX(0)' }
-  },
-  slideOutUp: {
-    '0%': { transform: 'translateY(0)' },
-    '100%': { transform: 'translateY(-100%)' }
-  },
-  slideOutDown: {
-    '0%': { transform: 'translateY(0)' },
-    '100%': { transform: 'translateY(100%)' }
-  },
-  
-  // Zooms
+  slideInUp: { '0%': { transform: 'translateY(100%)' }, '100%': { transform: 'translateY(0)' } },
+  slideInDown: { '0%': { transform: 'translateY(-100%)' }, '100%': { transform: 'translateY(0)' } },
+  slideInLeft: { '0%': { transform: 'translateX(-100%)' }, '100%': { transform: 'translateX(0)' } },
+  slideInRight: { '0%': { transform: 'translateX(100%)' }, '100%': { transform: 'translateX(0)' } },
+  slideOutUp: { '0%': { transform: 'translateY(0)' }, '100%': { transform: 'translateY(-100%)' } },
+  slideOutDown: { '0%': { transform: 'translateY(0)' }, '100%': { transform: 'translateY(100%)' } },
   zoomIn: {
     '0%': { opacity: 0, transform: 'scale(0.8)' },
     '100%': { opacity: 1, transform: 'scale(1)' }
@@ -93,8 +85,6 @@ export const animationPresets: Record<string, KeyframeDefinition> = {
     '0%': { opacity: 0, transform: 'scale(0.8) translateY(-20px)' },
     '100%': { opacity: 1, transform: 'scale(1) translateY(0)' }
   },
-  
-  // Bounces
   bounce: {
     '0%, 100%': { transform: 'translateY(0)' },
     '50%': { transform: 'translateY(-20px)' }
@@ -109,18 +99,11 @@ export const animationPresets: Record<string, KeyframeDefinition> = {
     '50%': { transform: 'scale(0.95)' },
     '100%': { opacity: 0, transform: 'scale(0.8)' }
   },
-  
-  // Pulses
-  pulse: {
-    '0%, 100%': { transform: 'scale(1)' },
-    '50%': { transform: 'scale(1.05)' }
-  },
+  pulse: { '0%, 100%': { transform: 'scale(1)' }, '50%': { transform: 'scale(1.05)' } },
   pulseGlow: {
     '0%, 100%': { opacity: 1, filter: 'brightness(1)' },
     '50%': { opacity: 0.8, filter: 'brightness(1.2)' }
   },
-  
-  // Shakes
   shake: {
     '0%, 100%': { transform: 'translateX(0)' },
     '25%': { transform: 'translateX(-5px)' },
@@ -136,20 +119,9 @@ export const animationPresets: Record<string, KeyframeDefinition> = {
     '25%, 75%': { transform: 'translateY(-10px)' },
     '50%': { transform: 'translateY(10px)' }
   },
-  
-  // Rotations
-  spin: {
-    '0%': { transform: 'rotate(0deg)' },
-    '100%': { transform: 'rotate(360deg)' }
-  },
-  spinReverse: {
-    '0%': { transform: 'rotate(0deg)' },
-    '100%': { transform: 'rotate(-360deg)' }
-  },
-  wiggle: {
-    '0%, 100%': { transform: 'rotate(-3deg)' },
-    '50%': { transform: 'rotate(3deg)' }
-  },
+  spin: { '0%': { transform: 'rotate(0deg)' }, '100%': { transform: 'rotate(360deg)' } },
+  spinReverse: { '0%': { transform: 'rotate(0deg)' }, '100%': { transform: 'rotate(-360deg)' } },
+  wiggle: { '0%, 100%': { transform: 'rotate(-3deg)' }, '50%': { transform: 'rotate(3deg)' } },
   wobble: {
     '0%': { transform: 'translateX(0%)' },
     '15%': { transform: 'translateX(-25%) rotate(-5deg)' },
@@ -159,8 +131,6 @@ export const animationPresets: Record<string, KeyframeDefinition> = {
     '75%': { transform: 'translateX(-5%) rotate(-1deg)' },
     '100%': { transform: 'translateX(0%)' }
   },
-  
-  // Flips
   flip: {
     '0%': { transform: 'perspective(400px) rotateY(0)' },
     '100%': { transform: 'perspective(400px) rotateY(180deg)' }
@@ -169,52 +139,20 @@ export const animationPresets: Record<string, KeyframeDefinition> = {
     '0%': { transform: 'perspective(400px) rotateX(0)' },
     '100%': { transform: 'perspective(400px) rotateX(180deg)' }
   },
-  
-  // Special effects
-  blink: {
-    '0%, 100%': { opacity: 1 },
-    '50%': { opacity: 0 }
-  },
-  typing: {
-    '0%': { width: '0' },
-    '100%': { width: '100%' }
-  },
-  cursor: {
-    '0%, 100%': { borderColor: 'transparent' },
-    '50%': { borderColor: 'currentColor' }
-  },
-  shimmer: {
-    '0%': { backgroundPosition: '-200% 0' },
-    '100%': { backgroundPosition: '200% 0' }
-  },
-  ripple: {
-    '0%': { transform: 'scale(0)', opacity: 0.5 },
-    '100%': { transform: 'scale(4)', opacity: 0 }
-  },
-  float: {
-    '0%, 100%': { transform: 'translateY(0)' },
-    '50%': { transform: 'translateY(-10px)' }
-  },
-  sink: {
-    '0%, 100%': { transform: 'translateY(0)' },
-    '50%': { transform: 'translateY(10px)' }
-  },
+  blink: { '0%, 100%': { opacity: 1 }, '50%': { opacity: 0 } },
+  typing: { '0%': { width: '0' }, '100%': { width: '100%' } },
+  cursor: { '0%, 100%': { borderColor: 'transparent' }, '50%': { borderColor: 'currentColor' } },
+  shimmer: { '0%': { backgroundPosition: '-200% 0' }, '100%': { backgroundPosition: '200% 0' } },
+  ripple: { '0%': { transform: 'scale(0)', opacity: 0.5 }, '100%': { transform: 'scale(4)', opacity: 0 } },
+  float: { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-10px)' } },
+  sink: { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(10px)' } },
   swing: {
     '0%, 100%': { transform: 'rotate(0deg)' },
     '25%': { transform: 'rotate(15deg)' },
     '75%': { transform: 'rotate(-15deg)' }
   },
-  flash: {
-    '0%, 100%': { opacity: 1 },
-    '25%, 75%': { opacity: 0.5 },
-    '50%': { opacity: 0 }
-  },
-  
-  // Text animations
-  textReveal: {
-    '0%': { clipPath: 'inset(0 100% 0 0)' },
-    '100%': { clipPath: 'inset(0 0 0 0)' }
-  },
+  flash: { '0%, 100%': { opacity: 1 }, '25%, 75%': { opacity: 0.5 }, '50%': { opacity: 0 } },
+  textReveal: { '0%': { clipPath: 'inset(0 100% 0 0)' }, '100%': { clipPath: 'inset(0 0 0 0)' } },
   textGlitch: {
     '0%, 100%': { transform: 'translate(0, 0)' },
     '20%': { transform: 'translate(-2px, 1px)' },
@@ -224,9 +162,8 @@ export const animationPresets: Record<string, KeyframeDefinition> = {
   }
 };
 
-// Default animation timing values
 export const DEFAULT_ANIMATION_CONFIG: Required<AnimationConfig> = {
-  name: '',  // Add this missing property
+  name: '',
   duration: '0.3s',
   delay: '0s',
   timing: 'ease',
@@ -236,7 +173,6 @@ export const DEFAULT_ANIMATION_CONFIG: Required<AnimationConfig> = {
   playState: 'running'
 };
 
-// Predefined timing functions
 export const timingFunctions = {
   linear: 'linear',
   ease: 'ease',
@@ -249,11 +185,19 @@ export const timingFunctions = {
   sharp: 'cubic-bezier(0.4, 0, 0.6, 1)'
 };
 
-// Helper to create animation style
+// ============================================================================
+// Compilation & Generation Helpers
+// ============================================================================
+
+/**
+ * Builds CSS animation definitions.
+ * Set singleShorthand=true to minimize output block footprint.
+ */
 export function createAnimation(
   animationName: string, 
-  config: AnimationConfig = {}
-): Record<string, any> {
+  config: AnimationConfig = {},
+  singleShorthand: boolean = false
+): Record<string, string | number> {
   const {
     duration = DEFAULT_ANIMATION_CONFIG.duration,
     delay = DEFAULT_ANIMATION_CONFIG.delay,
@@ -264,16 +208,18 @@ export function createAnimation(
     playState = DEFAULT_ANIMATION_CONFIG.playState
   } = config;
   
-  // Build animation shorthand
-  // CSS animation shorthand: name duration timing-function delay iteration-count direction fill-mode play-state
-  const animationValue = `${animationName} ${duration} ${timing} ${delay} ${iteration} ${direction} ${fillMode} ${playState}`;
+  const shorthand = `${animationName} ${duration} ${timing} ${delay} ${iteration} ${direction} ${fillMode} ${playState}`.trim();
   
+  if (singleShorthand) {
+    return { animation: shorthand };
+  }
+
   return {
-    animation: animationValue.trim(),
-    animationName: animationName,
+    animation: shorthand,
+    animationName,
     animationDuration: duration,
-    animationDelay: delay,
     animationTimingFunction: timing,
+    animationDelay: delay,
     animationIterationCount: iteration,
     animationDirection: direction,
     animationFillMode: fillMode,
@@ -281,63 +227,51 @@ export function createAnimation(
   };
 }
 
-// Create keyframes CSS string
+/**
+ * Generates an un-prefixed keyframes string block.
+ * Offloads prefixing duties to your target environment pass.
+ */
 export function createKeyframesCSS(
-  name: string,
-  steps: KeyframeDefinition,
-  prefix: boolean = true
+  name: string, 
+  steps: KeyframeDefinition, 
+  vendorPrefix: boolean = false
 ): string {
-  let css = `@keyframes ${name} {\n`;
-  
-  for (const [keyframe, styles] of Object.entries(steps)) {
-    css += `  ${keyframe} {\n`;
-    
-    for (const [prop, value] of Object.entries(styles)) {
-      const kebabProp = prop.replace(/([A-Z])/g, '-$1').toLowerCase();
-      css += `    ${kebabProp}: ${value};\n`;
-    }
-    
-    css += `  }\n`;
-  }
-  
-  css += `}\n`;
-  
-  // Vendor prefixing is handled by the ChainCSS prefixer pass.
-  // Duplicating the entire keyframe block here wastes output size.
-  // Set prefix=false and let the prefixer add -webkit- when needed.
-  if (prefix) {
-    css += `@-webkit-keyframes ${name} {\n`;
+  const renderBlock = (prefix = '') => {
+    let css = `@${prefix}keyframes ${name} {\n`;
     for (const [keyframe, styles] of Object.entries(steps)) {
       css += `  ${keyframe} {\n`;
       for (const [prop, value] of Object.entries(styles)) {
-        const kebabProp = prop.replace(/([A-Z])/g, '-$1').toLowerCase();
-        css += `    -webkit-${kebabProp}: ${value};\n`;
+        const kebabProp = prop
+          .replace(/([A-Z])/g, '-$1')
+          .toLowerCase()
+          .replace(/^--/, '-');
         css += `    ${kebabProp}: ${value};\n`;
       }
       css += `  }\n`;
     }
     css += `}\n`;
+    return css;
+  };
+
+  if (vendorPrefix) {
+    // Adding the leading dash to correctly generate @-webkit-keyframes
+    return renderBlock('-webkit-') + '\n' + renderBlock();
   }
-  
-  return css;
+  return renderBlock();
 }
 
-// Get animation preset
 export function getAnimationPreset(name: string): KeyframeDefinition | undefined {
   return animationPresets[name];
 }
 
-// Check if animation preset exists
 export function hasAnimationPreset(name: string): boolean {
   return name in animationPresets;
 }
 
-// Get all animation preset names
 export function getAnimationPresetNames(): string[] {
   return Object.keys(animationPresets);
 }
 
-// Register a custom animation preset
 export function registerAnimationPreset(
   name: string,
   steps: KeyframeDefinition,
@@ -346,12 +280,10 @@ export function registerAnimationPreset(
   if (animationPresets[name] && !overwrite) {
     return false;
   }
-  
   animationPresets[name] = steps;
   return true;
 }
 
-// Register multiple animation presets
 export function registerAnimationPresets(
   presets: Record<string, KeyframeDefinition>,
   overwrite: boolean = false
@@ -361,25 +293,23 @@ export function registerAnimationPresets(
   }
 }
 
-// Create a combined animation from multiple presets
-export function combineAnimations(
-  animations: Array<{ name: string; duration?: string; delay?: string }>
-): Record<string, any> {
-  const combined: Record<string, any> = {};
-  const animationList: string[] = [];
-  
-  for (const anim of animations) {
+/**
+ * Combines multiple parallel presets safely using valid types
+ */
+export function combineAnimations(animations: CombinedAnimationItem[]): Record<string, string> {
+  const animationList = animations.map(anim => {
     const duration = anim.duration || '0.3s';
     const delay = anim.delay || '0s';
-    const timing = (anim as any).timing || 'ease';
-    animationList.push(`${anim.name} ${duration} ${timing} ${delay}`);
-  }
-  
-  combined.animation = animationList.join(', ');
-  return combined;
+    const timing = anim.timing || 'ease';
+    return `${anim.name} ${duration} ${timing} ${delay}`;
+  });
+
+  return { animation: animationList.join(', ') };
 }
 
-// Generate staggered animation delays for children
+/**
+ * Builds microsecond-accurate sequence delay maps for staggered listings
+ */
 export function staggerChildren(
   baseDelay: string = '0s',
   increment: string = '0.1s',
@@ -390,82 +320,61 @@ export function staggerChildren(
   const incMs = parseTimeToMs(increment);
   
   for (let i = 0; i < count; i++) {
-    delays[i] = `${baseMs + (i * incMs)}ms`;
+    delays[i] = msToTime(baseMs + (i * incMs));
   }
   
   return delays;
 }
 
-// Helper to parse time string to milliseconds
 function parseTimeToMs(time: string): number {
-  if (time.endsWith('ms')) {
-    const val = parseFloat(time);
+  const trimmed = time.trim();
+  if (trimmed.endsWith('ms')) {
+    const val = parseFloat(trimmed);
     return isNaN(val) ? 0 : val;
   }
-  if (time.endsWith('s')) {
-    const val = parseFloat(time);
+  if (trimmed.endsWith('s')) {
+    const val = parseFloat(trimmed);
     return isNaN(val) ? 0 : val * 1000;
   }
-  const val = parseFloat(time);
+  const val = parseFloat(trimmed);
   return isNaN(val) ? 0 : val;
 }
 
-// Convert milliseconds to time string
 export function msToTime(ms: number): string {
-  if (ms >= 1000) {
+  if (ms === 0) return '0ms';
+  if (ms % 1000 === 0) {
     return `${ms / 1000}s`;
   }
   return `${ms}ms`;
 }
 
-// Create animation sequence
-export interface AnimationStep {
-  name: string;
-  duration?: string;
-  delay?: string;
-  timing?: string;
+/**
+ * Assembles compound multi-step animation keyframe paths
+ */
+export function createAnimationSequence(steps: AnimationStep[]): Record<string, string> {
+  return combineAnimations(steps);
 }
 
-export function createAnimationSequence(steps: AnimationStep[]): Record<string, any> {
-  if (steps.length === 0) return {};
-  
-  const animations: string[] = [];
-  
-  for (const step of steps) {
-    const duration = step.duration || '0.3s';
-    const delay = step.delay || '0s';
-    animations.push(`${step.name} ${duration} ${delay}`);
-  }
-  
-  return {
-    animation: animations.join(', ')
-  };
-}
-
-// Check if animation is a preset
 export function isValidAnimation(name: string): boolean {
   return hasAnimationPreset(name);
 }
 
-// Get animation suggestion for similar names
+/**
+ * Diagnostic search engine matching typos against existing presets
+ */
 export function getAnimationSuggestion(name: string): string | null {
   const presetNames = getAnimationPresetNames();
   const lowerName = name.toLowerCase();
   
-  // Find exact match
   if (presetNames.includes(name)) return name;
   
-  // Find partial matches
   const matches = presetNames.filter(n => 
     n.toLowerCase().includes(lowerName) || 
     lowerName.includes(n.toLowerCase())
   );
   
-  if (matches.length > 0) {
-    return matches[0];
-  }
+  if (matches.length > 0) return matches[0];
   
-  // Find similar by Levenshtein distance
   let bestMatch: string | null = null;
   let bestDistance = Infinity;
   
@@ -480,17 +389,11 @@ export function getAnimationSuggestion(name: string): string | null {
   return bestMatch;
 }
 
-// Levenshtein distance for suggestions
 function levenshteinDistance(a: string, b: string): number {
   const matrix: number[][] = [];
   
-  for (let i = 0; i <= a.length; i++) {
-    matrix[i] = [i];
-  }
-  
-  for (let j = 0; j <= b.length; j++) {
-    matrix[0][j] = j;
-  }
+  for (let i = 0; i <= a.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
   
   for (let i = 1; i <= a.length; i++) {
     for (let j = 1; j <= b.length; j++) {
@@ -506,7 +409,6 @@ function levenshteinDistance(a: string, b: string): number {
   return matrix[a.length][b.length];
 }
 
-// Export default animation utilities
 export default {
   animationPresets,
   createAnimation,

@@ -1,16 +1,85 @@
-// src/compiler/pipeline/optimizers/duplicate-declaration-detector.ts
-//
-// Duplicate Declaration Detector — flags redundant declarations within a rule.
-//
-// CSS silently uses the last declaration when a property is declared multiple
-// times in the same rule. Earlier declarations are dead code. This pass
-// detects them and emits diagnostics so developers can clean them up.
-//
-// This does NOT remove the declarations — only the developer knows which
-// value they intended. The pass flags the issue and lets the human decide.
+// ============================================================================
+// FILE: src/compiler/pipeline/optimizers/duplicate-declaration-detector.ts
+// ============================================================================
 
-import type { StyleIR } from '../ir/types.js';
+import type { StyleIR, IRRule, IRDeclaration } from '../ir/types.js';
 import type { OptimizationPass, OptimizationResult } from '../pipeline-types.js';
+
+/**
+ * Checks if a duplicate property value is an intentional CSS fallback mechanism
+ * (e.g., fallback colors, display modes, or experimental prefixes).
+ */
+function isIntentionalFallback(prevValue: unknown, nextValue: unknown): boolean {
+  const p = String(prevValue).trim().toLowerCase();
+  const n = String(nextValue).trim().toLowerCase();
+  
+  // identical = redundant, safe to delete
+  if (p === n) return false;
+
+  // 1. color fallback: #fff / rgb() -> gradient / var() / oklab
+  const isLegacyColor = p.startsWith('#') || p.startsWith('rgb');
+  const isModernColor = n.includes('gradient') || n.includes('var(') || n.includes('oklab') || n.includes('oklch') || n.includes('calc(');
+  if (isLegacyColor && isModernColor) return true;
+
+  // 2. display fallback: block -> flex -> grid (keep both for old browsers)
+  const displayValues = ['block', 'inline', 'flex', 'inline-flex', 'grid', 'inline-grid'];
+  if (displayValues.includes(p) && displayValues.includes(n)) return true;
+
+  return false;
+}
+
+/**
+ * Prunes safe duplicate declarations out of a target array while respecting fallbacks.
+ */
+function pruneDuplicateDeclarations(
+  declarations: IRDeclaration[] | undefined,
+  ruleContextName: string,
+  ruleId: string,
+  diagnostics: any[]
+): { pruned: IRDeclaration[]; changesCount: number; bytesSavedCount: number } {
+  if (!declarations || declarations.length === 0) {
+    return { pruned: declarations || [], changesCount: 0, bytesSavedCount: 0 };
+  }
+
+  const pruned: IRDeclaration[] = [];
+  const seenIndexMap = new Map<string, number>(); // property -> index in the working 'pruned' array
+  let changesCount = 0;
+  let bytesSavedCount = 0;
+
+  for (const decl of declarations) {
+    const prop = decl.property;
+
+    if (seenIndexMap.has(prop)) {
+      const prevIndex = seenIndexMap.get(prop)!;
+      const prevDecl = pruned[prevIndex];
+
+      if (!isIntentionalFallback(prevDecl.value, decl.value)) {
+        // Safe to eliminate the earlier duplicate!
+        changesCount++;
+        bytesSavedCount += String(prevDecl.value).length + prop.length + 4; // approximate declaration size
+
+        diagnostics.push({
+          id: `dup-decl-${ruleId}-${prop}-${changesCount}`,
+          nodeId: ruleId,
+          severity: 'warning',
+          message: `Duplicate property "${prop}" in "${ruleContextName}" — earlier value "${prevDecl.value}" is safely removed as it's overridden by "${decl.value}".`,
+          suggestion: `Remove redundant "${prop}" assignment.`,
+          pass: 'duplicate-declaration-detector',
+        });
+
+        // Replace the earlier index position with the new progressive declaration mutation
+        pruned[prevIndex] = decl;
+        continue;
+      }
+    }
+
+    // Keep the declaration and track its updated position index
+    pruned.push(decl);
+    seenIndexMap.set(prop, pruned.length - 1);
+  }
+
+  return { pruned, changesCount, bytesSavedCount };
+}
 
 export const duplicateDeclarationDetector: OptimizationPass = {
   name: 'duplicate-declaration-detector',
@@ -18,41 +87,61 @@ export const duplicateDeclarationDetector: OptimizationPass = {
   requiredFor: ['css'],
 
   optimize(ir: StyleIR): OptimizationResult {
-    let changes = 0;
+    let totalChanges = 0;
+    let totalBytesSaved = 0;
+
+    if (!ir || !ir.rules) {
+      return { ir, savings: { rulesEliminated: 0, declarationsEliminated: 0, bytesSaved: 0 }, changes: 0 };
+    }
+
+    if (!ir.diagnostics) {
+      ir.diagnostics = [];
+    }
 
     for (const rule of ir.rules) {
       if (rule.isDead) continue;
 
-      // Track the last-seen index of each property
-      const seen = new Map<string, number>();
+      // 1. Optimize standard block level declarations
+      if (rule.declarations) {
+        const result = pruneDuplicateDeclarations(rule.declarations, rule.selector || 'unknown', rule.id, ir.diagnostics);
+        rule.declarations = result.pruned;
+        totalChanges += result.changesCount;
+        totalBytesSaved += result.bytesSavedCount;
+      }
 
-      for (let i = 0; i < rule.declarations.length; i++) {
-        const decl = rule.declarations[i];
-
-        if (seen.has(decl.property)) {
-          // Duplicate found — the earlier declaration is overridden
-          changes++;
-
-          ir.diagnostics.push({
-            id: 'dup-decl-' + decl.id,
-            nodeId: rule.id,
-            severity: 'warning',
-            message: `Duplicate property "${decl.property}" in "${rule.selector}" — declaration at position ${seen.get(decl.property)} is overridden by the one at position ${i}`,
-            suggestion: `Remove the earlier "${decl.property}" declaration to clean up dead code.`,
-            pass: 'duplicate-declaration-detector',
-          });
+      // 2. Optimize nested pseudo-class structural layers
+      if ((rule as any).pseudoClasses) {
+        for (const pc of (rule as any).pseudoClasses) {
+          if (pc.declarations) {
+            const contextName = `${rule.selector || ''}:${pc.name}`;
+            const result = pruneDuplicateDeclarations(pc.declarations, contextName, pc.id || rule.id, ir.diagnostics);
+            pc.declarations = result.pruned;
+            totalChanges += result.changesCount;
+            totalBytesSaved += result.bytesSavedCount;
+          }
         }
+      }
 
-        seen.set(decl.property, i);
+      // 3. Optimize isolated conditional at-rules blocks
+      if (rule.atRules) {
+        for (const at of rule.atRules) {
+          if (at.declarations) {
+            const contextName = `@${at.type} ${at.query || ''} -> ${rule.selector || ''}`;
+            const result = pruneDuplicateDeclarations(at.declarations, contextName, rule.id, ir.diagnostics);
+            at.declarations = result.pruned;
+            totalChanges += result.changesCount;
+            totalBytesSaved += result.bytesSavedCount;
+          }
+        }
       }
     }
 
-    if (changes > 0) {
+    if (totalChanges > 0) {
       ir.diagnostics.push({
-        id: 'dup-decl-summary-' + Date.now(),
+        id: `dup-decl-summary-${Date.now()}`,
         nodeId: ir.id,
         severity: 'info',
-        message: `Duplicate declaration detector: found ${changes} overridden declarations across all rules`,
+        message: `Duplicate declaration detector: successfully cleaned up ${totalChanges} redundant overrides, saving ~${totalBytesSaved} bytes.`,
         pass: 'duplicate-declaration-detector',
       });
     }
@@ -61,10 +150,10 @@ export const duplicateDeclarationDetector: OptimizationPass = {
       ir,
       savings: {
         rulesEliminated: 0,
-        declarationsEliminated: 0,
-        bytesSaved: changes * 30, // Estimate: average declaration ~30 bytes
+        declarationsEliminated: totalChanges,
+        bytesSaved: totalBytesSaved,
       },
-      changes,
+      changes: totalChanges,
     };
   },
 };

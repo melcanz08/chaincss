@@ -1,4 +1,5 @@
-// src/compiler/suggestions.ts
+// src/compiler/utils/suggestions.ts
+
 // Types
 export interface SuggestionMatch {
   name: string;
@@ -6,13 +7,11 @@ export interface SuggestionMatch {
   type: 'shorthand' | 'css-property' | 'macro' | 'animation' | 'breakpoint';
 }
 
-// Known shorthands (from shorthandMap)
-
 // Known macros (from intent-engine and Chain.ts)
-export const KNOWN_MACROS: string[] = [
+export const KNOWN_MACROS: string[] = [...new Set([
   // Intent Macros
   'stickyHeader', 'card', 'hero', 'container', 'center', 'gridList',
-  'sidebar', 'pill', 'glass', 'truncate', 'srOnly', 'autoContrast',
+  'sidebar', 'pill', 'srOnly', 'autoContrast',
   // Chain.ts special methods
   'flex', 'grid', 'inlineFlex', 'inlineGrid', 'flexCenter', 'gridCenter',
   'stack', 'cols', 'rows', 'bento', 'gridTable',
@@ -31,7 +30,8 @@ export const KNOWN_MACROS: string[] = [
   'intent',
   // Constraint
   'constrain',
-];
+])];
+
 export const KNOWN_SHORTHANDS: string[] = [
   // Spacing
   'm', 'mt', 'mr', 'mb', 'ml', 
@@ -114,39 +114,49 @@ export const BREAKPOINTS: string[] = [
   'print', 'hover', 'no-hover', 'fine', 'coarse'
 ];
 
-// Simple Levenshtein distance for finding closest matches
+// Fast O(1) matching maps to bypass repetitive .includes linear scans
+const MACRO_SET = new Set(KNOWN_MACROS);
+const SHORTHAND_SET = new Set(KNOWN_SHORTHANDS);
+const ANIMATION_SET = new Set(ANIMATION_PRESETS);
+const BREAKPOINT_SET = new Set(BREAKPOINTS);
+const CSS_PROPERTY_SET = new Set(COMMON_CSS_PROPERTIES);
+
+/**
+ * Optimized Levenshtein distance implementation using a two-row buffer.
+ * Eliminates full O(N*M) grid nested array heap allocation and heavy GC churn.
+ */
 function levenshteinDistance(a: string, b: string): number {
+  if (a === b) return 0;
   if (a.length === 0) return b.length;
   if (b.length === 0) return a.length;
   
-  const matrix: number[][] = [];
+  let prevRow = new Int32Array(a.length + 1);
+  let currRow = new Int32Array(a.length + 1);
   
-  for (let i = 0; i <= b.length; i++) {
-    matrix[i] = [i];
-  }
   for (let j = 0; j <= a.length; j++) {
-    matrix[0][j] = j;
+    prevRow[j] = j;
   }
   
   for (let i = 1; i <= b.length; i++) {
+    currRow[0] = i;
+    const charB = b[i - 1];
+    
     for (let j = 1; j <= a.length; j++) {
-      const cost = a[j - 1] === b[i - 1] ? 0 : 1;
-      matrix[i][j] = Math.min(
-        matrix[i - 1][j] + 1,     // deletion
-        matrix[i][j - 1] + 1,     // insertion
-        matrix[i - 1][j - 1] + cost // substitution
+      const cost = a[j - 1] === charB ? 0 : 1;
+      currRow[j] = Math.min(
+        prevRow[j] + 1,      // deletion
+        currRow[j - 1] + 1,  // insertion
+        prevRow[j - 1] + cost // substitution
       );
     }
+    
+    // Swap row references quickly without array creation
+    const temp = prevRow;
+    prevRow = currRow;
+    currRow = temp;
   }
   
-  return matrix[b.length][a.length];
-}
-
-// Calculate similarity score (0-1, higher is better)
-function similarityScore(a: string, b: string): number {
-  const distance = levenshteinDistance(a.toLowerCase(), b.toLowerCase());
-  const maxLen = Math.max(a.length, b.length);
-  return maxLen === 0 ? 1 : 1 - (distance / maxLen);
+  return prevRow[a.length];
 }
 
 // Find best matches with scores
@@ -157,9 +167,10 @@ function findBestMatches(
   maxDistance: number = 3
 ): SuggestionMatch[] {
   const matches: SuggestionMatch[] = [];
+  const lowerQuery = query.toLowerCase();
   
   for (const candidate of candidates) {
-    const distance = levenshteinDistance(query.toLowerCase(), candidate.toLowerCase());
+    const distance = levenshteinDistance(lowerQuery, candidate.toLowerCase());
     if (distance <= maxDistance) {
       matches.push({
         name: candidate,
@@ -169,7 +180,6 @@ function findBestMatches(
     }
   }
   
-  // Sort by distance (lower is better) then by name
   matches.sort((a, b) => {
     if (a.distance !== b.distance) return a.distance - b.distance;
     return a.name.localeCompare(b.name);
@@ -178,16 +188,13 @@ function findBestMatches(
   return matches.slice(0, maxResults);
 }
 
-// Get type for a candidate
-function getTypeForCandidate(candidate: string): 'shorthand' | 'css-property' | 'macro' | 'animation' | 'breakpoint' {
-  if (KNOWN_MACROS.includes(candidate)) return 'macro';
-  if (KNOWN_SHORTHANDS.includes(candidate)) return 'shorthand';
-  if (ANIMATION_PRESETS.includes(candidate)) return 'animation';
-  if (BREAKPOINTS.includes(candidate)) return 'breakpoint';
-  if (KNOWN_SHORTHANDS.includes(candidate)) return 'shorthand';
-  if (COMMON_CSS_PROPERTIES.includes(candidate)) return 'css-property';
-  if (ANIMATION_PRESETS.includes(candidate)) return 'animation';
-  if (BREAKPOINTS.includes(candidate)) return 'breakpoint';
+// Highly optimized O(1) type lookup map matching
+function getTypeForCandidate(candidate: string): SuggestionMatch['type'] {
+  if (MACRO_SET.has(candidate)) return 'macro';
+  if (SHORTHAND_SET.has(candidate)) return 'shorthand';
+  if (ANIMATION_SET.has(candidate)) return 'animation';
+  if (BREAKPOINT_SET.has(candidate)) return 'breakpoint';
+  if (CSS_PROPERTY_SET.has(candidate)) return 'css-property';
   return 'macro';
 }
 
@@ -196,8 +203,7 @@ export function getSuggestion(
   prop: string, 
   validProperties: string[] = [],
   type: 'shorthand' | 'css-property' | 'all' = 'all'
-): string | SuggestionMatch | null {
-  // Build candidate list based on type
+): SuggestionMatch | null {
   let candidates: string[] = [];
   
   if (type === 'shorthand') {
@@ -215,17 +221,9 @@ export function getSuggestion(
     ];
   }
   
-  // Remove duplicates
   candidates = [...new Set(candidates)];
-  
-  // Find best matches
   const matches = findBestMatches(prop, candidates, 1, 3);
-  
-  if (matches.length > 0) {
-    return matches[0];
-  }
-  
-  return null;
+  return matches.length > 0 ? matches[0] : null;
 }
 
 // Get multiple suggestions
@@ -278,7 +276,6 @@ export function getPropertySuggestion(
     : COMMON_CSS_PROPERTIES;
   
   const matches = findBestMatches(prop, candidates, 1, 2);
-  
   return matches.length > 0 ? matches[0].name : null;
 }
 
@@ -319,7 +316,6 @@ export function getShorthandSuggestion(shorthand: string): { suggestion: string;
     };
   }
   
-  // Try fuzzy match
   const matches = findBestMatches(shorthand, Object.keys(shorthandMap), 1, 2);
   if (matches.length > 0) {
     const best = matches[0];
@@ -340,7 +336,6 @@ export function getValueSuggestion(
   property: string,
   value: string
 ): { suggested: string; confidence: number } | null {
-  // Common value corrections
   const corrections: Record<string, Record<string, string>> = {
     'display': {
       'flexbox': 'flex',
@@ -400,7 +395,6 @@ export function getAutocompleteSuggestions(prefix: string = '', limit: number = 
     .slice(0, limit);
   
   if (matches.length < limit) {
-    // Also include fuzzy matches
     const fuzzyMatches = findBestMatches(prefix, allSuggestions.map(s => s.name), limit - matches.length);
     for (const match of fuzzyMatches) {
       if (!matches.some(m => m.name === match.name)) {
@@ -433,13 +427,9 @@ export function getDetailedSuggestion(prop: string, validProperties: string[] = 
   type: string;
   confidence: number;
 } | null {
-  const suggestion = getSuggestion(prop, validProperties);
+  const match = getSuggestion(prop, validProperties);
+  if (!match) return null;
   
-  if (!suggestion) {
-    return null;
-  }
-  
-  const match = typeof suggestion === 'object' ? suggestion : { name: suggestion, distance: 1, type: getTypeForCandidate(suggestion) };
   const confidence = 1 - (match.distance / Math.max(prop.length, match.name.length));
   
   return {

@@ -1,116 +1,166 @@
 // src/compiler/services/cache-store.ts
 
-/**
- * LRU Cache Store — Generic cache with LRU eviction.
- * Extracted from ChainCSSCompiler for separation of concerns.
- */
-
-interface CacheEntry<T> {
+interface CacheNode<T> {
+  key: string;
   result: T;
-  accessCount: number;
-  lastAccessed: number;
   hash: string;
+  createdAt: number;
+  prev: CacheNode<T> | null;
+  next: CacheNode<T> | null;
 }
 
 export class CacheStore<T> {
-  private cache = new Map<string, CacheEntry<T>>();
-  private lru: string[] = [];
+  private lookup = new Map<string, CacheNode<T>>();
+  private head: CacheNode<T> | null = null;
+  private tail: CacheNode<T> | null = null;
+  
   private readonly maxSize: number;
+  private readonly ttl: number; // 0 means disabled
+  
   private hits = 0;
   private misses = 0;
+  private evictions = 0;
+  private invalidations = 0;
 
-  constructor(maxSize: number = 500) {
-    this.maxSize = maxSize;
+  constructor(maxSize: number = 500, ttlMs: number = 0) {
+    this.maxSize = Math.max(0, maxSize)
+    this.ttl = Math.max(0, ttlMs)
   }
 
-  /**
-   * Get a cached entry. Returns undefined if not found or expired.
-   */
-  get(key: string): T | undefined {
-    const entry = this.cache.get(key);
-    if (!entry) {
+  get(key: string, currentHash?: string): T | undefined {
+    const node = this.lookup.get(key);
+    if (!node) {
       this.misses++;
       return undefined;
     }
-    
+
+    // Check Time-To-Live Expiry
+    if (this.ttl > 0 && Date.now() - node.createdAt > this.ttl) {
+      this.removeNode(node);
+      this.lookup.delete(key);
+      this.invalidations++;
+      this.misses++;
+      return undefined;
+    }
+
+    // Check File Contents Invalidation
+    if (currentHash !== undefined && node.hash !== currentHash) {
+      this.removeNode(node);
+      this.lookup.delete(key);
+      this.invalidations++;
+      this.misses++;
+      return undefined;
+    }
+
     this.hits++;
-    entry.lastAccessed = Date.now();
-    entry.accessCount++;
-    this.touchLRU(key);
     
-    return entry.result;
+    // True O(1) Touch: detach pointers and move to head (no garbage generated)
+    this.detach(node);
+    this.setHead(node);
+
+    return node.result;
   }
 
-  /**
-   * Set a cached entry. Evicts oldest entry if at capacity.
-   */
   set(key: string, result: T, hash: string): void {
-    const entry: CacheEntry<T> = {
-      result,
-      accessCount: 1,
-      lastAccessed: Date.now(),
-      hash,
-    };
-    
-    if (this.cache.has(key)) {
-      this.cache.set(key, entry);
-      this.touchLRU(key);
+    if (this.maxSize === 0) return
+    let node = this.lookup.get(key);
+
+    if (node) {
+      // Update existing entry configuration
+      node.result = result;
+      node.hash = hash;
+      node.createdAt = Date.now();
+      this.detach(node);
+      this.setHead(node);
       return;
     }
-    
-    // Evict oldest if at capacity
-    while (this.cache.size >= this.maxSize && this.lru.length > 0) {
-      const oldest = this.lru.shift();
-      if (oldest) {
-        this.cache.delete(oldest);
-      }
+
+    // Create a new entry node
+    node = {
+      key,
+      result,
+      hash,
+      createdAt: Date.now(),
+      prev: null,
+      next: null
+    };
+
+    if (this.lookup.size >= this.maxSize && this.tail) {
+      // Evict oldest node (tail element)
+      const oldestKey = this.tail.key;
+      this.lookup.delete(oldestKey);
+      this.removeNode(this.tail);
+      this.evictions++;
     }
-    
-    this.cache.set(key, entry);
-    this.lru.push(key);
+
+    this.lookup.set(key, node);
+    this.setHead(node);
   }
 
-  /**
-   * Check if a key exists in the cache.
-   */
   has(key: string): boolean {
-    return this.cache.has(key);
+    const n = this.lookup.get(key)
+    if (!n) return false
+    if (this.ttl>0 && Date.now()-n.createdAt>this.ttl) {
+      this.delete(key); this.invalidations++; return false
+    }
+    return true
   }
 
-  /**
-   * Remove a specific entry.
-   */
   delete(key: string): boolean {
-    this.lru = this.lru.filter(k => k !== key);
-    return this.cache.delete(key);
+    const node = this.lookup.get(key);
+    if (!node) return false;
+    this.removeNode(node);
+    return this.lookup.delete(key);
   }
 
-  /**
-   * Clear all entries.
-   */
   clear(): void {
-    this.cache.clear();
-    this.lru = [];
+    this.lookup.clear();
+    this.head = null;
+    this.tail = null;
     this.hits = 0;
     this.misses = 0;
+    this.evictions = 0;
+    this.invalidations = 0;
   }
 
-  /**
-   * Get cache statistics.
-   */
-  getStats(): { size: number; maxSize: number; hits: number; misses: number; hitRate: number } {
+  // ============================================================================
+  // Pointer Mutation Engines
+  // ============================================================================
+
+  private setHead(node: CacheNode<T>): void {
+    node.next = this.head;
+    node.prev = null;
+    if (this.head) this.head.prev = node;
+    this.head = node;
+    if (!this.tail) this.tail = node;
+  }
+
+  private detach(node: CacheNode<T>): void {
+    if (node.prev) node.prev.next = node.next;
+    else this.head = node.next;
+
+    if (node.next) node.next.prev = node.prev;
+    else this.tail = node.prev;
+  }
+
+  private removeNode(node: CacheNode<T>) {
+    this.detach(node)
+    ;(node as any).result = null // clear ref
+    node.prev=null; node.next=null
+  }
+
+  getStats() {
     const total = this.hits + this.misses;
     return {
-      size: this.cache.size,
+      size: this.lookup.size,
       maxSize: this.maxSize,
       hits: this.hits,
       misses: this.misses,
+      evictions: this.evictions,
+      invalidations: this.invalidations,
       hitRate: total > 0 ? this.hits / total : 0,
     };
   }
-
-  private touchLRU(key: string): void {
-    this.lru = this.lru.filter(k => k !== key);
-    this.lru.push(key);
-  }
 }
+
+export default CacheStore;

@@ -1,4 +1,4 @@
-// src/compiler/pipeline-types.ts
+// src/compiler/pipeline/pipeline-types.ts
 
 import type { StyleIR, IRRule, IRDeclaration, IRNodeId } from './ir/types.js';
 

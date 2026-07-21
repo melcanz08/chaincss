@@ -1,5 +1,6 @@
-// src/cli/commands/figma.ts — chaincss figma init
-// Creates Tokens Studio GitHub sync config + ChainCSS entanglement wiring automatically
+// ============================================================================
+// FILE: src/cli/commands/figma.ts
+// ============================================================================
 
 import fs from 'fs'
 import path from 'path'
@@ -23,22 +24,52 @@ function ask(q: string, def?: string): Promise<string> {
   })
 }
 
-function ensureDir(p: string) { fs.mkdirSync(p, { recursive: true }) }
+function ensureDir(p: string) { 
+  fs.mkdirSync(p, { recursive: true }) 
+}
+
+// Simple validation to ensure repo conforms to standard "owner/name" structure
+function isValidGitHubRepo(repo: string): boolean {
+  return /^[a-zA-Z0-9-]+\/[a-zA-Z0-9._-]+$/.test(repo);
+}
 
 export async function figmaInitCommand(opts: FigmaInitOptions = {}) {
   const root = process.cwd()
   console.log(chalk.cyan('\n🎨 ChainCSS Figma Sync Init\n'))
   console.log(chalk.gray('This will wire Figma Tokens Studio <-> GitHub <-> ChainCSS entanglement\n'))
 
-  const repo = opts.repo || await ask('GitHub repo (org/repo) for token sync', '')
-  const branch = opts.branch || await ask('Branch', 'main')
-  const tokensPath = opts.path || await ask('Tokens path in repo', 'tokens.json')
-  const fileId = opts.fileId || await ask('Figma File ID (optional, for Variables API mode)', '')
+  // Resolve config variables checking the non-interactive --yes flag first
+  let repo = opts.repo || (opts.yes ? 'your-org/your-repo' : await ask('GitHub repo (org/repo) for token sync', ''));
+  
+  if (!opts.yes && repo) {
+    while (repo && !isValidGitHubRepo(repo)) {
+      console.log(chalk.red('⚠ Invalid format. Please provide the repository in the format "owner/repo"'));
+      repo = await ask('GitHub repo (org/repo) for token sync', '');
+    }
+  }
+
+  const branch = opts.branch || (opts.yes ? 'main' : await ask('Branch', 'main'))
+  const tokensPath = opts.path || (opts.yes ? 'tokens.json' : await ask('Tokens path in repo', 'tokens.json'))
+  const fileId = opts.fileId || (opts.yes ? '' : await ask('Figma File ID (optional, for Variables API mode)', ''))
   const useFigmaApi = !!fileId
 
   const tokensDir = path.join(root, 'tokens')
   const studioDir = path.join(root, '.tokensstudio')
   const githubDir = path.join(root, '.github', 'workflows')
+
+  // Detect project settings
+  const isTypeScriptProject = fs.existsSync(path.join(root, 'tsconfig.json'))
+  
+  let isESM = false
+  const pkgPath = path.join(root, 'package.json')
+  if (fs.existsSync(pkgPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
+      isESM = pkg.type === 'module'
+    } catch {
+      // Fallback if package.json is unparseable
+    }
+  }
 
   // 1. tokens/$metadata.json
   ensureDir(tokensDir)
@@ -80,7 +111,6 @@ export async function figmaInitCommand(opts: FigmaInitOptions = {}) {
   // 4. .tokensstudio sync provider hint (for Tokens Studio UI)
   const syncHintPath = path.join(studioDir, 'README.md')
   if (!fs.existsSync(syncHintPath)) {
-    const repoUrl = repo ? `https://github.com/${repo}` : 'https://github.com/YOUR_ORG/YOUR_REPO'
     fs.writeFileSync(syncHintPath, `# Tokens Studio Sync Setup
 
 1. Open Figma -> Tokens Studio -> Settings -> Sync -> Add new -> GitHub
@@ -91,7 +121,7 @@ export async function figmaInitCommand(opts: FigmaInitOptions = {}) {
 6. Enable "Commit changes" and "Push on change"
 
 ChainCSS will then poll:
-${repo ? `https://raw.githubusercontent.com/${repo}/${branch}/${tokensPath}` : 'https://raw.githubusercontent.com/.../tokens.json'}
+https://raw.githubusercontent.com/${repo || 'your-org/your-repo'}/${branch}/${tokensPath}
 
 Or use Figma Variables API mode:
 - Figma File ID: ${fileId || 'your-file-id'}
@@ -100,16 +130,36 @@ Or use Figma Variables API mode:
     console.log(chalk.green(`✓ Created ${path.relative(root, syncHintPath)}`))
   }
 
-  // 5. .env.example
-  const envPath = path.join(root, '.env.example')
-  let envContent = ''
-  if (fs.existsSync(envPath)) envContent = fs.readFileSync(envPath, 'utf8')
-  if (!envContent.includes('FIGMA_TOKEN')) {
-    fs.writeFileSync(envPath, envContent + `\n# Figma Tokens Studio / Figma Variables API\nFIGMA_TOKEN=figd_xxxxxxxxxxxxxxxx\n# Optional: GitHub PAT for push (if you want ChainCSS to push fixes back)\nGITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxx\n`, 'utf8')
-    console.log(chalk.green(`✓ Updated ${path.relative(root, envPath)}`))
+  // 5. Setup .env.example and populate a template local .env if it doesn't exist
+  const envFiles = [
+    { file: '.env.example', optionalPlaceholder: true },
+    { file: '.env', optionalPlaceholder: false }
+  ];
+
+  for (const envObj of envFiles) {
+    const filePath = path.join(root, envObj.file);
+    let envContent = '';
+    
+    // Don't overwrite active .env configurations, but append safely
+    if (fs.existsSync(filePath)) {
+      envContent = fs.readFileSync(filePath, 'utf8');
+    }
+    
+    if (!envContent.includes('FIGMA_TOKEN')) {
+      const separator = envContent && !envContent.endsWith('\n') ? '\n' : '';
+      const figmaVal = envObj.optionalPlaceholder ? 'figd_xxxxxxxxxxxxxxxx' : '';
+      const ghVal = envObj.optionalPlaceholder ? 'ghp_xxxxxxxxxxxxxxxx' : '';
+      
+      fs.writeFileSync(
+        filePath, 
+        envContent + `${separator}# Figma Tokens Studio / Figma Variables API\nFIGMA_TOKEN=${figmaVal}\n# Optional: GitHub PAT for push back integrations\nGITHUB_TOKEN=${ghVal}\n`, 
+        'utf8'
+      );
+      console.log(chalk.green(`✓ Updated ${path.relative(root, filePath)}`))
+    }
   }
 
-  // 6. GitHub Action to auto-fix entanglement on push
+  // 6. GitHub Action to auto-fix entanglement on push with safely quoted shell variables
   ensureDir(githubDir)
   const workflowPath = path.join(githubDir, 'chaincss-tokens.yml')
   if (!fs.existsSync(workflowPath)) {
@@ -125,18 +175,22 @@ on:
 jobs:
   entanglement:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: '20' }
+        with:
+          node-version: '20'
       - run: npm ci || npm install
-      - run: npx chaincss entanglement --input ${tokensPath} --fix --output ${tokensPath}
+      # ESCAPED: Added \ before the $ to prevent JavaScript template string interpolation errors
+      - run: npx chaincss entanglement --input "\${{ github.workspace }}/${tokensPath}" --fix --output "\${{ github.workspace }}/${tokensPath}"
       - name: Commit fixes
         run: |
           if [[ -n "$(git status --porcelain)" ]]; then
             git config user.name "chaincss-bot"
             git config user.email "bot@chaincss.dev"
-            git add ${tokensPath}
+            git add "\${{ github.workspace }}/${tokensPath}"
             git commit -m "chore(tokens): auto-fix entanglement [skip ci]"
             git push
           fi
@@ -144,15 +198,40 @@ jobs:
     console.log(chalk.green(`✓ Created ${path.relative(root, workflowPath)}`))
   }
 
-  // 7. Update chaincss.config.ts if exists, or create snippet
+  // 7. Generate a language-appropriate config template (ESM, CJS, or TS)
   const configJs = path.join(root, 'chaincss.config.js')
   const configTs = path.join(root, 'chaincss.config.ts')
   const hasConfig = fs.existsSync(configJs) || fs.existsSync(configTs)
-  if (!hasConfig) {
-    fs.writeFileSync(configJs, `import { defineConfig } from 'chaincss'\nexport default defineConfig({\n  inputs: ['src/**/*.chain.{ts,tsx}'],\n  output: { cssFile: 'dist/styles.css' },\n  atomic: { enabled: true },\n  tokens: {\n    relationships: [\n      { type: 'derived', source: 'colors.primary.500', target: 'colors.primary.100', method: 'mix-white 80%' },\n      { type: 'derived', source: 'colors.primary.500', target: 'colors.primary.600', method: 'shade 20%' },\n      { type: 'contrast', foreground: 'colors.text.onPrimary', background: 'colors.primary.500', target: 4.5, autoFix: 'auto', priority: 10 },\n      { type: 'contrast', foreground: 'colors.text.muted', background: 'colors.background', target: 4.5 }\n    ]\n  }\n})\n`, 'utf8')
-    console.log(chalk.green(`✓ Created chaincss.config.js with entanglement relationships`))
+
+  // Dynamic skeletal config body
+  const rawSkeletonConfig = `inputs: ['src/**/*.chain.{ts,tsx}'],
+  output: { cssFile: 'dist/styles.css' },
+  atomic: { enabled: true },
+  tokens: {
+    relationships: [
+      { type: 'derived', source: 'colors.primary.500', target: 'colors.primary.100', method: 'mix-white 80%' },
+      { type: 'derived', source: 'colors.primary.500', target: 'colors.primary.600', method: 'shade 20%' },
+      { type: 'contrast', foreground: 'colors.text.onPrimary', background: 'colors.primary.500', target: 4.5, autoFix: 'auto', priority: 10 },
+      { type: 'contrast', foreground: 'colors.text.muted', background: 'colors.background', target: 4.5 }
+    ]
+  }`
+
+  let configSkeleton = '';
+  if (isTypeScriptProject) {
+    configSkeleton = `import { defineConfig } from 'chaincss'\n\nexport default defineConfig({\n  ${rawSkeletonConfig}\n})\n`;
+  } else if (isESM) {
+    configSkeleton = `import { defineConfig } from 'chaincss'\n\nexport default defineConfig({\n  ${rawSkeletonConfig}\n})\n`;
   } else {
-    console.log(chalk.yellow(`! chaincss.config.* already exists, add this to your config:`))
+    // Standard CommonJS fallback for pure JS projects
+    configSkeleton = `const { defineConfig } = require('chaincss')\n\nmodule.exports = defineConfig({\n  ${rawSkeletonConfig}\n})\n`;
+  }
+
+  if (!hasConfig) {
+    const targetConfigPath = isTypeScriptProject ? configTs : configJs
+    fs.writeFileSync(targetConfigPath, configSkeleton, 'utf8')
+    console.log(chalk.green(`✓ Created ${path.basename(targetConfigPath)} with entanglement relationships`))
+  } else {
+    console.log(chalk.yellow(`! chaincss.config.* already exists, add this to your config's tokens object:`))
     console.log(chalk.gray(`
   tokens: {
     relationships: [
@@ -163,9 +242,9 @@ jobs:
 `))
   }
 
-  // 8. Vite snippet
+  // 8. Integration steps
   console.log(chalk.cyan('\nNext steps:\n'))
-  console.log(chalk.white('1. Add to vite.config.ts:'))
+  console.log(chalk.white(`1. Add to your bundler configuration (e.g., vite.config.${isTypeScriptProject ? 'ts' : 'js'}):`))
   console.log(chalk.gray(`
 import chaincss from './src/plugins/vite.ts'
 import figmaSync from './src/plugins/figma-sync.ts'
@@ -174,7 +253,7 @@ export default {
   plugins: [
     figmaSync({
       mode: '${useFigmaApi ? 'figmaVariables' : 'url'}',
-      ${useFigmaApi ? `fileId: '${fileId}',\n      token: process.env.FIGMA_TOKEN!,` : `url: 'https://raw.githubusercontent.com/${repo || 'org/repo'}/${branch}/${tokensPath}',`}
+      ${useFigmaApi ? `fileId: '${fileId}',\n      token: process.env.FIGMA_TOKEN!,` : `url: 'https://raw.githubusercontent.com/${repo || 'your-org/your-repo'}/${branch}/${tokensPath}',`}
       output: '${tokensPath}',
       pollMs: 3000
     }),
@@ -182,12 +261,11 @@ export default {
   ]
 }
 `))
-  console.log(chalk.white('2. Run:'))
-  console.log(chalk.gray(`  npm run dev\n  # designer changes color in Figma -> Tokens Studio pushes to GitHub -> figmaSync polls -> entanglement fixes -> HMR updates browser\n`))
-  console.log(chalk.white('3. Manual fix:'))
+  console.log(chalk.white('2. Run your development server:'))
+  console.log(chalk.gray(`  npm run dev\n  # Designer changes color in Figma -> Tokens Studio pushes -> figmaSync polls -> entanglement auto-fixes -> HMR updates browser\n`))
+  console.log(chalk.white('3. To run a manual background watch of entanglement relationships:'))
   console.log(chalk.gray(`  npx chaincss entanglement --input ${tokensPath} --fix --watch --verbose\n`))
   console.log(chalk.green('✅ Figma sync init complete!\n'))
 }
 
 export default figmaInitCommand
-

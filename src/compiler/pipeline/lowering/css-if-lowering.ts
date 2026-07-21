@@ -1,22 +1,6 @@
-// src/compiler/pipeline/lowering/css-if-lowering.ts
-
-/**
- * CSS if() Transpiler
- * 
- * Detects conditional style patterns and emits:
- *   1. Native CSS if() — Chrome 137+
- *   2. @supports fallback — Firefox, Safari
- * 
- * Selector handling: modifier flags are safely appended to the LAST
- * base class in a complex selector to avoid breaking descendant selectors.
- */
-
-export interface IfCondition {
-  property: string;
-  variable: string;
-  conditions: Record<string, string | number>;
-  defaultValue: string | number;
-}
+// ============================================================================
+// FILE: src/compiler/pipeline/lowering/css-if-lowering.ts
+// ============================================================================
 
 export interface DetectedCondition {
   property: string;
@@ -30,21 +14,10 @@ export interface DetectedCondition {
 // ============================================================================
 
 /**
- * Safely append a modifier to a CSS selector.
- * 
- * .card              → .card--modifier
- * .card .title       → .card .title--modifier
- * .btn:hover         → .btn--modifier:hover
- * .btn:focus         → .btn--modifier:focus
- * #app .card.active  → #app .card--modifier.active
- * ul > li            → ul > li--modifier
- * .a, .b             → .a--modifier, .b--modifier
- * 
- * The modifier is appended to the last base class segment BEFORE
- * any pseudo-classes or structural selectors.
+ * Safely appends a modifier to a CSS selector.
+ * Preserves pseudo-classes, pseudo-elements, and handles chained compound classes.
  */
 function appendModifierToLastClass(selector: string, modifier: string): string {
-  // Split on commas (multiple selectors)
   return selector
     .split(',')
     .map(s => appendModifierToSingleSelector(s.trim(), modifier))
@@ -52,23 +25,30 @@ function appendModifierToLastClass(selector: string, modifier: string): string {
 }
 
 function appendModifierToSingleSelector(selector: string, modifier: string): string {
-  // Extract pseudo-classes from the end
-  const pseudoMatch = selector.match(/^(.+?)((?::[a-zA-Z-]+(?:\([^)]*\))?)*)$/);
+  // Isolate pseudo-elements and pseudo-classes at the end of the selector string
+  const pseudoMatch = selector.match(/^(.+?)((?:::[a-zA-Z-]+|:[a-zA-Z-]+(?:\([^)]*\))?)*)$/);
   
   if (!pseudoMatch) return selector + modifier;
   
-  let base = pseudoMatch[1];
+  const base = pseudoMatch[1];
   const pseudos = pseudoMatch[2] || '';
 
-  // Find the last class or element in the base
+  // Split selector tokens by common CSS structural combinators
   const parts = base.split(/(\s+|\s*>\s*|\s*\+\s*|\s*~\s*)/);
   
-  // Walk backwards to find the last non-whitespace, non-combinator segment
   for (let i = parts.length - 1; i >= 0; i--) {
     const part = parts[i];
     if (part && !part.match(/^\s*$/) && !part.match(/^\s*[>+~]\s*$/)) {
-      if (part.startsWith('.')) {
-        parts[i] = part + modifier;
+      // If compound classes exist (e.g. .card.active), target the base class segment instead of the state modifier
+      if (part.includes('.')) {
+        const classes = part.split('.');
+        // classes[0] might be an element name (e.g., div) or empty string if it started with a dot
+        if (classes.length > 1) {
+          classes[1] = classes[1] + modifier;
+          parts[i] = classes.join('.');
+        } else {
+          parts[i] = part + modifier;
+        }
       } else {
         parts[i] = part + modifier;
       }
@@ -83,26 +63,24 @@ function appendModifierToSingleSelector(selector: string, modifier: string): str
 // Detection
 // ============================================================================
 
-/**
- * Detect conditional patterns from _conditions metadata.
- */
-export function detectIfPatterns(
-  styles: Record<string, any>
-): DetectedCondition[] {
+export function detectIfPatterns(styles: Record<string, any>): DetectedCondition[] {
   const conditions: DetectedCondition[] = [];
-  if (!styles._conditions) return conditions;
+  if (!styles || !styles._conditions) return conditions;
 
-  const condEntries = Object.entries(styles._conditions || {});
-  for (const [variable, branches] of condEntries) {
-    const branch = branches as { true: Record<string, any>; false: Record<string, any> };
+  for (const [variable, branches] of Object.entries(styles._conditions)) {
+    if (!branches || typeof branches !== 'object') continue;
+    
+    const branch = branches as { true?: Record<string, any>; false?: Record<string, any> };
     const trueStyles = branch.true || {};
     const falseStyles = branch.false || {};
 
-    const allProps = new Set([...Object.keys(trueStyles), ...Object.keys(falseStyles)]);
-    for (const prop of allProps) {
+    const champions = new Set([...Object.keys(trueStyles), ...Object.keys(falseStyles)]);
+    for (const prop of champions) {
       if (prop.startsWith('_') || prop === 'selectors') continue;
+      
       const trueVal = trueStyles[prop];
       const falseVal = falseStyles[prop];
+      
       if (trueVal !== undefined && falseVal !== undefined && trueVal !== falseVal) {
         conditions.push({
           property: prop,
@@ -125,52 +103,46 @@ export function emitCSSIf(
   detectedConditions: DetectedCondition[],
   baseProperties: Record<string, string | number> = {}
 ): string {
-  if (detectedConditions.length === 0) return '';
+  if (!detectedConditions || detectedConditions.length === 0) return '';
 
   let css = '';
 
-  // Native CSS if() block
-  css += '/* Native CSS if() — Chrome 137+ */\n';
-  css += selector + ' {\n';
+  // 1. Native CSS if() block — Compliant with CSS Values Level 5 flat specification format
+  css += '/* Native CSS if() — Chrome 137+ compliant */\n';
+  css += `${selector} {\n`;
   for (const [prop, value] of Object.entries(baseProperties)) {
-    css += '  ' + prop + ': ' + value + ';\n';
+    css += `  ${prop}: ${value};\n`;
   }
   for (const cond of detectedConditions) {
     const entries = Object.entries(cond.conditions);
-    if (entries.length === 1) {
-      const [condition, val] = entries[0];
-      css += '  ' + cond.property + ': if(style(' + cond.variable + ': ' + condition + '): ' + val + ' else ' + cond.defaultValue + ');\n';
-    } else {
-      let chain = '';
-      for (let i = 0; i < entries.length; i++) {
-        const [condition, val] = entries[i];
-        chain += i === 0
-          ? 'if(style(' + cond.variable + ': ' + condition + '): ' + val
-          : ' else if(style(' + cond.variable + ': ' + condition + '): ' + val;
-      }
-      chain += ' else ' + cond.defaultValue + ')'.repeat(entries.length);
-      css += '  ' + cond.property + ': ' + chain + ';\n';
+    let conditionChain = '';
+    
+    for (const [condition, val] of entries) {
+      conditionChain += `style(${cond.variable}: ${condition}): ${val}; `;
     }
+    conditionChain += `else: ${cond.defaultValue}`;
+    css += `  ${cond.property}: if(${conditionChain});\n`;
   }
   css += '}\n\n';
 
-  // @supports fallback
+  // 2. Structural @supports fallback block using functional evaluation rules
   css += '/* Fallback for browsers without CSS if() */\n';
-  css += '@supports not (property: if()) {\n';
-  css += '  ' + selector + ' {\n';
+  css += '@supports not (margin: if(style(--a: b): 0; else: 0)) {\n';
+  css += `  ${selector} {\n`;
   for (const [prop, value] of Object.entries(baseProperties)) {
-    css += '    ' + prop + ': ' + value + ';\n';
+    css += `    ${prop}: ${value};\n`;
   }
   for (const cond of detectedConditions) {
-    css += '    ' + cond.property + ': ' + cond.defaultValue + ';\n';
+    css += `    ${cond.property}: ${cond.defaultValue};\n`;
   }
   css += '  }\n';
+  
   for (const cond of detectedConditions) {
     const cleanVar = cond.variable.replace(/^--/, '');
     for (const [condition, val] of Object.entries(cond.conditions)) {
-      const modifier = '--' + cleanVar + '-' + condition;
+      const modifier = `--${cleanVar}-${condition}`;
       const modSelector = appendModifierToLastClass(selector, modifier);
-      css += '  ' + modSelector + ' { ' + cond.property + ': ' + val + '; }\n';
+      css += `  ${modSelector} { ${cond.property}: ${val}; }\n`;
     }
   }
   css += '}\n';

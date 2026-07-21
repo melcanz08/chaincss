@@ -1,5 +1,6 @@
-// src/compiler/pipeline/normalizers/intent-data.ts 
-// Adds custom semantic intents, custom known properties, faster Levenshtein with early exit
+// ============================================================================
+// FILE: src/compiler/pipeline/normalizers/intent-data.ts
+// ============================================================================
 
 import type { CorrectionResult, IntentContext } from '../../../core/types.js';
 
@@ -46,7 +47,7 @@ export function registerValueCorrections(prop: string, corrections: ValueCorrect
 export function resetValueCorrections() { VALUE_CORRECTIONS = { ...BUILTIN_VALUE_CORRECTIONS }; }
 
 // ------------------------------------------------------------------
-// Known properties — Set for O(1) lookup, plus custom keys
+// Known properties — Synchronized for Phase 2 layouts & modern specs
 // ------------------------------------------------------------------
 const BUILTIN_KNOWN = [
   'display','position','top','right','bottom','left','inset','inset-block','inset-inline',
@@ -64,6 +65,11 @@ const BUILTIN_KNOWN = [
   'cursor','pointer-events','user-select','appearance','outline','outline-offset','resize','caret-color','accent-color','scroll-behavior','overscroll-behavior',
   'z-index','isolation','border-collapse','border-spacing','table-layout',
   'fill','stroke','stroke-width','object-fit','object-position','aspect-ratio','content','will-change','contain',
+  // Phase 2 Additions: Advanced timelines, animations, and container specifications
+  'scroll-timeline','scroll-timeline-name','scroll-timeline-axis',
+  'view-timeline','view-timeline-name','view-timeline-axis','view-timeline-inset',
+  'timeline-scope','animation-timeline','animation-range','animation-composition',
+  'container','container-name','container-type'
 ];
 
 export const KNOWN_PROPERTIES: string[] = [...BUILTIN_KNOWN];
@@ -72,25 +78,42 @@ const customKnown = new Set<string>();
 
 export function registerCustomKnownProperties(props: string[]) {
   propertyCache.clear();
-  for (const p of props) { const lp = p.toLowerCase(); if (!knownSet.has(lp)) { knownSet.add(lp); customKnown.add(lp); KNOWN_PROPERTIES.push(p); } }
+  for (const p of props) { 
+    const lp = p.toLowerCase(); 
+    if (!knownSet.has(lp)) { 
+      knownSet.add(lp); 
+      customKnown.add(lp); 
+      KNOWN_PROPERTIES.push(p); 
+    } 
+  }
 }
+
 export function isKnownProperty(prop: string): boolean { 
-  const kebab = prop.replace(/[A-Z]/g, m => '-' + m.toLowerCase());
+  // Phase 2 Fix: Safe camelCase conversion that prevents leading dashes on Capitalized inputs
+  const kebab = prop
+    .replace(/[A-Z]/g, (m, offset) => (offset > 0 ? '-' : '') + m.toLowerCase());
+    
   return knownSet.has(kebab) || customKnown.has(kebab) || knownSet.has(prop.toLowerCase()) || customKnown.has(prop.toLowerCase()); 
 }
+
 export function resetKnownProperties() {
-  KNOWN_PROPERTIES.length = 0; KNOWN_PROPERTIES.push(...BUILTIN_KNOWN);
-  knownSet.clear(); for (const p of BUILTIN_KNOWN) knownSet.add(p.toLowerCase()); customKnown.clear(); propertyCache.clear();
+  KNOWN_PROPERTIES.length = 0; 
+  KNOWN_PROPERTIES.push(...BUILTIN_KNOWN);
+  knownSet.clear(); 
+  for (const p of BUILTIN_KNOWN) knownSet.add(p.toLowerCase()); 
+  customKnown.clear(); 
+  propertyCache.clear();
 }
 
 // ------------------------------------------------------------------
 // Levenshtein — optimized with early exit and two-row DP
 // ------------------------------------------------------------------
 export function levenshtein(a: string, b: string, maxDist = 4): number {
-  // Early prune: length diff > maxDist cannot be within threshold
   if (Math.abs(a.length - b.length) > maxDist) return maxDist + 1;
   const al = a.length, bl = b.length;
-  if (al === 0) return bl; if (bl === 0) return al;
+  if (al === 0) return bl; 
+  if (bl === 0) return al;
+  
   let prev = new Array(bl + 1), cur = new Array(bl + 1);
   for (let j = 0; j <= bl; j++) prev[j] = j;
   for (let i = 1; i <= al; i++) {
@@ -102,7 +125,7 @@ export function levenshtein(a: string, b: string, maxDist = 4): number {
       cur[j] = Math.min(prev[j] + 1, cur[j-1] + 1, prev[j-1] + cost);
       if (cur[j] < minInRow) minInRow = cur[j];
     }
-    if (minInRow > maxDist) return maxDist + 1; // early exit
+    if (minInRow > maxDist) return maxDist + 1; 
     const tmp = prev; prev = cur; cur = tmp;
   }
   return prev[bl];
@@ -112,15 +135,21 @@ const propertyCache = new Map<string, string | null>();
 
 export function findClosestProperty(prop: string): string | null {
   const lp = prop.toLowerCase();
-  if (isKnownProperty(lp)) return lp; // exact match, no need to search
+  if (isKnownProperty(lp)) return lp; 
   const cached = propertyCache.get(lp);
   if (cached !== undefined) return cached;
-  let best: string | null = null; let bestDist = 3; // threshold from original code
-  // Prune by length: only check candidates where |len diff| <= 3
+  
+  let best: string | null = null; 
+  let bestDist = 3; 
+  
   for (const k of KNOWN_PROPERTIES) {
     if (Math.abs(k.length - lp.length) > 3) continue;
     const d = levenshtein(lp, k.toLowerCase(), bestDist);
-    if (d < bestDist) { bestDist = d; best = k; if (d === 1) break; } // can't get better than 1
+    if (d < bestDist) { 
+      bestDist = d; 
+      best = k; 
+      if (d === 1) break; 
+    }
   }
   propertyCache.set(lp, best);
   return best;
@@ -134,7 +163,10 @@ export function clearPropertyCache() { propertyCache.clear(); }
 export function detectIntent(value: string, ctx: IntentContext = {}): CorrectionResult | null {
   const lv = value.toLowerCase();
   for (const rule of SEMANTIC_INTENTS) {
-    if (rule.pattern.test(lv)) { const r = rule.handler(value, ctx); if (r) return r; }
+    if (rule.pattern.test(lv)) { 
+      const r = rule.handler(value, ctx); 
+      if (r) return r; 
+    }
   }
   return null;
 }

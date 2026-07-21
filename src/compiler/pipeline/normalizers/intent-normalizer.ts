@@ -1,23 +1,26 @@
-// src/compiler/pipeline/normalizers/intent-normalizer.ts
-// Now aware of custom shorthands/macros and custom intents via registries
+// ============================================================================
+// FILE: src/compiler/pipeline/normalizers/intent-normalizer.ts
+// ============================================================================
 
 import { recordHistory } from '../ir/utils.js';
 import { createDeclaration } from '../ir/factory.js';
 import { intent } from './intent-detector.js';
 
-import type { StyleIR } from '../ir/types.js';
+import type { StyleIR, IRRule, IRDeclaration } from '../ir/types.js';
 import type { NormalizationPass, NormalizationResult, Correction } from '../pipeline-types.js';
 
-// v3.2: import custom registries to avoid false positives on user-defined keys
 let _customShorthands: Set<string> | null = null;
 let _customMacros: Set<string> | null = null;
 
 function getCustomSets() {
   if (_customShorthands) return { shorthands: _customShorthands, macros: _customMacros! };
   try {
-    // dynamic import to avoid circular dep at top level
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const sh = require('../../utils/shorthands.js');
+    // Phase 2 ESM Safe Shorthand Mapping Resolution
+    // Fallback gracefully if standard CommonJS require syntax is unsupported
+    const sh = typeof require !== 'undefined' 
+      ? require('../../utils/shorthands.js') 
+      : { shorthandMap: {}, macros: {} };
+      
     _customShorthands = new Set(Object.keys(sh.shorthandMap || {}));
     _customMacros = new Set(Object.keys(sh.macros || {}));
   } catch {
@@ -39,26 +42,22 @@ export const intentNormalizer: NormalizationPass = {
     const corrections: Correction[] = [];
     const { shorthands, macros } = getCustomSets();
 
-    for (const rule of ir.rules) {
-      if (rule.isDead) continue;
+    // Phase 2 Recursive Normalization Visitor Engine
+    function normalizeRule(rule: IRRule) {
+      if (rule.isDead) return;
       const pendingDefaults: Array<{ property: string; value: string | number; reason: string }> = [];
 
       for (const decl of rule.declarations) {
         const rawValue = String(decl.value);
 
-        // v3.2: skip correction for user-defined shorthands/macros/intents — they are intentional
         if (shorthands.has(decl.property) || macros.has(decl.property)) continue;
-        if ((decl as any).meta?.intent || (rule.meta as any)?._intent) {
-          // intent properties are resolved later by intentResolver, don't typo-correct them
-          continue;
-        }
+        if ((decl as any).meta?.intent || (rule.meta as any)?._intent) continue;
 
         const result = intent.correct(decl.property, rawValue);
 
         if (result) {
           if (result.intent === 'property-correction') {
             const originalProperty = decl.property;
-            // Don't auto-correct if the corrected name is actually a custom shorthand
             if (shorthands.has(result.corrected)) continue;
             decl.property = result.corrected;
             corrections.push({ nodeId: decl.id, property: originalProperty, original: originalProperty, corrected: result.corrected, reason: result.explanation });
@@ -87,7 +86,6 @@ export const intentNormalizer: NormalizationPass = {
 
         const validation = intent.validate(decl.property, rawValue);
         if (!validation.valid && validation.suggestion) {
-          // v3.2: don't suggest for custom keys
           if (shorthands.has(decl.property) || macros.has(decl.property)) continue;
           ir.diagnostics.push({
             id: `intent-suggest-${decl.id}`,
@@ -109,9 +107,42 @@ export const intentNormalizer: NormalizationPass = {
           recordHistory(newDecl, 'intent-normalizer', 'injected-default', undefined, reason);
         }
       }
+
+      // Natively recurse into deep structural blocks
+      if (rule.pseudoClasses) {
+        for (let i = 0; i < rule.pseudoClasses.length; i++) {
+          normalizeRule(rule.pseudoClasses[i] as unknown as IRRule);
+        }
+      }
+
+      if (rule.nestedRules) {
+        for (let i = 0; i < rule.nestedRules.length; i++) {
+          normalizeRule(rule.nestedRules[i]);
+        }
+      }
+
+      if (rule.atRules) {
+        for (let i = 0; i < rule.atRules.length; i++) {
+          const at = rule.atRules[i];
+          if (at.nestedRules) {
+            for (let j = 0; j < at.nestedRules.length; j++) {
+              normalizeRule(at.nestedRules[j]);
+            }
+          }
+          if (at.keyframes) {
+            for (let j = 0; j < at.keyframes.length; j++) {
+              normalizeRule(at.keyframes[j] as unknown as IRRule);
+            }
+          }
+        }
+      }
+    }
+
+    // Drive initial traversal through roots
+    for (let i = 0; i < ir.rules.length; i++) {
+      normalizeRule(ir.rules[i]);
     }
 
     return { ir, corrections };
   },
 };
-
