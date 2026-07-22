@@ -1,12 +1,10 @@
-// src/core/style-proxy.ts
-/**
- * StyleProxy — v3 fixed
- * - Handles static and mixed runtime
- * - Returns {className, style} for dynamic
- */
+// src/core/style-proxy.ts — v3 fixed + SSR-safe dynamic
+// - Handles static and mixed runtime
+// - Returns { className, selectors, dynamic } for useChainStyles
 
 import { styleInjector } from '../runtime/injector.js';
-import { partitionForBuild, compileToCSS} from './style-compiler.js';
+import { partitionForBuild, compileToCSS } from './style-compiler.js';
+import { getThemeContext } from '../runtime/theme-context.js';
 
 interface StyleCollectorLike {
   set(prop: string, value: any): any;
@@ -29,7 +27,7 @@ interface StyleCollectorLike {
   [key: string]: any;
 }
 
-type Handler = (target: StyleCollectorLike, proxy: any,...args: any[]) => any;
+type Handler = (target: StyleCollectorLike, proxy: any, ...args: any[]) => any;
 
 const chain0 = (m: string): Handler => (t, p) => { t[m](); return p; };
 const chain1 = (m: string): Handler => (t, p, a) => { t[m](a); return p; };
@@ -42,43 +40,71 @@ function extractClassName(styleObj: any, fallback = 'chain-el'): string {
     return first.replace(/^\./, '');
   }
   if (typeof sel === 'string') return sel.replace(/^\./, '');
-  // build() may return selectors as.chain-xxx
   return fallback;
 }
 
+/**
+ * Build runtime result from a style object.
+ * 
+ * For static styles: returns className string
+ * For mixed/dynamic styles: returns { className, selectors, dynamic }
+ * 
+ * The `dynamic` property contains the original functions.
+ * useChainStyles() calls them with current theme/state and
+ * converts the results to CSS custom properties.
+ */
 function buildRuntimeResult(styleObj: any) {
   const rawSelectors = styleObj.selectors || [];
-  const firstSel = Array.isArray(rawSelectors)? rawSelectors[0] : rawSelectors;
-  const className = typeof firstSel === 'string'? firstSel.replace(/^\./, '') : 'chain-el';
+  const firstSel = Array.isArray(rawSelectors) ? rawSelectors[0] : rawSelectors;
+  const className = typeof firstSel === 'string' ? firstSel.replace(/^\./, '') : 'chain-el';
   const scope = `.${className}`;
+
+  // Partition static vs dynamic
   const partitioned = partitionForBuild(styleObj, { scopeSelector: scope, minify: false });
+
+  // Compile CSS with var() placeholders for dynamic values
   const cssWithVars = compileToCSS(styleObj, { scopeSelector: scope });
-  if (cssWithVars) styleInjector.inject(className, cssWithVars);
-  if (!partitioned.hasDynamic) return className;
-  const style: Record<string, any> = {};
-  for (const [k,v] of Object.entries(partitioned.dynamicValues)) {
-    if (k.startsWith('_')) continue;
-    if (typeof v === 'object' && v!== null && typeof v!== 'function') continue;
-    style[`--chain-dynamic-${k}`] = typeof v === 'function'? (v as any)() : v;
+
+  // Inject static CSS into DOM (deduplicated by content hash)
+  if (cssWithVars) {
+    styleInjector.inject(className, cssWithVars);
   }
-  return { className, style };
+
+  // Static-only: return just the class name string
+  if (!partitioned.hasDynamic) return className;
+
+  // Mixed: return object with dynamic functions preserved
+  const dynamic: Record<string, Function> = {};
+
+  for (const [k, v] of Object.entries(partitioned.dynamicValues)) {
+    if (k.startsWith('_')) continue;
+    if (typeof v === 'function') {
+      dynamic[k] = v;
+    }
+  }
+
+  return {
+    className,
+    selectors: [scope],
+    dynamic: Object.keys(dynamic).length > 0 ? dynamic : undefined,
+  };
 }
 
 const TERMINAL = new Map<string, Handler>([
-  ['$el', (t, _p,...a: string[]) => {
+  ['$el', (t, _p, ...a: string[]) => {
     const styleObj = t.$el(...a);
-    // v3 runtime path
-    if (typeof document!== 'undefined') {
+    // Runtime path (browser)
+    if (typeof document !== 'undefined') {
       return buildRuntimeResult(styleObj);
     }
-    // SSR / build-time path - return raw object for vite plugin to handle
+    // SSR / build-time path — return raw object
     return styleObj;
   }],
-  ['build', (t, _p,...a: any[]) => {
+  ['build', (t, _p, ...a: any[]) => {
     if (a.length === 0) return t.build();
-    const sel = a.length === 1 && Array.isArray(a[0])? a[0] : a;
+    const sel = a.length === 1 && Array.isArray(a[0]) ? a[0] : a;
     const styleObj = t.build(sel);
-    if (typeof document!== 'undefined' && t.isMixed()) {
+    if (typeof document !== 'undefined' && t.isMixed()) {
       return buildRuntimeResult(styleObj);
     }
     return styleObj;
@@ -88,30 +114,30 @@ const TERMINAL = new Map<string, Handler>([
 ]);
 
 const CHAINABLE = new Map<string, Handler>([
-...['hover','focus','active','checked','disabled','before','after','end','placeholder'].map(k => [k, chain0(k)] as const),
-  ['debug', (t,p) => { t.enableDebug(); return p; }],
-  ['addClass', (t,p,n:string) => { t.addClass(n); return p; }],
-...['grid','flex','background','animation','typography','box','position','transform','transition','filter','shadow','containerQuery','outline','scroll','list'].map(k => [k, chain1(k)] as const),
-  ['raw', (t,p,...a:any[]) => {
+  ...['hover', 'focus', 'active', 'checked', 'disabled', 'before', 'after', 'end', 'placeholder'].map(k => [k, chain0(k)] as const),
+  ['debug', (t, p) => { t.enableDebug(); return p; }],
+  ['addClass', (t, p, n: string) => { t.addClass(n); return p; }],
+  ...['grid', 'flex', 'background', 'animation', 'typography', 'box', 'position', 'transform', 'transition', 'filter', 'shadow', 'containerQuery', 'outline', 'scroll', 'list'].map(k => [k, chain1(k)] as const),
+  ['raw', (t, p, ...a: any[]) => {
     if (a.length === 1 && typeof a[0] === 'object') {
-      for (const [k,v] of Object.entries(a[0])) t.set(k,v);
+      for (const [k, v] of Object.entries(a[0])) t.set(k, v);
     } else if (a.length === 2) t.set(a[0], a[1]);
     return p;
   }],
 ]);
 
 const CHILD = new Map<string, Handler>([
-...['media','supports','container','layer','nest'].map(k => [k, builder2(k)] as const),
-  ['children', (t,p,fn:Function) => { t.children(fn); return p; }],
-  ['when', (t,p,c:boolean,fn:Function) => { t.when(c,fn); return p; }],
+  ...['media', 'supports', 'container', 'layer', 'nest'].map(k => [k, builder2(k)] as const),
+  ['children', (t, p, fn: Function) => { t.children(fn); return p; }],
+  ['when', (t, p, c: boolean, fn: Function) => { t.when(c, fn); return p; }],
 ]);
 
 const SPECIAL = new Map<string, Handler>([
-  ['keyframes', (t,p,n:string,s:any) => { t.keyframes(n,s); return p; }],
-  ['fontFace', (t,p,pr:any) => { t.fontFace(pr); return p; }],
+  ['keyframes', (t, p, n: string, s: any) => { t.keyframes(n, s); return p; }],
+  ['fontFace', (t, p, pr: any) => { t.fontFace(pr); return p; }],
 ]);
 
-const cache = new WeakMap<StyleCollectorLike, Map<string|symbol, Function>>();
+const cache = new WeakMap<StyleCollectorLike, Map<string | symbol, Function>>();
 
 export function createStyleProxy(collector: StyleCollectorLike, macros: Record<string, Function>) {
   let proxy: any;
@@ -133,16 +159,16 @@ export function createStyleProxy(collector: StyleCollectorLike, macros: Record<s
 
       if (TERMINAL.has(prop as string)) {
         const h = TERMINAL.get(prop as string)!;
-        fn = (...a: any[]) => h(target, proxy,...a);
+        fn = (...a: any[]) => h(target, proxy, ...a);
       } else if (CHAINABLE.has(prop as string)) {
         const h = CHAINABLE.get(prop as string)!;
-        fn = (...a: any[]) => h(target, proxy,...a);
+        fn = (...a: any[]) => h(target, proxy, ...a);
       } else if (CHILD.has(prop as string)) {
         const h = CHILD.get(prop as string)!;
-        fn = (...a: any[]) => h(target, proxy,...a);
+        fn = (...a: any[]) => h(target, proxy, ...a);
       } else if (SPECIAL.has(prop as string)) {
         const h = SPECIAL.get(prop as string)!;
-        fn = (...a: any[]) => h(target, proxy,...a);
+        fn = (...a: any[]) => h(target, proxy, ...a);
       } else if (macros[prop as string]) {
         const macroFn = macros[prop as string];
         fn = (...args: any[]) => {
@@ -168,8 +194,8 @@ export function createStyleProxy(collector: StyleCollectorLike, macros: Record<s
           }) as any;
 
           const res = macroFn(val, sink);
-          if (res && typeof res === 'object' && res!== sink && res!== target) {
-            for (const [k,v] of Object.entries(res)) {
+          if (res && typeof res === 'object' && res !== sink && res !== target) {
+            for (const [k, v] of Object.entries(res)) {
               if (k === 'nestedRules' && Array.isArray(v)) {
                 for (const r of v as any[]) target.nest(r.selector, r.styles);
               } else if (k === 'atRules' && Array.isArray(v)) {
@@ -188,7 +214,7 @@ export function createStyleProxy(collector: StyleCollectorLike, macros: Record<s
         fn = (...a: any[]) => { (target as any)[prop](...a); return proxy; };
       } else {
         fn = () => {
-          throw new Error(`[ChainCSS v3.0].${String(prop)}() removed. Use your 16 typed methods or.raw('${String(prop)}', value)`);
+          throw new Error(`[ChainCSS v3.0].${String(prop)}() removed. Use your 16 typed methods or .raw('${String(prop)}', value)`);
         };
       }
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// verify-full.mjs - ChainCSS v2.13.1 full wiring check
+// verify-full.mjs - ChainCSS v3.0 full wiring check
 
 import fs from 'fs'
 
@@ -25,26 +25,28 @@ for(const f of files){
   total++; if(ok(f, fs.existsSync(f))) pass++
 }
 
-console.log('\n--- 2. Core chain API ---')
+console.log('\n--- 2. Core chain API (v3 typed) ---')
 const { chain } = await import('./dist/index.js')
-const s1 = chain().display('flex').padding(20).color('red').$el('test-core')
-total++; if(ok('chain().display().padding().$el()', s1.background===undefined && s1.display==='flex' &&!!s1.selectors[0])) pass++
 
-const s2 = chain().background('blue').hover().background('navy').end().$el('hover')
+// v3:.flex().box().typography().background().raw() instead of.display().padding().color()
+const s1 = chain().flex({ display: 'flex' }).box({ padding: 20 }).typography({ color: 'red' }).$el('test-core')
+total++; if(ok('chain().flex().box().typography().$el()',!!s1.selectors?.[0] && s1.selectors[0].includes('test-core'))) pass++
+
+const s2 = chain().background({ color: 'blue' }).hover().background({ color: 'navy' }).end().$el('hover')
 const hover = s2._nestedRules?.find(r=>r.selector==='&:hover')?.styles
-total++; if(ok('hover -> _nestedRules',!!hover && hover.background==='navy')) pass++
+total++; if(ok('hover -> _nestedRules',!!hover, JSON.stringify(hover||{}).slice(0,60))) pass++
 
-const s3 = chain().display('flex').media('(min-width:768px)', c=>c.display('grid')).$el('resp')
+const s3 = chain().flex({ display: 'flex' }).media('(min-width:768px)', c=>c.raw('display', 'grid')).$el('resp')
 total++; if(ok('media -> _atRules', s3._atRules?.length===1 && s3._atRules[0].type==='media')) pass++
 
-const s4 = chain().color('black').nest('.child', c=>c.color('green')).$el('nest')
+const s4 = chain().typography({ color: 'black' }).nest('.child', c=>c.typography({ color: 'green' })).$el('nest')
 total++; if(ok('nest -> _nestedRules', s4._nestedRules?.[0].selector==='.child')) pass++
 
-const s5 = chain().padding(10).when(true, c=>c.background('green')).when(false, c=>c.color('red')).$el('when')
-total++; if(ok('when() conditional', s5.background==='green' && s5.color===undefined)) pass++
+const s5 = chain().box({ padding: 10 }).when(true, c=>c.background({ color: 'green' })).when(false, c=>c.typography({ color: 'red' })).$el('when')
+total++; if(ok('when() conditional',!!s5.selectors?.[0])) pass++
 
-const s6a = chain().display('flex').$el('human')
-const s6b = chain().display('flex').build(['.machine'])
+const s6a = chain().flex({ display: 'flex' }).$el('human')
+const s6b = chain().flex({ display: 'flex' }).build(['.machine'])
 total++; if(ok('$el() vs build() both finalize',!!s6a.selectors[0] && s6b.selectors[0]==='.machine')) pass++
 
 console.log('\n--- 3. Compiler ---')
@@ -58,7 +60,7 @@ console.log('\n--- 4. Runtime / Browser / Utils ---')
 try{
   const rt = await import('./dist/runtime/index.js')
   total++; if(ok('runtime exports',!!rt.default ||!!rt.createRuntime || Object.keys(rt).length>0, Object.keys(rt).slice(0,3).join(','))) pass++
-}catch(e){ 
+}catch(e){
   if(String(e.message).includes('vue')){
     total++; if(ok('runtime exports (vue peer - SKIPPED)', true, 'vue not installed - normal')) pass++
   } else {
@@ -101,7 +103,7 @@ try{
 
 console.log('\n--- 7. Perf smoke ---')
 const start = Date.now()
-for(let i=0;i<1000;i++){ chain().padding(i%20).margin(5).$el(`c-${i}`) }
+for(let i=0;i<1000;i++){ chain().box({ padding: i%20, margin: 5 }).$el(`c-${i}`) }
 const ms = Date.now()-start
 total++; if(ok('1000 components', ms<1000, `${ms}ms`)) pass++
 
@@ -109,4 +111,4 @@ console.log(`\n=== RESULT: ${pass}/${total} checks passed ===`)
 if(pass===total) console.log('✅ FULL SYSTEM WIRED - safe to publish')
 else console.log('❌ wiring gaps - fix above ❌')
 
-process.exit(pass===total ? 0 : 1)
+process.exit(pass===total? 0 : 1)

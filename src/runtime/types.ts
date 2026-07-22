@@ -28,6 +28,7 @@ export interface UseChainStylesOptions {
 // Fixes Issue 3: Added clean explicitly exported hook return type
 export interface UseChainStylesReturn {
   classes: Record<string, string>;
+  styleVars: Record<string, string>;
   cx: (...names: string[]) => string;
   cn: (...names: string[]) => string;
 }

@@ -103,6 +103,19 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
         }
       }
       if (rulesToRegister.length > 0) { inspectorStore.addAll(rulesToRegister); console.log('[ChainCSS] IR rules collected:', rulesToRegister.length, 'total:', inspectorStore.size) } else { console.log('[ChainCSS] No IR data for:', absPath) };
+      for (const [name, dyn] of Object.entries(dynamicMap)) {
+        if (dyn && Object.keys(dyn).length > 0) {
+          const className = classMap[name];
+          if (className) {
+            css += `\n.${className} {\n`;
+            for (const [prop, fn] of Object.entries(dyn as Record<string, any>)) {
+              const kebabProp = prop.replace(/([A-Z])/g, '-$1').toLowerCase();
+              css += `  ${kebabProp}: var(--${className}-${kebabProp}, initial);\n`;
+            }
+            css += '}\n';
+          }
+        }
+      }
       return { css, classMap, dynamicMap };
     } finally {
       try { fs.unlinkSync(tmpPath); } catch {}

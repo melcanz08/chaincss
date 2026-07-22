@@ -84,9 +84,20 @@ function styleDefToObject(styleDef: StyleDefinition): StyleObject {
 
 function hashStyleDef(styleDef: StyleDefinition): string {
   const normalized = styleDefToObject(styleDef)
-  // Exclude dynamic (functions) from structural hash — JSON.stringify would drop them and collide
   const { dynamic, ...rest } = normalized as any
-  return hashString(fastStableStringify(rest))
+  
+  let hashInput = fastStableStringify(rest)
+  
+  // Include function source code in hash for dynamic styles
+  if (dynamic) {
+    for (const [key, fn] of Object.entries(dynamic)) {
+      if (typeof fn === 'function') {
+        hashInput += `|${key}:${fn.toString()}`
+      }
+    }
+  }
+  
+  return hashString(hashInput)
 }
 
 function isGlobalSelector(selectors: string[]): boolean {
@@ -163,7 +174,16 @@ export function createStyleCompilation(ctx: CompilationContext) {
 
     const className = getClassName(selectors, styleId, global)
     const { hasDynamic, dynamicValues } = partitionForBuild(styleObject as any)
+    if (hasDynamic && className) {
 
+      const cssWithVars = compileToCSS(styleObject as any, {
+        scopeSelector: `.${className}`,
+        minify: !!ctx.config.output.minify,
+      });
+      if (cssWithVars) {
+        finalCss = finalCss + '\n' + cssWithVars;
+      }
+    }
     const out: CompileResult = {
       css: formatCSS(finalCss, ctx.config.output.minify),
       classMap: global ? {} : { [styleId]: className },

@@ -19,6 +19,118 @@ try {
   get = (store: any) => { let v: any; const u = store.subscribe((x:any)=>(v=x)); u(); return v; };
 }
 
+// ============================================================================
+// useChainStyles — Svelte composable for context-aware dynamic styles (NEW)
+// ============================================================================
+
+function resolveDynamicStyles(
+  styleObj: any,
+  context: Record<string, any>
+): Record<string, string> {
+  const styleVars: Record<string, string> = {};
+  if (!styleObj?.dynamic) return styleVars;
+
+  const baseClass =
+    styleObj.className ||
+    styleObj.selectors?.[0]?.replace(/^\./, '') ||
+    'chain-el';
+
+  for (const [prop, fn] of Object.entries(styleObj.dynamic)) {
+    if (typeof fn === 'function') {
+      try {
+        const value = (fn as Function)(context);
+        const cleanProp = prop.replace(/([A-Z])/g, '-$1').toLowerCase().replace(/^-/, '');
+        const varName = `--${baseClass}-${cleanProp}`;
+        if (value !== undefined && value !== null) styleVars[varName] = String(value);
+      } catch (err) {
+        console.warn(`[ChainCSS Svelte] Error evaluating dynamic "${prop}":`, err);
+      }
+    }
+  }
+  return styleVars;
+}
+
+export function useChainStyles(
+  styles: Record<string, any>,
+  contextSource: Record<string, any> = {}
+) {
+  const moduleId = `chaincss-svelte-${generateId()}`;
+  const injectedIds: string[] = [];
+  let destroyed = false;
+
+  // Build context from stores/values
+  const buildContext = () => {
+    const ctx: Record<string, any> = {};
+    for (const [key, val] of Object.entries(contextSource)) {
+      if (val && typeof val === 'object' && typeof val.subscribe === 'function') {
+        ctx[key] = get(val);
+      } else {
+        ctx[key] = val;
+      }
+    }
+    return ctx;
+  };
+
+  // Compile class names
+  const classNames: Record<string, string> = {};
+  for (const [key, styleObj] of Object.entries(styles)) {
+    if (!styleObj) continue;
+    classNames[key] = styleObj.className || styleObj.selectors?.[0]?.replace(/^\./, '') || key;
+  }
+
+  // Evaluate dynamics
+  const evaluateDynamics = () => {
+    const context = buildContext();
+    const vars: Record<string, string> = {};
+    for (const [, styleObj] of Object.entries(styles)) {
+      if (!styleObj?.dynamic) continue;
+      Object.assign(vars, resolveDynamicStyles(styleObj, context));
+    }
+    return vars;
+  };
+
+  const initialVars = evaluateDynamics();
+  const classesStore = writable(classNames);
+  const styleVarsStore = writable(initialVars);
+
+  // Subscribe to store changes
+  for (const val of Object.values(contextSource)) {
+    if (val && typeof val === 'object' && typeof val.subscribe === 'function') {
+      val.subscribe(() => {
+        if (!destroyed) styleVarsStore.set(evaluateDynamics());
+      });
+    }
+  }
+
+  const cleanup = () => {
+    if (destroyed) return;
+    destroyed = true;
+    try { removeRuntimeModule(moduleId); } catch {}
+    for (const id of injectedIds) { try { removeRuntimeModule(id); } catch {} }
+  };
+  if (onDestroyFn) { try { onDestroyFn(cleanup); } catch {} }
+
+  return {
+    get classes() { return get(classesStore); },
+    get styleVars() { return get(styleVarsStore); },
+    cx: (n: string) => classNames[n] || '',
+    cn: (...ns: string[]) => ns.map((n) => classNames[n]).filter(Boolean).join(' '),
+    inject: (newStyles: any) => {
+      const iid = `chaincss-injected-${generateId()}`;
+      injectedIds.push(iid);
+      const comp: any = {};
+      const nm: any = {};
+      for (const [k, def] of Object.entries(newStyles)) {
+        const cn = `${k}-${iid}`;
+        nm[k] = cn;
+        comp[`${k}_${iid}`] = { selectors: [`.${cn}`], ...(typeof def === 'function' ? (def as any)() : def) };
+      }
+      compileRuntime(comp, iid);
+      return nm;
+    },
+  };
+}
+
 function generateId(): string {
   if (typeof crypto !== 'undefined' && (crypto as any).randomUUID) return `chain-${(crypto as any).randomUUID().slice(0,8)}`;
   return `chain-${Math.random().toString(36).substring(2,11)}`;

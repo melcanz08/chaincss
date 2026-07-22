@@ -1,4 +1,5 @@
 // @ts-nocheck — optional peer dependency
+
 import { compileRuntime, removeRuntimeModule, setManifest as setGlobalManifest, setTokens as setGlobalTokens } from './injector.js';
 
 let createSignal: any, createMemo: any, createEffect: any, onCleanup: any, createComponent: any;
@@ -184,4 +185,131 @@ let debugEnabled = false;
 export function enableSolidDebug() { debugEnabled = true; if (typeof window!== 'undefined') (window as any).__CHAINCSS_SOLID_DEBUG__ = true; }
 export function disableSolidDebug() { debugEnabled = false; if (typeof window!== 'undefined') (window as any).__CHAINCSS_SOLID_DEBUG__ = false; }
 export function isSolidDebugEnabled() { return debugEnabled || (typeof window!== 'undefined' &&!!(window as any).__CHAINCSS_SOLID_DEBUG__); }
+
+// ============================================================================
+// useChainStyles — Solid composable for context-aware dynamic styles (NEW)
+// ============================================================================
+
+function resolveDynamicStyles(
+  styleObj: any,
+  context: Record<string, any>
+): Record<string, string> {
+  const styleVars: Record<string, string> = {};
+  if (!styleObj?.dynamic) return styleVars;
+
+  const baseClass =
+    styleObj.className ||
+    styleObj.selectors?.[0]?.replace(/^\./, '') ||
+    'chain-el';
+
+  for (const [prop, fn] of Object.entries(styleObj.dynamic)) {
+    if (typeof fn === 'function') {
+      try {
+        const value = (fn as Function)(context);
+        const cleanProp = prop.replace(/([A-Z])/g, '-$1').toLowerCase().replace(/^-/, '');
+        const varName = `--${baseClass}-${cleanProp}`;
+        if (value !== undefined && value !== null) styleVars[varName] = String(value);
+      } catch (err) {
+        console.warn(`[ChainCSS Solid] Error evaluating dynamic "${prop}":`, err);
+      }
+    }
+  }
+  return styleVars;
+}
+
+/**
+ * SolidJS composable for ChainCSS dynamic styles.
+ * Returns signals that reactively update when context changes.
+ *
+ * @param styles - Style definitions from .chain.ts files
+ * @param contextSource - Object containing signals or plain values
+ *
+ * @example
+ * ```tsx
+ * import { createSignal } from 'solid-js'
+ * import { useChainStyles } from 'chaincss/runtime'
+ * import { themeToggle, counterBadge } from '../styles/playground.chain'
+ *
+ * function Demo() {
+ *   const [isDark, setIsDark] = createSignal(true)
+ *   const [count, setCount] = createSignal(0)
+ *
+ *   const { classes, styleVars } = useChainStyles(
+ *     { themeToggle, counterBadge },
+ *     { isDark, count }
+ *   )
+ *
+ *   return (
+ *     <button class={classes().themeToggle} style={styleVars()} onClick={() => setIsDark(!isDark())}>
+ *       {isDark() ? '🌙 Dark' : '☀️ Light'}
+ *     </button>
+ *   )
+ * }
+ * ```
+ */
+export function useChainStyles(
+  styles: Record<string, any>,
+  contextSource: Record<string, any> = {}
+) {
+  const moduleId = generateModuleId();
+  const injectedIds: string[] = [];
+
+  // Build context: unwrap Solid signals automatically
+  const buildContext = () => {
+    const ctx: Record<string, any> = {};
+    for (const [key, val] of Object.entries(contextSource)) {
+      // Solid signals are functions — call them to get the value
+      ctx[key] = typeof val === 'function' ? val() : val;
+    }
+    return ctx;
+  };
+
+  // Compile static class names (memoized)
+  const classNames = createMemo(() => {
+    const names: Record<string, string> = {};
+    for (const [key, styleObj] of Object.entries(styles)) {
+      if (!styleObj) continue;
+      names[key] =
+        styleObj.className ||
+        styleObj.selectors?.[0]?.replace(/^\./, '') ||
+        key;
+    }
+    return names;
+  });
+
+  // Evaluate dynamic styles reactively
+  const styleVars = createMemo(() => {
+    const context = buildContext();
+    const vars: Record<string, string> = {};
+    for (const [, styleObj] of Object.entries(styles)) {
+      if (!styleObj?.dynamic) continue;
+      Object.assign(vars, resolveDynamicStyles(styleObj, context));
+    }
+    return vars;
+  });
+
+  onCleanup(() => {
+    try { removeRuntimeModule(moduleId); } catch {}
+    for (const id of injectedIds) { try { removeRuntimeModule(id); } catch {} }
+  });
+
+  return {
+    classes: classNames,
+    styleVars,
+    cx: (...names: string[]) => {
+      const currentMap = classNames();
+      return names.map(name => currentMap[name] || '').filter(Boolean).join(' ');
+    },
+    cn: (...names: string[]) => {
+      const currentMap = classNames();
+      return names.map(name => currentMap[name] || '').filter(Boolean).join(' ');
+    },
+    inject: (newStyles: Record<string, any>) => {
+      const injectedId = `injected-${generateModuleId()}`;
+      injectedIds.push(injectedId);
+      compileRuntime(newStyles, injectedId);
+    },
+  };
+}
+
 export default { useAtomicClasses, styled, createStyledComponents, useComputedStyles, useDynamicStyles, ChainCSSProvider, useChainCSSContext, setManifest, setTokens, cx, withChainStyles, createReactiveStyles, enableSolidDebug, disableSolidDebug, isSolidDebugEnabled };

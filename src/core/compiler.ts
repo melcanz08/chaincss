@@ -246,7 +246,7 @@ export class ChainCSSCompiler {
       atomicClasses = [...atomicClasses,...((r as any).atomicClasses || [])]
     }
 
-    const result = { css, classMap, atomicClasses, stats, inspector: (baseResult as any).inspector } as CompileResult
+    const result = { css, classMap, atomicClasses, stats, dynamic: (baseResult as any).dynamic, inspector: (baseResult as any).inspector } as CompileResult
     this.trackCSS(result.css)
     this.trackStats(result.stats as any)
     return result
