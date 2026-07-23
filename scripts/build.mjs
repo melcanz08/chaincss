@@ -175,7 +175,81 @@ const targets = [
     platform: "node",
     format: "esm",
     packages: "external",
-  }
+  },
+    // Next.js Server
+  {
+    name: 'next-server',
+    entryPoints: ['src/next/server.tsx'],
+    outfile: 'dist/next/server.js',
+    platform: 'node',
+    format: 'esm',
+    external: ['react', 'react-dom', 'fs', 'path'],
+    packages: 'external',
+  },
+  {
+    name: 'next-server-cjs',
+    entryPoints: ['src/next/server.tsx'],
+    outfile: 'dist/next/server.cjs',
+    platform: 'node',
+    format: 'cjs',
+    external: ['react', 'react-dom', 'fs', 'path'],
+    packages: 'external',
+  },
+  // Next.js Client
+  {
+    name: 'next-client',
+    entryPoints: ['src/next/client.tsx'],
+    outfile: 'dist/next/client.js',
+    platform: 'browser',
+    format: 'esm',
+    external: ['react', 'react-dom'],
+  },
+  {
+    name: 'next-client-cjs',
+    entryPoints: ['src/next/client.tsx'],
+    outfile: 'dist/next/client.cjs',
+    platform: 'browser',
+    format: 'cjs',
+    external: ['react', 'react-dom'],
+  },
+  // Next.js Plugin
+  {
+    name: 'next-plugin',
+    entryPoints: ['src/next/plugin.ts'],
+    outfile: 'dist/next/plugin.js',
+    platform: 'node',
+    format: 'esm',
+    external: ['fs', 'path', 'glob', 'webpack'],
+    packages: 'external',
+  },
+  {
+    name: 'next-plugin-cjs',
+    entryPoints: ['src/next/plugin.ts'],
+    outfile: 'dist/next/plugin.cjs',
+    platform: 'node',
+    format: 'cjs',
+    external: ['fs', 'path', 'glob', 'webpack'],
+    packages: 'external',
+  },
+  // PostCSS Plugin
+  {
+    name: 'postcss',
+    entryPoints: ['src/postcss/index.cjs'],
+    outfile: 'dist/postcss/index.js',
+    platform: 'node',
+    format: 'esm',
+    external: ['fs', 'path', 'glob', 'postcss'],
+    packages: 'external',
+  },
+  {
+    name: 'postcss-cjs',
+    entryPoints: ['src/postcss/index.cjs'],
+    outfile: 'dist/postcss/index.cjs',
+    platform: 'node',
+    format: 'cjs',
+    external: ['fs', 'path', 'glob', 'postcss'],
+    packages: 'external',
+  },
 ];
 
 // ============================================================================

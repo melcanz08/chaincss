@@ -1,4 +1,4 @@
-// src/runtime/index.ts
+// src/runtime/index.ts — ChainCSS Runtime
 
 // Core runtime
 export { compileRuntime as compile, runRuntime as run, styleInjector } from './injector.js';
@@ -7,13 +7,13 @@ export { chain, chain as $ } from '../core/style-collector.js';
 export { setManifest } from './injector.js';
 
 // ==========================================================================
-// React — Direct re-export (synchronous for React hooks)
+// React — Direct re-export
 // ==========================================================================
 
 export {
   useChainStyles,
+  useChainStylesApplied,
   useDynamicChainStyles,
-  useThemeChainStyles,
   ChainCSSGlobal,
   cx,
   withChainStyles,
@@ -21,6 +21,7 @@ export {
   disableChainCSSDebug,
   isDebugEnabled,
   createStyledComponent,
+  createStyledComponents,
   useComputedStyles
 } from './react.js';
 
@@ -47,6 +48,10 @@ async function callVueExport(name: string, ...args: any[]): Promise<any> {
   return typeof fn === 'function' ? fn(...args) : undefined;
 }
 
+// New: useChainStyles for Vue
+export const useChainStylesVue = (...args: any[]) => callVueExport('useChainStyles', ...args);
+
+// Legacy
 export const useAtomicClassesVue = (...args: any[]) => callVueExport('useAtomicClasses', ...args);
 export const useComputedStylesVue = (...args: any[]) => callVueExport('useComputedStyles', ...args);
 export const provideStyleContext = (...args: any[]) => callVueExport('provideStyleContext', ...args);
@@ -80,6 +85,10 @@ async function callSvelteExport(name: string, ...args: any[]): Promise<any> {
   return typeof fn === 'function' ? fn(...args) : undefined;
 }
 
+// New: useChainStyles for Svelte
+export const useChainStylesSvelte = (...args: any[]) => callSvelteExport('useChainStyles', ...args);
+
+// Legacy
 export const useAtomicClassesSvelte = (...args: any[]) => callSvelteExport('useAtomicClasses', ...args);
 export const cxSvelte = (...args: any[]) => callSvelteExport('cx', ...args);
 export const useComputedStylesSvelte = (...args: any[]) => callSvelteExport('useComputedStyles', ...args);
@@ -115,10 +124,13 @@ async function callSolidExport(name: string, ...args: any[]): Promise<any> {
   return typeof fn === 'function' ? fn(...args) : undefined;
 }
 
+// New: useChainStyles for Solid (direct, no async needed)
 export const useChainStylesSolid = (...args: any[]) => callSolidExport('useChainStyles', ...args);
+
+// Legacy
 export const useComputedStylesSolid = (...args: any[]) => callSolidExport('useComputedStyles', ...args);
 export const createStyledComponentSolid = (...args: any[]) => callSolidExport('createStyledComponent', ...args);
-export const cxSolid = (...args: any[]) => callSolidExport('cxSolid', ...args);
+export const cxSolid = (...args: any[]) => callSolidExport('cx', ...args);
 export const createStyleContext = (...args: any[]) => callSolidExport('createStyleContext', ...args);
 
 // ==========================================================================
@@ -145,9 +157,13 @@ export {
 export type {
   RuntimeStyleDefinition,
   UseChainStylesOptions,
+  UseChainStylesReturn,
   RuntimeCompiledResult,
   StyleInjector,
   UseAtomicClassesReturn,
+  UseChainStylesReturnVue,
+  UseChainStylesReturnSvelte,
+  UseChainStylesReturnSolid,
   HMRPayload,
   ChainCSSDebugger
 } from './types.js';

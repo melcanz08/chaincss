@@ -4,50 +4,12 @@
 
 import React, { useMemo, useEffect, createContext, useContext } from 'react';
 import type { UseChainStylesOptions } from './types.js';
-import { getThemeContext, setThemeContext, type ThemeContext } from './theme-context.js';
 
 interface StyleDefinition {
   className?: string;
   selectors?: string[];
   dynamic?: Record<string, Function>;
   [key: string]: any;
-}
-
-// ============================================================================
-// Theme Context (React binding)
-// ============================================================================
-
-const ChainCSSThemeContext = createContext<ThemeContext>(getThemeContext());
-
-/**
- * Wrap your app with this to provide theme context to all chain.dynamic() styles.
- * Syncs to both React context and global context.
- */
-export function ChainCSSThemeProvider({
-  theme,
-  children
-}: {
-  theme: Partial<ThemeContext>;
-  children: React.ReactNode;
-}) {
-  const merged = useMemo(() => {
-    const m = { ...getThemeContext(), ...theme };
-    setThemeContext(m);
-    return m;
-  }, [theme]);
-
-  return React.createElement(
-    ChainCSSThemeContext.Provider,
-    { value: merged },
-    children
-  );
-}
-
-/**
- * Hook to access current theme context
- */
-export function useChainCSSTheme(): ThemeContext {
-  return useContext(ChainCSSThemeContext);
 }
 
 // ============================================================================
@@ -85,7 +47,6 @@ export function useChainStyles(
   cx: (...names: any[]) => string;
   cn: (...names: any[]) => string;
 } {
-  const theme = useContext(ChainCSSThemeContext) || getThemeContext();
 
   // Build dependency array for useMemo from deps object values
   const depValues = Object.values(deps);
@@ -95,7 +56,7 @@ export function useChainStyles(
     const styleVars: Record<string, string> = {};
 
     // Merge theme and component deps into a single context object
-    const context = { ...theme, ...deps };
+    const context = { ...deps };
 
     for (const [key, styleObj] of Object.entries(styles)) {
       if (!styleObj) continue;
@@ -139,7 +100,7 @@ export function useChainStyles(
     }
 
     return { classes, styleVars, cx, cn: cx };
-  }, [theme, ...depValues]);
+  }, [...depValues]);
 }
 
 /**

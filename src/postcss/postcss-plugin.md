@@ -1,157 +1,166 @@
-# ChainCSS PostCSS Plugin - Scaffold Complete
+# ChainCSS PostCSS Plugin
 
-One file = support for ALL bundlers.
+One plugin = all bundlers. Uses the real ChainCSS compiler for 100% accuracy.
 
-## What this gives you
+---
 
-**Before:**
-- Vite plugin -> only Vite
-- Webpack plugin -> only Webpack
-- Next plugin -> only Next
-- No Parcel, no Turbopack, no Rspack, no Farm
+## Supported Bundlers
 
-**After (with PostCSS plugin):**
-- Vite: works (via postcss.config.js)
-- Webpack: works
-- Next.js: works
-- Parcel: works
-- Turbopack: works (Next.js 13+ uses Turbopack)
-- Rspack: works
-- Farm: works
-- Any tool that supports PostCSS = works
+| Bundler | Status |
+|---------|--------|
+| Vite | ✅ via postcss.config.js |
+| Webpack | ✅ via postcss.config.js |
+| Next.js | ✅ via postcss.config.js |
+| Turbopack | ✅ (Next.js 13+) |
+| Parcel | ✅ |
+| Rspack | ✅ |
+| Farm | ✅ |
+| Any PostCSS-compatible tool | ✅ |
 
-Plus you can now use Tailwind-style ecosystem:
+---
 
-```js
-// postcss.config.js - works everywhere
-module.exports = {
-  plugins: [
-    require('chaincss/postcss')({
-      content: ['./src/**/*.{js,ts,jsx,tsx}']
-    }),
-    require('autoprefixer'),
-  ]
-}
-```
+## How It Works
 
-## How it works
+1. Scans your configured globs for `.chain.ts` / `.chain.js` files
+2. Uses the **real `StyleCollector` + `compileToCSS`** — full API: `.box()`, `.typography()`, `.flex()`, `.hover()`, `.media()`, `.dynamic()`, etc.
+3. Generates CSS with proper `var()` placeholders for dynamic properties
+4. Replaces `@chaincss;` directive in your CSS with the generated styles
 
-1. Scans your `content` globs for `chain().bg('red').p(4)` calls
-2. Uses your real `compileToCSS` if available (with OKLCH, entanglement, etc.)
-3. Replaces `@chaincss;` in CSS with generated CSS
+---
 
 ## Usage
 
-### 1. CSS
+### 1. CSS File
 
 ```css
 /* app.css or globals.css */
-@chaincss; /* will be replaced with all collected styles */
+@chaincss; /* Replaced with all collected ChainCSS styles */
 
-/* or */
+/* Works alongside Tailwind */
 @tailwind base;
 @chaincss;
 @tailwind utilities;
 ```
 
-### 2. Config
+### 2. Configuration
 
 ```js
 // postcss.config.js (CommonJS)
 module.exports = {
   plugins: {
     'chaincss/postcss': {
-      content: ['./src/**/*.{js,ts,jsx,tsx}', './app/**/*.{js,ts,jsx,tsx}'],
+      content: [
+        './src/**/*.chain.{ts,js,tsx,jsx}',
+        './app/**/*.chain.{ts,js,tsx,jsx}'
+      ],
       debug: true
     },
     autoprefixer: {}
   }
 }
+```
 
-// OR ESM - postcss.config.mjs
+```js
+// postcss.config.mjs (ESM)
 export default {
   plugins: {
     'chaincss/postcss': {
-      content: ['./src/**/*.{js,ts,jsx,tsx}']
+      content: ['./src/**/*.chain.{ts,js,tsx,jsx}']
     }
   }
 }
 ```
 
-### 3. Next.js App Router with PostCSS (simpler than webpack plugin)
+### 3. Next.js App Router
 
 ```js
 // postcss.config.js
 module.exports = {
   plugins: {
     'chaincss/postcss': {
-      content: ['./app/**/*.{js,ts,jsx,tsx}', './components/**/*.{js,ts,jsx,tsx}']
+      content: ['./app/**/*.chain.{ts,js,tsx,jsx}']
     }
   }
 }
+```
 
-// app/globals.css
+```css
+/* app/globals.css */
 @chaincss;
+```
 
-// app/layout.tsx - NO need for ChainCSSServerStyles!
-import './globals.css' // PostCSS already injected CSS
+```tsx
+// app/layout.tsx — No extra components needed!
+import './globals.css'
 
 export default function Layout({ children }) {
   return <html><body>{children}</body></html>
 }
 ```
 
-### 4. Vite
+### 4. Vite (Alternative to chaincss/vite Plugin)
 
 ```js
-// vite.config.js - no need for chaincss/vite plugin!
-export default {
-  // just use postcss.config.js
-}
-
 // postcss.config.js
 module.exports = {
   plugins: {
-    'chaincss/postcss': { content: ['./src/**/*.{js,ts,jsx,tsx}'] }
+    'chaincss/postcss': {
+      content: ['./src/**/*.chain.{ts,js,tsx,jsx}']
+    }
   }
 }
 ```
 
-## Comparison to Tailwind
+---
 
-| Feature | Tailwind | ChainCSS (with this plugin) |
-|---------|----------|---------------------------|
-| PostCSS plugin | ✅ `tailwindcss` | ✅ `chaincss/postcss` |
-| Content scanning | ✅ | ✅ |
-| Works in any bundler | ✅ | ✅ Now yes |
-| Community plugins | 50+ | You can now make them! |
-| `@` directive | `@tailwind` | `@chaincss` |
+## Full API Support
 
-## Next steps
+The PostCSS plugin uses the real ChainCSS compiler, so all methods work:
 
-1. Copy `src/postcss/index.js` to your project
-2. Add to package.json exports:
+```typescript
+// All of these compile correctly:
+chain()
+  .box({ padding: 24, borderRadius: 8 })
+  .typography({ fontSize: 16, color: '#fff' })
+  .flex({ align: 'center', gap: 8 })
+  .hover().background({ color: 'blue' }).end()
+  .media('(max-width: 640px)', (c) => c.box({ padding: 12 }))
+  .$el('my-component')
 
-```json
-{
-  "exports": {
-    "./postcss": "./src/postcss/index.js"
-  }
-}
+chain.dynamic()
+  .raw({ backgroundColor: (ctx) => ctx.isDark ? '#333' : '#fff' })
+  .$el('theme-toggle')
 ```
 
-3. Test:
+---
 
-```bash
-mkdir test-postcss
-cd test-postcss
-npm init -y
-npm install postcss chaincss
-# create postcss.config.js with chaincss/postcss
-# create src/app.js with chain().bg('red').p(4).$el()
-# npx postcss src/app.css -o dist/app.css
-```
+## Options
 
-4. Replace fallback parser with your real parser from `core/style-collector.js` for 100% accuracy
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `content` | `string[]` | `['./src/**/*.chain.{ts,js,tsx,jsx}']` | Glob patterns for chain files |
+| `output` | `string` | `null` | Optional file path to write CSS output |
+| `debug` | `boolean` | `false` | Enable verbose logging |
 
-The fallback regex in this scaffold handles 80% of cases. For production, import your real AST parser.
+---
+
+## Comparison
+
+| Feature | Tailwind | ChainCSS PostCSS |
+|---------|----------|------------------|
+| PostCSS plugin | `tailwindcss` | `chaincss/postcss` |
+| Content scanning | Utility classes in JSX | `.chain.ts` files |
+| Works in any bundler | ✅ | ✅ |
+| Build-time CSS | ✅ | ✅ |
+| Dynamic styles | ❌ | ✅ via `var()` + CSS custom properties |
+| Type-safe API | ❌ | ✅ TypeScript `.chain.ts` |
+| Zero-runtime (static) | ✅ | ✅ |
+| Mixed mode (static + dynamic) | ❌ | ✅ |
+
+---
+
+## License
+
+MIT
+
+**Author:** Rommel Caneos · [Contact](mailto:rec0608m@gmail.com) · [Website](https://www.chaincss.dev)

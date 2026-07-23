@@ -3,7 +3,6 @@
 
 import { compileRuntime, removeRuntimeModule } from './injector.js';
 import type { UseAtomicClassesOptions, UseAtomicClassesReturnVue } from './types.js';
-import { getThemeContext, type ThemeContext } from './theme-context.js';
 
 const CHAIN_CSS_KEY = Symbol('chaincss');
 
@@ -97,40 +96,6 @@ function resolveDynamicStyles(
   return styleVars;
 }
 
-// ============================================================================
-// useChainStyles — Vue 3 Composable (NEW)
-// ============================================================================
-
-/**
- * Vue 3 composable for ChainCSS dynamic styles.
- * Equivalent to React's useChainStyles hook.
- *
- * @param styles - Style definitions from .chain.ts files
- * @param contextSource - Ref or reactive object containing context values
- *
- * @example
- * ```vue
- * <script setup>
- * import { ref } from 'vue'
- * import { useChainStyles } from 'chaincss/runtime'
- * import { themeToggle } from './styles/playground.chain'
- *
- * const isDark = ref(true)
- * const count = ref(0)
- *
- * const { classes, styleVars } = useChainStyles(
- *   { themeToggle },
- *   { isDark, count }
- * )
- * </script>
- *
- * <template>
- *   <button :class="classes.themeToggle" :style="styleVars" @click="isDark = !isDark">
- *     {{ isDark ? '🌙' : '☀️' }}
- *   </button>
- * </template>
- * ```
- */
 export function useChainStyles(
   styles: Record<string, any>,
   contextSource: Record<string, any> = {}
@@ -144,7 +109,7 @@ export function useChainStyles(
 
   // Build reactive context from refs and plain values
   const buildContext = () => {
-    const ctx: Record<string, any> = { ...getThemeContext() };
+    const ctx: Record<string, any> = {};
     for (const [key, val] of Object.entries(contextSource)) {
       // Unwrap Vue refs automatically
       ctx[key] = val?.__v_isRef || (val?.value !== undefined && val?.constructor?.name === 'RefImpl')
@@ -406,3 +371,35 @@ export function disableVueDebug(): void {
 export function isVueDebugEnabled(): boolean {
   return typeof window !== 'undefined' && !!(window as any).__CHAINCSS_VUE_DEBUG__;
 }
+
+/**
+ * Vue 3 composable for ChainCSS dynamic styles.
+ * Equivalent to React's useChainStyles hook.
+ *
+ * @param styles - Style definitions from .chain.ts files
+ * @param contextSource - Ref or reactive object containing context values
+ *
+ * @example
+
+*<script setup>
+import { ref } from 'vue'
+import { useChainStyles } from 'chaincss/runtime'
+import { themeToggle, counterBadge } from '../styles/playground.chain'
+
+const isDark = ref(true)
+const count = ref(0)
+
+const { classes, styleVars } = useChainStyles(
+  { themeToggle, counterBadge },
+  { isDark, count }  // Vue refs auto-unwrapped!
+)
+</script>
+
+<template>
+  <button :class="classes.themeToggle" :style="styleVars" @click="isDark = !isDark">
+    {{ isDark ? '🌙 Dark' : '☀️ Light' }}
+  </button>
+  <button :class="classes.counterBadge" :style="styleVars" @click="count++">
+    Clicks: {{ count }}
+  </button>
+</template>*/

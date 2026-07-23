@@ -217,36 +217,6 @@ function resolveDynamicStyles(
   return styleVars;
 }
 
-/**
- * SolidJS composable for ChainCSS dynamic styles.
- * Returns signals that reactively update when context changes.
- *
- * @param styles - Style definitions from .chain.ts files
- * @param contextSource - Object containing signals or plain values
- *
- * @example
- * ```tsx
- * import { createSignal } from 'solid-js'
- * import { useChainStyles } from 'chaincss/runtime'
- * import { themeToggle, counterBadge } from '../styles/playground.chain'
- *
- * function Demo() {
- *   const [isDark, setIsDark] = createSignal(true)
- *   const [count, setCount] = createSignal(0)
- *
- *   const { classes, styleVars } = useChainStyles(
- *     { themeToggle, counterBadge },
- *     { isDark, count }
- *   )
- *
- *   return (
- *     <button class={classes().themeToggle} style={styleVars()} onClick={() => setIsDark(!isDark())}>
- *       {isDark() ? '🌙 Dark' : '☀️ Light'}
- *     </button>
- *   )
- * }
- * ```
- */
 export function useChainStyles(
   styles: Record<string, any>,
   contextSource: Record<string, any> = {}
@@ -313,3 +283,46 @@ export function useChainStyles(
 }
 
 export default { useAtomicClasses, styled, createStyledComponents, useComputedStyles, useDynamicStyles, ChainCSSProvider, useChainCSSContext, setManifest, setTokens, cx, withChainStyles, createReactiveStyles, enableSolidDebug, disableSolidDebug, isSolidDebugEnabled };
+
+// Usage example (SolidJS):
+
+/** SolidJS composable for ChainCSS dynamic styles.
+ * Returns signals that reactively update when context changes.
+ *
+ * @param styles - Style definitions from .chain.ts files
+ * @param contextSource - Object containing signals or plain values
+ *
+ * @exampleimport { createSignal } from 'solid-js'
+ * 
+
+import { useChainStyles } from 'chaincss/runtime'
+import { themeToggle, counterBadge } from '../styles/playground.chain'
+
+function Demo() {
+  const [isDark, setIsDark] = createSignal(true)
+  const [count, setCount] = createSignal(0)
+
+  const { classes, styleVars } = useChainStyles(
+    { themeToggle, counterBadge },
+    { isDark, count }  // Signals auto-unwrapped via ()
+  )
+
+  return (
+    <>
+      <button
+        class={classes().themeToggle}
+        style={styleVars()}
+        onClick={() => setIsDark(!isDark())}
+      >
+        {isDark() ? '🌙 Dark' : '☀️ Light'}
+      </button>
+      <button
+        class={classes().counterBadge}
+        style={styleVars()}
+        onClick={() => setCount(c => c + 1)}
+      >
+        Clicks: {count()}
+      </button>
+    </>
+  )
+}*/

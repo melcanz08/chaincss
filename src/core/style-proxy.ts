@@ -4,7 +4,6 @@
 
 import { styleInjector } from '../runtime/injector.js';
 import { partitionForBuild, compileToCSS } from './style-compiler.js';
-import { getThemeContext } from '../runtime/theme-context.js';
 
 interface StyleCollectorLike {
   set(prop: string, value: any): any;

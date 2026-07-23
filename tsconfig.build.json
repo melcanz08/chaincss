@@ -19,7 +19,9 @@
     "src/compiler/**/*",
     "src/cli/**/*",
     "src/plugins/**/*",
-    "src/runtime/**/*"
+    "src/runtime/**/*",
+    "src/next/**/*",
+    "src/postcss/**/*"
   ],
   "exclude": ["node_modules", "dist", "__tests__", "benchmarks", "examples"]
 }

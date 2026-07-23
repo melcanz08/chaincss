@@ -25,7 +25,6 @@ export interface UseChainStylesOptions {
   ssr?: boolean;
 }
 
-// Fixes Issue 3: Added clean explicitly exported hook return type
 export interface UseChainStylesReturn {
   classes: Record<string, string>;
   styleVars: Record<string, string>;
@@ -94,15 +93,10 @@ export interface ChainCSSManifest {
 }
 
 // ============================================================================
-// Framework-Specific Reference Adaptations (Safe without dependencies)
+// Framework-Specific Types
 // ============================================================================
 
-// Local type placeholders to solve Issue 1 (Zero-dependency compiler fallback layers)
-type VueRef<T> = { value: T };
-type VueComputedRef<T> = { readonly value: T };
-type SvelteReadable<T> = { subscribe: (callback: (value: T) => void) => () => void };
-
-// React-specific types
+// React
 export interface UseAtomicClassesReturn extends UseChainStylesReturn {
   inject?: (styles: Record<string, any>) => void;
 }
@@ -111,25 +105,32 @@ export interface UseDynamicChainStylesReturn extends UseAtomicClassesReturn {
   updateStyles: (newStyles: Record<string, any>) => void;
 }
 
-export interface UseThemeChainStylesReturn extends UseAtomicClassesReturn {
-  theme: any;
-  setTheme: (theme: any) => void;
+// Vue — useChainStyles return type
+export interface UseChainStylesReturnVue {
+  classes: { value: Record<string, string> };
+  styleVars: { value: Record<string, string> };
+  cx: (name: string) => string;
+  cn: (...names: string[]) => string;
 }
 
-// Vue-specific types
+// Vue — legacy
 export interface UseAtomicClassesReturnVue {
-  classes: VueRef<Record<string, string>>;
+  classes: { value: Record<string, string> };
   cx: (name: string) => string;
   cn: (...names: string[]) => string;
   inject: (styles: Record<string, any>) => void;
 }
 
-export interface UseComputedStylesReturnVue {
-  classes: VueRef<Record<string, string>>;
-  rootClass: VueComputedRef<string>;
+// Svelte — useChainStyles return type
+export interface UseChainStylesReturnSvelte {
+  classes: Record<string, string>;
+  styleVars: Record<string, string>;
+  cx: (name: string) => string;
+  cn: (...names: string[]) => string;
+  inject?: (styles: Record<string, any>) => void;
 }
 
-// Svelte-specific types
+// Svelte — legacy
 export interface UseAtomicClassesReturnSvelte {
   subscribe: (callback: (value: Record<string, string>) => void) => () => void;
   get: () => Record<string, string>;
@@ -137,23 +138,20 @@ export interface UseAtomicClassesReturnSvelte {
   cn: (...names: string[]) => string;
 }
 
-export interface UseComputedStylesReturnSvelte {
-  classes: UseAtomicClassesReturnSvelte;
-  rootClass: SvelteReadable<string>;
+// Solid — useChainStyles return type
+export interface UseChainStylesReturnSolid {
+  classes: () => Record<string, string>;
+  styleVars: () => Record<string, string>;
+  cx: (...names: string[]) => string;
+  cn: (...names: string[]) => string;
+  inject?: (styles: Record<string, any>) => void;
 }
 
-// Solid-specific types (Fixes Issue 2: Streamlined basic function declaration)
-type SolidAccessor<T> = () => T;
-
+// Solid — legacy
 export interface UseAtomicClassesReturnSolid {
-  classes: SolidAccessor<Record<string, string>>;
+  classes: () => Record<string, string>;
   cx: (...names: string[]) => string;
   inject: (styles: Record<string, any>) => void;
-}
-
-export interface UseComputedStylesReturnSolid {
-  classes: SolidAccessor<Record<string, string>>;
-  rootClass: SolidAccessor<string>;
 }
 
 // ============================================================================
@@ -214,8 +212,15 @@ export type ResponsiveValue<T> = T | {
 
 export type TokenValue<T = string> = T | `$${string}`;
 
+export interface RuntimeStyleDefinition {
+  className?: string;
+  selectors?: string[];
+  dynamic?: Record<string, Function>;  // Functions accept context: (ctx) => value
+  [key: string]: any;
+}
+
 // ============================================================================
-// Global Augmentations
+// Global Augmentations (debug flags only — no state)
 // ============================================================================
 
 declare global {
@@ -248,13 +253,6 @@ export function isChainCSSManifest(obj: any): obj is ChainCSSManifest {
 
 export function isTokenStore(obj: any): obj is TokenStore {
   return obj && typeof obj === 'object';
-}
-
-export interface RuntimeStyleDefinition {
-  className?: string;
-  selectors?: string[];
-  dynamic?: Record<string, () => string | number>;
-  [key: string]: any;
 }
 
 export function isHMRPayload(obj: any): obj is HMRPayload {

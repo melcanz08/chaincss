@@ -1,13 +1,14 @@
 'use client';
-// src/next/client.tsx - FINAL - Uses real ChainCSS compiler
+// src/next/client.tsx — Full ChainCSS client integration
+// Uses real StyleCollector + injector. No standalone fallback.
 
 import React, { useEffect, useLayoutEffect } from 'react';
 
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
-// Try real compiler
+// Import real compiler and collector
 let compileToCSS: any = null;
-let baseChain: any = null;
+let chainFn: any = null;
 let styleInjector: any = null;
 
 try {
@@ -17,23 +18,32 @@ try {
   try {
     const c = require('../../dist/core/style-compiler.cjs');
     compileToCSS = c.compileToCSS;
-  } catch {}
+  } catch {
+    console.warn('[ChainCSS Client] style-compiler not found. Using fallback.');
+  }
 }
 
 try {
   const collector = require('../core/style-collector.js');
-  baseChain = collector.chain;
+  chainFn = collector.chain;
 } catch {
   try {
     const c = require('../../dist/core/style-collector.cjs');
-    baseChain = c.chain;
-  } catch {}
+    chainFn = c.chain;
+  } catch {
+    console.warn('[ChainCSS Client] style-collector not found. Using fallback.');
+  }
 }
 
 try {
   const inj = require('../runtime/injector.js');
   styleInjector = inj.styleInjector || inj.default;
-} catch {}
+} catch {
+  try {
+    const inj = require('../../dist/runtime/injector.cjs');
+    styleInjector = inj.styleInjector;
+  } catch {}
+}
 
 // ============================================================================
 // Client registry
@@ -57,108 +67,98 @@ function getStyleEl(): HTMLStyleElement {
 function inject(className: string, css: string) {
   if (typeof document === 'undefined' || clientRegistry.has(className)) return;
   clientRegistry.set(className, css);
-  
-  // Use real injector if available (has entanglement, OKLCH handling)
+
+  // Use real injector if available (has deduplication, content hash, etc.)
   if (styleInjector) {
     try {
       styleInjector.inject(className, css);
       return;
     } catch {}
   }
-  
+
   // Fallback
   const el = getStyleEl();
   if (el) el.textContent = (el.textContent || '') + '\n' + css;
 }
 
 // ============================================================================
-// chain() - Client version with real compiler
+// chain() — Client version using real StyleCollector
 // ============================================================================
-
-function fallbackCompile(styles: Record<string, any>, className: string): string {
-  let css = '';
-  for (const [k, v] of Object.entries(styles)) {
-    if (v == null || typeof v === 'object') continue;
-    const kebab = k.replace(/[A-Z]/g, m => `-${m.toLowerCase()}`);
-    css += `${kebab}:${v};`;
-  }
-  return `.${className}{${css}}`;
-}
-
-function fallbackHash(s: string): string {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
-  return `c-${Math.abs(h).toString(36).slice(0, 6)}`;
-}
 
 export function chain(id?: string) {
-  // Use real chain if available
-  if (baseChain) {
-    try {
-      const instance = baseChain({ id });
-      const origEl = instance.$el?.bind(instance);
-      if (origEl) {
-        instance.$el = () => {
-          const result = origEl();
-          const className = result.root || result.className;
-          // Real chain already injected via its own injector, but ensure
-          if (className && (instance as any).__css__) {
-            inject(className, (instance as any).__css__);
-          }
-          return result;
-        };
-      }
-      return instance;
-    } catch (e) {
-      console.warn('[ChainCSS Client] Real chain failed, fallback:', e);
-    }
+  if (!chainFn) {
+    console.warn('[ChainCSS Client] StyleCollector not available. Styles will not be applied.');
+    return new Proxy({}, {
+      get: () => () => new Proxy({}, { get: () => () => ({ root: '', className: '' }) }),
+    });
   }
 
-  // Fallback standalone
-  const styles: Record<string, any> = {};
-  const finalId = id || fallbackHash(Math.random().toString());
+  const instance = chainFn({ id });
 
-  const handler = {
-    get(target: any, prop: string) {
+  return new Proxy(instance, {
+    get(target, prop: string) {
+      // Terminal methods — finalize and inject CSS
       if (prop === '$el') {
-        return () => {
-          let css: string;
-          if (compileToCSS) {
-            try { css = compileToCSS(styles, { scopeSelector: `.${finalId}` }); }
-            catch { css = fallbackCompile(styles, finalId); }
-          } else {
-            css = fallbackCompile(styles, finalId);
+        return (...selectors: string[]) => {
+          const result = (target as any).$el
+            ? (target as any).$el(...selectors)
+            : (target as any).build(selectors.length ? selectors : undefined);
+
+          const className =
+            result.className ||
+            result.selectors?.[0]?.replace(/^\./, '') ||
+            (typeof result === 'string' ? result : id || 'chain-el');
+
+          // Inject CSS using real compiler + injector
+          if (compileToCSS && typeof window !== 'undefined' && !clientRegistry.has(className)) {
+            try {
+              const css = compileToCSS(
+                typeof result === 'string'
+                  ? { selectors: [`.${className}`] }
+                  : result,
+                { scopeSelector: `.${className}`, minify: true }
+              );
+              if (css) inject(className, css);
+            } catch (e) {
+              console.warn('[ChainCSS Client] compileToCSS failed:', e);
+            }
           }
-          if (typeof window !== 'undefined') inject(finalId, css);
-          return { root: finalId, className: finalId };
+
+          if (typeof result === 'string') {
+            return { root: result, className: result };
+          }
+          return {
+            root: className,
+            className,
+            ...result,
+          };
         };
       }
-      if (prop === 'toClassName') return () => handler.get(target, '$el')().root;
-      if (prop === 'then') return undefined;
-      if (prop === '_styles') return styles;
-      
-      return (...args: any[]) => {
-        const value = args[0];
-        const map: Record<string, string> = {
-          bg: 'background', p: 'padding', m: 'margin',
-          w: 'width', h: 'height', rounded: 'borderRadius',
-        };
-        const cssProp = map[prop] || prop;
-        if (value === undefined) {
-          if (prop === 'flex') styles.display = 'flex';
-        } else {
-          styles[cssProp] = value;
-        }
-        return new Proxy(target, handler);
-      };
-    }
-  };
 
-  return new Proxy({}, handler);
+      if (prop === 'toClassName') {
+        return () => {
+          const r = (target as any).$el?.() || (target as any).build?.() || {};
+          return r.root || r.className || r.selectors?.[0]?.replace(/^\./, '') || id || 'chain-el';
+        };
+      }
+
+      if (prop === 'then') return undefined;
+
+      // Pass through all other methods to the real chain
+      const value = (target as any)[prop];
+      if (typeof value === 'function') {
+        return (...args: any[]) => {
+          value.apply(target, args);
+          return instance; // Return the proxy for chaining
+        };
+      }
+      return value;
+    },
+  });
 }
 
 // ============================================================================
-// useAtomicClasses - Now uses real compiler if available
+// useAtomicClasses — Compiles style objects at runtime
 // ============================================================================
 
 export function useAtomicClasses(styles: Record<string, any>) {
@@ -166,39 +166,34 @@ export function useAtomicClasses(styles: Record<string, any>) {
 
   useIsomorphicLayoutEffect(() => {
     const result: Record<string, string> = {};
-    
+
     for (const [key, def] of Object.entries(styles)) {
       if (!def) continue;
-      
+
       // Already a chain result
       if (typeof def === 'object' && 'root' in def) {
         result[key] = (def as any).root;
         continue;
       }
-      
-      // Object style -> compile
-      if (typeof def === 'object') {
-        const id = fallbackHash(key + JSON.stringify(def));
-        let css: string;
-        
-        // Use REAL compiler - this gives you entanglement, OKLCH, etc.
+
+      // Object with selectors — use real compiler
+      if (typeof def === 'object' && def.selectors) {
+        const className = def.selectors[0]?.replace(/^\./, '') || key;
+
         if (compileToCSS) {
           try {
-            css = compileToCSS(def, { scopeSelector: `.${id}` });
+            const css = compileToCSS(def, { scopeSelector: `.${className}`, minify: true });
+            inject(className, css);
           } catch {
-            css = fallbackCompile(def as any, id);
+            // Silently fall through
           }
-        } else {
-          css = fallbackCompile(def as any, id);
         }
-        
-        inject(id, css);
-        result[key] = id;
+        result[key] = className;
       } else if (typeof def === 'string') {
         result[key] = def;
       }
     }
-    
+
     setClasses(result);
   }, [JSON.stringify(styles)]);
 
@@ -210,7 +205,13 @@ export function useAtomicClasses(styles: Record<string, any>) {
 }
 
 // ============================================================================
-// Provider
+// Re-export useChainStyles from React runtime
+// ============================================================================
+
+export { useChainStyles, useChainStylesApplied } from '../runtime/react';
+
+// ============================================================================
+// Provider & Utilities
 // ============================================================================
 
 export function ChainCSSProvider({ children }: { children: React.ReactNode }) {
@@ -226,4 +227,3 @@ export const cx = (...c: (string | boolean | undefined)[]) => c.filter(Boolean).
 export const enableChainCSSDebug = () => {};
 export const disableChainCSSDebug = () => {};
 export const isDebugEnabled = () => false;
-

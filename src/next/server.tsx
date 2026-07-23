@@ -1,12 +1,13 @@
 // @ts-nocheck
-// src/next/server.tsx - FINAL - Uses real ChainCSS compiler
+// src/next/server.tsx — Full ChainCSS SSR integration
+// Uses real StyleCollector + compileToCSS. No standalone fallback.
 // RSC SAFE - No 'use client'
 
 import React from 'react';
 
-// Try to import real compiler, fallback to simple if not found (for sandbox testing)
+// Import real compiler and collector
 let compileToCSS: any = null;
-let baseChain: any = null;
+let chainFn: any = null;
 
 try {
   const compiler = require('../core/style-compiler.js');
@@ -15,46 +16,31 @@ try {
   try {
     const compiler = require('../../dist/core/style-compiler.cjs');
     compileToCSS = compiler.compileToCSS;
-  } catch {}
+  } catch {
+    throw new Error('[ChainCSS] style-compiler not found. Ensure chaincss is properly installed.');
+  }
 }
 
 try {
   const collector = require('../core/style-collector.js');
-  baseChain = collector.chain || collector.default || collector;
+  chainFn = collector.chain || collector.default || collector;
 } catch {
   try {
     const collector = require('../../dist/core/style-collector.cjs');
-    baseChain = collector.chain;
-  } catch {}
-}
-
-// ============================================================================
-// Fallback simple compiler if real one not found
-// ============================================================================
-function fallbackCompile(styles: Record<string, any>, className: string): string {
-  let css = '';
-  for (const [prop, value] of Object.entries(styles)) {
-    if (value == null || typeof value === 'object') continue;
-    const kebab = prop.replace(/[A-Z]/g, m => `-${m.toLowerCase()}`);
-    css += `${kebab}:${value};`;
+    chainFn = collector.chain;
+  } catch {
+    throw new Error('[ChainCSS] style-collector not found. Ensure chaincss is properly installed.');
   }
-  return `.${className}{${css}}`;
-}
-
-function fallbackHash(str: string): string {
-  let h = 0;
-  for (let i = 0; i < str.length; i++) h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
-  return `c-${Math.abs(h).toString(36).slice(0, 6)}`;
 }
 
 // ============================================================================
-// Server registry - per-request in real Next.js, global here
+// Server registry — per-request style collection
 // ============================================================================
 const serverRegistry = new Map<string, string>();
 let cssCache = '';
 
 export function getChainCSS(): string {
-  // 1. Try build output
+  // 1. Try build output first
   try {
     if (typeof window === 'undefined') {
       const fs = require('fs');
@@ -76,101 +62,76 @@ export function clearChainCSS() {
 }
 
 // ============================================================================
-// chain() - RSC version using real compiler
+// chain() — SSR version using real StyleCollector
 // ============================================================================
 
 export function chain(id?: string) {
-  // If real chain exists, use it with ssr mode
-  if (baseChain) {
-    try {
-      const instance = baseChain({ ssr: true, id });
-      const originalEl = instance.$el?.bind(instance);
-      const originalToClass = instance.toClassName?.bind(instance);
-      
-      // Wrap $el to capture CSS
-      if (originalEl) {
-        instance.$el = () => {
-          const result = originalEl();
-          const className = result.root || result.className || result;
-          
-          // Try to get CSS from instance
-          let css = '';
-          try {
-            if (compileToCSS && instance._styles) {
-              css = compileToCSS(instance._styles, { scopeSelector: `.${className}` });
-            } else if ((instance as any).__css__) {
-              css = (instance as any).__css__;
-            }
-          } catch {}
-          
-          if (css && !serverRegistry.has(className)) {
-            serverRegistry.set(className, css);
-            cssCache += css + '\n';
-          }
-          
-          return result;
-        };
-      }
-      return instance;
-    } catch (e) {
-      console.warn('[ChainCSS RSC] Failed to use real chain, using fallback:', e);
-    }
-  }
+  const instance = chainFn({ ssr: true, id });
 
-  // Fallback: standalone implementation
-  const styles: Record<string, any> = {};
-  const finalId = id || fallbackHash(Math.random().toString());
-
-  const handler = {
-    get(target: any, prop: string) {
+  return new Proxy(instance, {
+    get(target, prop: string) {
+      // Terminal methods — finalize and capture CSS
       if (prop === '$el') {
-        return () => {
-          let css: string;
-          if (compileToCSS) {
+        return (...selectors: string[]) => {
+          const result = (target as any).$el
+            ? (target as any).$el(...selectors)
+            : (target as any).build(selectors.length ? selectors : undefined);
+
+          const className =
+            result.className ||
+            result.selectors?.[0]?.replace(/^\./, '') ||
+            (typeof result === 'string' ? result : id || 'chain-el');
+
+          // Generate CSS using the real compiler
+          if (compileToCSS && !serverRegistry.has(className)) {
             try {
-              css = compileToCSS(styles, { scopeSelector: `.${finalId}` });
-            } catch {
-              css = fallbackCompile(styles, finalId);
+              const css = compileToCSS(
+                typeof result === 'string'
+                  ? { selectors: [`.${className}`] }
+                  : result,
+                { scopeSelector: `.${className}`, minify: true }
+              );
+              if (css) {
+                serverRegistry.set(className, css);
+                cssCache += css + '\n';
+              }
+            } catch (e) {
+              console.warn('[ChainCSS RSC] compileToCSS failed:', e);
             }
-          } else {
-            css = fallbackCompile(styles, finalId);
           }
-          
-          if (!serverRegistry.has(finalId)) {
-            serverRegistry.set(finalId, css);
-            cssCache += css + '\n';
+
+          // Return result with className for component use
+          if (typeof result === 'string') {
+            return { root: result, className: result };
           }
-          
-          return { root: finalId, className: finalId };
+          return {
+            root: className,
+            className,
+            ...result,
+          };
         };
       }
+
       if (prop === 'toClassName') {
         return () => {
-          const r = (handler.get as any)(target, '$el')();
-          return r.root;
+          const r = (target as any).$el?.() || (target as any).build?.() || {};
+          return r.root || r.className || r.selectors?.[0]?.replace(/^\./, '') || id || 'chain-el';
         };
       }
-      if (prop === 'then') return undefined;
-      if (prop === '_styles') return styles;
-      
-      return (...args: any[]) => {
-        const value = args[0];
-        const map: Record<string, string> = {
-          bg: 'background', p: 'padding', m: 'margin',
-          w: 'width', h: 'height', rounded: 'borderRadius',
-        };
-        const cssProp = map[prop] || prop;
-        if (value === undefined) {
-          if (prop === 'flex') styles.display = 'flex';
-        } else {
-          styles[cssProp] = value;
-        }
-        return new Proxy(target, handler);
-      };
-    }
-  };
 
-  return new Proxy({}, handler);
+      if (prop === 'then') return undefined;
+
+      // Pass through all other methods to the real chain
+      const value = (target as any)[prop];
+      if (typeof value === 'function') {
+        return (...args: any[]) => {
+          value.apply(target, args);
+          return instance; // Return the proxy for chaining
+        };
+      }
+      return value;
+    },
+  });
 }
 
 export const chainServer = chain;
@@ -199,4 +160,3 @@ export function ChainCSSStyleTag({ css, nonce }: { css?: string; nonce?: string 
     nonce,
   });
 }
-
