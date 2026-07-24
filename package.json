@@ -14,13 +14,20 @@
     },
     "./browser": {
       "types": "./dist/browser.d.ts",
-      "import": "./dist/browser.js"
+      "import": "./dist/browser.js",
+      "require": "./dist/browser.js"
     },
     "./advanced": {
       "types": "./dist/advanced.d.ts",
-      "import": "./dist/advanced.js"
+      "import": "./dist/advanced.js",
+      "require": "./dist/advanced.js"
     },
     "./runtime": {
+      "types": "./dist/runtime/index.d.ts",
+      "import": "./dist/runtime/index.js",
+      "require": "./dist/runtime/index.cjs"
+    },
+    "./runtime/react": {
       "types": "./dist/runtime/index.d.ts",
       "import": "./dist/runtime/index.js",
       "require": "./dist/runtime/index.cjs"
@@ -34,15 +41,6 @@
       "types": "./dist/utils.d.ts",
       "import": "./dist/utils.js",
       "require": "./dist/utils.cjs"
-    },
-    "./plugin/vite": {
-      "types": "./dist/plugins/vite.d.ts",
-      "import": "./dist/plugins/vite.js",
-      "require": "./dist/plugins/vite.cjs"
-    },
-    "./plugin/webpack": {
-      "types": "./dist/plugins/webpack.d.ts",
-      "import": "./dist/plugins/webpack.js"
     },
     "./vite": {
       "types": "./dist/plugins/vite.d.ts",

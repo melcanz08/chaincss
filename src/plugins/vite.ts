@@ -110,7 +110,7 @@ export default function chaincssPlugin(options: ChainCSSPluginOptions = {}): Plu
             css += `\n.${className} {\n`;
             for (const [prop, fn] of Object.entries(dyn as Record<string, any>)) {
               const kebabProp = prop.replace(/([A-Z])/g, '-$1').toLowerCase();
-              css += `  ${kebabProp}: var(--${className}-${kebabProp}, initial);\n`;
+              css += `  ${kebabProp}: var(--${className}-${kebabProp});\n`;
             }
             css += '}\n';
           }

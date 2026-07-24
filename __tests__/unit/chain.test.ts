@@ -451,7 +451,7 @@ describe('CSS Compilation', () => {
     const lines = css.split('\n');
     const colorLine = lines.find(l => l.trim().startsWith('color:'));
     expect(colorLine).toBeDefined();
-    expect(colorLine).toContain('var(--chain-dynamic-color');
+    expect(colorLine).toContain('var(--button-color');
   });
 
   it('partitions static and dynamic values for build', () => {

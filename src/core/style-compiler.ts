@@ -69,7 +69,8 @@ export function compileToCSS(styleObject: StyleObject, options: InternalCompileO
     const allNestedRules = parsed.nestedRules || [];
     const allAtRules = parsed.atRules || [];
 
-    const mainDeclarations = compileDeclarations(parsed.regularProps, indent, newline);
+    const varPrefix = effectiveSelector.replace(/^\./, '').replace(/^#/, '');
+    const mainDeclarations = compileDeclarations(parsed.regularProps, indent, newline, varPrefix);
     if (mainDeclarations && effectiveSelector) {
       const source = options.sourceMap && options.sourceFile ? `/* ${options.sourceFile} */${newline}` : '';
       parts.push(`${source}${effectiveSelector} {${newline}${mainDeclarations}${newline}}`);
@@ -105,10 +106,15 @@ function compileNestedRule(parentSelector: string, rule: NestedRule, options: In
   const css = compileToCSS(rule.styles as StyleObject, { ...options, scopeSelector: nestedSelector });
   return css || null;
 }
-function compileDeclarations(properties: CSSProperties, indent: string, newline: string): string {
+function compileDeclarations(properties: CSSProperties, indent: string, newline: string, varPrefix?: string): string {
   let css = '';
   for (const [prop, value] of Object.entries(properties)) {
-    if (isDynamicValue(value)) { css += `${indent}${camelToKebab(prop)}: var(--chain-dynamic-${prop}, initial);${newline}`; continue; }
+    if (isDynamicValue(value)) { 
+      const prefix = varPrefix || 'chain-dynamic';
+      const kebabProp = camelToKebab(prop);
+      css += `${indent}${kebabProp}: var(--${prefix}-${kebabProp});${newline}`; 
+      continue; 
+    }
     if (isCSSPrimitiveValue(value)) { css += `${indent}${camelToKebab(prop)}: ${sanitizeCSSValue(String(value))};${newline}`; }
   }
   return css.endsWith(newline) ? css.slice(0, -newline.length) : css;

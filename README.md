@@ -1,10 +1,16 @@
-# ChainCSS — The Design-Aware CSS Compiler
+# ChainCSS — CSS Compiler Platform
 
 [![npm version](https://badge.fury.io/js/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![npm downloads](https://img.shields.io/npm/dm/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![license](https://img.shields.io/npm/l/chaincss.svg)](LICENSE)
 
 📖 **[Full Documentation →](https://www.chaincss.dev/)**
 
-**ChainCSS is a design-aware CSS compiler.** Tokens know their relationships. Styles understand intent. Static compiles to atomic CSS, dynamic runs via CSS custom properties — zero-leak, concurrent-safe.
+**ChainCSS is a CSS compiler platform — not a utility library.**
+It compiles styles through a 5-stage pipeline with its own intermediate representation (IR).
+Tokens form a dependency graph. Styles express intent. Accessibility is a build step.
+Static properties compile to atomic CSS at build time. Dynamic values resolve via CSS
+custom properties at runtime. Zero-leak, framework-agnostic, SSR-ready.
+
+**Think LLVM for CSS.**
 
 ```bash
 npm install chaincss
@@ -12,32 +18,88 @@ npm install chaincss
 
 ---
 
-## What Makes ChainCSS Different
+## A Compiler Platform, Not a Library
 
-Most CSS tools treat styles as isolated declarations. ChainCSS treats them as a connected system with a 5-stage pipeline.
+ChainCSS is built like a real compiler — not a CSS generator.
+
+| Component | What it does | Why it matters |
+|:---|:---|:---|
+| **IR (Intermediate Representation)** | Styles are parsed into an AST before codegen | Enables optimization passes, static analysis, dead code elimination |
+| **5-Stage Pipeline** | Normalization → Validation → Analysis → Lowering → Optimization | Each stage is pluggable, inspectable, and cacheable |
+| **Content-Addressable Cache** | Identical inputs produce cache hits across builds | Sub-ms recompiles in watch mode |
+| **Token Dependency Graph** | Tokens know their relationships (derived, contrast, entanglement) | Change one color → all dependent values recompute |
+| **Live Inspector** | Exposes every pipeline stage at runtime | Debug styles like you'd debug compiled code |
+| **Framework-Agnostic Runtime** | React, Vue, Svelte, Solid via CSS custom property bridge | Write styles once, run anywhere |
+
+**Seven integrated subsystems, one consistent architecture:**
+
+```
+Author → Collector → IR → Pipeline → Optimizer → Emitter → Runtime
+```
+
+---
+
+## What Makes ChainCSS Different
 
 ### 🧬 Token Dependency Graph
 
-Tokens aren't flat variables. They're a graph. Change `primary.500` and every derived shade, hover state, border, and text contrast propagates automatically.
+Tokens aren't flat variables. They're a graph. Change `primary.500` and every derived
+shade, hover state, border, and text contrast propagates automatically.
 
 ```ts
-// Define relationships once
 tokens: {
- relationships: [
- { type: 'derived', source: 'primary.500', target: 'primary.100', method: 'mix-white 80%' },
- { type: 'contrast', foreground: 'text.onPrimary', background: 'primary.500', target: 4.5 },
- ]
+  relationships: [
+    { type: 'derived', source: 'primary.500', target: 'primary.100', method: 'mix-white 80%' },
+    { type: 'contrast', foreground: 'text.onPrimary', background: 'primary.500', target: 4.5 },
+  ]
 }
 ```
 
-Designer changes `primary.500` in Figma → 20+ tokens recompute → HMR in 80ms. **No manual palette updates.**
-
 ### ♿ Accessibility-Aware Compilation
 
-ChainCSS doesn't just detect contrast failures — it fixes them. Preserves hue, adjusts lightness via binary search, rewrites the token. WCAG 2.2 compliance as a build step.
+Doesn't just detect contrast failures — fixes them. Preserves hue, adjusts lightness
+via binary search, rewrites the token. WCAG 2.2 compliance as a build step.
 
 ```bash
 npx chaincss audit --fix --write
+```
+
+### 🎯 Mixed Mode — Static + Dynamic in One API
+
+Static properties compile to `.css` at build time. Dynamic functions receive context
+and return values applied as CSS custom properties. One API. Zero compromises.
+
+```ts
+// button.chain.ts
+export const btn = chain.dynamic()
+  .box({ padding: '12px 24px', borderRadius: 8 })                          // → static CSS
+  .background({ color: (ctx) => ctx.isActive ? '#6366f1' : '#a5b4fc' })    // → runtime CSS var
+  .shadow({ box: (ctx) => ctx.isActive
+    ? '0 8px 25px rgba(99,102,241,0.4)'
+    : '0 2px 8px rgba(0,0,0,0.1)'
+  })
+  .$el('btn')
+```
+
+```css
+/* Generated CSS */
+.chain-btn {
+  padding: 12px 24px;
+  border-radius: 8px;
+  background-color: var(--chain-btn-background-color);
+  box-shadow: var(--chain-btn-box-shadow);
+}
+```
+
+```tsx
+// React — zero-leak, SSR-safe
+import { useChainStyles } from 'chaincss/runtime'
+import { btn } from './button.chain'
+
+function Button({ isActive }: { isActive: boolean }) {
+  const { classes, styleVars } = useChainStyles({ btn }, { isActive })
+  return <button className={classes.btn} style={styleVars}>Click</button>
+}
 ```
 
 ### 🔗 Relationship Macros
@@ -49,71 +111,14 @@ Don't write complex selectors. Express intent.
 | `.group:has(> :hover) > &:not(:hover)` | `.peerDim()` |
 | `&:has(> :nth-child(3))` | `.hasCount({ count: 3 })` |
 | `&:focus-within label, &:has(input:not(:placeholder-shown)) label` | `.entangleFocus()` |
-| `.group:has(.peer:hover) &:not(.peer:hover)` | `.peerHover()` |
 
 32+ macros that generate CSS relationships, not just properties.
-
-### 🎯 Mixed Mode — Static + Dynamic in One API
-
-Static properties compile to `.css` at build time. Dynamic functions `() => value` are preserved in `.class.js` and evaluated to CSS vars at runtime. No DOM injection.
-
-```ts
-// button.chain.ts
-export const btn = chain.dynamic()
-.box({ padding: '12px 24px', borderRadius: 8 }) // → static CSS
-.background({ color: () => isActive? '#6366f1' : '#a5b4fc' }) // → var(--chain-dynamic-bg)
-.shadow({ box: () => isActive? '0 8px 25px rgba(99,102,241,0.4)' : '0 2px 8px rgba(0,0,0,0.1)' })
-.$el('btn')
-```
-
-```css
-/* button.css (generated) */
-.chain-btn-dynamic {
- padding: 12px 24px; border-radius: 8px;
- background-color: var(--chain-dynamic-background, initial);
-}
-```
-
-```js
-// button.class.js (generated by Vite plugin - now fixed to preserve dynamic)
-export const btn = {
- className: 'chain-btn-dynamic',
- selectors: ['.chain-btn-dynamic'],
- dynamic: {
- "background": () => isActive? '#6366f1' : '#a5b4fc',
- }
-}
-```
-
-```tsx
-// React - zero-leak runtime
-import { useChainStyles } from 'chaincss/runtime'
-import { btn } from './button.chain'
-
-function Button({ isActive }) {
- const { classes, styleVars } = useChainStyles({ btn }, [isActive])
- return <button className={classes.btn} style={styleVars}>Click</button>
-}
-```
-
-Or dynamic directly in component (playground pattern):
-
-```tsx
-const dynamicBtn = useMemo(() => chain.dynamic()
-.background({ color: () => isDark? '#1e293b' : '#f1f5f9' })
-.$el('btn'), [isDark])
-<button className={dynamicBtn.className} style={dynamicBtn.style} />
-```
-
-### 🔍 Live Compiler Inspector
-
-Inspect every stage: Normalization → Validation → Analysis → Lowering → Optimization. Served at `/__chaincss-ir.json`, styles at `/__chaincss.css`. Press `Ctrl+Shift+I`. HMR via `/@chaincss/client.js`.
 
 ---
 
 ## Quick Start
 
-### With Vite (30 seconds)
+### Vite (30 seconds)
 
 ```bash
 npm create vite@latest my-app -- --template react-ts
@@ -127,7 +132,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
- plugins: [chaincss({ atomic: true }), react()],
+  plugins: [chaincss({ atomic: true }), react()],
 })
 ```
 
@@ -136,14 +141,30 @@ export default defineConfig({
 import { chain } from 'chaincss'
 
 export const btn = chain()
-.background({ color: '#6366f1' })
-.typography({ color: '#ffffff', fontWeight: '600' })
-.box({ padding: '12px 24px', borderRadius: 8 })
-.hover().background({ color: '#4f46e5' }).end()
-.$el('button')
+  .background({ color: '#6366f1' })
+  .typography({ color: '#ffffff', fontWeight: '600' })
+  .box({ padding: '12px 24px', borderRadius: 8 })
+  .hover().background({ color: '#4f46e5' }).end()
+  .$el('button')
 ```
 
-Vite plugin pre-compiles `src/**/*.chain.ts` → `*.css` + `*.class.js`, atomic CSS, pipeline engine active.
+### Next.js (Turbopack + Webpack)
+
+```js
+// postcss.config.cjs
+module.exports = {
+  plugins: {
+    'chaincss/postcss': {
+      content: ['./app/**/*.chain.{ts,js,tsx,jsx}'],
+    },
+  },
+}
+```
+
+```css
+/* app/globals.css */
+@chaincss;
+```
 
 ---
 
@@ -153,47 +174,35 @@ Group related CSS properties into single, typed calls with full autocomplete.
 
 | Method | Covers | Example |
 |:---|:---|:---|
-| `.flex()` | `display:flex`, `flex-direction`, `align-items`, `justify-content`, `gap`, `grow`, `shrink` | `.flex({ direction: 'column', align: 'center', gap: 16 })` |
-| `.grid()` | `display:grid`, `grid-template-columns/rows`, `gap`, `area`, `auto-flow` | `.grid({ columns: '1fr 1fr', gap: 24 })` |
-| `.box()` | `margin`, `padding`, `border`, `border-radius`, `width`, `height`, `overflow` | `.box({ padding: '24px', margin: '0 auto', maxWidth: 1200 })` |
+| `.flex()` | `display:flex`, `flex-direction`, `align-items`, `justify-content`, `gap` | `.flex({ direction: 'column', align: 'center', gap: 16 })` |
+| `.grid()` | `display:grid`, `grid-template-columns/rows`, `gap`, `area` | `.grid({ columns: '1fr 1fr', gap: 24 })` |
+| `.box()` | `margin`, `padding`, `border`, `border-radius`, `width`, `height` | `.box({ padding: '24px', margin: '0 auto', maxWidth: 1200 })` |
 | `.typography()` | `font-family/size/weight`, `line-height`, `letter-spacing`, `text-align`, `color` | `.typography({ fontSize: 16, fontWeight: '600', color: '#333' })` |
 | `.background()` | `background-color/image/position/size/repeat` | `.background({ color: '#fff', size: 'cover' })` |
 | `.position()` | `position`, `top/right/bottom/left`, `z-index` | `.position({ type: 'absolute', top: 0, zIndex: 10 })` |
-| `.shadow()` | `box-shadow`, `text-shadow` (decomposed: x/y/blur/spread/color) | `.shadow({ y: 4, blur: 12, color: 'rgba(0,0,0,0.1)' })` |
+| `.shadow()` | `box-shadow`, `text-shadow` (x/y/blur/spread/color) | `.shadow({ y: 4, blur: 12, color: 'rgba(0,0,0,0.1)' })` |
 | `.raw()` | Any CSS property not covered above | `.raw({ cursor: 'pointer', resize: 'vertical' })` |
 
-**Short aliases for power users:**
-
-```ts
-chain()
-.flex({ d: 'col', ai: 'center', g: 16 }) // direction, align, gap
-.box({ p: '24px', m: '0 auto', w: '100%' }) // padding, margin, width
-.typography({ fs: 16, fw: '600', c: '#333' }) // fontSize, fontWeight, color
-.$el('card')
-```
+Short aliases available for all methods.
 
 ---
 
-## Runtime API
+## Framework Support
 
-Zero-leak, concurrent-safe React runtime (CSS vars via `style.setProperty`, no `textContent` injection).
+| Framework | Static Styles | Dynamic Styles | Method |
+|-----------|:---:|:---:|--------|
+| **React** | ✅ | ✅ | `useChainStyles({ styles }, { deps })` |
+| **Vue** | ✅ | ✅ | Template ref + `style.setProperty()` |
+| **Svelte** | ✅ | ✅ | `$effect` + `style.setProperty()` + CSS import |
+| **SolidJS** | ✅ | ✅ | Ref callback + `style.setProperty()` |
+| **Next.js** | ✅ | ✅ | PostCSS plugin + `useChainStyles` for client |
+| **Vanilla HTML** | ✅ | ✅ | Import `.css` + `style.setProperty()` |
 
-```ts
-import {
- useChainStyles, // { classes, styleVars, cx, cn }
- useChainStylesApplied, // { className, style }
- useDynamicChainStyles, // watch:true
- useThemeChainStyles, // theme-aware
- ChainCSSGlobal, // global styles with cleanup
- createStyledComponent, // stable forwardRef
- withChainStyles, // HOC
- cx
-} from 'chaincss/runtime'
-```
+See **[Framework Integration Notes →](./FRAMEWORK_NOTES.md)** for detailed patterns.
 
 ---
 
-## 32+ Macros — CSS Relationships, Not Just Properties
+## 32+ Macros
 
 | Category | Macros |
 |---|---|
@@ -206,41 +215,15 @@ import {
 
 ---
 
-## Design Tokens + Entanglement
+## Build Tool Integration
 
-```bash
-npx chaincss create app my-app --template entangled
-npm run tokens:watch # Figma → GitHub → tokens.json → propagate → HMR 80ms
-```
-
-```ts
-// chaincss.config.ts
-export default defineConfig({
- tokens: {
- tokens: { colors: { primary: { 500: '#6366f1' } } },
- relationships: [
- { type: 'derived', source: 'primary.500', target: 'primary.100', method: 'mix-white 80%' },
- { type: 'contrast', foreground: 'text.onPrimary', background: 'primary.500', target: 4.5 }
- ]
- }
-})
-```
-
----
-
-## Vite Plugin Options
-
-```ts
-chaincss({
- atomic: true, // atomic CSS (default true)
- tokens: {}, // design tokens
- breakpoints: {}, // custom breakpoints
- minify: true, // minify in prod
- verbose: false,
- silent: false,
- disablePipeline: false
-})
-```
+| Tool | Plugin | Notes |
+|------|--------|-------|
+| **Vite** | `chaincss/vite` | React, Vue, Svelte, Solid |
+| **Next.js** | `chaincss/postcss` | Turbopack + Webpack via `postcss.config.cjs` |
+| **Webpack** | `chaincss/webpack` or PostCSS | Any framework |
+| **PostCSS** | `chaincss/postcss` | Any bundler with PostCSS support |
+| **CLI** | `npx chaincss dev/build` | Standalone dev server + build |
 
 ---
 
@@ -248,29 +231,15 @@ chaincss({
 
 | | ChainCSS | Tailwind | Styled Components | Vanilla Extract | Panda CSS |
 |:---|:---:|:---:|:---:|:---:|:---:|
-| **Design token graph** | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **Compiler architecture** | ✅ IR + pipeline | ❌ | ❌ | ❌ | ❌ |
+| **Mixed mode** | ✅ | ❌ | ✅ | ❌ | ❌ |
+| **Zero-runtime (static)** | ✅ | ✅ | ❌ | ✅ | ✅ |
+| **Token dependency graph** | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **Contrast auto-fix** | ✅ | ❌ | ❌ | ❌ | ❌ |
-| **Mixed mode (CSS vars)** | ✅ | ❌ | ✅ | ❌ | ❌ |
-| **Zero-leak runtime** | ✅ | ✅ | ❌ | ✅ | ✅ |
 | **Relationship macros** | ✅ | ❌ | ❌ | ❌ | ❌ |
-| **5-stage inspector** | ✅ | ❌ | ❌ | ❌ | ❌ |
-| **Atomic CSS** | ✅ | ✅ | ❌ | ❌ | ✅ |
+| **Live compiler inspector** | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **Figma sync** | ✅ | ❌ | ❌ | ❌ | ❌ |
-
----
-
-## CLI Commands
-
-```bash
-npx chaincss init # Scaffold config
-npx chaincss dev # Dev server + HMR + inspector
-npx chaincss build # Production build
-npx chaincss check # WCAG 2.2 audit
-npx chaincss check --fix # Auto-fix accessibility
-npx chaincss audit --fix --write # Contrast auto-fix + write back
-npx chaincss tokens:watch # Watch + propagate token changes
-npx chaincss figma sync # Pull from Figma Variables API or GitHub
-```
+| **SSR-safe dynamics** | ✅ | ✅ | ✅ | ❌ | ❌ |
 
 ---
 
@@ -282,13 +251,7 @@ npx chaincss figma sync # Pull from Figma Variables API or GitHub
 | 500 | 23ms | 133KB |
 | 2,000 | 127ms | 530KB |
 
-Compiler pipeline cached via CacheStore + CacheManager (`.chaincss-cache`). Cold start ~61ms. Compiler never ships to browser.
-
----
-
-## Framework Support
-
-React · Vue · Svelte · SolidJS — ChainCSS outputs plain CSS + CSS vars. Works anywhere.
+Compiler never ships to browser. Cold start ~61ms.
 
 ---
 

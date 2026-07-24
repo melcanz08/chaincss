@@ -48,28 +48,38 @@ function compileChainFile(filePath) {
     for (const [name, exportValue] of Object.entries(mod)) {
       if (!exportValue || typeof exportValue !== 'object') continue;
 
-      // Handle objects with selectors (chain results)
+      // Determine class name and selectors
+      let className;
+      let styleObj = exportValue;
+
+      // Case 1: Object has selectors (from $el('name') or build(['.name']))
       if (exportValue.selectors) {
-        const className =
+        className =
           exportValue.className ||
           (Array.isArray(exportValue.selectors)
             ? exportValue.selectors[0]?.replace(/^\./, '')
             : String(exportValue.selectors).replace(/^\./, '')) ||
           name;
-
-        if (compileToCSS) {
-          try {
-            css += compileToCSS(exportValue, { scopeSelector: `.${className}`, minify: false }) + '\n';
-          } catch (e) {
-            if (process.env.DEBUG) console.warn(`[ChainCSS PostCSS] Failed to compile ${name}:`, e.message);
-          }
-        }
+      }
+      // Case 2: Object has className but no selectors (from buildRuntimeResult)
+      else if (exportValue.className) {
+        className = exportValue.className;
+        styleObj = { ...exportValue, selectors: [`.${className}`] };
+      }
+      // Case 3: Raw style object with CSS properties but no selectors/className
+      // (from $el() without arguments in Node.js — returns raw build() output)
+      else {
+        // Generate class name from export key
+        className = `chain-${name.replace(/([A-Z])/g, '-$1').toLowerCase()}`;
+        styleObj = { ...exportValue, selectors: [`.${className}`] };
       }
 
-      // Handle plain strings (pre-compiled class names from Vite plugin)
-      if (typeof exportValue === 'string' && exportValue.startsWith('chain-')) {
-        // Class name already compiled by Vite plugin — CSS is handled separately
-        continue;
+      if (compileToCSS && className) {
+        try {
+          css += compileToCSS(styleObj, { scopeSelector: `.${className}`, minify: false }) + '\n';
+        } catch (e) {
+          if (process.env.DEBUG) console.warn(`[ChainCSS PostCSS] Failed to compile ${name}:`, e.message);
+        }
       }
     }
   } catch (e) {
