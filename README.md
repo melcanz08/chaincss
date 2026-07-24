@@ -4,13 +4,11 @@
 
 📖 **[Full Documentation →](https://www.chaincss.dev/)**
 
-**ChainCSS is a CSS compiler platform — not a utility library.**
+**ChainCSS is a CSS compiler platform**
 It compiles styles through a 5-stage pipeline with its own intermediate representation (IR).
 Tokens form a dependency graph. Styles express intent. Accessibility is a build step.
 Static properties compile to atomic CSS at build time. Dynamic values resolve via CSS
 custom properties at runtime. Zero-leak, framework-agnostic, SSR-ready.
-
-**Think LLVM for CSS.**
 
 ```bash
 npm install chaincss
@@ -18,9 +16,9 @@ npm install chaincss
 
 ---
 
-## A Compiler Platform, Not a Library
+## A Compiler Platform
 
-ChainCSS is built like a real compiler — not a CSS generator.
+ChainCSS is built like a real compiler.
 
 | Component | What it does | Why it matters |
 |:---|:---|:---|
