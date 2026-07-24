@@ -1,11 +1,11 @@
-# ChainCSS — CSS Compiler Platform
+# ChainCSS
 
 [![npm version](https://badge.fury.io/js/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![npm downloads](https://img.shields.io/npm/dm/chaincss.svg)](https://www.npmjs.com/package/chaincss) [![license](https://img.shields.io/npm/l/chaincss.svg)](LICENSE)
 
 📖 **[Full Documentation →](https://www.chaincss.dev/)**
 
-**ChainCSS is a CSS compiler platform**
-It compiles styles through a 5-stage pipeline with its own intermediate representation (IR).
+**ChainCSS** 
+compiles styles through a 5-stage pipeline with its own intermediate representation (IR).
 Tokens form a dependency graph. Styles express intent. Accessibility is a build step.
 Static properties compile to atomic CSS at build time. Dynamic values resolve via CSS
 custom properties at runtime. Zero-leak, framework-agnostic, SSR-ready.
@@ -18,7 +18,7 @@ npm install chaincss
 
 ## A Compiler Platform
 
-ChainCSS is built like a real compiler.
+ChainCSS is built like a real compiler. - Not just an ordinary css library.
 
 | Component | What it does | Why it matters |
 |:---|:---|:---|
