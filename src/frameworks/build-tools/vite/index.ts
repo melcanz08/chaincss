@@ -136,14 +136,29 @@ export default function chaincssPlugin(
             dynamicMap[name] = (compileResult as any).dynamic;
           const inspector = compileResult?.inspector;
           if (inspector?.ir) {
+            const pipelineReport = Array.isArray(inspector.pipelineReport)
+              ? inspector.pipelineReport
+              : Object.values(inspector.pipelineReport || {});
+
+            const diagnostics = Array.isArray(inspector.diagnostics)
+              ? inspector.diagnostics
+              : Object.values(inspector.diagnostics || {});
+
             const rules = serializeForInspector(
               inspector.ir,
-              inspector.pipelineReport || [],
-              inspector.diagnostics || [],
+              pipelineReport,
+              diagnostics,
               absPath,
               name,
             );
-            rulesToRegister.push(...rules);
+
+            if (rules) {
+              if (Array.isArray(rules)) {
+                rulesToRegister.push(...rules);
+              } else {
+                rulesToRegister.push(rules as InspectorRule);
+              }
+            }
           }
         }
       } catch (e) {
@@ -194,7 +209,7 @@ export default function chaincssPlugin(
       return result;
     } catch (err) {
       logError(
-        `Compilation failed on ${path.basename(absPath)}: ${(err as Error).message}`,
+        `Compilation failed on ${path.basename(absPath)}:\n${(err as Error).stack || (err as Error).message}`,
       );
       throw err;
     }
