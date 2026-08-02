@@ -30,11 +30,12 @@ export function cloneIR(ir: StyleIR): StyleIR {
 
 function cloneGraph(graph: any): any {
   return {
-    nodes: graph.nodes instanceof Map
-      ? new Map(graph.nodes)
-      : Array.isArray(graph.nodes)
+    nodes:
+      graph.nodes instanceof Map
         ? new Map(graph.nodes)
-        : new Map(Object.entries(graph.nodes || {})),
+        : Array.isArray(graph.nodes)
+          ? new Map(graph.nodes)
+          : new Map(Object.entries(graph.nodes || {})),
     edges: Array.isArray(graph.edges)
       ? graph.edges.map((e: any) => ({
           ...e,
