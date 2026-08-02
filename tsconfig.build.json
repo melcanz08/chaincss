@@ -12,15 +12,7 @@
     "types": ["vite/client", "node"]
   },
   "include": [
-    "src/index.ts",
-    "src/browser.ts",
-    "src/advanced.ts",
-    "src/utils.ts",
-    "src/core/**/*",
-    "src/compiler/**/*",
-    "src/adapters/**/*",
-    "src/frameworks/**/*",
-    "src/shared/**/*"
+    "src/**/*"
   ],
   "exclude": ["node_modules", "dist", "__tests__", "benchmarks", "examples"]
 }

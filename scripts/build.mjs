@@ -4,7 +4,7 @@
 
 /**
  * Unified ChainCSS build script.
- * Replaces 7 separate esbuild commands with a single orchestrator.
+ * Replaces separate esbuild commands with a single orchestrator.
  * Injects VERSION from package.json at build time.
  * 
  * Usage: node scripts/build.mjs [--watch]
@@ -14,7 +14,6 @@ import { build, context } from 'esbuild';
 import { writeFileSync, mkdirSync, chmodSync, rmSync, readFileSync, existsSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
-
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '..');
@@ -107,7 +106,7 @@ const targets = [
     format: 'cjs',
     packages: 'external',
   },
-  // Utilities (shorthands, macros, helpers, suggestions, animations, breakpoints)
+  // Utilities
   {
     name: 'utils',
     entryPoints: ['src/shared/utils/index.ts'],
@@ -124,7 +123,7 @@ const targets = [
     format: 'cjs',
     packages: 'external',
   },
-  // Plugins
+  // Vite Plugin
   {
     name: 'plugin-vite',
     entryPoints: ['src/frameworks/build-tools/vite/index.ts'],
@@ -141,6 +140,7 @@ const targets = [
     format: 'cjs',
     packages: 'external',
   },
+  // Webpack Plugin
   {
     name: 'plugin-webpack',
     entryPoints: ['src/frameworks/build-tools/webpack/index.ts'],
@@ -149,7 +149,15 @@ const targets = [
     format: 'esm',
     packages: 'external',
   },
-  // Advanced entry (for power users)
+  {
+    name: 'plugin-webpack-cjs',
+    entryPoints: ['src/frameworks/build-tools/webpack/index.ts'],
+    outfile: 'dist/plugins/webpack.cjs',
+    platform: 'node',
+    format: 'cjs',
+    packages: 'external',
+  },
+  // Advanced entry
   {
     name: 'advanced',
     entryPoints: ['src/advanced.ts'],
@@ -167,6 +175,14 @@ const targets = [
     format: "esm",
     packages: "external",
   },
+  {
+    name: "figma-sync-cjs",
+    entryPoints: ["src/frameworks/build-tools/figma-sync/index.ts"],
+    outfile: "dist/plugins/figma-sync.cjs",
+    platform: "node",
+    format: "cjs",
+    packages: "external",
+  },
   // Token entanglement engine
   {
     name: "entanglement",
@@ -176,7 +192,15 @@ const targets = [
     format: "esm",
     packages: "external",
   },
-    // Next.js Server
+  {
+    name: "entanglement-cjs",
+    entryPoints: ["src/compiler/tokens/entanglement.ts"],
+    outfile: "dist/compiler/tokens/entanglement.cjs",
+    platform: "node",
+    format: "cjs",
+    packages: "external",
+  },
+  // Next.js Server
   {
     name: 'next-server',
     entryPoints: ['src/frameworks/next/server.tsx'],
@@ -250,7 +274,7 @@ const targets = [
     external: ['fs', 'path', 'glob', 'postcss'],
     packages: 'external',
   },
-    // Compiler entry (Node.js only)
+  // Compiler entry
   {
     name: 'compiler-entry',
     entryPoints: ['src/compiler-entry.ts'],
@@ -267,7 +291,7 @@ const targets = [
     format: 'cjs',
     packages: 'external',
   },
-  // Core entry (minimal)
+  // Core entry
   {
     name: 'core-entry',
     entryPoints: ['src/core-entry.ts'],
@@ -325,14 +349,12 @@ const targets = [
 // ============================================================================
 
 async function run() {
-  // Clean
   if (!existsSync(dist)) mkdirSync(dist, { recursive: true });
   mkdirSync(dist, { recursive: true });
 
   console.log('🔨 Building ChainCSS...\n');
 
   if (isWatch) {
-    // Watch mode: create contexts for incremental rebuilds
     const contexts = await Promise.all(
       targets.map(async (target) => {
         const ctx = await context({
@@ -354,7 +376,6 @@ async function run() {
       })
     );
     
-    // Ensure package.json is written in watch mode too
     writeFileSync(
       resolve(dist, 'package.json'),
       JSON.stringify({ type: 'module' }, null, 2)
@@ -362,7 +383,6 @@ async function run() {
 
     console.log('👀 Watching for changes...\n');
   } else {
-    // Single build
     for (const target of targets) {
       const outfile = resolve(root, target.outfile);
       mkdirSync(dirname(outfile), { recursive: true });
@@ -383,19 +403,17 @@ async function run() {
           logLevel: 'warning',
         });
 
-        // Set executable permission for CLI
         if (target.chmod) {
           chmodSync(outfile, target.chmod);
         }
 
-        console.log(`  ✅ ${target.name.padEnd(20)} → ${target.outfile}`);
+        console.log(`  ✅ ${target.name.padEnd(22)} → ${target.outfile}`);
       } catch (err) {
-        console.error(`  ❌ ${target.name.padEnd(20)} → ${err.message}`);
+        console.log(`  ❌ ${target.name.padEnd(22)} → ${err.message}`);
         if (!isWatch) process.exit(1);
       }
     }
 
-    // Write package.json into dist AFTER building targets so clean doesn't wipe it out
     writeFileSync(
       resolve(dist, 'package.json'),
       JSON.stringify({ type: 'module' }, null, 2)

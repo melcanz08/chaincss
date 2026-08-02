@@ -7,10 +7,15 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
       "browser": "./dist/browser.js",
-      "require": "./dist/index.cjs"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "require": "./dist/index.cjs"
+      }
     },
     "./core": {
       "types": "./dist/core-entry.d.ts",
@@ -19,18 +24,18 @@
     },
     "./runtime": {
       "types": "./dist/runtime-entry.d.ts",
-      "import": "./dist/runtime-entry.js",
-      "require": "./dist/runtime-entry.cjs"
+      "import": "./dist/runtime/index.js",
+      "require": "./dist/runtime/index.cjs"
     },
     "./compiler": {
       "types": "./dist/compiler-entry.d.ts",
-      "import": "./dist/compiler-entry.js",
-      "require": "./dist/compiler-entry.cjs"
+      "import": "./dist/compiler/index.js",
+      "require": "./dist/compiler/index.cjs"
     },
     "./utils": {
       "types": "./dist/utils-entry.d.ts",
-      "import": "./dist/utils-entry.js",
-      "require": "./dist/utils-entry.cjs"
+      "import": "./dist/utils.js",
+      "require": "./dist/utils.cjs"
     },
     "./browser": {
       "types": "./dist/browser.d.ts",
@@ -42,17 +47,17 @@
       "require": "./dist/advanced.js"
     },
     "./vite": {
-      "types": "./dist/plugins/vite.d.ts",
+      "types": "./dist/frameworks/build-tools/vite/index.d.ts",
       "import": "./dist/plugins/vite.js",
       "require": "./dist/plugins/vite.cjs"
     },
     "./webpack": {
-      "types": "./dist/plugins/webpack.d.ts",
+      "types": "./dist/frameworks/build-tools/webpack/index.d.ts",
       "import": "./dist/plugins/webpack.js",
       "require": "./dist/plugins/webpack.cjs"
     },
     "./figma-sync": {
-      "types": "./dist/plugins/figma-sync.d.ts",
+      "types": "./dist/frameworks/build-tools/figma-sync/index.d.ts",
       "import": "./dist/plugins/figma-sync.js",
       "require": "./dist/plugins/figma-sync.cjs"
     },
@@ -62,17 +67,17 @@
       "require": "./dist/compiler/tokens/entanglement.cjs"
     },
     "./next/server": {
-      "types": "./dist/next/server.d.ts",
+      "types": "./dist/frameworks/next/server.d.ts",
       "import": "./dist/next/server.js",
       "require": "./dist/next/server.cjs"
     },
     "./next/client": {
-      "types": "./dist/next/client.d.ts",
+      "types": "./dist/frameworks/next/client.d.ts",
       "import": "./dist/next/client.js",
       "require": "./dist/next/client.cjs"
     },
     "./next": {
-      "types": "./dist/next/plugin.d.ts",
+      "types": "./dist/frameworks/next/plugin.d.ts",
       "import": "./dist/next/plugin.js",
       "require": "./dist/next/plugin.cjs"
     },
@@ -91,7 +96,7 @@
     "build_test": "rm -rf dist .chaincss-cache && npm run build:clean && node scripts/build.mjs && npm run build:types && vitest run",
     "build:watch": "npm run build:clean && npm run build:types && node scripts/build.mjs --watch",
     "build:clean": "rm -rf dist",
-    "build:types": "tsc -p tsconfig.build.json",
+    "build:types": "tsc -p tsconfig.build.json && cp dist/index.d.ts dist/index.d.cts",
     "build:core": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js --packages=external --external:vue --external:react --external:react-dom --external:svelte",
     "build:cli": "esbuild src/adapters/cli/index.ts --bundle --platform=node --format=esm --outfile=dist/cli/index.js --packages=external && printf '#!/usr/bin/env node\\n' | cat - dist/cli/index.js > dist/cli/tmp && mv dist/cli/tmp dist/cli/index.js && chmod +x dist/cli/index.js",
     "build:plugins": "esbuild src/frameworks/build-tools/vite/index.ts --bundle --platform=node --format=esm --outfile=dist/plugins/vite.js --packages=external && esbuild src/frameworks/build-tools/figma-sync/index.ts --bundle --platform=node --format=esm --outfile=dist/plugins/figma-sync.js --packages=external && esbuild src/frameworks/build-tools/webpack/index.ts --bundle --platform=node --format=esm --outfile=dist/plugins/webpack.js --packages=external",
@@ -170,7 +175,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/melcanz08/chaincss"
+    "url": "git+https://github.com/melcanz08/chaincss.git"
   },
   "homepage": "https://chaincss.dev",
   "bugs": {
