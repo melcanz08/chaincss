@@ -3,88 +3,94 @@
 // ChainCSS - Core Compiler Engine
 // ============================================================================
 
-import chalk from 'chalk'
-import path from 'path'
-import crypto from 'crypto'
-import { DEFAULT_CONFIG, PERFORMANCE } from '@shared/constants/index.js'
-import { writeFile, getBaseName } from '@shared/utils/index.js'
-import type { ChainCSSConfig, CompileResult, StyleDefinition } from '@shared/types/index.js'
-import { ChainCSSPrefixer } from '@compiler/prefixer.js'
-import { Pipeline, createDefaultPipeline } from '@compiler/pipeline/index.js'
-import { setBreakpoints } from '@compiler/breakpoints.js'
-import { ModuleLoader } from '@compiler/services/module-loader.js'
-import { CacheStore } from '@compiler/services/cache-store.js'
-import { CacheManager } from '@compiler/cache/cache-manager.js'
-import { PersistentCache } from '@compiler/cache/content-addressable-cache.js'
-import { ManifestWriter } from '@compiler/services/manifest-writer.js'
-import { CompilerEvents } from '@compiler/services/compiler-events.js'
-import type { CompilerEvent } from '@compiler/services/compiler-events.js'
+import chalk from "chalk";
+import path from "path";
+import crypto from "crypto";
+import { DEFAULT_CONFIG, PERFORMANCE } from "@shared/constants/index.js";
+import { writeFile, getBaseName } from "@shared/utils/index.js";
+import type {
+  ChainCSSConfig,
+  CompileResult,
+  StyleDefinition,
+} from "@shared/types/index.js";
+import { ChainCSSPrefixer } from "@compiler/prefixer.js";
+import { Pipeline, createDefaultPipeline } from "@compiler/pipeline/index.js";
+import { setBreakpoints } from "@compiler/breakpoints.js";
+import { ModuleLoader } from "@compiler/services/module-loader.js";
+import { CacheStore } from "@compiler/services/cache-store.js";
+import { CacheManager } from "@compiler/cache/cache-manager.js";
+import { PersistentCache } from "@compiler/cache/content-addressable-cache.js";
+import { ManifestWriter } from "@compiler/services/manifest-writer.js";
+import { CompilerEvents } from "@compiler/services/compiler-events.js";
+import type { CompilerEvent } from "@compiler/services/compiler-events.js";
 import {
   createCompilerState,
   updateState,
   markChangedRules,
   getStateStats,
   type CompilerState,
-} from '@compiler/pipeline/persistent-compiler.js'
-import { findAffectedNodes } from '@compiler/pipeline/ir/graph-builder.js'
-import { createStyleCompilation } from './style-compilation.js'
-import { createComponentCompiler } from './component-compiler.js'
-import { StatsTracker } from './stats.js'
+} from "@compiler/pipeline/persistent-compiler.js";
+import { findAffectedNodes } from "@compiler/pipeline/ir/graph-builder.js";
+import { createStyleCompilation } from "./style-compilation.js";
+import { createComponentCompiler } from "./component-compiler.js";
+import { StatsTracker } from "./stats.js";
 
-function ensureIterable<T>(target: T | T[] | Record<string, T> | undefined): T[] {
+function ensureIterable<T>(
+  target: T | T[] | Record<string, T> | undefined,
+): T[] {
   if (!target) return [];
   if (Array.isArray(target)) return target;
-  if (typeof target === 'object') return Object.values(target) as T[];
+  if (typeof target === "object") return Object.values(target) as T[];
   return [];
 }
 
 function deepMerge(base: any, overrides: any): any {
-  const result = { ...base }
+  const result = { ...base };
   for (const key of Object.keys(overrides)) {
     if (
       overrides[key] &&
-      typeof overrides[key] === 'object' &&
+      typeof overrides[key] === "object" &&
       !Array.isArray(overrides[key]) &&
-      typeof result[key] === 'object'
+      typeof result[key] === "object"
     ) {
-      result[key] = deepMerge(result[key], overrides[key])
+      result[key] = deepMerge(result[key], overrides[key]);
     } else {
-      result[key] = overrides[key]
+      result[key] = overrides[key];
     }
   }
-  return result
+  return result;
 }
 
 export class ChainCSSCompiler {
-  private config: Required<ChainCSSConfig>
-  private prefixer: ChainCSSPrefixer | null = null
-  private pipeline: Pipeline
-  private pipelineEnabled: boolean
-  private loader: ModuleLoader
-  private cache: CacheStore<CompileResult>
-  private persistentCache: CacheManager | null = null
-  private stateCache: PersistentCache | null = null
-  private manifestWriter: ManifestWriter
-  private eventHandlers: Array<(event: CompilerEvent) => void> = []
-  public readonly events = new CompilerEvents()
-  private compileInProgress = false
-  private compileQueue: Array<() => Promise<void>> = []
-  private persistentMode = true
-  private compilerState: CompilerState | null = null
+  private config: Required<ChainCSSConfig>;
+  private prefixer: ChainCSSPrefixer | null = null;
+  private pipeline: Pipeline;
+  private pipelineEnabled: boolean;
+  private loader: ModuleLoader;
+  private cache: CacheStore<CompileResult>;
+  private persistentCache: CacheManager | null = null;
+  private stateCache: PersistentCache | null = null;
+  private manifestWriter: ManifestWriter;
+  private eventHandlers: Array<(event: CompilerEvent) => void> = [];
+  public readonly events = new CompilerEvents();
+  private compileInProgress = false;
+  private compileQueue: Array<() => Promise<void>> = [];
+  private persistentMode = true;
+  private compilerState: CompilerState | null = null;
   private aggregatedStats = {
     totalStyles: 0,
     atomicStyles: 0,
     deadRulesEliminated: 0,
     pipelinePasses: 0,
     filesProcessed: 0,
-  }
-  private styleCompiler!: ReturnType<typeof createStyleCompilation>
-  private componentCompiler!: ReturnType<typeof createComponentCompiler>
-  private cssChunks: string[] = []
-  private combinedCache: string | null = null
-  private _hasStyles = false
-  private initPromise: Promise<void> | null = null
-  private statsTracker = new StatsTracker()
+  };
+  private styleCompiler!: ReturnType<typeof createStyleCompilation>;
+  private componentCompiler!: ReturnType<typeof createComponentCompiler>;
+  private cssChunks: string[] = [];
+  private combinedCache: string | null = null;
+  private _hasStyles = false;
+  private initPromise: Promise<void> | null = null;
+  private statsTracker = new StatsTracker();
   constructor(config: ChainCSSConfig) {
     this.config = {
       ...DEFAULT_CONFIG,
@@ -93,33 +99,40 @@ export class ChainCSSCompiler {
       atomic: { ...DEFAULT_CONFIG.atomic, ...(config as any).atomic },
       prefixer: { ...DEFAULT_CONFIG.prefixer, ...(config as any).prefixer },
       tokens: deepMerge(DEFAULT_CONFIG.tokens, (config as any).tokens || {}),
-    } as Required<ChainCSSConfig>
+    } as Required<ChainCSSConfig>;
 
-    if (this.config.breakpoints) setBreakpoints(this.config.breakpoints)
-    if (this.config.prefixer?.enabled) this.prefixer = new ChainCSSPrefixer(this.config.prefixer)
+    if (this.config.breakpoints) setBreakpoints(this.config.breakpoints);
+    if (this.config.prefixer?.enabled)
+      this.prefixer = new ChainCSSPrefixer(this.config.prefixer);
 
-    this.loader = new ModuleLoader()
-    this.cache = new CacheStore<CompileResult>(PERFORMANCE.CACHE_MAX_ENTRIES || 500)
+    this.loader = new ModuleLoader();
+    this.cache = new CacheStore<CompileResult>(
+      PERFORMANCE.CACHE_MAX_ENTRIES || 500,
+    );
 
     // Two separate caches for different purposes:
     // - persistentCache: style compilation result cache (key-value by style ID + hash)
     // - stateCache: persistent compiler state (content-addressable by hash)
     try {
-      this.persistentCache = new CacheManager('.chaincss-cache/compiler-cache.json', {
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        maxSize: 100 * 1024 * 1024,
-        autoSave: true,
-      })
+      this.persistentCache = new CacheManager(
+        ".chaincss-cache/compiler-cache.json",
+        {
+          maxAge: 7 * 24 * 60 * 60 * 1000,
+          maxSize: 100 * 1024 * 1024,
+          autoSave: true,
+        },
+      );
       this.stateCache = new PersistentCache({
-        cacheDir: '.chaincss-cache/persistent',
+        cacheDir: ".chaincss-cache/persistent",
         maxAgeDays: 7,
-      })
+      });
     } catch {
-      this.persistentCache = null
-      this.stateCache = null
+      this.persistentCache = null;
+      this.stateCache = null;
     }
-    this.manifestWriter = new ManifestWriter()
-    this.pipelineEnabled = (config as any).experimental?.enablePipeline !== false
+    this.manifestWriter = new ManifestWriter();
+    this.pipelineEnabled =
+      (config as any).experimental?.enablePipeline !== false;
     this.pipeline = createDefaultPipeline({
       contexts: {
         optimization: {
@@ -127,7 +140,7 @@ export class ChainCSSCompiler {
           atomic: this.config.atomic.enabled,
         },
       },
-    })
+    });
     const ctx = {
       config: this.config,
       pipeline: this.pipeline,
@@ -136,8 +149,8 @@ export class ChainCSSCompiler {
       persistentCache: this.persistentCache,
       stateCache: this.stateCache,
       emit: (e: CompilerEvent) => this.emit(e),
-    }
-    this.styleCompiler = createStyleCompilation(ctx as any)
+    };
+    this.styleCompiler = createStyleCompilation(ctx as any);
     this.componentCompiler = createComponentCompiler({
       config: this.config,
       loader: this.loader,
@@ -148,60 +161,68 @@ export class ChainCSSCompiler {
       getAggregatedStats: () => this.getAggregatedStats(),
       emit: (e) => this.emit(e),
       statsTracker: this.statsTracker,
-    })
+    });
 
-    this.registerCustomExtensions()
+    this.registerCustomExtensions();
   }
 
   private registerCustomExtensions() {
-    const cfg = this.config as any
-    const promises: Promise<any>[] = []
+    const cfg = this.config as any;
+    const promises: Promise<any>[] = [];
 
     if (cfg.shorthands && Object.keys(cfg.shorthands).length) {
       promises.push(
-        import('@compiler/utils/shorthands.js').then((m) => {
-          ;(m as any).registerCustomShorthands?.(cfg.shorthands, !!cfg.allowOverride)
+        import("@compiler/utils/shorthands.js").then((m) => {
+          (m as any).registerCustomShorthands?.(
+            cfg.shorthands,
+            !!cfg.allowOverride,
+          );
           return Promise.all([
-            import('@compiler/pipeline/normalizers/intent-data.js').then((d) =>
-              (d as any).registerCustomKnownProperties?.(Object.keys(cfg.shorthands)),
+            import("@compiler/pipeline/normalizers/intent-data.js").then((d) =>
+              (d as any).registerCustomKnownProperties?.(
+                Object.keys(cfg.shorthands),
+              ),
             ),
-            import('@compiler/pipeline/normalizers/intent-detector.js').then((det) =>
-              (det as any).registerCustomIntentKeys?.(Object.keys(cfg.shorthands)),
+            import("@compiler/pipeline/normalizers/intent-detector.js").then(
+              (det) =>
+                (det as any).registerCustomIntentKeys?.(
+                  Object.keys(cfg.shorthands),
+                ),
             ),
-          ])
+          ]);
         }),
-      )
+      );
     }
     if (cfg.macros && Object.keys(cfg.macros).length) {
       promises.push(
-        import('@compiler/utils/shorthands.js').then((m) =>
+        import("@compiler/utils/shorthands.js").then((m) =>
           (m as any).registerCustomMacros?.(cfg.macros, !!cfg.allowOverride),
         ),
-      )
+      );
     }
     if (cfg.intents && Object.keys(cfg.intents).length) {
       promises.push(
-        import('@compiler/pipeline/lowering/intent-resolver.js').then((r) =>
+        import("@compiler/pipeline/lowering/intent-resolver.js").then((r) =>
           (r as any).registerIntents?.(cfg.intents, !!cfg.allowOverride),
         ),
-      )
+      );
     }
 
     this.initPromise = Promise.all(promises)
       .then(() => {})
       .catch((err) => {
         this.emit({
-          type: 'error',
-          code: 'EXTENSION_REGISTRATION_FAILED',
-          message: 'Failed to register custom extensions dynamically',
+          type: "error",
+          code: "EXTENSION_REGISTRATION_FAILED",
+          message: "Failed to register custom extensions dynamically",
           originalError: err,
-        } as any)
-      })
+        } as any);
+      });
   }
 
   public async ready(): Promise<this> {
-    if (this.initPromise) await this.initPromise
-    return this
+    if (this.initPromise) await this.initPromise;
+    return this;
   }
 
   // ==========================================================================
@@ -209,25 +230,25 @@ export class ChainCSSCompiler {
   // ==========================================================================
 
   public onEvent(h: (event: CompilerEvent) => void) {
-    this.eventHandlers.push(h)
+    this.eventHandlers.push(h);
     return () => {
-      this.eventHandlers = this.eventHandlers.filter((x) => x !== h)
-    }
+      this.eventHandlers = this.eventHandlers.filter((x) => x !== h);
+    };
   }
 
   private emit(e: CompilerEvent) {
     try {
-      ;(this.events as any).emit(e)
+      (this.events as any).emit(e);
     } catch {}
     for (const h of this.eventHandlers) {
       try {
-        h(e)
+        h(e);
       } catch {}
     }
-    if (e.type === 'warning' && !this.config.silent)
-      console.warn(chalk.yellow(`[ChainCSS] ${e.code}: ${e.message}`))
-    if (e.type === 'error' && !this.config.silent)
-      console.error(chalk.red(`[ChainCSS] ${e.code}: ${e.message}`))
+    if (e.type === "warning" && !this.config.silent)
+      console.warn(chalk.yellow(`[ChainCSS] ${e.code}: ${e.message}`));
+    if (e.type === "error" && !this.config.silent)
+      console.error(chalk.red(`[ChainCSS] ${e.code}: ${e.message}`));
   }
 
   // ==========================================================================
@@ -235,45 +256,55 @@ export class ChainCSSCompiler {
   // ==========================================================================
 
   public compileStyle(id: string, def: StyleDefinition): CompileResult {
-    const selectors = (def as any).selectors?.length ? (def as any).selectors : [`.${id}`]
-    const nestedRules = ensureIterable((def as any)._nestedRules)
-    const atRules = ensureIterable((def as any)._atRules)
-    const { _nestedRules, _atRules, selectors: _sel, ...baseProps } = def as any
-    const baseDef = { ...baseProps, selectors }
+    const selectors = (def as any).selectors?.length
+      ? (def as any).selectors
+      : [`.${id}`];
+    const nestedRules = ensureIterable((def as any)._nestedRules);
+    const atRules = ensureIterable((def as any)._atRules);
+    const {
+      _nestedRules,
+      _atRules,
+      selectors: _sel,
+      ...baseProps
+    } = def as any;
+    const baseDef = { ...baseProps, selectors };
 
     const baseResult = this.pipelineEnabled
       ? this.styleCompiler.compileViaPipeline(id, baseDef)
-      : this.styleCompiler.compileDirect(id, baseDef)
+      : this.styleCompiler.compileDirect(id, baseDef);
 
-    let css = baseResult.css
-    let classMap = (baseResult as any).classMap || {}
-    let atomicClasses = (baseResult as any).atomicClasses || []
-    let stats = (baseResult as any).stats || {}
+    let css = baseResult.css;
+    let classMap = (baseResult as any).classMap || {};
+    let atomicClasses = (baseResult as any).atomicClasses || [];
+    let stats = (baseResult as any).stats || {};
 
     for (const rule of nestedRules) {
-      const resolvedSelector = rule.selector.includes('&')
+      const resolvedSelector = rule.selector.includes("&")
         ? rule.selector.replace(/&/g, selectors[0])
-        : `${selectors[0]}${rule.selector.startsWith(':') || rule.selector.startsWith('[') ? '' : ' '}${rule.selector}`
+        : `${selectors[0]}${rule.selector.startsWith(":") || rule.selector.startsWith("[") ? "" : " "}${rule.selector}`;
 
-      const nestedDef = { ...rule.styles, selectors: [resolvedSelector] }
+      const nestedDef = { ...rule.styles, selectors: [resolvedSelector] };
       const r = this.pipelineEnabled
-        ? this.styleCompiler.compileViaPipeline(`${id}:${rule.selector}`, nestedDef)
-        : this.styleCompiler.compileDirect(`${id}:${rule.selector}`, nestedDef)
+        ? this.styleCompiler.compileViaPipeline(
+            `${id}:${rule.selector}`,
+            nestedDef,
+          )
+        : this.styleCompiler.compileDirect(`${id}:${rule.selector}`, nestedDef);
 
-      css += `\n${r.css}`
-      classMap = { ...classMap, ...(r as any).classMap }
-      atomicClasses = [...atomicClasses, ...((r as any).atomicClasses || [])]
+      css += `\n${r.css}`;
+      classMap = { ...classMap, ...(r as any).classMap };
+      atomicClasses = [...atomicClasses, ...((r as any).atomicClasses || [])];
     }
 
     for (const at of atRules) {
-      const innerDef = { ...at.styles, selectors }
+      const innerDef = { ...at.styles, selectors };
       const r = this.pipelineEnabled
         ? this.styleCompiler.compileViaPipeline(`${id}:${at.type}`, innerDef)
-        : this.styleCompiler.compileDirect(`${id}:${at.type}`, innerDef)
+        : this.styleCompiler.compileDirect(`${id}:${at.type}`, innerDef);
 
-      css += `\n@${at.type} ${at.query} { ${r.css} }`
-      classMap = { ...classMap, ...(r as any).classMap }
-      atomicClasses = [...atomicClasses, ...((r as any).atomicClasses || [])]
+      css += `\n@${at.type} ${at.query} { ${r.css} }`;
+      classMap = { ...classMap, ...(r as any).classMap };
+      atomicClasses = [...atomicClasses, ...((r as any).atomicClasses || [])];
     }
 
     const result = {
@@ -283,42 +314,52 @@ export class ChainCSSCompiler {
       stats,
       dynamic: (baseResult as any).dynamic,
       inspector: (baseResult as any).inspector,
-    } as CompileResult
+    } as CompileResult;
 
-    this.trackCSS(result.css)
-    this.trackStats(result.stats as any)
-    return result
+    this.trackCSS(result.css);
+    this.trackStats(result.stats as any);
+    return result;
   }
 
   public compileRecipe(id: string, val: any): CompileResult {
     try {
-      const g = val.getAllVariants
-      if (typeof g === 'function') {
-        let css = ''
-        const map: Record<string, string> = {}
+      const g = val.getAllVariants;
+      if (typeof g === "function") {
+        let css = "";
+        const map: Record<string, string> = {};
         for (const v of g()) {
           const k = Object.entries(v)
             .map(([a, b]) => `${a}-${b}`)
-            .join('_')
-          const sd = val(v)
+            .join("_");
+          const sd = val(v);
           if (sd?.selectors) {
-            const r = this.compileStyle(`${id}_${k}`, sd)
-            css += r.css
-            Object.assign(map, r.classMap)
+            const r = this.compileStyle(`${id}_${k}`, sd);
+            css += r.css;
+            Object.assign(map, r.classMap);
           }
         }
-        return { css, classMap: map, atomicClasses: [], stats: this.computeStats() } as any
+        return {
+          css,
+          classMap: map,
+          atomicClasses: [],
+          stats: this.computeStats(),
+        } as any;
       }
     } catch (e) {
       this.emit({
-        type: 'error',
-        code: 'RECIPE_COMPILE_FAILED',
+        type: "error",
+        code: "RECIPE_COMPILE_FAILED",
         message: `recipe ${id} failed`,
         sourceFile: id,
         originalError: e,
-      } as any)
+      } as any);
     }
-    return { css: '', classMap: {}, atomicClasses: [], stats: this.computeStats() } as any
+    return {
+      css: "",
+      classMap: {},
+      atomicClasses: [],
+      stats: this.computeStats(),
+    } as any;
   }
 
   // ==========================================================================
@@ -326,7 +367,7 @@ export class ChainCSSCompiler {
   // ==========================================================================
 
   public async compileComponents(components: string[]) {
-    await this.ready()
+    await this.ready();
     return new Promise<void>((resolve, reject) => {
       this.compileQueue.push(async () => {
         try {
@@ -336,42 +377,45 @@ export class ChainCSSCompiler {
             deadRulesEliminated: 0,
             pipelinePasses: 0,
             filesProcessed: 0,
-          }
-          await this.componentCompiler.compileAll(components)
-          resolve()
+          };
+          await this.componentCompiler.compileAll(components);
+          resolve();
         } catch (err) {
-          reject(err as Error)
+          reject(err as Error);
         }
-      })
-      this.runQueue()
-    })
+      });
+      this.runQueue();
+    });
   }
 
   private async runQueue() {
-    if (this.compileInProgress) return
-    this.compileInProgress = true
+    if (this.compileInProgress) return;
+    this.compileInProgress = true;
     while (this.compileQueue.length) {
-      const job = this.compileQueue.shift()!
-      await job()
+      const job = this.compileQueue.shift()!;
+      await job();
     }
-    this.compileInProgress = false
+    this.compileInProgress = false;
   }
 
   // ==========================================================================
   // File Compilation (Full + Incremental)
   // ==========================================================================
 
-  public async compileFile(filePath: string, useIncremental = false): Promise<Record<string, CompileResult>> {
-    await this.ready()
+  public async compileFile(
+    filePath: string,
+    useIncremental = false,
+  ): Promise<Record<string, CompileResult>> {
+    await this.ready();
 
     if (useIncremental && this.persistentMode && this.compilerState) {
-      return this.compileFileIncremental(filePath)
+      return this.compileFileIncremental(filePath);
     }
 
-    const ex = await this.loader.import(filePath)
-    const out: Record<string, CompileResult> = {}
+    const ex = await this.loader.import(filePath);
+    const out: Record<string, CompileResult> = {};
     for (const [n, v] of Object.entries(ex || {})) {
-      if (!v || typeof v !== 'object') continue;
+      if (!v || typeof v !== "object") continue;
       const value = { ...v };
       if (value._nestedRules) {
         value._nestedRules = ensureIterable(value._nestedRules);
@@ -379,36 +423,38 @@ export class ChainCSSCompiler {
       if (value._atRules) {
         value._atRules = ensureIterable(value._atRules);
       }
-      
-      if (typeof v === 'function' && (v as any).variants) {
-        out[n] = this.compileRecipe(n, v)
+
+      if (typeof v === "function" && (v as any).variants) {
+        out[n] = this.compileRecipe(n, v);
       } else if ((v as any)?.selectors) {
-        out[n] = this.compileStyle(n, v as any)
+        out[n] = this.compileStyle(n, v as any);
       }
     }
 
     if (this.persistentMode && Object.keys(out).length > 0) {
-      const firstResult = Object.values(out)[0]
-      const inspector = (firstResult as any)?.inspector
+      const firstResult = Object.values(out)[0];
+      const inspector = (firstResult as any)?.inspector;
       if (inspector?.ir) {
         if (!this.compilerState) {
-          this.compilerState = createCompilerState(inspector.ir)
+          this.compilerState = createCompilerState(inspector.ir);
         } else {
-          updateState(this.compilerState, inspector.ir, [filePath])
+          updateState(this.compilerState, inspector.ir, [filePath]);
         }
       }
     }
 
-    return out
+    return out;
   }
 
-  private async compileFileIncremental(filePath: string): Promise<Record<string, CompileResult>> {
-    const ex = await this.loader.import(filePath)
-    const out: Record<string, CompileResult> = {}
-    const changedRuleIds: string[] = []
+  private async compileFileIncremental(
+    filePath: string,
+  ): Promise<Record<string, CompileResult>> {
+    const ex = await this.loader.import(filePath);
+    const out: Record<string, CompileResult> = {};
+    const changedRuleIds: string[] = [];
 
     for (const [n, v] of Object.entries(ex || {})) {
-      if (!v || typeof v !== 'object') continue;
+      if (!v || typeof v !== "object") continue;
       const value = { ...v };
       if (value._nestedRules) {
         value._nestedRules = ensureIterable(value._nestedRules);
@@ -416,42 +462,42 @@ export class ChainCSSCompiler {
       if (value._atRules) {
         value._atRules = ensureIterable(value._atRules);
       }
-      
-      if (typeof v === 'function' && (v as any).variants) {
-        out[n] = this.compileRecipe(n, v)
+
+      if (typeof v === "function" && (v as any).variants) {
+        out[n] = this.compileRecipe(n, v);
       } else if ((v as any)?.selectors) {
-        out[n] = this.compileStyle(n, v as any)
+        out[n] = this.compileStyle(n, v as any);
       }
     }
 
     if (changedRuleIds.length > 0 && this.compilerState) {
-      markChangedRules(this.compilerState, changedRuleIds)
+      markChangedRules(this.compilerState, changedRuleIds);
     }
 
-    const firstResult = Object.values(out)[0]
-    const inspector = (firstResult as any)?.inspector
+    const firstResult = Object.values(out)[0];
+    const inspector = (firstResult as any)?.inspector;
     if (inspector?.ir && this.compilerState) {
-      updateState(this.compilerState, inspector.ir, [filePath])
+      updateState(this.compilerState, inspector.ir, [filePath]);
     }
 
-    return out
+    return out;
   }
 
   public getIncrementalImpact(filePath: string): {
-    changedFiles: string[]
-    affectedRules: number
-    totalRules: number
-    affectedPercent: number
-    shouldIncremental: boolean
+    changedFiles: string[];
+    affectedRules: number;
+    totalRules: number;
+    affectedPercent: number;
+    shouldIncremental: boolean;
   } | null {
-    if (!this.compilerState?.ir?.graph) return null
+    if (!this.compilerState?.ir?.graph) return null;
 
-    const graph = this.compilerState.ir.graph
-    const totalRules = this.compilerState.ir.rules.length
+    const graph = this.compilerState.ir.graph;
+    const totalRules = this.compilerState.ir.rules.length;
 
     const fileRules = this.compilerState.ir.rules.filter(
-      r => r.source?.file === filePath
-    )
+      (r) => r.source?.file === filePath,
+    );
 
     if (fileRules.length === 0) {
       return {
@@ -460,33 +506,34 @@ export class ChainCSSCompiler {
         totalRules,
         affectedPercent: 0,
         shouldIncremental: false,
-      }
+      };
     }
 
-    const allAffected = new Set<string>()
+    const allAffected = new Set<string>();
     for (const rule of fileRules) {
-      allAffected.add(rule.id)
-      const affected = findAffectedNodes(graph, rule.id)
-      for (const id of affected) allAffected.add(id)
+      allAffected.add(rule.id);
+      const affected = findAffectedNodes(graph, rule.id);
+      for (const id of affected) allAffected.add(id);
     }
 
-    const affectedCount = allAffected.size
+    const affectedCount = allAffected.size;
 
     return {
       changedFiles: [filePath],
       affectedRules: affectedCount,
       totalRules,
-      affectedPercent: totalRules > 0 ? Math.round((affectedCount / totalRules) * 100) : 0,
+      affectedPercent:
+        totalRules > 0 ? Math.round((affectedCount / totalRules) * 100) : 0,
       shouldIncremental: affectedCount > 0 && affectedCount <= totalRules * 0.5,
-    }
+    };
   }
 
   public async compile(inputFile: string, outDir: string) {
-    const r = await this.compileFile(inputFile)
-    let css = ''
-    for (const v of Object.values(r)) css += v.css
-    writeFile(path.join(outDir, `${getBaseName(inputFile)}.css`), css)
-    return { results: r }
+    const r = await this.compileFile(inputFile);
+    let css = "";
+    for (const v of Object.values(r)) css += v.css;
+    writeFile(path.join(outDir, `${getBaseName(inputFile)}.css`), css);
+    return { results: r };
   }
 
   // ==========================================================================
@@ -494,26 +541,26 @@ export class ChainCSSCompiler {
   // ==========================================================================
 
   public setPipelineEnabled(v: boolean) {
-    this.pipelineEnabled = v
-    return this
+    this.pipelineEnabled = v;
+    return this;
   }
 
   public setPipeline(p: Pipeline) {
-    this.pipeline = p
-    this.pipelineEnabled = true
-    return this
+    this.pipeline = p;
+    this.pipelineEnabled = true;
+    return this;
   }
 
   public isPipelineEnabled() {
-    return this.pipelineEnabled
+    return this.pipelineEnabled;
   }
 
   public getPipeline() {
-    return this.pipeline
+    return this.pipeline;
   }
 
   public getDiagnostics() {
-    return this.pipeline.getLastResult?.()?.ir?.diagnostics || []
+    return this.pipeline.getLastResult?.()?.ir?.diagnostics || [];
   }
 
   // ==========================================================================
@@ -521,26 +568,26 @@ export class ChainCSSCompiler {
   // ==========================================================================
 
   public setPersistentMode(enabled: boolean): this {
-    this.persistentMode = enabled
-    if (!enabled) this.compilerState = null
-    return this
+    this.persistentMode = enabled;
+    if (!enabled) this.compilerState = null;
+    return this;
   }
 
   public isPersistentMode(): boolean {
-    return this.persistentMode
+    return this.persistentMode;
   }
 
   public getCompilerState(): CompilerState | null {
-    return this.compilerState
+    return this.compilerState;
   }
 
   public setCompilerState(state: CompilerState): void {
-    this.compilerState = state
+    this.compilerState = state;
   }
 
   public getCompilerStats() {
-    if (!this.compilerState) return null
-    return getStateStats(this.compilerState)
+    if (!this.compilerState) return null;
+    return getStateStats(this.compilerState);
   }
 
   // ==========================================================================
@@ -548,36 +595,38 @@ export class ChainCSSCompiler {
   // ==========================================================================
 
   private computeStats() {
-    const last = this.pipeline.getLastResult?.()
-    const rules = last?.ir?.rules || []
-    const total = rules.length
-    const alive = rules.filter((r: any) => !r.isDead).length
-    const atomic = rules.filter((r: any) =>
-      r.passMeta?.optimization?.atomic?.isAtomic === true || r.meta?.atomic === true
-    ).length
+    const last = this.pipeline.getLastResult?.();
+    const rules = last?.ir?.rules || [];
+    const total = rules.length;
+    const alive = rules.filter((r: any) => !r.isDead).length;
+    const atomic = rules.filter(
+      (r: any) =>
+        r.passMeta?.optimization?.atomic?.isAtomic === true ||
+        r.meta?.atomic === true,
+    ).length;
     return {
       totalStyles: total,
       atomicStyles: atomic,
       uniqueProperties: 0,
-      savings: total - alive ? `${total - alive} rules eliminated` : '0%',
+      savings: total - alive ? `${total - alive} rules eliminated` : "0%",
       deadRulesEliminated: total - alive,
       pipelinePasses: last?.timeline?.length || 0,
-    }
+    };
   }
 
   public getStats() {
-    return this.computeStats()
+    return this.computeStats();
   }
 
   private trackStats(s: ReturnType<typeof this.computeStats>) {
-    this.aggregatedStats.totalStyles += s.totalStyles
-    this.aggregatedStats.atomicStyles += s.atomicStyles
-    this.aggregatedStats.deadRulesEliminated += s.deadRulesEliminated
+    this.aggregatedStats.totalStyles += s.totalStyles;
+    this.aggregatedStats.atomicStyles += s.atomicStyles;
+    this.aggregatedStats.deadRulesEliminated += s.deadRulesEliminated;
     this.aggregatedStats.pipelinePasses = Math.max(
       this.aggregatedStats.pipelinePasses,
       s.pipelinePasses,
-    )
-    this.aggregatedStats.filesProcessed++
+    );
+    this.aggregatedStats.filesProcessed++;
   }
 
   public getAggregatedStats() {
@@ -587,37 +636,40 @@ export class ChainCSSCompiler {
       uniqueProperties: 0,
       savings: this.aggregatedStats.deadRulesEliminated
         ? `${this.aggregatedStats.deadRulesEliminated} rules eliminated`
-        : '0%',
+        : "0%",
       deadRulesEliminated: this.aggregatedStats.deadRulesEliminated,
       pipelinePasses: this.aggregatedStats.pipelinePasses,
       filesProcessed: this.aggregatedStats.filesProcessed,
-    }
+    };
   }
 
   // ==========================================================================
   // Virtual Source (Vite HMR)
   // ==========================================================================
 
-  public async compileVirtualSource(source: string, virtualPath: string): Promise<Record<string, CompileResult>> {
-    await this.ready()
+  public async compileVirtualSource(
+    source: string,
+    virtualPath: string,
+  ): Promise<Record<string, CompileResult>> {
+    await this.ready();
 
     // Content-addressable cache lookup via PersistentCache (stateCache)
     if (this.stateCache) {
-      const sourceHash = crypto.createHash('md5').update(source).digest('hex')
-      const cached = await this.stateCache.getByHash(sourceHash)
+      const sourceHash = crypto.createHash("md5").update(source).digest("hex");
+      const cached = await this.stateCache.getByHash(sourceHash);
       if (cached?.result) {
-        return cached.result
+        return cached.result;
       }
     }
 
     // In-memory compilation via loader
-    const ex = await this.loader.importSource(source, virtualPath)
-    const out: Record<string, CompileResult> = {}
-    const changedRuleIds: string[] = []
+    const ex = await this.loader.importSource(source, virtualPath);
+    const out: Record<string, CompileResult> = {};
+    const changedRuleIds: string[] = [];
 
     for (const [n, v] of Object.entries(ex || {})) {
-      if (!v || typeof v !== 'object') continue;
-      
+      if (!v || typeof v !== "object") continue;
+
       // Ensure nested rules and at-rules are safely handled
       const value = { ...v };
       if (value._nestedRules) {
@@ -626,48 +678,52 @@ export class ChainCSSCompiler {
       if (value._atRules) {
         value._atRules = ensureIterable(value._atRules);
       }
-      
-      if (typeof v === 'function' && (v as any).variants) {
-        out[n] = this.compileRecipe(n, v)
+
+      if (typeof v === "function" && (v as any).variants) {
+        out[n] = this.compileRecipe(n, v);
       } else if ((v as any)?.selectors) {
-        const result = this.compileStyle(n, v as any)
-        out[n] = result
+        const result = this.compileStyle(n, v as any);
+        out[n] = result;
 
         // Collect rule IDs for dirty tracking
-        const inspector = (result as any)?.inspector
+        const inspector = (result as any)?.inspector;
         if (inspector?.ir?.rules) {
           for (const rule of inspector.ir.rules) {
-            changedRuleIds.push(rule.id)
+            changedRuleIds.push(rule.id);
           }
         }
       }
     }
 
     // INCREMENTAL: Mark changed rules as dirty via graph
-    if (this.persistentMode && changedRuleIds.length > 0 && this.compilerState) {
-      markChangedRules(this.compilerState, changedRuleIds)
+    if (
+      this.persistentMode &&
+      changedRuleIds.length > 0 &&
+      this.compilerState
+    ) {
+      markChangedRules(this.compilerState, changedRuleIds);
     }
 
     // Update persistent state
     if (this.persistentMode && Object.keys(out).length > 0) {
-      const firstResult = Object.values(out)[0]
-      const inspector = (firstResult as any)?.inspector
+      const firstResult = Object.values(out)[0];
+      const inspector = (firstResult as any)?.inspector;
       if (inspector?.ir) {
         if (!this.compilerState) {
-          this.compilerState = createCompilerState(inspector.ir)
+          this.compilerState = createCompilerState(inspector.ir);
         } else {
-          updateState(this.compilerState, inspector.ir, [virtualPath])
+          updateState(this.compilerState, inspector.ir, [virtualPath]);
         }
       }
     }
 
     // Save to content-addressable cache via PersistentCache (stateCache)
     if (this.stateCache) {
-      const sourceHash = crypto.createHash('md5').update(source).digest('hex')
-      await this.stateCache.setByHash(sourceHash, out)
+      const sourceHash = crypto.createHash("md5").update(source).digest("hex");
+      await this.stateCache.setByHash(sourceHash, out);
     }
 
-    return out
+    return out;
   }
 
   // ==========================================================================
@@ -676,12 +732,12 @@ export class ChainCSSCompiler {
 
   /** Style compilation result cache (CacheManager — key-value by style ID + hash) */
   public getPersistentCache(): CacheManager | null {
-    return this.persistentCache
+    return this.persistentCache;
   }
 
   /** Compiler state cache (PersistentCache — content-addressable by hash) */
   public getStateCache(): PersistentCache | null {
-    return this.stateCache
+    return this.stateCache;
   }
 
   // ==========================================================================
@@ -690,13 +746,13 @@ export class ChainCSSCompiler {
 
   public getCombinedCSS() {
     if (this.combinedCache === null) {
-      this.combinedCache = this.cssChunks.join('\n')
+      this.combinedCache = this.cssChunks.join("\n");
     }
-    return this.combinedCache
+    return this.combinedCache;
   }
 
   public hasStyles() {
-    return this._hasStyles
+    return this._hasStyles;
   }
 
   public clearCSS() {
@@ -714,13 +770,17 @@ export class ChainCSSCompiler {
 
   private trackCSS(c: string) {
     if (c?.trim()) {
-      this.cssChunks.push(c)
-      this.combinedCache = null
-      this._hasStyles = true
+      this.cssChunks.push(c);
+      this.combinedCache = null;
+      this._hasStyles = true;
     }
   }
 }
 
-export async function compileChainCSS(input: string, out: string, cfg?: ChainCSSConfig) {
-  return new ChainCSSCompiler(cfg || {}).compile(input, out)
+export async function compileChainCSS(
+  input: string,
+  out: string,
+  cfg?: ChainCSSConfig,
+) {
+  return new ChainCSSCompiler(cfg || {}).compile(input, out);
 }

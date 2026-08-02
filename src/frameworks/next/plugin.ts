@@ -1,7 +1,7 @@
 // @ts-nocheck
 // src/frameworks/next/plugin.ts - COMPLETE Next.js plugin with RSC support
-import fs from 'fs';
-import path from 'path';
+import fs from "fs";
+import path from "path";
 
 export interface ChainCSSNextOptions {
   output?: string;
@@ -10,14 +10,14 @@ export interface ChainCSSNextOptions {
   serverComponents?: boolean;
 }
 
-const PLUGIN_NAME = 'ChainCSSNextPlugin';
+const PLUGIN_NAME = "ChainCSSNextPlugin";
 
 class ChainCSSNextWebpackPlugin {
   options: Required<ChainCSSNextOptions>;
-  
+
   constructor(options: ChainCSSNextOptions = {}) {
     this.options = {
-      output: './.next/static/css/chaincss.css',
+      output: "./.next/static/css/chaincss.css",
       manifest: true,
       debug: false,
       serverComponents: true,
@@ -28,49 +28,63 @@ class ChainCSSNextWebpackPlugin {
   apply(compiler: any) {
     const { output, manifest, debug } = this.options;
 
-    compiler.hooks.afterEmit.tapAsync(PLUGIN_NAME, (compilation: any, callback: any) => {
-      try {
-        // Collect CSS from compilation
-        let collectedCSS = '';
-        
-        // Look for chaincss assets in compilation
-        if (compilation.assets) {
-          for (const [name, asset] of Object.entries(compilation.assets as any)) {
-            if (name.includes('chaincss')) {
-              // @ts-ignore
-              collectedCSS += asset.source() + '\n';
+    compiler.hooks.afterEmit.tapAsync(
+      PLUGIN_NAME,
+      (compilation: any, callback: any) => {
+        try {
+          // Collect CSS from compilation
+          let collectedCSS = "";
+
+          // Look for chaincss assets in compilation
+          if (compilation.assets) {
+            for (const [name, asset] of Object.entries(
+              compilation.assets as any,
+            )) {
+              if (name.includes("chaincss")) {
+                // @ts-ignore
+                collectedCSS += asset.source() + "\n";
+              }
             }
           }
-        }
 
-        // If no CSS collected, create empty file (RSC will generate at runtime)
-        const outputPath = path.resolve(process.cwd(), output);
-        const dir = path.dirname(outputPath);
-        
-        if (!fs.existsSync(dir)) {
-          fs.mkdirSync(dir, { recursive: true });
-        }
+          // If no CSS collected, create empty file (RSC will generate at runtime)
+          const outputPath = path.resolve(process.cwd(), output);
+          const dir = path.dirname(outputPath);
 
-        // Only write if we have content or file doesn't exist
-        if (collectedCSS || !fs.existsSync(outputPath)) {
-          fs.writeFileSync(outputPath, collectedCSS || '/* chaincss - RSC generated */\n');
-          if (debug) console.log(`[ChainCSS] Wrote ${collectedCSS.length} bytes to ${output}`);
-        }
+          if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+          }
 
-        // Write manifest
-        if (manifest) {
-          const manifestPath = path.join(dir, 'chaincss-manifest.json');
-          const manifestData = {
-            generatedAt: new Date().toISOString(),
-            cssFile: output,
-          };
-          fs.writeFileSync(manifestPath, JSON.stringify(manifestData, null, 2));
+          // Only write if we have content or file doesn't exist
+          if (collectedCSS || !fs.existsSync(outputPath)) {
+            fs.writeFileSync(
+              outputPath,
+              collectedCSS || "/* chaincss - RSC generated */\n",
+            );
+            if (debug)
+              console.log(
+                `[ChainCSS] Wrote ${collectedCSS.length} bytes to ${output}`,
+              );
+          }
+
+          // Write manifest
+          if (manifest) {
+            const manifestPath = path.join(dir, "chaincss-manifest.json");
+            const manifestData = {
+              generatedAt: new Date().toISOString(),
+              cssFile: output,
+            };
+            fs.writeFileSync(
+              manifestPath,
+              JSON.stringify(manifestData, null, 2),
+            );
+          }
+        } catch (e) {
+          console.error("[ChainCSS] Plugin error:", e);
         }
-      } catch (e) {
-        console.error('[ChainCSS] Plugin error:', e);
-      }
-      callback();
-    });
+        callback();
+      },
+    );
   }
 }
 
@@ -115,4 +129,3 @@ export function withChainCSS(nextOptions: ChainCSSNextOptions = {}) {
 
 export default withChainCSS;
 export { ChainCSSNextWebpackPlugin };
-

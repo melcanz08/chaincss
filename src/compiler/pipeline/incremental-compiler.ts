@@ -1,10 +1,15 @@
 // src/compiler/pipeline/incremental-compiler.ts
 // Incremental compilation using the dependency graph
 
-import type { StyleIR, IRRule, IRNodeId, IRGraph } from './ir/types.js';
-import { buildIRGraph, findAffectedNodes, traverseGraph, getGraphStats } from './ir/graph-builder.js';
-import type { PipelineResult } from './pipeline-types.js';
-import type { Pipeline } from './pipeline.js';
+import type { StyleIR, IRRule, IRNodeId, IRGraph } from "./ir/types.js";
+import {
+  buildIRGraph,
+  findAffectedNodes,
+  traverseGraph,
+  getGraphStats,
+} from "./ir/graph-builder.js";
+import type { PipelineResult } from "./pipeline-types.js";
+import type { Pipeline } from "./pipeline.js";
 
 export interface IncrementalChange {
   /** IDs of rules that were added or modified */
@@ -33,7 +38,10 @@ export interface IncrementalResult extends PipelineResult {
  * Determine which rules need recompilation based on changed nodes.
  * Uses the dependency graph to find all affected nodes.
  */
-export function findDirtyRules(graph: IRGraph, change: IncrementalChange): Set<IRNodeId> {
+export function findDirtyRules(
+  graph: IRGraph,
+  change: IncrementalChange,
+): Set<IRNodeId> {
   const dirty = new Set<IRNodeId>();
 
   // Directly changed rules
@@ -74,7 +82,9 @@ export function markDirtyRules(ir: StyleIR, dirtyIds: Set<IRNodeId>): void {
  * This reduces the IR size for the pipeline passes.
  */
 export function filterDirtyIR(ir: StyleIR, dirtyIds: Set<IRNodeId>): StyleIR {
-  const dirtyRules = ir.rules.filter(r => dirtyIds.has(r.id) || (r._dirty === true));
+  const dirtyRules = ir.rules.filter(
+    (r) => dirtyIds.has(r.id) || r._dirty === true,
+  );
   const skippedCount = ir.rules.length - dirtyRules.length;
 
   return {
@@ -101,7 +111,7 @@ export function filterDirtyIR(ir: StyleIR, dirtyIds: Set<IRNodeId>): StyleIR {
 export async function incrementalCompile(
   pipeline: Pipeline,
   previousIR: StyleIR,
-  change: IncrementalChange
+  change: IncrementalChange,
 ): Promise<IncrementalResult> {
   const fullStartTime = Date.now();
 
@@ -126,13 +136,14 @@ export async function incrementalCompile(
   const totalRules = previousIR.rules.length;
   const recompiledCount = filteredIR.rules.length;
   const skippedCount = totalRules - recompiledCount;
-  const estimatedFullTime = compileTime * (totalRules / Math.max(recompiledCount, 1));
+  const estimatedFullTime =
+    compileTime * (totalRules / Math.max(recompiledCount, 1));
   const timeSaved = Math.max(0, estimatedFullTime - compileTime);
 
   // Merge diagnostics from previous IR
   const mergedDiagnostics = [
-    ...previousIR.diagnostics.filter(d => 
-      !filteredIR.diagnostics.some(nd => nd.id === d.id)
+    ...previousIR.diagnostics.filter(
+      (d) => !filteredIR.diagnostics.some((nd) => nd.id === d.id),
     ),
     ...filteredIR.diagnostics,
   ];
@@ -145,7 +156,7 @@ export async function incrementalCompile(
       meta: {
         ...pipelineResult.ir.meta,
         passCount: pipelineResult.ir.meta.passCount + 1,
-        passes: [...pipelineResult.ir.meta.passes, 'incremental'],
+        passes: [...pipelineResult.ir.meta.passes, "incremental"],
       },
     },
     totalDuration: Date.now() - fullStartTime,
@@ -166,7 +177,7 @@ export async function incrementalCompile(
  */
 export function previewIncrementalImpact(
   previousIR: StyleIR,
-  change: IncrementalChange
+  change: IncrementalChange,
 ): {
   changedFiles: string[];
   affectedRules: number;
@@ -187,7 +198,9 @@ export function previewIncrementalImpact(
     changedFiles: change.changedFiles,
     affectedRules: dirtyIds.size,
     totalRules: previousIR.rules.length,
-    affectedPercent: Math.round((dirtyIds.size / Math.max(previousIR.rules.length, 1)) * 100),
+    affectedPercent: Math.round(
+      (dirtyIds.size / Math.max(previousIR.rules.length, 1)) * 100,
+    ),
     deepestImpact,
   };
 }

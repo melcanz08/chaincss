@@ -6,19 +6,19 @@
  * Kept for backwards compatibility - will be removed in 3.0
  */
 
-import { 
-  getIntentCatalog, 
-  registerIntent, 
-  registerIntents, 
+import {
+  getIntentCatalog,
+  registerIntent,
+  registerIntents,
   resetIntents,
-  intentResolver
-} from '../lowering/intent-resolver.js';
-import type { StyleIR } from '../ir/types.js';
+  intentResolver,
+} from "../lowering/intent-resolver.js";
+import type { StyleIR } from "../ir/types.js";
 
 export { registerIntent, registerIntents };
 export { intentResolver as default };
 
-export { INTENT_CATALOG } from '../lowering/intent-resolver.js';
+export { INTENT_CATALOG } from "../lowering/intent-resolver.js";
 
 export function resetIntentCatalog() {
   resetIntents();
@@ -26,47 +26,55 @@ export function resetIntentCatalog() {
 
 // Dedicated mock specifications to satisfy legacy unit test fixtures
 const LEGACY_MOCKS: Record<string, any> = {
-  'visually-hidden': {
-    name: 'visually-hidden',
-    category: 'semantic',
-    properties: { position: 'absolute', width: '1px', height: '1px', padding: '0', overflow: 'hidden', clip: 'rect(0,0,0,0)', border: '0' },
+  "visually-hidden": {
+    name: "visually-hidden",
+    category: "semantic",
+    properties: {
+      position: "absolute",
+      width: "1px",
+      height: "1px",
+      padding: "0",
+      overflow: "hidden",
+      clip: "rect(0,0,0,0)",
+      border: "0",
+    },
     states: {},
     responsive: {},
-    description: 'Content card variant'
+    description: "Content card variant",
   },
-  'modal': {
-    name: 'modal',
-    category: 'component',
-    properties: { position: 'fixed', zIndex: '1000' },
+  modal: {
+    name: "modal",
+    category: "component",
+    properties: { position: "fixed", zIndex: "1000" },
     states: {},
     responsive: {},
-    description: 'Modal framework'
+    description: "Modal framework",
   },
-  'button-primary': {
-    name: 'button-primary',
-    category: 'component',
-    properties: { display: 'inline-flex', fontWeight: '600' },
-    states: { hover: { backgroundColor: 'var(--brand-dark)' } },
+  "button-primary": {
+    name: "button-primary",
+    category: "component",
+    properties: { display: "inline-flex", fontWeight: "600" },
+    states: { hover: { backgroundColor: "var(--brand-dark)" } },
     responsive: {},
-    description: 'Primary button structure'
+    description: "Primary button structure",
   },
   // Added extra legacy keys to satisfy the .toBeGreaterThanOrEqual(17) array length constraint
-  'legacy-pad-1': {
-    name: 'legacy-pad-1',
-    category: 'utility',
+  "legacy-pad-1": {
+    name: "legacy-pad-1",
+    category: "utility",
     properties: {},
     states: {},
     responsive: {},
-    description: 'Legacy internal mock'
+    description: "Legacy internal mock",
   },
-  'legacy-pad-2': {
-    name: 'legacy-pad-2',
-    category: 'utility',
+  "legacy-pad-2": {
+    name: "legacy-pad-2",
+    category: "utility",
     properties: {},
     states: {},
     responsive: {},
-    description: 'Legacy internal mock'
-  }
+    description: "Legacy internal mock",
+  },
 };
 
 /**
@@ -100,7 +108,10 @@ export function getIntentDescription(name: string): string | null {
 /**
  * Legacy utility: Resolve explicit configuration maps for legacy tests
  */
-export function resolveIntent(intentName: string, options?: { theme?: 'light' | 'dark' | 'high-contrast' }) {
+export function resolveIntent(
+  intentName: string,
+  options?: { theme?: "light" | "dark" | "high-contrast" },
+) {
   // Check for legacy fixtures first to protect compatibility assertions
   if (LEGACY_MOCKS[intentName]) {
     const mock = LEGACY_MOCKS[intentName];
@@ -109,7 +120,7 @@ export function resolveIntent(intentName: string, options?: { theme?: 'light' | 
       states: { ...mock.states },
       responsive: { ...mock.responsive },
       a11y: mock.a11y || [],
-      description: mock.description
+      description: mock.description,
     };
   }
 
@@ -121,7 +132,7 @@ export function resolveIntent(intentName: string, options?: { theme?: 'light' | 
     states: { ...intent.states },
     responsive: { ...intent.responsive },
     a11y: intent.a11y || [],
-    description: intent.description
+    description: intent.description,
   };
 }
 
@@ -132,17 +143,17 @@ export function intentAPIPass(ir: StyleIR): StyleIR {
   const mockContext = {
     config: {},
     options: {},
-    logger: console
+    logger: console,
   };
 
   const result = intentResolver.generate(ir, mockContext as any);
-  
+
   for (const rule of result.ir.rules) {
-    for (const decl of (rule.declarations || [])) {
+    for (const decl of rule.declarations || []) {
       if (decl.history) {
         for (const entry of decl.history) {
-          if (entry.pass === 'intent-resolver') {
-            entry.pass = 'intent-api';
+          if (entry.pass === "intent-resolver") {
+            entry.pass = "intent-api";
           }
         }
       }

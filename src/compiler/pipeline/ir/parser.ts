@@ -2,9 +2,22 @@
 // FILE: src/compiler/pipeline/ir/parser.ts
 // ============================================================================
 
-import type { StyleDefinition } from '@shared/types/index.js';
-import { createIR, createRule, createDeclaration, nextId, record } from './index.js';
-import type { IRPseudoClass, IRAtRule, IRCondition, StyleIR, IRRule, IRKeyframeFrame } from './types.js';
+import type { StyleDefinition } from "@shared/types/index.js";
+import {
+  createIR,
+  createRule,
+  createDeclaration,
+  nextId,
+  record,
+} from "./index.js";
+import type {
+  IRPseudoClass,
+  IRAtRule,
+  IRCondition,
+  StyleIR,
+  IRRule,
+  IRKeyframeFrame,
+} from "./types.js";
 
 // ============================================================================
 // Case Normalization
@@ -16,11 +29,15 @@ import type { IRPseudoClass, IRAtRule, IRCondition, StyleIR, IRRule, IRKeyframeF
  */
 function normalizeProperty(prop: string): string {
   if (!/[A-Z]/.test(prop)) return prop;
-  
+
   const needsLeadingDash = /^[A-Z]/.test(prop) || /^ms[A-Z]/.test(prop);
-  const kebabed = prop.replace(/([A-Z])/g, '-$1').toLowerCase();
-  
-  return needsLeadingDash ? (kebabed.startsWith('-') ? kebabed : '-' + kebabed) : kebabed;
+  const kebabed = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+
+  return needsLeadingDash
+    ? kebabed.startsWith("-")
+      ? kebabed
+      : "-" + kebabed
+    : kebabed;
 }
 
 // ============================================================================
@@ -29,18 +46,18 @@ function normalizeProperty(prop: string): string {
 
 export function parseIR(
   styles: Record<string, StyleDefinition> | Record<string, any>,
-  sourceFile?: string
+  sourceFile?: string,
 ): StyleIR {
   const ir = createIR(sourceFile ? [sourceFile] : []);
 
   for (const [componentName, styleDef] of Object.entries(styles)) {
-    if (!styleDef || typeof styleDef !== 'object') continue;
+    if (!styleDef || typeof styleDef !== "object") continue;
 
     const selectors = Array.isArray(styleDef.selectors)
       ? styleDef.selectors
-      : styleDef.selector 
+      : styleDef.selector
         ? [styleDef.selector]
-        : ['.' + componentName];
+        : ["." + componentName];
 
     // Track rules explicitly generated within this component block to avoid scanning the global array
     const componentRules: IRRule[] = [];
@@ -56,25 +73,35 @@ export function parseIR(
       const entries = Object.entries(styleDef);
       for (let j = 0; j < entries.length; j++) {
         const [prop, value] = entries[j];
-        
-        if (prop === 'selectors' || prop === 'selector' || prop.startsWith('_')) continue;
-        if (prop === 'atRules' || prop === 'nestedRules' || prop === 'themes') continue;
+
+        if (prop === "selectors" || prop === "selector" || prop.startsWith("_"))
+          continue;
+        if (prop === "atRules" || prop === "nestedRules" || prop === "themes")
+          continue;
 
         // ── Pseudo-classes & pseudo-elements ──
-        if ((prop.startsWith('&:') || prop.startsWith('&::')) && typeof value === 'object' && value!== null) {
-          const isElement = prop.startsWith('&::');
-          const pseudoName = prop.replace(/^&::?/, ''); // hover, before
+        if (
+          (prop.startsWith("&:") || prop.startsWith("&::")) &&
+          typeof value === "object" &&
+          value !== null
+        ) {
+          const isElement = prop.startsWith("&::");
+          const pseudoName = prop.replace(/^&::?/, ""); // hover, before
           const pc: IRPseudoClass = {
             id: nextId(pseudoName),
             parentId: rule.id,
-            name: isElement? `::${pseudoName}` : pseudoName, // keep :: for emitter
+            name: isElement ? `::${pseudoName}` : pseudoName, // keep :: for emitter
             declarations: [],
             source: rule.source,
-            history: [record('parser', 'created', undefined, `Parsed ${pseudoName}`)],
+            history: [
+              record("parser", "created", undefined, `Parsed ${pseudoName}`),
+            ],
           };
-          for (const [p,v] of Object.entries(value)) {
-            if (typeof v === 'string' || typeof v === 'number') {
-              pc.declarations.push(createDeclaration(normalizeProperty(p), v, rule.source));
+          for (const [p, v] of Object.entries(value)) {
+            if (typeof v === "string" || typeof v === "number") {
+              pc.declarations.push(
+                createDeclaration(normalizeProperty(p), v, rule.source),
+              );
             }
           }
           if (pc.declarations.length) rule.pseudoClasses.push(pc);
@@ -82,14 +109,20 @@ export function parseIR(
         }
 
         // ── Nested selectors: & .icon, &[data-active], & > div ──
-        if (prop.startsWith('&') && typeof value === 'object' && value!== null) {
+        if (
+          prop.startsWith("&") &&
+          typeof value === "object" &&
+          value !== null
+        ) {
           // create nested rule for later lowering
           const nestedSelector = prop.replace(/^&/, rule.selector); // ".btn .child"
           const nestedRule = createRule(nestedSelector, rule.source);
           (nestedRule as any).parentId = rule.id;
-          for (const [p,v] of Object.entries(value)) {
-            if (typeof v === 'string' || typeof v === 'number') {
-              nestedRule.declarations.push(createDeclaration(normalizeProperty(p), v, rule.source));
+          for (const [p, v] of Object.entries(value)) {
+            if (typeof v === "string" || typeof v === "number") {
+              nestedRule.declarations.push(
+                createDeclaration(normalizeProperty(p), v, rule.source),
+              );
             }
           }
           rule.nestedRules.push(nestedRule);
@@ -97,21 +130,30 @@ export function parseIR(
         }
 
         // ── Legacy `hover` key fallback ──
-        if (prop === 'hover' && typeof value === 'object' && value !== null && !styleDef['&:hover']) {
+        if (
+          prop === "hover" &&
+          typeof value === "object" &&
+          value !== null &&
+          !styleDef["&:hover"]
+        ) {
           const pc: IRPseudoClass = {
-            id: nextId('hover'),
+            id: nextId("hover"),
             parentId: rule.id,
-            name: 'hover',
+            name: "hover",
             declarations: [],
             source: rule.source,
-            history: [record('parser', 'created', undefined, 'Parsed hover block')],
+            history: [
+              record("parser", "created", undefined, "Parsed hover block"),
+            ],
           };
-          
+
           const hEntries = Object.entries(value);
           for (let k = 0; k < hEntries.length; k++) {
             const [p, v] = hEntries[k];
-            if (typeof v === 'string' || typeof v === 'number') {
-              pc.declarations.push(createDeclaration(normalizeProperty(p), v, rule.source));
+            if (typeof v === "string" || typeof v === "number") {
+              pc.declarations.push(
+                createDeclaration(normalizeProperty(p), v, rule.source),
+              );
             }
           }
           if (pc.declarations.length > 0) {
@@ -121,8 +163,10 @@ export function parseIR(
         }
 
         // ── Regular CSS Declarations ──
-        if (typeof value === 'string' || typeof value === 'number') {
-          rule.declarations.push(createDeclaration(normalizeProperty(prop), value, rule.source));
+        if (typeof value === "string" || typeof value === "number") {
+          rule.declarations.push(
+            createDeclaration(normalizeProperty(prop), value, rule.source),
+          );
         }
       }
 
@@ -135,10 +179,10 @@ export function parseIR(
     if (allAtRules && Array.isArray(allAtRules)) {
       for (let i = 0; i < allAtRules.length; i++) {
         const atRule = allAtRules[i];
-        const type = atRule.type || 'media';
-        
+        const type = atRule.type || "media";
+
         const templateAtRule: IRAtRule = {
-          id: nextId('atrule'),
+          id: nextId("atrule"),
           type,
           query: atRule.query,
           name: atRule.name,
@@ -146,40 +190,52 @@ export function parseIR(
           nestedRules: [],
           keyframes: [],
           source: { file: sourceFile, component: componentName },
-          history: [record('parser', 'created', undefined, `Parsed @${type} block`)],
+          history: [
+            record("parser", "created", undefined, `Parsed @${type} block`),
+          ],
         };
 
         // Handle standard at-rule styles
-        if (atRule.styles && typeof atRule.styles === 'object') {
+        if (atRule.styles && typeof atRule.styles === "object") {
           const sEntries = Object.entries(atRule.styles);
           for (let j = 0; j < sEntries.length; j++) {
             const [prop, value] = sEntries[j];
-            if (typeof value === 'string' || typeof value === 'number') {
+            if (typeof value === "string" || typeof value === "number") {
               templateAtRule.declarations.push(
-                createDeclaration(normalizeProperty(prop), value, templateAtRule.source)
+                createDeclaration(
+                  normalizeProperty(prop),
+                  value,
+                  templateAtRule.source,
+                ),
               );
             }
           }
         }
 
         // Phase 2: Structural processing for keyframe steps
-        if (type === 'keyframes' && atRule.frames && typeof atRule.frames === 'object') {
+        if (
+          type === "keyframes" &&
+          atRule.frames &&
+          typeof atRule.frames === "object"
+        ) {
           const fEntries = Object.entries(atRule.frames);
           for (let j = 0; j < fEntries.length; j++) {
             const [keyText, frameStyles] = fEntries[j];
-            if (frameStyles && typeof frameStyles === 'object') {
+            if (frameStyles && typeof frameStyles === "object") {
               const frame: IRKeyframeFrame = {
-                id: nextId('frame'),
+                id: nextId("frame"),
                 keyText,
                 declarations: [],
-                source: templateAtRule.source
+                source: templateAtRule.source,
               };
-              
+
               const fsEntries = Object.entries(frameStyles);
               for (let k = 0; k < fsEntries.length; k++) {
                 const [p, v] = fsEntries[k];
-                if (typeof v === 'string' || typeof v === 'number') {
-                  frame.declarations.push(createDeclaration(normalizeProperty(p), v, frame.source));
+                if (typeof v === "string" || typeof v === "number") {
+                  frame.declarations.push(
+                    createDeclaration(normalizeProperty(p), v, frame.source),
+                  );
                 }
               }
               templateAtRule.keyframes!.push(frame);
@@ -192,11 +248,16 @@ export function parseIR(
           const rule = componentRules[j];
           rule.atRules.push({
             ...templateAtRule,
-            id: nextId('atrule'),
+            id: nextId("atrule"),
             parentId: rule.id,
             declarations: [...templateAtRule.declarations],
-            keyframes: templateAtRule.keyframes ? templateAtRule.keyframes.map(f => ({...f, declarations: [...f.declarations]})) : undefined,
-            nestedRules: [...templateAtRule.nestedRules]
+            keyframes: templateAtRule.keyframes
+              ? templateAtRule.keyframes.map((f) => ({
+                  ...f,
+                  declarations: [...f.declarations],
+                }))
+              : undefined,
+            nestedRules: [...templateAtRule.nestedRules],
           });
         }
       }
@@ -208,27 +269,27 @@ export function parseIR(
         const cond = styleDef._ifConditions[i];
         if (!cond.property || !cond.variable) {
           ir.diagnostics.push({
-            id: nextId('diag'),
+            id: nextId("diag"),
             nodeId: ir.id,
-            severity: 'warning',
+            severity: "warning",
             message: `Skipping malformed if() condition in ${componentName}: missing property or variable`,
-            pass: 'parser',
+            pass: "parser",
           });
           continue;
         }
 
         const templateCond: IRCondition = {
-          id: nextId('cond'),
+          id: nextId("cond"),
           property: normalizeProperty(cond.property),
           variable: cond.variable,
           conditions: cond.conditions || {},
-          defaultValue: cond.defaultValue || '',
+          defaultValue: cond.defaultValue || "",
           source: { file: sourceFile, component: componentName },
         };
 
         for (let j = 0; j < componentRules.length; j++) {
           const rule = componentRules[j];
-          rule.conditions.push({ ...templateCond, id: nextId('cond') });
+          rule.conditions.push({ ...templateCond, id: nextId("cond") });
         }
       }
     }

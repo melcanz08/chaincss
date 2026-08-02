@@ -1,9 +1,9 @@
 // src/compiler/pipeline/unified-scheduler.ts
 // Unified scheduler — one algorithm for both built-in passes and plugins
 
-import type { ChainCSSPlugin } from './plugin-api.js';
-import type { PassDeclaration, ScheduleResult } from './pass-scheduler.js';
-import { schedulePasses } from './pass-scheduler.js';
+import type { ChainCSSPlugin } from "./plugin-api.js";
+import type { PassDeclaration, ScheduleResult } from "./pass-scheduler.js";
+import { schedulePasses } from "./pass-scheduler.js";
 
 // ============================================================================
 // Plugin → PassDeclaration conversion
@@ -15,7 +15,7 @@ import { schedulePasses } from './pass-scheduler.js';
  */
 export function pluginToPassDeclaration(
   plugin: ChainCSSPlugin,
-  phase: 'normalize' | 'validate' | 'analyze' | 'optimize' | 'lower'
+  phase: "normalize" | "validate" | "analyze" | "optimize" | "lower",
 ): PassDeclaration | null {
   // Only convert if the plugin has this phase
   if (!plugin[phase]) return null;
@@ -54,7 +54,7 @@ export function pluginToPassDeclaration(
     requires,
     produces,
     invalidates,
-    cost: 'cheap', // Plugins are assumed cheap; they can override
+    cost: "cheap", // Plugins are assumed cheap; they can override
   };
 }
 
@@ -66,12 +66,16 @@ export interface UnifiedScheduleResult extends ScheduleResult {
   /** Plugins sorted in execution order (alongside built-in passes) */
   orderedPlugins: ChainCSSPlugin[];
   /** Resolved provider→consumer edges */
-  capabilityEdges: Array<{ provider: string; consumer: string; capability: string }>;
+  capabilityEdges: Array<{
+    provider: string;
+    consumer: string;
+    capability: string;
+  }>;
 }
 
 /**
  * Schedule both built-in passes and plugins together.
- * 
+ *
  * 1. Convert plugins to PassDeclarations
  * 2. Resolve capability edges (consumes → finds providers)
  * 3. Merge with built-in passes
@@ -81,7 +85,7 @@ export interface UnifiedScheduleResult extends ScheduleResult {
 export function unifiedSchedule(
   builtInPasses: PassDeclaration[],
   plugins: ChainCSSPlugin[],
-  phase: 'normalize' | 'validate' | 'analyze' | 'optimize' | 'lower'
+  phase: "normalize" | "validate" | "analyze" | "optimize" | "lower",
 ): UnifiedScheduleResult {
   // Convert plugins to pass declarations
   const pluginPasses: PassDeclaration[] = [];
@@ -96,7 +100,7 @@ export function unifiedSchedule(
   }
 
   // Resolve capability edges
-  const capabilityEdges: UnifiedScheduleResult['capabilityEdges'] = [];
+  const capabilityEdges: UnifiedScheduleResult["capabilityEdges"] = [];
   const allProvides = new Map<string, string[]>(); // capability → [provider names]
 
   for (const pass of [...builtInPasses, ...pluginPasses]) {
@@ -110,7 +114,7 @@ export function unifiedSchedule(
   for (const pass of pluginPasses) {
     const resolvedRequires: string[] = [];
     for (const req of pass.requires) {
-      if (req.startsWith('provider:')) {
+      if (req.startsWith("provider:")) {
         const capability = req.slice(9);
         const providers = allProvides.get(capability) || [];
         for (const provider of providers) {
@@ -128,7 +132,7 @@ export function unifiedSchedule(
   for (const plugin of plugins) {
     if (plugin.before) {
       for (const beforeName of plugin.before) {
-        const targetPass = pluginPasses.find(p => p.name === beforeName);
+        const targetPass = pluginPasses.find((p) => p.name === beforeName);
         if (targetPass) {
           if (!targetPass.requires.includes(plugin.name)) {
             targetPass.requires.push(plugin.name);
@@ -164,18 +168,18 @@ export function unifiedSchedule(
 
 /**
  * Ordering precedence for unified scheduling:
- * 
+ *
  * 1. dependencies — hard requirements (plugin won't work without them)
  * 2. provides/consumes — capability-based ordering
  * 3. before/after — explicit ordering hints
  * 4. priority — tiebreaker (lower = earlier, default 100)
- * 
+ *
  * If a cycle is detected, the scheduler logs a warning and falls back
  * to priority-based ordering for the conflicting plugins.
  */
 export const ORDERING_PRECEDENCE = [
-  'dependencies',
-  'provides/consumes',
-  'before/after',
-  'priority',
+  "dependencies",
+  "provides/consumes",
+  "before/after",
+  "priority",
 ] as const;

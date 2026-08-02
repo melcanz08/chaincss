@@ -1,7 +1,7 @@
 // src/compiler/diagnostics/reporter.ts
 // Diagnostic reporting
 
-export type DiagnosticSeverity = 'info' | 'warning' | 'error' | 'debug';
+export type DiagnosticSeverity = "info" | "warning" | "error" | "debug";
 
 export interface Diagnostic {
   id: string;
@@ -31,9 +31,9 @@ export interface DiagnosticReport {
 
 export class DiagnosticReporter {
   private diagnostics: Diagnostic[] = [];
-  private version: string = '2.14.5';
+  private version: string = "2.14.5";
 
-  report(diagnostic: Omit<Diagnostic, 'timestamp' | 'id'>): Diagnostic {
+  report(diagnostic: Omit<Diagnostic, "timestamp" | "id">): Diagnostic {
     const full: Diagnostic = {
       ...diagnostic,
       id: this.generateId(),
@@ -43,33 +43,45 @@ export class DiagnosticReporter {
     return full;
   }
 
-  error(message: string, options?: Partial<Omit<Diagnostic, 'id' | 'timestamp' | 'severity'>>): Diagnostic {
+  error(
+    message: string,
+    options?: Partial<Omit<Diagnostic, "id" | "timestamp" | "severity">>,
+  ): Diagnostic {
     return this.report({
-      severity: 'error',
+      severity: "error",
       message,
       ...options,
     });
   }
 
-  warning(message: string, options?: Partial<Omit<Diagnostic, 'id' | 'timestamp' | 'severity'>>): Diagnostic {
+  warning(
+    message: string,
+    options?: Partial<Omit<Diagnostic, "id" | "timestamp" | "severity">>,
+  ): Diagnostic {
     return this.report({
-      severity: 'warning',
+      severity: "warning",
       message,
       ...options,
     });
   }
 
-  info(message: string, options?: Partial<Omit<Diagnostic, 'id' | 'timestamp' | 'severity'>>): Diagnostic {
+  info(
+    message: string,
+    options?: Partial<Omit<Diagnostic, "id" | "timestamp" | "severity">>,
+  ): Diagnostic {
     return this.report({
-      severity: 'info',
+      severity: "info",
       message,
       ...options,
     });
   }
 
-  debug(message: string, options?: Partial<Omit<Diagnostic, 'id' | 'timestamp' | 'severity'>>): Diagnostic {
+  debug(
+    message: string,
+    options?: Partial<Omit<Diagnostic, "id" | "timestamp" | "severity">>,
+  ): Diagnostic {
     return this.report({
-      severity: 'debug',
+      severity: "debug",
       message,
       ...options,
     });
@@ -80,11 +92,11 @@ export class DiagnosticReporter {
   }
 
   getErrors(): Diagnostic[] {
-    return this.diagnostics.filter(d => d.severity === 'error');
+    return this.diagnostics.filter((d) => d.severity === "error");
   }
 
   getWarnings(): Diagnostic[] {
-    return this.diagnostics.filter(d => d.severity === 'warning');
+    return this.diagnostics.filter((d) => d.severity === "warning");
   }
 
   clear(): void {
@@ -94,8 +106,8 @@ export class DiagnosticReporter {
   generateReport(): DiagnosticReport {
     const errors = this.getErrors();
     const warnings = this.getWarnings();
-    const info = this.diagnostics.filter(d => d.severity === 'info');
-    const debug = this.diagnostics.filter(d => d.severity === 'debug');
+    const info = this.diagnostics.filter((d) => d.severity === "info");
+    const debug = this.diagnostics.filter((d) => d.severity === "debug");
 
     return {
       diagnostics: this.diagnostics,
@@ -114,38 +126,47 @@ export class DiagnosticReporter {
   formatReport(): string {
     const report = this.generateReport();
     const lines = [
-      '═══════════════════════════════════════════',
-      ' ChainCSS Diagnostic Report',
-      '═══════════════════════════════════════════',
-      '',
+      "═══════════════════════════════════════════",
+      " ChainCSS Diagnostic Report",
+      "═══════════════════════════════════════════",
+      "",
       ` Generated: ${new Date(report.generatedAt).toISOString()}`,
       ` Version: ${report.version}`,
-      '',
+      "",
       ` Summary:`,
       `   Total: ${report.summary.total}`,
       `   Errors: ${report.summary.errors}`,
       `   Warnings: ${report.summary.warnings}`,
       `   Info: ${report.summary.info}`,
       `   Debug: ${report.summary.debug}`,
-      '',
+      "",
     ];
 
     if (report.diagnostics.length > 0) {
-      lines.push(' ── Diagnostics ──');
+      lines.push(" ── Diagnostics ──");
       for (const d of report.diagnostics) {
-        const severityColor = d.severity === 'error' ? '✗' : 
-                             d.severity === 'warning' ? '⚠' : 
-                             d.severity === 'info' ? 'ℹ' : '🔍';
-        const location = d.file ? ` (${d.file}${d.line ? `:${d.line}` : ''})` : '';
-        lines.push(` ${severityColor} [${d.severity.toUpperCase()}] ${d.message}${location}`);
+        const severityColor =
+          d.severity === "error"
+            ? "✗"
+            : d.severity === "warning"
+              ? "⚠"
+              : d.severity === "info"
+                ? "ℹ"
+                : "🔍";
+        const location = d.file
+          ? ` (${d.file}${d.line ? `:${d.line}` : ""})`
+          : "";
+        lines.push(
+          ` ${severityColor} [${d.severity.toUpperCase()}] ${d.message}${location}`,
+        );
         if (d.suggestion) {
           lines.push(`   💡 ${d.suggestion}`);
         }
       }
     }
 
-    lines.push('', '═══════════════════════════════════════════');
-    return lines.join('\n');
+    lines.push("", "═══════════════════════════════════════════");
+    return lines.join("\n");
   }
 
   private generateId(): string {

@@ -1,7 +1,15 @@
 // src/compiler/pipeline/ir/immutable.ts
 // Immutable IR helpers — deep clone, freeze, and immutable updates
 
-import type { StyleIR, IRRule, IRDeclaration, IRPseudoClass, IRAtRule, IRCondition, IRTransformRecord } from './types.js';
+import type {
+  StyleIR,
+  IRRule,
+  IRDeclaration,
+  IRPseudoClass,
+  IRAtRule,
+  IRCondition,
+  IRTransformRecord,
+} from "./types.js";
 
 /**
  * Deep clone a StyleIR. Returns a new object with no shared references.
@@ -10,8 +18,12 @@ export function cloneIR(ir: StyleIR): StyleIR {
   return {
     id: ir.id,
     rules: ir.rules.map(cloneRule),
-    diagnostics: ir.diagnostics.map(d => ({ ...d })),
-    meta: { ...ir.meta, sourceFiles: [...ir.meta.sourceFiles], passes: [...ir.meta.passes] },
+    diagnostics: ir.diagnostics.map((d) => ({ ...d })),
+    meta: {
+      ...ir.meta,
+      sourceFiles: [...ir.meta.sourceFiles],
+      passes: [...ir.meta.passes],
+    },
     graph: ir.graph ? cloneGraph(ir.graph) : undefined,
   };
 }
@@ -19,7 +31,10 @@ export function cloneIR(ir: StyleIR): StyleIR {
 function cloneGraph(graph: any): any {
   return {
     nodes: new Map(graph.nodes),
-    edges: graph.edges.map((e: any) => ({ ...e, metadata: e.metadata ? { ...e.metadata } : undefined })),
+    edges: graph.edges.map((e: any) => ({
+      ...e,
+      metadata: e.metadata ? { ...e.metadata } : undefined,
+    })),
     rootNodes: [...graph.rootNodes],
     leafNodes: [...graph.leafNodes],
   };
@@ -34,15 +49,17 @@ function cloneRule(rule: IRRule): IRRule {
     pseudoClasses: rule.pseudoClasses.map(clonePseudoClass),
     atRules: rule.atRules.map(cloneAtRule),
     nestedRules: rule.nestedRules.map(cloneRule),
-    conditions: rule.conditions.map(c => ({ ...c })),
+    conditions: rule.conditions.map((c) => ({ ...c })),
     _dirty: rule._dirty,
     meta: { ...rule.meta },
-    passMeta: rule.passMeta ? JSON.parse(JSON.stringify(rule.passMeta)) : undefined,
+    passMeta: rule.passMeta
+      ? JSON.parse(JSON.stringify(rule.passMeta))
+      : undefined,
     isDead: rule.isDead,
     specificity: rule.specificity,
     hash: rule.hash,
     source: { ...rule.source },
-    history: rule.history.map(h => ({ ...h })),
+    history: rule.history.map((h) => ({ ...h })),
   };
 }
 
@@ -53,7 +70,7 @@ function cloneDeclaration(decl: IRDeclaration): IRDeclaration {
     value: decl.value,
     important: decl.important,
     source: decl.source ? { ...decl.source } : undefined,
-    history: decl.history.map(h => ({ ...h })),
+    history: decl.history.map((h) => ({ ...h })),
     meta: { ...decl.meta },
   };
 }
@@ -65,7 +82,7 @@ function clonePseudoClass(pc: IRPseudoClass): IRPseudoClass {
     name: pc.name,
     declarations: pc.declarations.map(cloneDeclaration),
     source: { ...pc.source },
-    history: pc.history.map(h => ({ ...h })),
+    history: pc.history.map((h) => ({ ...h })),
   };
 }
 
@@ -78,14 +95,14 @@ function cloneAtRule(atRule: IRAtRule): IRAtRule {
     name: atRule.name,
     declarations: atRule.declarations.map(cloneDeclaration),
     nestedRules: atRule.nestedRules.map(cloneRule),
-    keyframes: atRule.keyframes?.map(kf => ({
+    keyframes: atRule.keyframes?.map((kf) => ({
       id: kf.id,
       keyText: kf.keyText,
       declarations: kf.declarations.map(cloneDeclaration),
       source: { ...kf.source },
     })),
     source: { ...atRule.source },
-    history: atRule.history.map(h => ({ ...h })),
+    history: atRule.history.map((h) => ({ ...h })),
   };
 }
 
@@ -108,15 +125,19 @@ export function addDeclaration(rule: IRRule, decl: IRDeclaration): IRRule {
 export function removeDeclaration(rule: IRRule, declId: string): IRRule {
   return {
     ...rule,
-    declarations: rule.declarations.filter(d => d.id !== declId),
+    declarations: rule.declarations.filter((d) => d.id !== declId),
   };
 }
 
-export function updateDeclaration(rule: IRRule, declId: string, changes: Partial<IRDeclaration>): IRRule {
+export function updateDeclaration(
+  rule: IRRule,
+  declId: string,
+  changes: Partial<IRDeclaration>,
+): IRRule {
   return {
     ...rule,
-    declarations: rule.declarations.map(d =>
-      d.id === declId ? { ...d, ...changes } : d
+    declarations: rule.declarations.map((d) =>
+      d.id === declId ? { ...d, ...changes } : d,
     ),
   };
 }
@@ -125,7 +146,10 @@ export function markDead(rule: IRRule): IRRule {
   return { ...rule, isDead: true };
 }
 
-export function addDiagnostic(ir: StyleIR, diag: StyleIR['diagnostics'][0]): StyleIR {
+export function addDiagnostic(
+  ir: StyleIR,
+  diag: StyleIR["diagnostics"][0],
+): StyleIR {
   return {
     ...ir,
     diagnostics: [...ir.diagnostics, diag],
@@ -147,7 +171,7 @@ export function freezeIR(ir: StyleIR): StyleIR {
 }
 
 function deepFreeze(obj: any): any {
-  if (obj === null || typeof obj !== 'object') return obj;
+  if (obj === null || typeof obj !== "object") return obj;
   if (Array.isArray(obj)) return obj.map(deepFreeze);
   if (obj instanceof Map) {
     const frozen = new Map();

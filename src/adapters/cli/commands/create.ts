@@ -2,74 +2,81 @@
 // FILE: src/adapters/cli/commands/create.ts
 // ============================================================================
 
-import fs from 'fs'
-import path from 'path'
-import chalk from 'chalk'
-import { execSync } from 'child_process'
+import fs from "fs";
+import path from "path";
+import chalk from "chalk";
+import { execSync } from "child_process";
 
 interface CreateOptions {
-  template?: 'minimal' | 'entangled' | 'react'
-  pm?: 'npm' | 'pnpm' | 'yarn' | 'bun'
-  install?: boolean
-  verbose?: boolean
+  template?: "minimal" | "entangled" | "react";
+  pm?: "npm" | "pnpm" | "yarn" | "bun";
+  install?: boolean;
+  verbose?: boolean;
 }
 
-function ensureDir(p: string) { 
-  fs.mkdirSync(p, { recursive: true }) 
+function ensureDir(p: string) {
+  fs.mkdirSync(p, { recursive: true });
 }
 
-function write(p: string, content: string) { 
-  ensureDir(path.dirname(p))
-  fs.writeFileSync(p, content, 'utf8') 
+function write(p: string, content: string) {
+  ensureDir(path.dirname(p));
+  fs.writeFileSync(p, content, "utf8");
 }
 
 function pkgJson(name: string, template: string) {
-  const isReact = template === 'react'
-  
+  const isReact = template === "react";
+
   const devDeps: Record<string, string> = {
     vite: "^5.4.0",
     chaincss: "^2.13.1", // Uses latest release baseline
-    typescript: "^5.5.0"
-  }
+    typescript: "^5.5.0",
+  };
 
-  const deps: Record<string, string> = {}
+  const deps: Record<string, string> = {};
 
   if (isReact) {
-    deps['react'] = "^18.3.0"
-    deps['react-dom'] = "^18.3.0"
-    devDeps['@types/react'] = "^18.3.0"
-    devDeps['@types/react-dom'] = "^18.3.0"
-    devDeps['@vitejs/plugin-react'] = "^4.3.0"
+    deps["react"] = "^18.3.0";
+    deps["react-dom"] = "^18.3.0";
+    devDeps["@types/react"] = "^18.3.0";
+    devDeps["@types/react-dom"] = "^18.3.0";
+    devDeps["@vitejs/plugin-react"] = "^4.3.0";
   }
 
-  return JSON.stringify({
-    name,
-    type: "module",
-    private: true,
-    scripts: {
-      dev: "vite",
-      build: "vite build",
-      preview: "vite preview",
-      "tokens:watch": "chaincss entanglement --input tokens/global.json --watch --verbose",
-      "tokens:fix": "chaincss entanglement --input tokens/global.json --fix",
-      "audit": "chaincss audit --fix --write"
+  return JSON.stringify(
+    {
+      name,
+      type: "module",
+      private: true,
+      scripts: {
+        dev: "vite",
+        build: "vite build",
+        preview: "vite preview",
+        "tokens:watch":
+          "chaincss entanglement --input tokens/global.json --watch --verbose",
+        "tokens:fix": "chaincss entanglement --input tokens/global.json --fix",
+        audit: "chaincss audit --fix --write",
+      },
+      dependencies: deps,
+      devDependencies: devDeps,
     },
-    dependencies: deps,
-    devDependencies: devDeps
-  }, null, 2)
+    null,
+    2,
+  );
 }
 
 function viteConfig(template: string) {
-  const hasFigma = template === 'entangled' || template === 'react'
-  const isReact = template === 'react'
-  
+  const hasFigma = template === "entangled" || template === "react";
+  const isReact = template === "react";
+
   return `import { defineConfig } from 'vite'
 import chaincss from 'chaincss/vite'
 ${isReact ? "import react from '@vitejs/plugin-react'\n" : ""}${hasFigma ? "import figmaSync from 'chaincss/figma-sync'\n" : "// import figmaSync from 'chaincss/figma-sync'\n"}
 export default defineConfig({
   plugins: [
     ${isReact ? "react()," : ""}
-    ${hasFigma ? `figmaSync({
+    ${
+      hasFigma
+        ? `figmaSync({
       mode: 'url',
       // Replace with your Tokens Studio GitHub raw URL
       url: 'https://raw.githubusercontent.com/your-org/design-tokens/main/tokens.json',
@@ -77,7 +84,9 @@ export default defineConfig({
       pollMs: 3000,
       autoFix: true,
       verbose: true
-    }),` : "// figmaSync({ mode: 'url', url: 'https://.../tokens.json' }),"}
+    }),`
+        : "// figmaSync({ mode: 'url', url: 'https://.../tokens.json' }),"
+    }
     chaincss({
       verbose: true,
       atomic: true,
@@ -91,34 +100,38 @@ export default defineConfig({
     })
   ]
 })
-`
+`;
 }
 
 function tsConfig() {
-  return JSON.stringify({
-    compilerOptions: {
-      target: "ES2022",
-      useDefineForClassFields: true,
-      module: "ESNext",
-      lib: ["DOM", "DOM.Iterable", "ES2022"],
-      skipLibCheck: true,
+  return JSON.stringify(
+    {
+      compilerOptions: {
+        target: "ES2022",
+        useDefineForClassFields: true,
+        module: "ESNext",
+        lib: ["DOM", "DOM.Iterable", "ES2022"],
+        skipLibCheck: true,
 
-      /* Bundler mode */
-      moduleResolution: "bundler",
-      allowImportingTsExtensions: true,
-      resolveJsonModule: true,
-      isolatedModules: true,
-      noEmit: true,
-      jsx: "react-jsx",
+        /* Bundler mode */
+        moduleResolution: "bundler",
+        allowImportingTsExtensions: true,
+        resolveJsonModule: true,
+        isolatedModules: true,
+        noEmit: true,
+        jsx: "react-jsx",
 
-      /* Linting */
-      strict: true,
-      noUnusedLocals: true,
-      noUnusedParameters: true,
-      noImplicitReturns: true
+        /* Linting */
+        strict: true,
+        noUnusedLocals: true,
+        noUnusedParameters: true,
+        noImplicitReturns: true,
+      },
+      include: ["src"],
     },
-    include: ["src"]
-  }, null, 2)
+    null,
+    2,
+  );
 }
 
 function chaincssConfig() {
@@ -140,7 +153,7 @@ export default defineConfig({
   },
   breakpoints: { sm: '640px', md: '768px', lg: '1024px' }
 })
-`
+`;
 }
 
 function appChainTs() {
@@ -188,11 +201,11 @@ export const badge = {
   selectors: ['.badge'],
   intent: 'bgPrimary100 textPrimary700 roundedFull px3 py1 textSm fontMedium'
 }
-`
+`;
 }
 
 function indexHtml(name: string, template: string) {
-  const entryScript = template === 'react' ? '/src/main.tsx' : '/src/main.ts'
+  const entryScript = template === "react" ? "/src/main.tsx" : "/src/main.ts";
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -201,7 +214,10 @@ function indexHtml(name: string, template: string) {
   <title>${name} — ChainCSS</title>
 </head>
 <body>
-  ${template === 'react' ? '<div id="root"></div>' : `
+  ${
+    template === "react"
+      ? '<div id="root"></div>'
+      : `
   <div class="page">
     <div class="card">
       <span class="badge">Entangled</span>
@@ -209,11 +225,12 @@ function indexHtml(name: string, template: string) {
       <p style="margin:0;opacity:0.7;line-height:1.5">Modify your design token parameters and watch compilation mechanics run in real-time.</p>
       <button class="btn">Primary Action</button>
     </div>
-  </div>`}
+  </div>`
+  }
   <script type="module" src="${entryScript}"></script>
 </body>
 </html>
-`
+`;
 }
 
 function reactBoilerplate() {
@@ -234,74 +251,134 @@ export function App() {
     </div>
   )
 }
-`
+`;
 }
 
-export async function createCommand(appName?: string, opts: CreateOptions = {}) {
-  const template = opts.template || 'entangled'
-  const pm = opts.pm || 'npm'
-  const name = appName || `my-chaincss-${template}-app`
-  const root = path.join(process.cwd(), name)
+export async function createCommand(
+  appName?: string,
+  opts: CreateOptions = {},
+) {
+  const template = opts.template || "entangled";
+  const pm = opts.pm || "npm";
+  const name = appName || `my-chaincss-${template}-app`;
+  const root = path.join(process.cwd(), name);
 
   if (fs.existsSync(root)) {
-    console.log(chalk.red(`Folder ${name} already exists`))
-    process.exit(1)
+    console.log(chalk.red(`Folder ${name} already exists`));
+    process.exit(1);
   }
 
-  console.log(chalk.cyan(`\n✨ Creating ChainCSS app: ${name} (${template})\n`))
+  console.log(
+    chalk.cyan(`\n✨ Creating ChainCSS app: ${name} (${template})\n`),
+  );
 
-  ensureDir(path.join(root, 'src'))
-  ensureDir(path.join(root, 'tokens'))
-  ensureDir(path.join(root, '.tokensstudio'))
-  ensureDir(path.join(root, '.github', 'workflows'))
+  ensureDir(path.join(root, "src"));
+  ensureDir(path.join(root, "tokens"));
+  ensureDir(path.join(root, ".tokensstudio"));
+  ensureDir(path.join(root, ".github", "workflows"));
 
   // Structural Configuration Files
-  write(path.join(root, 'package.json'), pkgJson(name, template))
-  write(path.join(root, 'tsconfig.json'), tsConfig())
-  write(path.join(root, 'vite.config.ts'), viteConfig(template))
-  write(path.join(root, 'chaincss.config.ts'), chaincssConfig())
-  write(path.join(root, 'index.html'), indexHtml(name, template))
-  write(path.join(root, 'src', 'App.chain.ts'), appChainTs())
+  write(path.join(root, "package.json"), pkgJson(name, template));
+  write(path.join(root, "tsconfig.json"), tsConfig());
+  write(path.join(root, "vite.config.ts"), viteConfig(template));
+  write(path.join(root, "chaincss.config.ts"), chaincssConfig());
+  write(path.join(root, "index.html"), indexHtml(name, template));
+  write(path.join(root, "src", "App.chain.ts"), appChainTs());
 
   // BUNDLER WORKAROUND: Generate empty CSS file to prevent immediate cold boot resolution crashes
-  write(path.join(root, 'src', 'App.chain.css'), '/* Generated fallback baseline for Vite cold starts */\n')
+  write(
+    path.join(root, "src", "App.chain.css"),
+    "/* Generated fallback baseline for Vite cold starts */\n",
+  );
 
   // Core Application Mount Setup
-  if (template === 'react') {
-    write(path.join(root, 'src', 'App.tsx'), reactBoilerplate())
-    write(path.join(root, 'src', 'main.tsx'), `import React from 'react'\nimport ReactDOM from 'react-dom/client'\nimport { App } from './App.tsx'\n\nReactDOM.createRoot(document.getElementById('root')!).render(\n  <React.StrictMode>\n    <App />\n  </React.StrictMode>\n)\n`)
+  if (template === "react") {
+    write(path.join(root, "src", "App.tsx"), reactBoilerplate());
+    write(
+      path.join(root, "src", "main.tsx"),
+      `import React from 'react'\nimport ReactDOM from 'react-dom/client'\nimport { App } from './App.tsx'\n\nReactDOM.createRoot(document.getElementById('root')!).render(\n  <React.StrictMode>\n    <App />\n  </React.StrictMode>\n)\n`,
+    );
   } else {
-    write(path.join(root, 'src', 'main.ts'), `import './App.chain.css'\nconsole.log('[ChainCSS] Runtime baseline ready.')\n`)
+    write(
+      path.join(root, "src", "main.ts"),
+      `import './App.chain.css'\nconsole.log('[ChainCSS] Runtime baseline ready.')\n`,
+    );
   }
 
   // Token Baselines
-  write(path.join(root, 'tokens', '$metadata.json'), JSON.stringify({ tokenSetOrder: ['global', 'light', 'dark'] }, null, 2))
-  write(path.join(root, 'tokens', '$themes.json'), JSON.stringify([{ id: 'light', name: 'Light', selectedTokenSets: { global: 'enabled' } }], null, 2))
-  write(path.join(root, 'tokens', 'global.json'), JSON.stringify({
-    colors: {
-      primary: {
-        "500": { value: "#6366f1", type: "color", description: "Source token" },
-        "100": { value: "#e0e7ff", type: "color", description: "Auto-derived" },
-        "600": { value: "#4f46e5", type: "color", description: "Auto-derived" }
+  write(
+    path.join(root, "tokens", "$metadata.json"),
+    JSON.stringify({ tokenSetOrder: ["global", "light", "dark"] }, null, 2),
+  );
+  write(
+    path.join(root, "tokens", "$themes.json"),
+    JSON.stringify(
+      [
+        {
+          id: "light",
+          name: "Light",
+          selectedTokenSets: { global: "enabled" },
+        },
+      ],
+      null,
+      2,
+    ),
+  );
+  write(
+    path.join(root, "tokens", "global.json"),
+    JSON.stringify(
+      {
+        colors: {
+          primary: {
+            "500": {
+              value: "#6366f1",
+              type: "color",
+              description: "Source token",
+            },
+            "100": {
+              value: "#e0e7ff",
+              type: "color",
+              description: "Auto-derived",
+            },
+            "600": {
+              value: "#4f46e5",
+              type: "color",
+              description: "Auto-derived",
+            },
+          },
+          background: { value: "#ffffff", type: "color" },
+          surface: { value: "#f8fafc", type: "color" },
+          text: {
+            onPrimary: { value: "#ffffff", type: "color" },
+            onSurface: { value: "#0f172a", type: "color" },
+            muted: { value: "#94a3b8", type: "color" },
+          },
+          border: { value: "#e2e8f0", type: "color" },
+        },
       },
-      background: { value: "#ffffff", type: "color" },
-      surface: { value: "#f8fafc", type: "color" },
-      text: {
-        onPrimary: { value: "#ffffff", type: "color" },
-        onSurface: { value: "#0f172a", type: "color" },
-        muted: { value: "#94a3b8", type: "color" }
-      },
-      border: { value: "#e2e8f0", type: "color" }
-    }
-  }, null, 2))
+      null,
+      2,
+    ),
+  );
 
-  write(path.join(root, '.env.example'), `FIGMA_TOKEN=figd_xxx\nTOKENS_URL=https://raw.githubusercontent.com/your-org/design-tokens/main/tokens.json\n`)
-  write(path.join(root, '.env'), `FIGMA_TOKEN=\nTOKENS_URL=\n`)
-  write(path.join(root, '.gitignore'), `node_modules\ndist\n.chaincss-cache\n*.class.js\n*.chain.css\n.env\n`)
+  write(
+    path.join(root, ".env.example"),
+    `FIGMA_TOKEN=figd_xxx\nTOKENS_URL=https://raw.githubusercontent.com/your-org/design-tokens/main/tokens.json\n`,
+  );
+  write(path.join(root, ".env"), `FIGMA_TOKEN=\nTOKENS_URL=\n`);
+  write(
+    path.join(root, ".gitignore"),
+    `node_modules\ndist\n.chaincss-cache\n*.class.js\n*.chain.css\n.env\n`,
+  );
 
   // Documentation & Automation Actions
-  write(path.join(root, '.tokensstudio', 'README.md'), `# Connect Figma Studio Configuration\nRefer to standard deployment docs to set up repository webhooks.\n`)
-  write(path.join(root, '.github', 'workflows', 'chaincss-tokens.yml'), `name: Entanglement Fix
+  write(
+    path.join(root, ".tokensstudio", "README.md"),
+    `# Connect Figma Studio Configuration\nRefer to standard deployment docs to set up repository webhooks.\n`,
+  );
+  write(
+    path.join(root, ".github", "workflows", "chaincss-tokens.yml"),
+    `name: Entanglement Fix
 on:
   push:
     paths: ['tokens/**']
@@ -325,37 +402,49 @@ jobs:
             git commit -m "chore(tokens): auto-fix entanglement [skip ci]"
             git push
           fi
-`)
+`,
+  );
 
-  console.log(chalk.green(`\n✓ Created ${name}/`))
-  console.log(chalk.gray(`  ├─ tsconfig.json (TypeScript base setup)`))
-  console.log(chalk.gray(`  ├─ vite.config.ts (Pre-wired environments)`))
-  console.log(chalk.gray(`  ├─ src/App.chain.css (Fallback baseline)`))
-  console.log(chalk.gray(`  └─ tokens/global.json (Entanglement token configuration)`))
+  console.log(chalk.green(`\n✓ Created ${name}/`));
+  console.log(chalk.gray(`  ├─ tsconfig.json (TypeScript base setup)`));
+  console.log(chalk.gray(`  ├─ vite.config.ts (Pre-wired environments)`));
+  console.log(chalk.gray(`  ├─ src/App.chain.css (Fallback baseline)`));
+  console.log(
+    chalk.gray(`  └─ tokens/global.json (Entanglement token configuration)`),
+  );
 
-  let installSuccess = false
+  let installSuccess = false;
   if (opts.install) {
-    console.log(chalk.cyan(`\n📦 Installing project elements with ${pm}...`))
-    try { 
-      execSync(`${pm} install`, { cwd: root, stdio: 'inherit' }) 
-      installSuccess = true
+    console.log(chalk.cyan(`\n📦 Installing project elements with ${pm}...`));
+    try {
+      execSync(`${pm} install`, { cwd: root, stdio: "inherit" });
+      installSuccess = true;
     } catch {
-      console.log(chalk.yellow(`\n⚠️ Automatic install failed. Your system may be missing ${pm} globally, or there is a local network issue.`))
+      console.log(
+        chalk.yellow(
+          `\n⚠️ Automatic install failed. Your system may be missing ${pm} globally, or there is a local network issue.`,
+        ),
+      );
     }
   }
 
   // Format runner execution feedback to dynamically reflect designated package manager tool
-  const runCmd = pm === 'npm' ? 'npm run' : pm === 'yarn' ? 'yarn' : `${pm} run`
-  
-  console.log(chalk.cyan(`\nNext execution configurations:\n`))
-  console.log(chalk.white(`  cd ${name}`))
+  const runCmd =
+    pm === "npm" ? "npm run" : pm === "yarn" ? "yarn" : `${pm} run`;
+
+  console.log(chalk.cyan(`\nNext execution configurations:\n`));
+  console.log(chalk.white(`  cd ${name}`));
   if (!installSuccess) {
-    console.log(chalk.white(`  ${pm} install`))
+    console.log(chalk.white(`  ${pm} install`));
   }
-  console.log(chalk.white(`  ${runCmd} dev`))
-  console.log(chalk.gray(`  # in a separate terminal process to watch configuration state transformations`))
-  console.log(chalk.white(`  ${runCmd} tokens:watch\n`))
-  console.log(chalk.green(`✨ Happy entangling!\n`))
+  console.log(chalk.white(`  ${runCmd} dev`));
+  console.log(
+    chalk.gray(
+      `  # in a separate terminal process to watch configuration state transformations`,
+    ),
+  );
+  console.log(chalk.white(`  ${runCmd} tokens:watch\n`));
+  console.log(chalk.green(`✨ Happy entangling!\n`));
 }
 
-export default createCommand
+export default createCommand;

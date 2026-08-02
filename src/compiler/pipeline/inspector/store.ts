@@ -2,8 +2,8 @@
 // FILE: src/compiler/pipeline/inspector/store.ts
 // ============================================================================
 
-import type { InspectorRule, InspectorExport } from './types.js';
-import { buildInspectorExport, type ExporterOptions } from './exporter.js';
+import type { InspectorRule, InspectorExport } from "./types.js";
+import { buildInspectorExport, type ExporterOptions } from "./exporter.js";
 
 export class InspectorStore {
   private rules = new Map<string, InspectorRule>();

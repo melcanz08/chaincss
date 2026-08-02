@@ -4,13 +4,17 @@
 // Usage: import { chain, StyleCollector } from 'chaincss/core'
 
 // Core exports
-export { VERSION } from './shared/constants/index.js';
-export { StyleCollector, chain } from '@core/entities/style-collector.js';
-export type { StyleObject, AtRule, NestedRule } from '@core/entities/style-collector.js';
+export { VERSION } from "./shared/constants/index.js";
+export { StyleCollector, chain } from "@core/entities/style-collector.js";
+export type {
+  StyleObject,
+  AtRule,
+  NestedRule,
+} from "@core/entities/style-collector.js";
 
 // Config
-export { defineConfig } from '@shared/config/index.js';
-export type { ChainCSSUserConfig, MacroHandler } from '@shared/config/index.js';
+export { defineConfig } from "@shared/config/index.js";
+export type { ChainCSSUserConfig, MacroHandler } from "@shared/config/index.js";
 
 // Types
 export type {
@@ -36,5 +40,5 @@ export type {
   ContainerOptions,
   OutlineOptions,
   ScrollOptions,
-  ListOptions
-} from '@shared/types/index.js';
+  ListOptions,
+} from "@shared/types/index.js";

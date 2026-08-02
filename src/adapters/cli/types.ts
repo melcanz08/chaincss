@@ -2,7 +2,7 @@
 // FILE: src/adapters/cli/types.ts
 // ============================================================================
 
-import type { ChainCSSConfig as CoreChainCSSConfig } from '@shared/types/index.js';
+import type { ChainCSSConfig as CoreChainCSSConfig } from "@shared/types/index.js";
 
 // Re-export core config for package entry-point consumers
 export type ChainCSSConfig = CoreChainCSSConfig;
@@ -62,7 +62,15 @@ export interface DevOptions extends BaseCLIOptions {
 // ------------------------------------------------------------------
 
 export interface CacheOptions extends BaseCLIOptions {
-  action: 'clear' | 'stats' | 'prune' | 'list' | 'inspect' | 'delete' | 'validate' | 'backup';
+  action:
+    | "clear"
+    | "stats"
+    | "prune"
+    | "list"
+    | "inspect"
+    | "delete"
+    | "validate"
+    | "backup";
   key?: string;
   force?: boolean;
   maxAge?: number;
@@ -71,7 +79,7 @@ export interface CacheOptions extends BaseCLIOptions {
 }
 
 export interface TimelineOptions extends BaseCLIOptions {
-  action: 'list' | 'diff' | 'changes' | 'stats' | 'export' | 'clear' | 'watch';
+  action: "list" | "diff" | "changes" | "stats" | "export" | "clear" | "watch";
   snapshot1?: string;
   snapshot2?: string;
   output?: string;
@@ -79,9 +87,9 @@ export interface TimelineOptions extends BaseCLIOptions {
 
 export interface InitOptions {
   force?: boolean;
-  template?: 'full' | 'minimal';
+  template?: "full" | "minimal";
   typescript?: boolean; // Cleansed of raw CLI string artifacts
-  framework?: 'react' | 'vue' | 'svelte' | 'solid';
+  framework?: "react" | "vue" | "svelte" | "solid";
 }
 
 // ------------------------------------------------------------------
@@ -106,15 +114,15 @@ export interface FigmaInitOptions extends BaseCLIOptions {
 }
 
 export interface CreateOptions extends BaseCLIOptions {
-  template?: 'minimal' | 'entangled' | 'react' | 'vue';
-  pm?: 'npm' | 'pnpm' | 'yarn' | 'bun';
+  template?: "minimal" | "entangled" | "react" | "vue";
+  pm?: "npm" | "pnpm" | "yarn" | "bun";
   install?: boolean;
 }
 
 export interface AuditOptions extends BaseCLIOptions {
   theme?: string;
   contract?: string;
-  failOn?: 'warning' | 'error' | string;
+  failOn?: "warning" | "error" | string;
   target?: number;
   json?: string;
   strict?: boolean;
@@ -135,9 +143,9 @@ export interface CheckOptions extends BaseCLIOptions {
  * Use this in your Commander action callbacks before hitting your business logic!
  */
 export function normalizeBooleanFlag(value: unknown): boolean {
-  if (typeof value === 'boolean') return value;
-  if (typeof value === 'string') {
-    return value.trim().toLowerCase() === 'true';
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    return value.trim().toLowerCase() === "true";
   }
   return false;
 }
@@ -172,6 +180,6 @@ export interface BuildResult {
     atomicStyles: number;
     cssSize: number;
     gzippedSize?: number; // Essential for checking compressed network payloads
-    savings?: number;      // Tracks performance metrics over legacy rulesets
+    savings?: number; // Tracks performance metrics over legacy rulesets
   };
 }

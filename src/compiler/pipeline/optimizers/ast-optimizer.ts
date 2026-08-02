@@ -3,9 +3,17 @@
 // Converts ParsedValue to AST and runs algebraic optimization
 // ============================================================================
 
-import type { StyleIR, IRRule, IRDeclaration } from '../ir/types.js';
-import type { OptimizationPass, OptimizationResult } from '../pipeline-types.js';
-import { parseCSSValue, optimizeAST, printAST, isConstant } from '../ir/css-ast.js';
+import type { StyleIR, IRRule, IRDeclaration } from "../ir/types.js";
+import type {
+  OptimizationPass,
+  OptimizationResult,
+} from "../pipeline-types.js";
+import {
+  parseCSSValue,
+  optimizeAST,
+  printAST,
+  isConstant,
+} from "../ir/css-ast.js";
 
 // Pre-compiled regex constants to prevent runtime re-compilation in loops
 const REGEX_KEYWORDS = /^[a-zA-Z-]+$/;
@@ -18,9 +26,9 @@ const REGEX_HEX_COLOR = /^#[0-9a-fA-F]{3,8}$/;
  * and writes the optimized value back.
  */
 export const astOptimizer: OptimizationPass = {
-  name: 'ast-optimizer',
-  cost: 'cheap',
-  requiredFor: ['css', 'atomic-css', 'component', 'sourcemap'],
+  name: "ast-optimizer",
+  cost: "cheap",
+  requiredFor: ["css", "atomic-css", "component", "sourcemap"],
 
   optimize(ir: StyleIR, _context: any): OptimizationResult {
     let changes = 0;
@@ -115,11 +123,14 @@ export const astOptimizer: OptimizationPass = {
   },
 };
 
-function optimizeDeclaration(decl: IRDeclaration): { changed: boolean; bytesSaved: number } {
+function optimizeDeclaration(decl: IRDeclaration): {
+  changed: boolean;
+  bytesSaved: number;
+} {
   const val = decl.value;
   if (val == null) return { changed: false, bytesSaved: 0 };
   const originalValue = String(val);
-  
+
   // Skip if already optimized or not optimizable
   if (!isOptimizable(originalValue)) {
     return { changed: false, bytesSaved: 0 };
@@ -128,7 +139,7 @@ function optimizeDeclaration(decl: IRDeclaration): { changed: boolean; bytesSave
   try {
     // Build AST from string
     const ast = parseCSSValue(originalValue);
-    
+
     // Store AST in metadata for other passes if meta exists
     if (decl.meta) {
       (decl.meta as any).ast = ast;
@@ -147,8 +158,8 @@ function optimizeDeclaration(decl: IRDeclaration): { changed: boolean; bytesSave
           decl.history = [];
         }
         decl.history.push({
-          pass: 'ast-optimizer',
-          action: 'optimized',
+          pass: "ast-optimizer",
+          action: "optimized",
           timestamp: Date.now(),
           previous: originalValue,
           reason: `Simplified: ${originalValue} → ${newValue}`,
@@ -168,12 +179,14 @@ function isOptimizable(value: string): boolean {
   if (REGEX_KEYWORDS.test(value)) return false;
   if (REGEX_NUMBERS.test(value)) return false;
   if (REGEX_HEX_COLOR.test(value)) return false;
-  
+
   // Optimize: calc(), var(), function(), space-separated lists
-  return value.includes('calc(') || 
-         value.includes('var(') || 
-         value.includes('+') || 
-         value.includes('-') ||
-         value.includes('*') ||
-         value.includes('/');
+  return (
+    value.includes("calc(") ||
+    value.includes("var(") ||
+    value.includes("+") ||
+    value.includes("-") ||
+    value.includes("*") ||
+    value.includes("/")
+  );
 }

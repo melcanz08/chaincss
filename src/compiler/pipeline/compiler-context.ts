@@ -3,20 +3,41 @@
 // Shared compiler context — connects all subsystems into one unified interface
 // ============================================================================
 
-import type { StyleIR, IRRule, IRNodeId } from './ir/types.js';
-import type { IRGraph } from './ir/types.js';
-import type { SymbolTable } from './symbol-table.js';
-import type { DiagnosticsReport } from './diagnostics-reporter.js';
-import type { PipelineResult, PipelineStageResult, PassResult } from './pipeline-types.js';
-import { buildIRGraph, findAffectedNodes, getGraphStats, exportGraphAsJSON, type GraphExport } from './ir/graph-builder.js';
-import { buildSymbolTable, resolveSymbol, findDependents, findUnusedSymbols } from './symbol-table.js';
-import { generateDiagnosticsReport } from './diagnostics-reporter.js';
+import type { StyleIR, IRRule, IRNodeId } from "./ir/types.js";
+import type { IRGraph } from "./ir/types.js";
+import type { SymbolTable } from "./symbol-table.js";
+import type { DiagnosticsReport } from "./diagnostics-reporter.js";
+import type {
+  PipelineResult,
+  PipelineStageResult,
+  PassResult,
+} from "./pipeline-types.js";
+import {
+  buildIRGraph,
+  findAffectedNodes,
+  getGraphStats,
+  exportGraphAsJSON,
+  type GraphExport,
+} from "./ir/graph-builder.js";
+import {
+  buildSymbolTable,
+  resolveSymbol,
+  findDependents,
+  findUnusedSymbols,
+} from "./symbol-table.js";
+import { generateDiagnosticsReport } from "./diagnostics-reporter.js";
 
 // ============================================================================
 // Types
 // ============================================================================
 
-export type CompilerEventType = 'ruleAdded' | 'ruleRemoved' | 'diagnostic' | 'cacheHit' | 'compileStart' | 'compileEnd';
+export type CompilerEventType =
+  | "ruleAdded"
+  | "ruleRemoved"
+  | "diagnostic"
+  | "cacheHit"
+  | "compileStart"
+  | "compileEnd";
 
 export interface CompilerEvent {
   type: CompilerEventType;
@@ -65,7 +86,7 @@ export class CompilerContext {
 
   /** Accumulated diagnostics across all passes */
   diagnostics: Array<{
-    severity: 'error' | 'warning' | 'info' | 'hint';
+    severity: "error" | "warning" | "info" | "hint";
     message: string;
     suggestion?: string;
     pass: string;
@@ -119,7 +140,7 @@ export class CompilerContext {
   onEvent(handler: CompilerEventHandler): () => void {
     this.eventHandlers.push(handler);
     return () => {
-      this.eventHandlers = this.eventHandlers.filter(h => h !== handler);
+      this.eventHandlers = this.eventHandlers.filter((h) => h !== handler);
     };
   }
 
@@ -204,10 +225,10 @@ export class CompilerContext {
    * Emits a 'diagnostic' event for plugin/IDE consumption.
    */
   addDiagnostic(
-    severity: 'error' | 'warning' | 'info' | 'hint',
+    severity: "error" | "warning" | "info" | "hint",
     message: string,
     pass: string,
-    options?: { suggestion?: string; nodeId?: IRNodeId }
+    options?: { suggestion?: string; nodeId?: IRNodeId },
   ) {
     const entry = {
       severity,
@@ -219,7 +240,7 @@ export class CompilerContext {
     this.diagnostics.push(entry);
 
     // Emit fine-grained diagnostic event
-    this.emit('diagnostic', entry);
+    this.emit("diagnostic", entry);
   }
 
   /**
@@ -227,10 +248,10 @@ export class CompilerContext {
    */
   getDiagnosticsSummary() {
     return {
-      errors: this.diagnostics.filter(d => d.severity === 'error').length,
-      warnings: this.diagnostics.filter(d => d.severity === 'warning').length,
-      info: this.diagnostics.filter(d => d.severity === 'info').length,
-      hints: this.diagnostics.filter(d => d.severity === 'hint').length,
+      errors: this.diagnostics.filter((d) => d.severity === "error").length,
+      warnings: this.diagnostics.filter((d) => d.severity === "warning").length,
+      info: this.diagnostics.filter((d) => d.severity === "info").length,
+      hints: this.diagnostics.filter((d) => d.severity === "hint").length,
       total: this.diagnostics.length,
     };
   }
@@ -271,7 +292,7 @@ export class CompilerContext {
   getCached<T>(key: string): T | undefined {
     const value = this.cache.get(key) as T | undefined;
     if (value !== undefined) {
-      this.emit('cacheHit', { key });
+      this.emit("cacheHit", { key });
     }
     return value;
   }
@@ -301,20 +322,20 @@ export class CompilerContext {
   updateIR(ir: StyleIR) {
     // Detect added/removed rules for event emission
     if (this.lastIR) {
-      const oldIds = new Set(this.ir.rules.map(r => r.id));
-      const newIds = new Set(ir.rules.map(r => r.id));
+      const oldIds = new Set(this.ir.rules.map((r) => r.id));
+      const newIds = new Set(ir.rules.map((r) => r.id));
 
       for (const id of newIds) {
         if (!oldIds.has(id)) {
-          const rule = ir.rules.find(r => r.id === id);
-          this.emit('ruleAdded', { ruleId: id, selector: rule?.selector });
+          const rule = ir.rules.find((r) => r.id === id);
+          this.emit("ruleAdded", { ruleId: id, selector: rule?.selector });
         }
       }
 
       for (const id of oldIds) {
         if (!newIds.has(id)) {
-          const rule = this.ir.rules.find(r => r.id === id);
-          this.emit('ruleRemoved', { ruleId: id, selector: rule?.selector });
+          const rule = this.ir.rules.find((r) => r.id === id);
+          this.emit("ruleRemoved", { ruleId: id, selector: rule?.selector });
         }
       }
     }
@@ -404,13 +425,15 @@ export class CompilerContext {
 
     const totalRules = this.ir.rules.length;
     const affectedCount = allAffected.size;
-    const percentAffected = totalRules > 0 ? Math.round((affectedCount / totalRules) * 100) : 0;
+    const percentAffected =
+      totalRules > 0 ? Math.round((affectedCount / totalRules) * 100) : 0;
 
     return {
       affectedRules: affectedCount,
       totalRules,
       percentAffected,
-      shouldIncremental: affectedCount > 0 && !this.needsFullRecompile(affectedCount),
+      shouldIncremental:
+        affectedCount > 0 && !this.needsFullRecompile(affectedCount),
     };
   }
 
@@ -424,7 +447,7 @@ export class CompilerContext {
    */
   recordCompile(duration: number, isIncremental: boolean = false) {
     if (this.performance.totalCompiles === 0) {
-      this.emit('compileStart', { isIncremental });
+      this.emit("compileStart", { isIncremental });
     }
 
     this.performance.totalCompiles++;
@@ -436,9 +459,14 @@ export class CompilerContext {
     this.performance.lastCompileDuration = duration;
     const total = this.performance.totalCompiles;
     this.performance.averageCompileDuration =
-      (this.performance.averageCompileDuration * (total - 1) + duration) / total;
+      (this.performance.averageCompileDuration * (total - 1) + duration) /
+      total;
 
-    this.emit('compileEnd', { duration, isIncremental, totalCompiles: this.performance.totalCompiles });
+    this.emit("compileEnd", {
+      duration,
+      isIncremental,
+      totalCompiles: this.performance.totalCompiles,
+    });
   }
 
   /**
@@ -466,7 +494,7 @@ export class CompilerContext {
   getSummary() {
     return {
       rules: this.ir.rules.length,
-      deadRules: this.ir.rules.filter(r => r.isDead).length,
+      deadRules: this.ir.rules.filter((r) => r.isDead).length,
       symbols: this.symbols.stats,
       graph: this.getGraphStats(),
       diagnostics: this.getDiagnosticsSummary(),
@@ -478,10 +506,10 @@ export class CompilerContext {
   private cloneIR(ir: StyleIR): StyleIR {
     const cloned = JSON.parse(JSON.stringify(ir));
     if (ir.graph) {
-        cloned.graph = buildIRGraph(cloned);
+      cloned.graph = buildIRGraph(cloned);
     }
     return cloned;
-}
+  }
 }
 
 // ============================================================================
@@ -493,7 +521,7 @@ export class CompilerContext {
  */
 export function createCompilerContext(
   ir: StyleIR,
-  config?: CompilerContextConfig
+  config?: CompilerContextConfig,
 ): CompilerContext {
   return new CompilerContext(ir, config);
 }
@@ -503,7 +531,7 @@ export function createCompilerContext(
  */
 export function updateCompilerContext(
   ctx: CompilerContext,
-  newIR: StyleIR
+  newIR: StyleIR,
 ): CompilerContext {
   ctx.updateIR(newIR);
   return ctx;

@@ -1,10 +1,14 @@
 // src/frameworks/index.ts — ChainCSS Runtime
 
 // Core runtime
-export { compileRuntime as compile, runRuntime as run, styleInjector } from './core/injector.js';
-import { compileToCSS } from '@core/usecases/style-compiler.js';
-export { chain, chain as $ } from '@core/entities/style-collector.js';
-export { setManifest } from './core/injector.js';
+export {
+  compileRuntime as compile,
+  runRuntime as run,
+  styleInjector,
+} from "./core/injector.js";
+import { compileToCSS } from "@core/usecases/style-compiler.js";
+export { chain, chain as $ } from "@core/entities/style-collector.js";
+export { setManifest } from "./core/injector.js";
 
 // ==========================================================================
 // React — Direct re-export
@@ -22,8 +26,8 @@ export {
   isDebugEnabled,
   createStyledComponent,
   createStyledComponents,
-  useComputedStyles
-} from './react/index.js';
+  useComputedStyles,
+} from "./react/index.js";
 
 // ==========================================================================
 // Vue — Lazy-loaded via dynamic import (ESM-safe)
@@ -35,9 +39,15 @@ let _vueLoadPromise: Promise<any> | null = null;
 function getVueModule(): Promise<any> {
   if (_vueModule) return Promise.resolve(_vueModule);
   if (!_vueLoadPromise) {
-    _vueLoadPromise = import('./vue/index.js')
-      .then(mod => { _vueModule = mod; return mod; })
-      .catch(() => { _vueModule = {}; return _vueModule; });
+    _vueLoadPromise = import("./vue/index.js")
+      .then((mod) => {
+        _vueModule = mod;
+        return mod;
+      })
+      .catch(() => {
+        _vueModule = {};
+        return _vueModule;
+      });
   }
   return _vueLoadPromise;
 }
@@ -45,21 +55,29 @@ function getVueModule(): Promise<any> {
 async function callVueExport(name: string, ...args: any[]): Promise<any> {
   const mod = await getVueModule();
   const fn = mod[name];
-  return typeof fn === 'function' ? fn(...args) : undefined;
+  return typeof fn === "function" ? fn(...args) : undefined;
 }
 
 // New: useChainStyles for Vue
-export const useChainStylesVue = (...args: any[]) => callVueExport('useChainStyles', ...args);
+export const useChainStylesVue = (...args: any[]) =>
+  callVueExport("useChainStyles", ...args);
 
 // Legacy
-export const useAtomicClassesVue = (...args: any[]) => callVueExport('useAtomicClasses', ...args);
-export const useComputedStylesVue = (...args: any[]) => callVueExport('useComputedStyles', ...args);
-export const provideStyleContext = (...args: any[]) => callVueExport('provideStyleContext', ...args);
-export const injectStyleContext = (...args: any[]) => callVueExport('injectStyleContext', ...args);
+export const useAtomicClassesVue = (...args: any[]) =>
+  callVueExport("useAtomicClasses", ...args);
+export const useComputedStylesVue = (...args: any[]) =>
+  callVueExport("useComputedStyles", ...args);
+export const provideStyleContext = (...args: any[]) =>
+  callVueExport("provideStyleContext", ...args);
+export const injectStyleContext = (...args: any[]) =>
+  callVueExport("injectStyleContext", ...args);
 
 // Sync stubs
 export const ChainCSSGlobalVue = (..._args: any[]) => null;
-export const createStyledVueComponent = (..._args: any[]) => () => null;
+export const createStyledVueComponent =
+  (..._args: any[]) =>
+  () =>
+    null;
 export const createStyledVueComponents = (..._args: any[]) => ({});
 
 // ==========================================================================
@@ -72,9 +90,15 @@ let _svelteLoadPromise: Promise<any> | null = null;
 function getSvelteModule(): Promise<any> {
   if (_svelteModule) return Promise.resolve(_svelteModule);
   if (!_svelteLoadPromise) {
-    _svelteLoadPromise = import('./svelte/index.js')
-      .then(mod => { _svelteModule = mod; return mod; })
-      .catch(() => { _svelteModule = {}; return _svelteModule; });
+    _svelteLoadPromise = import("./svelte/index.js")
+      .then((mod) => {
+        _svelteModule = mod;
+        return mod;
+      })
+      .catch(() => {
+        _svelteModule = {};
+        return _svelteModule;
+      });
   }
   return _svelteLoadPromise;
 }
@@ -82,23 +106,32 @@ function getSvelteModule(): Promise<any> {
 async function callSvelteExport(name: string, ...args: any[]): Promise<any> {
   const mod = await getSvelteModule();
   const fn = mod[name];
-  return typeof fn === 'function' ? fn(...args) : undefined;
+  return typeof fn === "function" ? fn(...args) : undefined;
 }
 
 // New: useChainStyles for Svelte
-export const useChainStylesSvelte = (...args: any[]) => callSvelteExport('useChainStyles', ...args);
+export const useChainStylesSvelte = (...args: any[]) =>
+  callSvelteExport("useChainStyles", ...args);
 
 // Legacy
-export const useAtomicClassesSvelte = (...args: any[]) => callSvelteExport('useAtomicClasses', ...args);
-export const cxSvelte = (...args: any[]) => callSvelteExport('cx', ...args);
-export const useComputedStylesSvelte = (...args: any[]) => callSvelteExport('useComputedStyles', ...args);
-export const provideStyleContextSvelte = (...args: any[]) => callSvelteExport('provideStyleContext', ...args);
-export const injectStyleContextSvelte = (...args: any[]) => callSvelteExport('injectStyleContext', ...args);
-export const chainStyles = (...args: any[]) => callSvelteExport('chainStyles', ...args);
+export const useAtomicClassesSvelte = (...args: any[]) =>
+  callSvelteExport("useAtomicClasses", ...args);
+export const cxSvelte = (...args: any[]) => callSvelteExport("cx", ...args);
+export const useComputedStylesSvelte = (...args: any[]) =>
+  callSvelteExport("useComputedStyles", ...args);
+export const provideStyleContextSvelte = (...args: any[]) =>
+  callSvelteExport("provideStyleContext", ...args);
+export const injectStyleContextSvelte = (...args: any[]) =>
+  callSvelteExport("injectStyleContext", ...args);
+export const chainStyles = (...args: any[]) =>
+  callSvelteExport("chainStyles", ...args);
 
 // Sync stubs
 export const ChainCSSGlobalSvelte = (..._args: any[]) => null;
-export const createStyledSvelteComponent = (..._args: any[]) => () => null;
+export const createStyledSvelteComponent =
+  (..._args: any[]) =>
+  () =>
+    null;
 export const createStyledSvelteComponents = (..._args: any[]) => ({});
 
 // ==========================================================================
@@ -111,9 +144,15 @@ let _solidLoadPromise: Promise<any> | null = null;
 function getSolidModule(): Promise<any> {
   if (_solidModule) return Promise.resolve(_solidModule);
   if (!_solidLoadPromise) {
-    _solidLoadPromise = import('./solid/index.js')
-      .then(mod => { _solidModule = mod; return mod; })
-      .catch(() => { _solidModule = {}; return _solidModule; });
+    _solidLoadPromise = import("./solid/index.js")
+      .then((mod) => {
+        _solidModule = mod;
+        return mod;
+      })
+      .catch(() => {
+        _solidModule = {};
+        return _solidModule;
+      });
   }
   return _solidLoadPromise;
 }
@@ -121,17 +160,21 @@ function getSolidModule(): Promise<any> {
 async function callSolidExport(name: string, ...args: any[]): Promise<any> {
   const mod = await getSolidModule();
   const fn = mod[name];
-  return typeof fn === 'function' ? fn(...args) : undefined;
+  return typeof fn === "function" ? fn(...args) : undefined;
 }
 
 // New: useChainStyles for Solid (direct, no async needed)
-export const useChainStylesSolid = (...args: any[]) => callSolidExport('useChainStyles', ...args);
+export const useChainStylesSolid = (...args: any[]) =>
+  callSolidExport("useChainStyles", ...args);
 
 // Legacy
-export const useComputedStylesSolid = (...args: any[]) => callSolidExport('useComputedStyles', ...args);
-export const createStyledComponentSolid = (...args: any[]) => callSolidExport('createStyledComponent', ...args);
-export const cxSolid = (...args: any[]) => callSolidExport('cx', ...args);
-export const createStyleContext = (...args: any[]) => callSolidExport('createStyleContext', ...args);
+export const useComputedStylesSolid = (...args: any[]) =>
+  callSolidExport("useComputedStyles", ...args);
+export const createStyledComponentSolid = (...args: any[]) =>
+  callSolidExport("createStyledComponent", ...args);
+export const cxSolid = (...args: any[]) => callSolidExport("cx", ...args);
+export const createStyleContext = (...args: any[]) =>
+  callSolidExport("createStyleContext", ...args);
 
 // ==========================================================================
 // Utilities
@@ -150,8 +193,8 @@ export {
   devWarn,
   devLog,
   logError,
-  createDebugger
-} from '@shared/utils/index.js';
+  createDebugger,
+} from "@shared/utils/index.js";
 
 // Types
 export type {
@@ -165,29 +208,35 @@ export type {
   UseChainStylesReturnSvelte,
   UseChainStylesReturnSolid,
   HMRPayload,
-  ChainCSSDebugger
-} from '@shared/types/index.js';
+  ChainCSSDebugger,
+} from "@shared/types/index.js";
 
 // ==========================================================================
 // Auto-inject styles into DOM
 // ==========================================================================
 
 export function injectChainStyles(styles: Record<string, any>) {
-  let css = '';
+  let css = "";
 
   for (const [key, obj] of Object.entries(styles)) {
     if (!obj || !obj.selectors) continue;
-    css += compileToCSS(obj, { scopeSelector: '.' + obj.selectors[0] }) + '\n';
+    css += compileToCSS(obj, { scopeSelector: "." + obj.selectors[0] }) + "\n";
   }
 
   if (!css.trim()) return null;
 
-  const el = document.createElement('style');
-  el.setAttribute('data-chaincss', 'runtime');
+  const el = document.createElement("style");
+  el.setAttribute("data-chaincss", "runtime");
   el.textContent = css;
   document.head.appendChild(el);
 
-  console.log('⛓️ ChainCSS — ' + Object.keys(styles).length + ' styles injected | CSS: ' + css.length + ' bytes | smartChain auto-detect active');
+  console.log(
+    "⛓️ ChainCSS — " +
+      Object.keys(styles).length +
+      " styles injected | CSS: " +
+      css.length +
+      " bytes | smartChain auto-detect active",
+  );
 
   return el;
 }
@@ -197,10 +246,9 @@ export {
   getRuntimeAdapter,
   setRuntimeAdapter,
   resetRuntimeAdapter,
-} from './core/adapter/factory.js';
+} from "./core/adapter/factory.js";
 
-export type { RuntimeAdapter } from './core/adapter/types.js';
-export { BrowserAdapter } from './core/adapter/browser-adapter.js';
-export { SSRAdapter } from './core/adapter/ssr-adapter.js';
-export { compileToCSS } from '@core/usecases/style-compiler.js';
-
+export type { RuntimeAdapter } from "./core/adapter/types.js";
+export { BrowserAdapter } from "./core/adapter/browser-adapter.js";
+export { SSRAdapter } from "./core/adapter/ssr-adapter.js";
+export { compileToCSS } from "@core/usecases/style-compiler.js";

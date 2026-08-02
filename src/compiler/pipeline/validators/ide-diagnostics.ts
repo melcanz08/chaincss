@@ -5,10 +5,18 @@
 // Runs as a validation pass so suggestions flow through to inspector JSON,
 // CLI output, and dev server.
 
-import type { StyleIR, IRRule, IRDeclaration } from '../ir/types.js';
-import type { ValidationPass, ValidationResult, Diagnostic } from '../pipeline-types.js';
-import type { SymbolTable } from '../symbol-table.js';
-import { buildSymbolTable, findUnusedSymbols, findDependents } from '../symbol-table.js';
+import type { StyleIR, IRRule, IRDeclaration } from "../ir/types.js";
+import type {
+  ValidationPass,
+  ValidationResult,
+  Diagnostic,
+} from "../pipeline-types.js";
+import type { SymbolTable } from "../symbol-table.js";
+import {
+  buildSymbolTable,
+  findUnusedSymbols,
+  findDependents,
+} from "../symbol-table.js";
 
 // ============================================================================
 // Quick Fix: Add transition when hover is present without one
@@ -19,27 +27,25 @@ function detectMissingTransition(rule: IRRule): Diagnostic[] {
   const pseudoClasses = rule.pseudoClasses || [];
 
   const hasHover = pseudoClasses.some(
-    pc => pc.name === 'hover' && pc.declarations?.length > 0
+    (pc) => pc.name === "hover" && pc.declarations?.length > 0,
   );
   if (!hasHover) return issues;
 
   const allDecls = [
     ...rule.declarations,
-    ...pseudoClasses.flatMap(pc => pc.declarations || []),
+    ...pseudoClasses.flatMap((pc) => pc.declarations || []),
   ];
 
-  const hasTransition = allDecls.some(
-    d => d.property === 'transition'
-  );
+  const hasTransition = allDecls.some((d) => d.property === "transition");
 
   if (!hasTransition) {
     issues.push({
       id: `ide-transition-${rule.id}`,
       nodeId: rule.id,
-      severity: 'hint',
-      category: 'quick-fix',
+      severity: "hint",
+      category: "quick-fix",
       message: `"${rule.selector}" has :hover styles but no transition for smooth animation.`,
-      suggestion: 'transition: all 0.2s ease;',
+      suggestion: "transition: all 0.2s ease;",
       autoFixable: true,
     });
   }
@@ -55,10 +61,10 @@ function detectMarginInlineOpportunity(rule: IRRule): Diagnostic[] {
   const issues: Diagnostic[] = [];
 
   const marginLeft = rule.declarations.find(
-    d => d.property === 'margin-left' || d.property === 'marginLeft'
+    (d) => d.property === "margin-left" || d.property === "marginLeft",
   );
   const marginRight = rule.declarations.find(
-    d => d.property === 'margin-right' || d.property === 'marginRight'
+    (d) => d.property === "margin-right" || d.property === "marginRight",
   );
 
   if (!marginLeft || !marginRight) return issues;
@@ -70,8 +76,8 @@ function detectMarginInlineOpportunity(rule: IRRule): Diagnostic[] {
     issues.push({
       id: `ide-margin-inline-${rule.id}`,
       nodeId: rule.id,
-      severity: 'hint',
-      category: 'quick-fix',
+      severity: "hint",
+      category: "quick-fix",
       message: `"${rule.selector}" uses margin-left + margin-right with identical values.`,
       suggestion: `margin-inline: ${leftVal};`,
       autoFixable: true,
@@ -80,10 +86,10 @@ function detectMarginInlineOpportunity(rule: IRRule): Diagnostic[] {
 
   // Same for padding
   const paddingLeft = rule.declarations.find(
-    d => d.property === 'padding-left' || d.property === 'paddingLeft'
+    (d) => d.property === "padding-left" || d.property === "paddingLeft",
   );
   const paddingRight = rule.declarations.find(
-    d => d.property === 'padding-right' || d.property === 'paddingRight'
+    (d) => d.property === "padding-right" || d.property === "paddingRight",
   );
 
   if (paddingLeft && paddingRight) {
@@ -94,8 +100,8 @@ function detectMarginInlineOpportunity(rule: IRRule): Diagnostic[] {
       issues.push({
         id: `ide-padding-inline-${rule.id}`,
         nodeId: rule.id,
-        severity: 'hint',
-        category: 'quick-fix',
+        severity: "hint",
+        category: "quick-fix",
         message: `"${rule.selector}" uses padding-left + padding-right with identical values.`,
         suggestion: `padding-inline: ${plVal};`,
         autoFixable: true,
@@ -114,10 +120,10 @@ function detectMarginBlockOpportunity(rule: IRRule): Diagnostic[] {
   const issues: Diagnostic[] = [];
 
   const marginTop = rule.declarations.find(
-    d => d.property === 'margin-top' || d.property === 'marginTop'
+    (d) => d.property === "margin-top" || d.property === "marginTop",
   );
   const marginBottom = rule.declarations.find(
-    d => d.property === 'margin-bottom' || d.property === 'marginBottom'
+    (d) => d.property === "margin-bottom" || d.property === "marginBottom",
   );
 
   if (marginTop && marginBottom) {
@@ -128,8 +134,8 @@ function detectMarginBlockOpportunity(rule: IRRule): Diagnostic[] {
       issues.push({
         id: `ide-margin-block-${rule.id}`,
         nodeId: rule.id,
-        severity: 'hint',
-        category: 'quick-fix',
+        severity: "hint",
+        category: "quick-fix",
         message: `"${rule.selector}" uses margin-top + margin-bottom with identical values.`,
         suggestion: `margin-block: ${topVal};`,
         autoFixable: true,
@@ -138,10 +144,10 @@ function detectMarginBlockOpportunity(rule: IRRule): Diagnostic[] {
   }
 
   const paddingTop = rule.declarations.find(
-    d => d.property === 'padding-top' || d.property === 'paddingTop'
+    (d) => d.property === "padding-top" || d.property === "paddingTop",
   );
   const paddingBottom = rule.declarations.find(
-    d => d.property === 'padding-bottom' || d.property === 'paddingBottom'
+    (d) => d.property === "padding-bottom" || d.property === "paddingBottom",
   );
 
   if (paddingTop && paddingBottom) {
@@ -152,8 +158,8 @@ function detectMarginBlockOpportunity(rule: IRRule): Diagnostic[] {
       issues.push({
         id: `ide-padding-block-${rule.id}`,
         nodeId: rule.id,
-        severity: 'hint',
-        category: 'quick-fix',
+        severity: "hint",
+        category: "quick-fix",
         message: `"${rule.selector}" uses padding-top + padding-bottom with identical values.`,
         suggestion: `padding-block: ${ptVal};`,
         autoFixable: true,
@@ -172,10 +178,10 @@ function detectBorderInlineOpportunity(rule: IRRule): Diagnostic[] {
   const issues: Diagnostic[] = [];
 
   const borderLeft = rule.declarations.find(
-    d => d.property === 'border-left' || d.property === 'borderLeft'
+    (d) => d.property === "border-left" || d.property === "borderLeft",
   );
   const borderRight = rule.declarations.find(
-    d => d.property === 'border-right' || d.property === 'borderRight'
+    (d) => d.property === "border-right" || d.property === "borderRight",
   );
 
   if (borderLeft && borderRight) {
@@ -186,8 +192,8 @@ function detectBorderInlineOpportunity(rule: IRRule): Diagnostic[] {
       issues.push({
         id: `ide-border-inline-${rule.id}`,
         nodeId: rule.id,
-        severity: 'hint',
-        category: 'quick-fix',
+        severity: "hint",
+        category: "quick-fix",
         message: `"${rule.selector}" uses border-left + border-right with identical values.`,
         suggestion: `border-inline: ${leftVal};`,
         autoFixable: true,
@@ -205,19 +211,17 @@ function detectBorderInlineOpportunity(rule: IRRule): Diagnostic[] {
 function detectRedundantMaxWidth(rule: IRRule): Diagnostic[] {
   const issues: Diagnostic[] = [];
 
-  const width = rule.declarations.find(
-    d => d.property === 'width'
-  );
+  const width = rule.declarations.find((d) => d.property === "width");
   const maxWidth = rule.declarations.find(
-    d => d.property === 'max-width' || d.property === 'maxWidth'
+    (d) => d.property === "max-width" || d.property === "maxWidth",
   );
 
   if (width && maxWidth && String(width.value) === String(maxWidth.value)) {
     issues.push({
       id: `ide-redundant-maxwidth-${rule.id}`,
       nodeId: rule.id,
-      severity: 'hint',
-      category: 'quick-fix',
+      severity: "hint",
+      category: "quick-fix",
       message: `"${rule.selector}" has identical width and max-width values.`,
       suggestion: `Remove max-width (redundant when equal to width).`,
       autoFixable: true,
@@ -233,12 +237,12 @@ function detectRedundantMaxWidth(rule: IRRule): Diagnostic[] {
 
 function detectTokenDependencyChains(
   rule: IRRule,
-  symbols: SymbolTable
+  symbols: SymbolTable,
 ): Diagnostic[] {
   const issues: Diagnostic[] = [];
 
   // Find all tokens referenced by this rule
-  for (const decl of (rule.declarations || [])) {
+  for (const decl of rule.declarations || []) {
     const val = String(decl.value);
     const tokenMatches = val.matchAll(/\$([a-zA-Z0-9_.-]+)/g);
     for (const match of tokenMatches) {
@@ -250,12 +254,12 @@ function detectTokenDependencyChains(
       const chain = buildTokenChain(tokenName, symbols);
       if (chain.length > 1) {
         issues.push({
-          id: `ide-token-chain-${rule.id}-${tokenName.replace(/\./g, '-')}`,
+          id: `ide-token-chain-${rule.id}-${tokenName.replace(/\./g, "-")}`,
           nodeId: rule.id,
-          severity: 'info',
-          category: 'hover-info',
-          message: `Token $${tokenName} dependency chain: ${chain.join(' → ')}`,
-          suggestion: `Trace: ${chain.join(' → ')}`,
+          severity: "info",
+          category: "hover-info",
+          message: `Token $${tokenName} dependency chain: ${chain.join(" → ")}`,
+          suggestion: `Trace: ${chain.join(" → ")}`,
           autoFixable: false,
         });
       }
@@ -296,18 +300,23 @@ function detectUnusedTokens(symbols: SymbolTable): Diagnostic[] {
 
   for (const symbol of unused) {
     // Only flag tokens and variables (not selectors/components which are always "used" by existing)
-    if (symbol.kind === 'token' || symbol.kind === 'variable' || symbol.kind === 'animation') {
+    if (
+      symbol.kind === "token" ||
+      symbol.kind === "variable" ||
+      symbol.kind === "animation"
+    ) {
       issues.push({
-        id: `ide-unused-${symbol.kind}-${symbol.name.replace(/[^a-zA-Z0-9]/g, '-')}`,
+        id: `ide-unused-${symbol.kind}-${symbol.name.replace(/[^a-zA-Z0-9]/g, "-")}`,
         nodeId: symbol.nodeId,
-        severity: 'warning',
-        category: 'unused-symbol',
-        message: `${symbol.kind === 'token' ? 'Token' : symbol.kind === 'animation' ? 'Animation' : 'Variable'} "${symbol.name}" is defined but never referenced.`,
-        suggestion: symbol.kind === 'token'
-          ? `Remove unused token "${symbol.name}" from your token definitions.`
-          : symbol.kind === 'animation'
-            ? `Remove unused @keyframes "${symbol.name}" or add an animation reference.`
-            : `Remove unused variable "${symbol.name}".`,
+        severity: "warning",
+        category: "unused-symbol",
+        message: `${symbol.kind === "token" ? "Token" : symbol.kind === "animation" ? "Animation" : "Variable"} "${symbol.name}" is defined but never referenced.`,
+        suggestion:
+          symbol.kind === "token"
+            ? `Remove unused token "${symbol.name}" from your token definitions.`
+            : symbol.kind === "animation"
+              ? `Remove unused @keyframes "${symbol.name}" or add an animation reference.`
+              : `Remove unused variable "${symbol.name}".`,
         autoFixable: false,
       });
     }
@@ -321,13 +330,17 @@ function detectUnusedTokens(symbols: SymbolTable): Diagnostic[] {
 // ============================================================================
 
 export const ideDiagnostics: ValidationPass = {
-  name: 'ide-diagnostics',
+  name: "ide-diagnostics",
 
   validate(ir: StyleIR): ValidationResult {
     const diagnostics: Diagnostic[] = [];
 
     if (!ir || !ir.rules) {
-      return { diagnostics: [], passed: true, stats: { errors: 0, warnings: 0, info: 0, hints: 0 } };
+      return {
+        diagnostics: [],
+        passed: true,
+        stats: { errors: 0, warnings: 0, info: 0, hints: 0 },
+      };
     }
 
     // Build symbol table once for all checks
@@ -351,10 +364,10 @@ export const ideDiagnostics: ValidationPass = {
     // Global checks (not per-rule)
     diagnostics.push(...detectUnusedTokens(symbols));
 
-    const errors = diagnostics.filter(d => d.severity === 'error').length;
-    const warnings = diagnostics.filter(d => d.severity === 'warning').length;
-    const info = diagnostics.filter(d => d.severity === 'info').length;
-    const hints = diagnostics.filter(d => d.severity === 'hint').length;
+    const errors = diagnostics.filter((d) => d.severity === "error").length;
+    const warnings = diagnostics.filter((d) => d.severity === "warning").length;
+    const info = diagnostics.filter((d) => d.severity === "info").length;
+    const hints = diagnostics.filter((d) => d.severity === "hint").length;
 
     return {
       diagnostics,

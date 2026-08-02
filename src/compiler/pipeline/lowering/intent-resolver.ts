@@ -1,12 +1,16 @@
 // ============================================================================
-// FILE: src/compiler/pipeline/lowering/intent-resolver.ts 
+// FILE: src/compiler/pipeline/lowering/intent-resolver.ts
 // ============================================================================
 
-import { recordHistory } from '../ir/utils.js';
-import type { StyleIR } from '../ir/types.js';
-import type { LoweringPass, LoweringResult, LoweringContext } from '../pipeline-types.js';
-import { createDeclaration } from '../ir/index.js';
-import { resolveSemantic } from '../../tokens/semantic-tokens.js';
+import { recordHistory } from "../ir/utils.js";
+import type { StyleIR } from "../ir/types.js";
+import type {
+  LoweringPass,
+  LoweringResult,
+  LoweringContext,
+} from "../pipeline-types.js";
+import { createDeclaration } from "../ir/index.js";
+import { resolveSemantic } from "../../tokens/semantic-tokens.js";
 
 export interface IntentDefinition {
   name: string;
@@ -20,99 +24,235 @@ export interface IntentDefinition {
 }
 
 const BUILTIN_INTENT_CATALOG: Record<string, IntentDefinition> = {
-  'center-content': {
-    name: 'center-content', category: 'layout', description: 'Center content both horizontally and vertically',
-    semantics: [{ category: 'surface', intent: 'container' }],
-    properties: { display: 'flex', justifyContent: 'center', alignItems: 'center' },
+  "center-content": {
+    name: "center-content",
+    category: "layout",
+    description: "Center content both horizontally and vertically",
+    semantics: [{ category: "surface", intent: "container" }],
+    properties: {
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+    },
   },
-  'stack': {
-    name: 'stack', category: 'layout', description: 'Vertical stack with consistent spacing',
-    properties: { display: 'flex', flexDirection: 'column' },
-    semantics: [{ category: 'spacing', intent: 'comfortable' }],
+  stack: {
+    name: "stack",
+    category: "layout",
+    description: "Vertical stack with consistent spacing",
+    properties: { display: "flex", flexDirection: "column" },
+    semantics: [{ category: "spacing", intent: "comfortable" }],
   },
-  'sidebar-layout': {
-    name: 'sidebar-layout', category: 'layout', description: 'Two-column layout with mobile collapse',
-    properties: { display: 'grid', gridTemplateColumns: '280px 1fr', minHeight: '100vh' },
-    semantics: [{ category: 'spacing', intent: 'comfortable' }],
-    responsive: { mobile: { gridTemplateColumns: '1fr' } },
+  "sidebar-layout": {
+    name: "sidebar-layout",
+    category: "layout",
+    description: "Two-column layout with mobile collapse",
+    properties: {
+      display: "grid",
+      gridTemplateColumns: "280px 1fr",
+      minHeight: "100vh",
+    },
+    semantics: [{ category: "spacing", intent: "comfortable" }],
+    responsive: { mobile: { gridTemplateColumns: "1fr" } },
   },
-  'grid-list': {
-    name: 'grid-list', category: 'layout', description: 'Responsive auto-fit grid',
-    properties: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' },
-    semantics: [{ category: 'spacing', intent: 'comfortable' }],
+  "grid-list": {
+    name: "grid-list",
+    category: "layout",
+    description: "Responsive auto-fit grid",
+    properties: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+    },
+    semantics: [{ category: "spacing", intent: "comfortable" }],
   },
-  'card': {
-    name: 'card', category: 'component', description: 'Content card with shadow, radius, and hover lift',
-    semantics: [{ category: 'surface', intent: 'container' }, { category: 'elevation', intent: 'raised' }, { category: 'spacing', intent: 'comfortable' }],
-    properties: { display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'box-shadow 0.2s ease, transform 0.2s ease' },
-    states: { hover: { boxShadow: '0 10px 30px rgba(0,0,0,0.15)', transform: 'translateY(-2px)' } },
-    responsive: { mobile: { padding: '16px' } },
-    a11y: ['contrast', 'focus-visible'],
+  card: {
+    name: "card",
+    category: "component",
+    description: "Content card with shadow, radius, and hover lift",
+    semantics: [
+      { category: "surface", intent: "container" },
+      { category: "elevation", intent: "raised" },
+      { category: "spacing", intent: "comfortable" },
+    ],
+    properties: {
+      display: "flex",
+      flexDirection: "column",
+      overflow: "hidden",
+      transition: "box-shadow 0.2s ease, transform 0.2s ease",
+    },
+    states: {
+      hover: {
+        boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
+        transform: "translateY(-2px)",
+      },
+    },
+    responsive: { mobile: { padding: "16px" } },
+    a11y: ["contrast", "focus-visible"],
   },
-  'button-primary': {
-    name: 'button-primary', category: 'component', description: 'Primary call-to-action button',
-    semantics: [{ category: 'surface', intent: 'interactive' }, { category: 'spacing', intent: 'compact' }, { category: 'state', intent: 'hover' }, { category: 'state', intent: 'focus' }, { category: 'state', intent: 'active' }, { category: 'state', intent: 'disabled' }],
-    properties: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: '600', border: 'none', userSelect: 'none' },
-    a11y: ['contrast', 'touch-target', 'focus-visible'],
+  "button-primary": {
+    name: "button-primary",
+    category: "component",
+    description: "Primary call-to-action button",
+    semantics: [
+      { category: "surface", intent: "interactive" },
+      { category: "spacing", intent: "compact" },
+      { category: "state", intent: "hover" },
+      { category: "state", intent: "focus" },
+      { category: "state", intent: "active" },
+      { category: "state", intent: "disabled" },
+    ],
+    properties: {
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontWeight: "600",
+      border: "none",
+      userSelect: "none",
+    },
+    a11y: ["contrast", "touch-target", "focus-visible"],
   },
-  'button-secondary': {
-    name: 'button-secondary', category: 'component', description: 'Secondary outlined button',
-    semantics: [{ category: 'spacing', intent: 'compact' }, { category: 'state', intent: 'focus' }, { category: 'state', intent: 'disabled' }],
-    properties: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: '500', backgroundColor: 'transparent', border: '1px solid $colors.neutral.300', color: '$colors.neutral.700', userSelect: 'none' },
-    states: { hover: { backgroundColor: '$colors.neutral.50' } },
-    a11y: ['contrast', 'touch-target', 'focus-visible'],
+  "button-secondary": {
+    name: "button-secondary",
+    category: "component",
+    description: "Secondary outlined button",
+    semantics: [
+      { category: "spacing", intent: "compact" },
+      { category: "state", intent: "focus" },
+      { category: "state", intent: "disabled" },
+    ],
+    properties: {
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontWeight: "500",
+      backgroundColor: "transparent",
+      border: "1px solid $colors.neutral.300",
+      color: "$colors.neutral.700",
+      userSelect: "none",
+    },
+    states: { hover: { backgroundColor: "$colors.neutral.50" } },
+    a11y: ["contrast", "touch-target", "focus-visible"],
   },
-  'input-field': {
-    name: 'input-field', category: 'component', description: 'Text input with focus and error states',
-    semantics: [{ category: 'surface', intent: 'input' }, { category: 'spacing', intent: 'compact' }, { category: 'state', intent: 'focus' }, { category: 'state', intent: 'disabled' }],
-    properties: { width: '100%', fontSize: '16px', lineHeight: '1.5', transition: 'border-color 0.2s ease, box-shadow 0.2s ease' },
-    a11y: ['contrast'],
+  "input-field": {
+    name: "input-field",
+    category: "component",
+    description: "Text input with focus and error states",
+    semantics: [
+      { category: "surface", intent: "input" },
+      { category: "spacing", intent: "compact" },
+      { category: "state", intent: "focus" },
+      { category: "state", intent: "disabled" },
+    ],
+    properties: {
+      width: "100%",
+      fontSize: "16px",
+      lineHeight: "1.5",
+      transition: "border-color 0.2s ease, box-shadow 0.2s ease",
+    },
+    a11y: ["contrast"],
   },
-  'modal': {
-    name: 'modal', category: 'component', description: 'Modal dialog with overlay backdrop',
-    semantics: [{ category: 'surface', intent: 'overlay' }, { category: 'elevation', intent: 'modal' }, { category: 'spacing', intent: 'spacious' }],
-    properties: { display: 'flex', flexDirection: 'column', maxWidth: '560px', margin: 'auto' },
-    a11y: ['contrast', 'focus-visible'],
+  modal: {
+    name: "modal",
+    category: "component",
+    description: "Modal dialog with overlay backdrop",
+    semantics: [
+      { category: "surface", intent: "overlay" },
+      { category: "elevation", intent: "modal" },
+      { category: "spacing", intent: "spacious" },
+    ],
+    properties: {
+      display: "flex",
+      flexDirection: "column",
+      maxWidth: "560px",
+      margin: "auto",
+    },
+    a11y: ["contrast", "focus-visible"],
   },
-  'tooltip': {
-    name: 'tooltip', category: 'component', description: 'Hover tooltip',
-    semantics: [{ category: 'surface', intent: 'tooltip' }],
-    properties: { position: 'absolute', zIndex: '50', pointerEvents: 'none' },
-    a11y: ['contrast'],
+  tooltip: {
+    name: "tooltip",
+    category: "component",
+    description: "Hover tooltip",
+    semantics: [{ category: "surface", intent: "tooltip" }],
+    properties: { position: "absolute", zIndex: "50", pointerEvents: "none" },
+    a11y: ["contrast"],
   },
-  'hero-section': {
-    name: 'hero-section', category: 'semantic', description: 'Full-width hero banner',
-    semantics: [{ category: 'spacing', intent: 'generous' }],
-    properties: { display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', width: '100%', minHeight: '60vh', textAlign: 'center' },
-    responsive: { mobile: { minHeight: '40vh', padding: '32px 16px' } },
+  "hero-section": {
+    name: "hero-section",
+    category: "semantic",
+    description: "Full-width hero banner",
+    semantics: [{ category: "spacing", intent: "generous" }],
+    properties: {
+      display: "flex",
+      flexDirection: "column",
+      justifyContent: "center",
+      alignItems: "center",
+      width: "100%",
+      minHeight: "60vh",
+      textAlign: "center",
+    },
+    responsive: { mobile: { minHeight: "40vh", padding: "32px 16px" } },
   },
-  'sticky-header': {
-    name: 'sticky-header', category: 'semantic', description: 'Sticky header with backdrop blur',
-    semantics: [{ category: 'elevation', intent: 'sticky' }, { category: 'spacing', intent: 'compact' }],
-    properties: { backgroundColor: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(8px)', borderBottom: '1px solid rgba(0,0,0,0.05)' },
+  "sticky-header": {
+    name: "sticky-header",
+    category: "semantic",
+    description: "Sticky header with backdrop blur",
+    semantics: [
+      { category: "elevation", intent: "sticky" },
+      { category: "spacing", intent: "compact" },
+    ],
+    properties: {
+      backgroundColor: "rgba(255,255,255,0.9)",
+      backdropFilter: "blur(8px)",
+      borderBottom: "1px solid rgba(0,0,0,0.05)",
+    },
   },
-  'hover-lift': {
-    name: 'hover-lift', category: 'interaction', description: 'Subtle lift on hover',
-    states: { hover: { transform: 'translateY(-2px)', boxShadow: '0 8px 25px rgba(0,0,0,0.12)', transition: 'all 0.2s ease' } },
-    a11y: ['focus-visible'],
+  "hover-lift": {
+    name: "hover-lift",
+    category: "interaction",
+    description: "Subtle lift on hover",
+    states: {
+      hover: {
+        transform: "translateY(-2px)",
+        boxShadow: "0 8px 25px rgba(0,0,0,0.12)",
+        transition: "all 0.2s ease",
+      },
+    },
+    a11y: ["focus-visible"],
   },
-  'focus-ring': {
-    name: 'focus-ring', category: 'interaction', description: 'Accessible focus indicator',
-    states: { 'focus-visible': { outline: '2px solid $colors.primary.500', outlineOffset: '2px' } },
+  "focus-ring": {
+    name: "focus-ring",
+    category: "interaction",
+    description: "Accessible focus indicator",
+    states: {
+      "focus-visible": {
+        outline: "2px solid $colors.primary.500",
+        outlineOffset: "2px",
+      },
+    },
   },
 };
 
-export const INTENT_CATALOG: Record<string, IntentDefinition> = { ...BUILTIN_INTENT_CATALOG };
+export const INTENT_CATALOG: Record<string, IntentDefinition> = {
+  ...BUILTIN_INTENT_CATALOG,
+};
 export const BUILTIN_CATALOG = BUILTIN_INTENT_CATALOG;
 
-export function registerIntent(name: string, def: IntentDefinition, allowOverride = false) {
+export function registerIntent(
+  name: string,
+  def: IntentDefinition,
+  allowOverride = false,
+) {
   if (!allowOverride && BUILTIN_INTENT_CATALOG[name]) {
-    console.warn(`[ChainCSS] intent '${name}' overrides builtin. Use allowOverride:true to silence.`);
+    console.warn(
+      `[ChainCSS] intent '${name}' overrides builtin. Use allowOverride:true to silence.`,
+    );
   }
   INTENT_CATALOG[name] = { ...def, name };
 }
 
-export function registerIntents(intents: Record<string, IntentDefinition>, allowOverride = false) {
+export function registerIntents(
+  intents: Record<string, IntentDefinition>,
+  allowOverride = false,
+) {
   // Guard entry mutation by flushing non-builtin allocations before merging new cycles
   //resetIntents(); // <- delete this line -  BUG: this flushes previous custom intents
   for (const [k, v] of Object.entries(intents || {})) {
@@ -127,7 +267,9 @@ export function resetIntents() {
   Object.assign(INTENT_CATALOG, BUILTIN_INTENT_CATALOG);
 }
 
-export function getIntentCatalog() { return { ...INTENT_CATALOG }; }
+export function getIntentCatalog() {
+  return { ...INTENT_CATALOG };
+}
 
 interface ResolvedIntent {
   properties: Record<string, string | number>;
@@ -137,21 +279,27 @@ interface ResolvedIntent {
   description: string;
 }
 
-function resolveIntent(intentName: string, theme?: 'light' | 'dark' | 'high-contrast'): ResolvedIntent | null {
+function resolveIntent(
+  intentName: string,
+  theme?: "light" | "dark" | "high-contrast",
+): ResolvedIntent | null {
   const intent = INTENT_CATALOG[intentName];
   if (!intent) return null;
-  
+
   const properties: Record<string, string | number> = {};
   const states: Record<string, Record<string, string | number>> = {};
   const responsive: Record<string, Record<string, string | number>> = {};
-  
+
   if (intent.semantics) {
     for (const sem of intent.semantics) {
-      const resolved = resolveSemantic(sem.category as any, sem.intent, { mode: theme || 'light' });
+      const resolved = resolveSemantic(sem.category as any, sem.intent, {
+        mode: theme || "light",
+      });
       if (resolved) {
         for (const [prop, value] of Object.entries(resolved.properties)) {
           if (resolved.pseudoClass) {
-            if (!states[resolved.pseudoClass]) states[resolved.pseudoClass] = {};
+            if (!states[resolved.pseudoClass])
+              states[resolved.pseudoClass] = {};
             states[resolved.pseudoClass][prop] = value;
           } else {
             properties[prop] = value;
@@ -162,45 +310,67 @@ function resolveIntent(intentName: string, theme?: 'light' | 'dark' | 'high-cont
   }
   if (intent.properties) Object.assign(properties, intent.properties);
   if (intent.states) {
-    for (const [s, p] of Object.entries(intent.states)) { 
-      if (!states[s]) states[s] = {}; 
-      Object.assign(states[s], p); 
+    for (const [s, p] of Object.entries(intent.states)) {
+      if (!states[s]) states[s] = {};
+      Object.assign(states[s], p);
     }
   }
   if (intent.responsive) Object.assign(responsive, intent.responsive);
-  return { properties, states, responsive, a11y: intent.a11y || [], description: intent.description };
+  return {
+    properties,
+    states,
+    responsive,
+    a11y: intent.a11y || [],
+    description: intent.description,
+  };
 }
 
 export const intentResolver: LoweringPass = {
-  name: 'intent-resolver',
+  name: "intent-resolver",
   generate(ir: StyleIR, context: LoweringContext): LoweringResult {
     let generatedNodes = 0;
-    
+
     for (const rule of ir.rules) {
-      const intentName: string = (
-        rule.passMeta?.analysis?.semantic?.intents?.[0] ??
+      const intentName: string = (rule.passMeta?.analysis?.semantic
+        ?.intents?.[0] ??
         (rule.meta as any)._intent ??
-        ''
-      ) as string;
+        "") as string;
       if (!intentName) continue;
-      
+
       const resolved = resolveIntent(intentName);
       if (!resolved) continue;
-      
+
       for (const [prop, value] of Object.entries(resolved.properties)) {
-        rule.declarations.push(createDeclaration(prop, value, rule.source, { intent: intentName, category: 'lowered-intent' }));
+        rule.declarations.push(
+          createDeclaration(prop, value, rule.source, {
+            intent: intentName,
+            category: "lowered-intent",
+          }),
+        );
         const decl = rule.declarations[rule.declarations.length - 1];
-        recordHistory(decl, 'intent-resolver', 'lowered-intent', undefined, `intent("${intentName}") → ${prop}: ${value}`);
+        recordHistory(
+          decl,
+          "intent-resolver",
+          "lowered-intent",
+          undefined,
+          `intent("${intentName}") → ${prop}: ${value}`,
+        );
         generatedNodes++;
       }
-      
+
       for (const [stateName, stateProps] of Object.entries(resolved.states)) {
-        const pseudoClass = rule.pseudoClasses.find(pc => pc.name === stateName);
+        const pseudoClass = rule.pseudoClasses.find(
+          (pc) => pc.name === stateName,
+        );
         if (pseudoClass) {
           for (const [p, v] of Object.entries(stateProps)) {
-            const existingDecl = pseudoClass.declarations.find(d => d.property === p);
+            const existingDecl = pseudoClass.declarations.find(
+              (d) => d.property === p,
+            );
             if (!existingDecl) {
-              pseudoClass.declarations.push(createDeclaration(p, v, rule.source));
+              pseudoClass.declarations.push(
+                createDeclaration(p, v, rule.source),
+              );
             }
           }
         } else {
@@ -210,8 +380,8 @@ export const intentResolver: LoweringPass = {
             parentId: rule.id,
             source: rule.source,
             history: [],
-            declarations: Object.entries(stateProps).map(([p, v]) => 
-              createDeclaration(p, v, rule.source)
+            declarations: Object.entries(stateProps).map(([p, v]) =>
+              createDeclaration(p, v, rule.source),
             ),
           });
         }
@@ -219,7 +389,12 @@ export const intentResolver: LoweringPass = {
       if (Object.keys(resolved.responsive).length > 0) {
         if (!rule.passMeta) rule.passMeta = {};
         if (!rule.passMeta.analysis) rule.passMeta.analysis = {};
-        if (!rule.passMeta.analysis.semantic) rule.passMeta.analysis.semantic = { tokens: [], intents: [], constraints: [] };
+        if (!rule.passMeta.analysis.semantic)
+          rule.passMeta.analysis.semantic = {
+            tokens: [],
+            intents: [],
+            constraints: [],
+          };
         (rule.passMeta.analysis as any).responsiveIntents = resolved.responsive;
         // Backward compat
         (rule.meta as any)._responsiveIntents = resolved.responsive;

@@ -1,7 +1,6 @@
 // src/shared/types/shorthand-types.ts
 type Dynamic<T> = T extends Function ? T : T | (() => T);
 
-
 // ============================================================================
 // Shorthand Method Types — ChainCSS
 // ============================================================================
@@ -27,7 +26,7 @@ export interface GridOptions {
   /** grid-area */
   area?: Dynamic<string>;
   /** grid-auto-flow */
-  autoFlow?: 'row' | 'column' | 'dense' | 'row dense' | 'column dense';
+  autoFlow?: "row" | "column" | "dense" | "row dense" | "column dense";
   /** grid-auto-columns */
   autoColumns?: Dynamic<string | number>;
   /** grid-auto-rows */
@@ -51,9 +50,9 @@ export interface GridOptions {
 
 export interface FlexOptions {
   /** flex-direction */
-  direction?: 'row' | 'row-reverse' | 'column' | 'column-reverse';
+  direction?: "row" | "row-reverse" | "column" | "column-reverse";
   /** flex-wrap */
-  wrap?: 'nowrap' | 'wrap' | 'wrap-reverse';
+  wrap?: "nowrap" | "wrap" | "wrap-reverse";
   /** flex-grow */
   grow?: Dynamic<number>;
   /** flex-shrink */
@@ -61,20 +60,33 @@ export interface FlexOptions {
   /** flex-basis */
   basis?: Dynamic<string | number>;
   /** align-items */
-  align?: 'stretch' | 'center' | 'flex-start' | 'flex-end' | 'baseline';
+  align?: "stretch" | "center" | "flex-start" | "flex-end" | "baseline";
   /** justify-content */
-  justify?: 'flex-start' | 'flex-end' | 'center' | 'space-between' | 'space-around' | 'space-evenly';
+  justify?:
+    | "flex-start"
+    | "flex-end"
+    | "center"
+    | "space-between"
+    | "space-around"
+    | "space-evenly";
   /** align-content */
-  alignContent?: 'stretch' | 'center' | 'flex-start' | 'flex-end' | 'space-between' | 'space-around';
+  alignContent?:
+    | "stretch"
+    | "center"
+    | "flex-start"
+    | "flex-end"
+    | "space-between"
+    | "space-around";
   /** align-self */
-  alignSelf?: 'auto' | 'stretch' | 'center' | 'flex-start' | 'flex-end' | 'baseline';
+  alignSelf?:
+    "auto" | "stretch" | "center" | "flex-start" | "flex-end" | "baseline";
   /** gap (flex gap) */
   gap?: Dynamic<string | number>;
   // Short aliases
   /** Alias for direction */
-  d?: 'row' | 'row-reverse' | 'column' | 'column-reverse';
+  d?: "row" | "row-reverse" | "column" | "column-reverse";
   /** Alias for wrap */
-  w?: 'nowrap' | 'wrap' | 'wrap-reverse';
+  w?: "nowrap" | "wrap" | "wrap-reverse";
   /** Alias for grow */
   gr?: Dynamic<number>;
   /** Alias for shrink */
@@ -82,9 +94,15 @@ export interface FlexOptions {
   /** Alias for basis */
   b?: Dynamic<string | number>;
   /** Alias for align */
-  ai?: 'stretch' | 'center' | 'flex-start' | 'flex-end' | 'baseline';
+  ai?: "stretch" | "center" | "flex-start" | "flex-end" | "baseline";
   /** Alias for justify */
-  jc?: 'flex-start' | 'flex-end' | 'center' | 'space-between' | 'space-around' | 'space-evenly';
+  jc?:
+    | "flex-start"
+    | "flex-end"
+    | "center"
+    | "space-between"
+    | "space-around"
+    | "space-evenly";
   /** flex shorthand (grow shrink basis) */
   f?: Dynamic<string>;
 }
@@ -103,13 +121,13 @@ export interface AnimationOptions {
   /** animation-delay */
   delay?: Dynamic<string>;
   /** animation-iteration-count */
-  iterationCount?: number | 'infinite';
+  iterationCount?: number | "infinite";
   /** animation-direction */
-  direction?: 'normal' | 'reverse' | 'alternate' | 'alternate-reverse';
+  direction?: "normal" | "reverse" | "alternate" | "alternate-reverse";
   /** animation-fill-mode */
-  fillMode?: 'none' | 'forwards' | 'backwards' | 'both';
+  fillMode?: "none" | "forwards" | "backwards" | "both";
   /** animation-play-state */
-  playState?: 'running' | 'paused';
+  playState?: "running" | "paused";
   // Short aliases
   /** Alias for name */
   n?: Dynamic<string>;
@@ -120,7 +138,7 @@ export interface AnimationOptions {
   /** Alias for delay */
   dl?: Dynamic<string>;
   /** Alias for iterationCount */
-  i?: number | 'infinite';
+  i?: number | "infinite";
   /** animation shorthand */
   a?: Dynamic<string>;
 }
@@ -175,15 +193,15 @@ export interface TypographyOptions {
   /** font-weight */
   fontWeight?: Dynamic<string | number>;
   /** font-style */
-  fontStyle?: 'normal' | 'italic' | 'oblique';
+  fontStyle?: "normal" | "italic" | "oblique";
   /** line-height */
   lineHeight?: Dynamic<string | number>;
   /** letter-spacing */
   letterSpacing?: Dynamic<string | number>;
   /** text-align */
-  textAlign?: 'left' | 'right' | 'center' | 'justify' | 'start' | 'end';
+  textAlign?: "left" | "right" | "center" | "justify" | "start" | "end";
   /** text-transform */
-  textTransform?: 'none' | 'uppercase' | 'lowercase' | 'capitalize';
+  textTransform?: "none" | "uppercase" | "lowercase" | "capitalize";
   /** text-decoration */
   textDecoration?: Dynamic<string>;
   /** text-indent */
@@ -191,10 +209,11 @@ export interface TypographyOptions {
   /** word-spacing */
   wordSpacing?: Dynamic<string | number>;
   /** white-space */
-  whiteSpace?: 'normal' | 'nowrap' | 'pre' | 'pre-wrap' | 'pre-line' | 'break-spaces';
+  whiteSpace?:
+    "normal" | "nowrap" | "pre" | "pre-wrap" | "pre-line" | "break-spaces";
   /** overflow-wrap / word-break handling */
-  wordBreak?: 'normal' | 'break-all' | 'keep-all' | 'break-word';
-   /** text color */
+  wordBreak?: "normal" | "break-all" | "keep-all" | "break-word";
+  /** text color */
   color?: Dynamic<string>;
   /** opacity */
   opacity?: Dynamic<string | number>;
@@ -208,9 +227,9 @@ export interface TypographyOptions {
   /** Alias for lineHeight */
   lh?: Dynamic<string | number>;
   /** Alias for textAlign */
-  ta?: 'left' | 'right' | 'center' | 'justify' | 'start' | 'end';
+  ta?: "left" | "right" | "center" | "justify" | "start" | "end";
   /** Alias for textTransform */
-  tt?: 'none' | 'uppercase' | 'lowercase' | 'capitalize';
+  tt?: "none" | "uppercase" | "lowercase" | "capitalize";
   /** font shorthand */
   f?: Dynamic<string>;
 }
@@ -295,7 +314,7 @@ export interface BoxOptions {
 
 export interface PositionOptions {
   /** position */
-  type?: 'static' | 'relative' | 'absolute' | 'fixed' | 'sticky';
+  type?: "static" | "relative" | "absolute" | "fixed" | "sticky";
   /** top */
   top?: Dynamic<string | number>;
   /** right */
@@ -310,7 +329,7 @@ export interface PositionOptions {
   zIndex?: Dynamic<number>;
   // Short aliases
   /** Alias for type */
-  t?: 'static' | 'relative' | 'absolute' | 'fixed' | 'sticky';
+  t?: "static" | "relative" | "absolute" | "fixed" | "sticky";
   /** Alias for zIndex */
   z?: Dynamic<number>;
 }
@@ -434,7 +453,7 @@ export interface ShadowOptions {
 
 export interface ContainerOptions {
   /** container-type */
-  type?: 'normal' | 'size' | 'inline-size';
+  type?: "normal" | "size" | "inline-size";
   /** container-name */
   name?: Dynamic<string>;
 }
@@ -443,7 +462,7 @@ export interface AspectOptions {
   /** aspect-ratio */
   ratio?: Dynamic<string | number>;
   /** object-fit */
-  objectFit?: 'fill' | 'contain' | 'cover' | 'none' | 'scale-down';
+  objectFit?: "fill" | "contain" | "cover" | "none" | "scale-down";
   /** object-position */
   objectPosition?: Dynamic<string>;
 }
@@ -456,7 +475,16 @@ export interface OutlineOptions {
   /** outline-width */
   width?: Dynamic<string | number>;
   /** outline-style */
-  style?: 'none' | 'solid' | 'dashed' | 'dotted' | 'double' | 'groove' | 'ridge' | 'inset' | 'outset';
+  style?:
+    | "none"
+    | "solid"
+    | "dashed"
+    | "dotted"
+    | "double"
+    | "groove"
+    | "ridge"
+    | "inset"
+    | "outset";
   /** outline-color */
   color?: Dynamic<string>;
   /** outline-offset */
@@ -465,7 +493,16 @@ export interface OutlineOptions {
   /** Alias for width */
   w?: Dynamic<string | number>;
   /** Alias for style */
-  s?: 'none' | 'solid' | 'dashed' | 'dotted' | 'double' | 'groove' | 'ridge' | 'inset' | 'outset';
+  s?:
+    | "none"
+    | "solid"
+    | "dashed"
+    | "dotted"
+    | "double"
+    | "groove"
+    | "ridge"
+    | "inset"
+    | "outset";
   /** Alias for color */
   c?: Dynamic<string>;
   /** outline shorthand */
@@ -478,13 +515,20 @@ export interface OutlineOptions {
 
 export interface ScrollOptions {
   /** scroll-behavior */
-  behavior?: 'auto' | 'smooth';
+  behavior?: "auto" | "smooth";
   /** scroll-snap-type */
-  snapType?: 'none' | 'x mandatory' | 'y mandatory' | 'x proximity' | 'y proximity' | 'both mandatory' | 'both proximity';
+  snapType?:
+    | "none"
+    | "x mandatory"
+    | "y mandatory"
+    | "x proximity"
+    | "y proximity"
+    | "both mandatory"
+    | "both proximity";
   /** scroll-snap-align */
-  snapAlign?: 'none' | 'start' | 'center' | 'end';
+  snapAlign?: "none" | "start" | "center" | "end";
   /** scroll-snap-stop */
-  snapStop?: 'normal' | 'always';
+  snapStop?: "normal" | "always";
   /** scroll-margin */
   margin?: Dynamic<string | number>;
   /** scroll-margin-top */
@@ -506,16 +550,16 @@ export interface ScrollOptions {
   /** scroll-padding-left */
   paddingLeft?: Dynamic<string | number>;
   /** scrollbar-width (Firefox) */
-  scrollbarWidth?: 'auto' | 'thin' | 'none';
+  scrollbarWidth?: "auto" | "thin" | "none";
   /** scrollbar-color (Firefox) */
   scrollbarColor?: Dynamic<string>;
   /** overflow-x */
-  overflowX?: 'visible' | 'hidden' | 'scroll' | 'auto';
+  overflowX?: "visible" | "hidden" | "scroll" | "auto";
   /** overflow-y */
-  overflowY?: 'visible' | 'hidden' | 'scroll' | 'auto';
+  overflowY?: "visible" | "hidden" | "scroll" | "auto";
   // Short aliases
   /** Alias for behavior */
-  b?: 'auto' | 'smooth';
+  b?: "auto" | "smooth";
 }
 
 // ----------------------------------------------------------------------------
@@ -524,9 +568,20 @@ export interface ScrollOptions {
 
 export interface ListOptions {
   /** list-style-type */
-  style?: 'none' | 'disc' | 'circle' | 'square' | 'decimal' | 'decimal-leading-zero' | 'lower-roman' | 'upper-roman' | 'lower-alpha' | 'upper-alpha' | string;
+  style?:
+    | "none"
+    | "disc"
+    | "circle"
+    | "square"
+    | "decimal"
+    | "decimal-leading-zero"
+    | "lower-roman"
+    | "upper-roman"
+    | "lower-alpha"
+    | "upper-alpha"
+    | string;
   /** list-style-position */
-  position?: 'inside' | 'outside';
+  position?: "inside" | "outside";
   /** list-style-image */
   image?: Dynamic<string>;
   /** list-style shorthand */

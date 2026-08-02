@@ -2,27 +2,27 @@
 // FILE: src/adapters/cli/utils/logger.ts
 // ============================================================================
 
-import chalk from 'chalk';
+import chalk from "chalk";
 
-export type LogLevel = 'info' | 'success' | 'warn' | 'error' | 'debug';
+export type LogLevel = "info" | "success" | "warn" | "error" | "debug";
 
 // Determine if environment natively supports full Unicode symbols (e.g., non-Windows, or Windows with modern terminal/UTF-8 active)
-const supportsUnicode = 
-  process.platform !== 'win32' || 
+const supportsUnicode =
+  process.platform !== "win32" ||
   process.env.WT_SESSION || // Windows Terminal
-  process.env.TERM === 'xterm-256color' || 
-  process.env.LANG?.includes('UTF-8');
+  process.env.TERM === "xterm-256color" ||
+  process.env.LANG?.includes("UTF-8");
 
 const SYMBOLS = {
-  info: supportsUnicode ? 'ℹ' : 'i',
-  success: supportsUnicode ? '✓' : '√',
-  warn: supportsUnicode ? '⚠' : '!',
-  error: supportsUnicode ? '✗' : 'x',
-  step: supportsUnicode ? '→' : '>',
-  debug: supportsUnicode ? '🔍' : 'D',
-  barFilled: supportsUnicode ? '█' : '=',
-  barEmpty: supportsUnicode ? '░' : '-',
-  divider: '─'
+  info: supportsUnicode ? "ℹ" : "i",
+  success: supportsUnicode ? "✓" : "√",
+  warn: supportsUnicode ? "⚠" : "!",
+  error: supportsUnicode ? "✗" : "x",
+  step: supportsUnicode ? "→" : ">",
+  debug: supportsUnicode ? "🔍" : "D",
+  barFilled: supportsUnicode ? "█" : "=",
+  barEmpty: supportsUnicode ? "░" : "-",
+  divider: "─",
 };
 
 export class Logger {
@@ -47,7 +47,7 @@ export class Logger {
    */
   private clearProgressLine(): void {
     if (this.isProgressBarActive && process.stdout.isTTY) {
-      process.stdout.write('\r\x1b[K');
+      process.stdout.write("\r\x1b[K");
       this.isProgressBarActive = false;
     }
   }
@@ -87,7 +87,10 @@ export class Logger {
   header(message: string): void {
     this.clearProgressLine();
     // Strip ANSI styling from message parameter to calculate underline length correctly
-    const cleanLength = message.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '').length;
+    const cleanLength = message.replace(
+      /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g,
+      "",
+    ).length;
     console.log();
     console.log(chalk.bold.cyan(message));
     console.log(chalk.gray(SYMBOLS.divider.repeat(cleanLength)));
@@ -103,8 +106,8 @@ export class Logger {
     if (keys.length === 0) return;
 
     this.clearProgressLine();
-    const maxKeyLength = Math.max(...keys.map(k => k.length));
-    
+    const maxKeyLength = Math.max(...keys.map((k) => k.length));
+
     for (const [key, value] of Object.entries(data)) {
       const paddedKey = key.padEnd(maxKeyLength);
       console.log(`  ${chalk.cyan(paddedKey)}: ${value}`);
@@ -117,7 +120,10 @@ export class Logger {
    */
   progress(current: number, total: number, message: string): void {
     const safeTotal = total <= 0 ? 1 : total;
-    const percent = Math.min(100, Math.max(0, Math.round((current / safeTotal) * 100)));
+    const percent = Math.min(
+      100,
+      Math.max(0, Math.round((current / safeTotal) * 100)),
+    );
 
     if (!process.stdout.isTTY) {
       if (current === total) {
@@ -127,15 +133,20 @@ export class Logger {
     }
 
     const barLength = 30;
-    const filledLength = Math.min(barLength, Math.max(0, Math.round((barLength * current) / safeTotal)));
-    const bar = SYMBOLS.barFilled.repeat(filledLength) + SYMBOLS.barEmpty.repeat(barLength - filledLength);
-    
+    const filledLength = Math.min(
+      barLength,
+      Math.max(0, Math.round((barLength * current) / safeTotal)),
+    );
+    const bar =
+      SYMBOLS.barFilled.repeat(filledLength) +
+      SYMBOLS.barEmpty.repeat(barLength - filledLength);
+
     // '\r\x1b[K' returns carriage to start AND erases ghost characters
     process.stdout.write(`\r\x1b[K  ${bar} ${percent}% ${message}`);
     this.isProgressBarActive = true;
-    
+
     if (current >= total) {
-      process.stdout.write('\n');
+      process.stdout.write("\n");
       this.isProgressBarActive = false;
     }
   }
@@ -149,9 +160,12 @@ const loggersMap = new Map<string, Logger>();
  * @param scope Unique namespace identifier. Defaults to 'global'.
  * @param verbose Enable debug logs on this instance.
  */
-export function createLogger(verbose: boolean = false, scope: string = 'global'): Logger {
+export function createLogger(
+  verbose: boolean = false,
+  scope: string = "global",
+): Logger {
   let instance = loggersMap.get(scope);
-  
+
   if (!instance) {
     instance = new Logger(verbose);
     loggersMap.set(scope, instance);
@@ -159,6 +173,6 @@ export function createLogger(verbose: boolean = false, scope: string = 'global')
     // Sync requested verbosity update
     instance.setVerbose(verbose);
   }
-  
+
   return instance;
 }

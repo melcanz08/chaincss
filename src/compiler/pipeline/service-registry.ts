@@ -1,12 +1,12 @@
 // src/compiler/pipeline/service-registry.ts
 // Central service registry — connects cache, graph, tokens, diagnostics, emitter, watcher, logger
 
-import type { CompilerContext } from './compiler-context.js';
-import type { StyleIR } from './ir/types.js';
-import type { IRGraph } from './ir/types.js';
-import type { SymbolTable } from './symbol-table.js';
-import type { DiagnosticsReport } from './diagnostics-reporter.js';
-import type { PassResult } from './pipeline-types.js';
+import type { CompilerContext } from "./compiler-context.js";
+import type { StyleIR } from "./ir/types.js";
+import type { IRGraph } from "./ir/types.js";
+import type { SymbolTable } from "./symbol-table.js";
+import type { DiagnosticsReport } from "./diagnostics-reporter.js";
+import type { PassResult } from "./pipeline-types.js";
 
 // ============================================================================
 // Service Interfaces
@@ -23,25 +23,44 @@ export interface CacheService {
 
 export interface GraphService {
   getAffectedRules(ruleId: string): string[];
-  getStats(): ReturnType<typeof import('./ir/graph-builder.js').getGraphStats>;
+  getStats(): ReturnType<typeof import("./ir/graph-builder.js").getGraphStats>;
   dependsOn(ruleId: string, dependencyId: string): boolean;
-  exportGraph(): import('./ir/graph-builder.js').GraphExport; 
+  exportGraph(): import("./ir/graph-builder.js").GraphExport;
   readonly graph: IRGraph;
 }
 
 export interface SymbolService {
-  resolve(name: string): ReturnType<typeof import('./symbol-table.js').resolveSymbol>;
-  getDependents(name: string): ReturnType<typeof import('./symbol-table.js').findDependents>;
-  getUnused(): ReturnType<typeof import('./symbol-table.js').findUnusedSymbols>;
+  resolve(
+    name: string,
+  ): ReturnType<typeof import("./symbol-table.js").resolveSymbol>;
+  getDependents(
+    name: string,
+  ): ReturnType<typeof import("./symbol-table.js").findDependents>;
+  getUnused(): ReturnType<typeof import("./symbol-table.js").findUnusedSymbols>;
   readonly table: SymbolTable;
 }
 
 export interface DiagnosticsService {
-  add(severity: string, message: string, pass: string, opts?: { suggestion?: string; nodeId?: string }): void;
-  summary(): { errors: number; warnings: number; info: number; hints: number; total: number };
+  add(
+    severity: string,
+    message: string,
+    pass: string,
+    opts?: { suggestion?: string; nodeId?: string },
+  ): void;
+  summary(): {
+    errors: number;
+    warnings: number;
+    info: number;
+    hints: number;
+    total: number;
+  };
   generateReport(totalDuration: number): DiagnosticsReport;
   readonly items: ReadonlyArray<{
-    severity: string; message: string; pass: string; suggestion?: string; nodeId?: string;
+    severity: string;
+    message: string;
+    pass: string;
+    suggestion?: string;
+    nodeId?: string;
   }>;
 }
 
@@ -51,7 +70,10 @@ export interface EmitterService {
 }
 
 export interface WatcherService {
-  on(event: 'change' | 'add' | 'unlink', callback: (filePath: string) => void): void;
+  on(
+    event: "change" | "add" | "unlink",
+    callback: (filePath: string) => void,
+  ): void;
   off(event: string, callback: Function): void;
   watch(patterns: string[]): void;
   unwatch(): void;
@@ -62,7 +84,7 @@ export interface LoggerService {
   warn(msg: string, ...args: unknown[]): void;
   error(msg: string, ...args: unknown[]): void;
   debug(msg: string, ...args: unknown[]): void;
-  setLevel(level: 'debug' | 'info' | 'warn' | 'error'): void;
+  setLevel(level: "debug" | "info" | "warn" | "error"): void;
 }
 
 // ============================================================================
@@ -110,49 +132,60 @@ export function createServiceRegistry(ctx: CompilerContext): ServiceRegistry {
   const registry = new ServiceRegistry();
 
   // Cache service
-  registry.register<CacheService>('cache', {
+  registry.register<CacheService>("cache", {
     get: <T>(key: string) => ctx.getCached<T>(key),
     set: (key, value) => ctx.setCached(key, value),
     has: (key) => ctx.getCached(key) !== undefined,
     delete: (key) => ctx.setCached(key, undefined),
     clear: () => ctx.clearCache(),
-    get size() { return ctx.cache.size; },
+    get size() {
+      return ctx.cache.size;
+    },
   });
 
   // Graph service
-  registry.register<GraphService>('graph', {
+  registry.register<GraphService>("graph", {
     getAffectedRules: (ruleId) => ctx.getAffectedRules(ruleId),
     getStats: () => ctx.getGraphStats(),
     dependsOn: (ruleId, depId) => ctx.dependsOn(ruleId, depId),
-    exportGraph: () => ctx.exportGraph(),  // ADD
-    get graph() { return ctx.graph; },
+    exportGraph: () => ctx.exportGraph(), // ADD
+    get graph() {
+      return ctx.graph;
+    },
   });
 
   // Symbol service
-  registry.register<SymbolService>('symbols', {
+  registry.register<SymbolService>("symbols", {
     resolve: (name) => ctx.resolveSymbol(name),
     getDependents: (name) => ctx.getSymbolDependents(name),
     getUnused: () => ctx.getUnusedSymbols(),
-    get table() { return ctx.symbols; },
+    get table() {
+      return ctx.symbols;
+    },
   });
 
   // Diagnostics service
-  registry.register<DiagnosticsService>('diagnostics', {
-    add: (severity, message, pass, opts) => ctx.addDiagnostic(severity as any, message, pass, opts),
+  registry.register<DiagnosticsService>("diagnostics", {
+    add: (severity, message, pass, opts) =>
+      ctx.addDiagnostic(severity as any, message, pass, opts),
     summary: () => ctx.getDiagnosticsSummary(),
     generateReport: (totalDuration) => ctx.generateReport(totalDuration),
-    get items() { return ctx.diagnostics; },
+    get items() {
+      return ctx.diagnostics;
+    },
   });
 
   // Logger service (simple console-based)
-  registry.register<LoggerService>('logger', {
+  registry.register<LoggerService>("logger", {
     info: (msg, ...args) => console.log(`[ChainCSS] ${msg}`, ...args),
     warn: (msg, ...args) => console.warn(`[ChainCSS] ${msg}`, ...args),
     error: (msg, ...args) => console.error(`[ChainCSS] ${msg}`, ...args),
     debug: (msg, ...args) => {
       if (ctx.config.verbose) console.debug(`[ChainCSS] ${msg}`, ...args);
     },
-    setLevel: (_level) => { /* no-op for now */ },
+    setLevel: (_level) => {
+      /* no-op for now */
+    },
   });
 
   return registry;

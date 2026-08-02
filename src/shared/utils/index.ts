@@ -2,7 +2,7 @@
 
 // Re-exports from browser-safe and node-safe utilities
 
-export * from './browser.js';
+export * from "./browser.js";
 
 // Node.js utilities (re-export from node.ts)
 export {
@@ -20,7 +20,7 @@ export {
   getAllFiles,
   getMemoryUsage,
   formatBytes,
-} from './node.js';
+} from "./node.js";
 
 // Also re-export common-utils (browser-safe utilities)
 export {
@@ -43,4 +43,4 @@ export {
   enableDebug,
   isDebugEnabled,
   debugLog,
-} from './common-utils.js';
+} from "./common-utils.js";

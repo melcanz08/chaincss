@@ -1,6 +1,6 @@
 // src/core/entities/rule-builder.ts
 
-import type { StyleObject, AtRule, NestedRule } from '@shared/types/index.js';
+import type { StyleObject, AtRule, NestedRule } from "@shared/types/index.js";
 
 export interface RuleBuilderOptions {
   debug?: boolean;
@@ -9,11 +9,19 @@ export interface RuleBuilderOptions {
 }
 
 function isPlainObject(v: any): boolean {
-  return v !== null && typeof v === 'object' && !Array.isArray(v) && Object.getPrototypeOf(v) === Object.prototype;
+  return (
+    v !== null &&
+    typeof v === "object" &&
+    !Array.isArray(v) &&
+    Object.getPrototypeOf(v) === Object.prototype
+  );
 }
 
 // Fast shallow merge for CSS objects — no Reflect, no defineProperty
-function shallowMerge(target: Record<string, any>, source: Record<string, any>): void {
+function shallowMerge(
+  target: Record<string, any>,
+  source: Record<string, any>,
+): void {
   for (const k in source) {
     if (!Object.prototype.hasOwnProperty.call(source, k)) continue;
     const sv = source[k];
@@ -29,7 +37,7 @@ function shallowMerge(target: Record<string, any>, source: Record<string, any>):
 function isStyleObjectEmpty(style: StyleObject | undefined): boolean {
   if (!style) return true;
   const anyStyle = style as any;
-  if (typeof anyStyle.isEmpty === 'function') return anyStyle.isEmpty();
+  if (typeof anyStyle.isEmpty === "function") return anyStyle.isEmpty();
   // getRaw may return { } even when style has atRules — check both
   if (anyStyle.getRaw) {
     const raw = anyStyle.getRaw();
@@ -54,16 +62,19 @@ export class RuleBuilder {
   buildChild(
     fn: (childProxy: any) => void,
     createChildProxy: (opts?: RuleBuilderOptions) => any,
-    opts: RuleBuilderOptions | boolean = {}
+    opts: RuleBuilderOptions | boolean = {},
   ): StyleObject {
-    const normalized: RuleBuilderOptions = typeof opts === 'boolean' ? { debug: opts } : opts;
+    const normalized: RuleBuilderOptions =
+      typeof opts === "boolean" ? { debug: opts } : opts;
     const childProxy = createChildProxy({
       debug: normalized.debug ?? false,
       classPrefix: normalized.classPrefix,
       tokens: normalized.tokens,
     });
     fn(childProxy);
-    return (childProxy as any).build ? (childProxy as any).build() : childProxy.$el();
+    return (childProxy as any).build
+      ? (childProxy as any).build()
+      : childProxy.$el();
   }
 
   addMedia(query: string, childResult: StyleObject): void {
@@ -72,7 +83,7 @@ export class RuleBuilder {
     if (existing && existing.styles) {
       shallowMerge(existing.styles as any, childResult as any);
     } else {
-      const rule: AtRule = { type: 'media', query, styles: childResult as any };
+      const rule: AtRule = { type: "media", query, styles: childResult as any };
       this.atRules.push(rule);
       this.mediaMap.set(query, rule);
     }
@@ -84,7 +95,11 @@ export class RuleBuilder {
     if (existing && existing.styles) {
       shallowMerge(existing.styles as any, childResult as any);
     } else {
-      const rule: AtRule = { type: 'supports', condition, styles: childResult as any };
+      const rule: AtRule = {
+        type: "supports",
+        condition,
+        styles: childResult as any,
+      };
       this.atRules.push(rule);
       this.supportsMap.set(condition, rule);
     }
@@ -96,7 +111,11 @@ export class RuleBuilder {
     if (existing && existing.styles) {
       shallowMerge(existing.styles as any, childResult as any);
     } else {
-      const rule: AtRule = { type: 'container', condition, styles: childResult as any };
+      const rule: AtRule = {
+        type: "container",
+        condition,
+        styles: childResult as any,
+      };
       this.atRules.push(rule);
       this.containerMap.set(condition, rule);
     }
@@ -108,7 +127,7 @@ export class RuleBuilder {
     if (existing && existing.styles) {
       shallowMerge(existing.styles as any, childResult as any);
     } else {
-      const rule: AtRule = { type: 'layer', name, styles: childResult as any };
+      const rule: AtRule = { type: "layer", name, styles: childResult as any };
       this.atRules.push(rule);
       this.layerMap.set(name, rule);
     }
@@ -117,7 +136,7 @@ export class RuleBuilder {
   // FIX: Do NOT merge nested selectors — react compound test expects 2 entries for '& .child' + '& .child:hover'
   // This also matches original pre-merge behavior that gave you 608 passing
   addNested(selector: string, childResult: StyleObject): void {
-    this.nestedRules.push({ selector, styles: childResult })
+    this.nestedRules.push({ selector, styles: childResult });
   }
 
   addKeyframes(name: string, steps: Record<string, any>): void {
@@ -126,20 +145,26 @@ export class RuleBuilder {
       existing.steps = existing.steps || {};
       shallowMerge(existing.steps as any, steps);
     } else {
-      const rule: AtRule = { type: 'keyframes', name, steps } as any;
+      const rule: AtRule = { type: "keyframes", name, steps } as any;
       this.atRules.push(rule);
       this.keyframesMap.set(name, rule);
     }
   }
 
   addFontFace(properties: Record<string, string>): void {
-    this.atRules.push({ type: 'font-face', properties } as any);
+    this.atRules.push({ type: "font-face", properties } as any);
   }
 
   // FIX: No deep clone — shallow copy is enough and 10x faster. Deep clone was causing 12.41s collect
-  getAtRules(): AtRule[] { return [...this.atRules]; }
-  getNestedRules(): NestedRule[] { return [...this.nestedRules]; }
-  hasRules(): boolean { return this.atRules.length > 0 || this.nestedRules.length > 0; }
+  getAtRules(): AtRule[] {
+    return [...this.atRules];
+  }
+  getNestedRules(): NestedRule[] {
+    return [...this.nestedRules];
+  }
+  hasRules(): boolean {
+    return this.atRules.length > 0 || this.nestedRules.length > 0;
+  }
 
   reset(): void {
     this.atRules = [];
@@ -151,6 +176,3 @@ export class RuleBuilder {
     this.keyframesMap.clear();
   }
 }
-
-
-

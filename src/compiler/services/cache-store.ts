@@ -13,18 +13,18 @@ export class CacheStore<T> {
   private lookup = new Map<string, CacheNode<T>>();
   private head: CacheNode<T> | null = null;
   private tail: CacheNode<T> | null = null;
-  
+
   private readonly maxSize: number;
   private readonly ttl: number; // 0 means disabled
-  
+
   private hits = 0;
   private misses = 0;
   private evictions = 0;
   private invalidations = 0;
 
   constructor(maxSize: number = 500, ttlMs: number = 0) {
-    this.maxSize = Math.max(0, maxSize)
-    this.ttl = Math.max(0, ttlMs)
+    this.maxSize = Math.max(0, maxSize);
+    this.ttl = Math.max(0, ttlMs);
   }
 
   get(key: string, currentHash?: string): T | undefined {
@@ -53,7 +53,7 @@ export class CacheStore<T> {
     }
 
     this.hits++;
-    
+
     // True O(1) Touch: detach pointers and move to head (no garbage generated)
     this.detach(node);
     this.setHead(node);
@@ -62,7 +62,7 @@ export class CacheStore<T> {
   }
 
   set(key: string, result: T, hash: string): void {
-    if (this.maxSize === 0) return
+    if (this.maxSize === 0) return;
     let node = this.lookup.get(key);
 
     if (node) {
@@ -82,7 +82,7 @@ export class CacheStore<T> {
       hash,
       createdAt: Date.now(),
       prev: null,
-      next: null
+      next: null,
     };
 
     if (this.lookup.size >= this.maxSize && this.tail) {
@@ -98,12 +98,14 @@ export class CacheStore<T> {
   }
 
   has(key: string): boolean {
-    const n = this.lookup.get(key)
-    if (!n) return false
-    if (this.ttl>0 && Date.now()-n.createdAt>this.ttl) {
-      this.delete(key); this.invalidations++; return false
+    const n = this.lookup.get(key);
+    if (!n) return false;
+    if (this.ttl > 0 && Date.now() - n.createdAt > this.ttl) {
+      this.delete(key);
+      this.invalidations++;
+      return false;
     }
-    return true
+    return true;
   }
 
   delete(key: string): boolean {
@@ -144,9 +146,10 @@ export class CacheStore<T> {
   }
 
   private removeNode(node: CacheNode<T>) {
-    this.detach(node)
-    ;(node as any).result = null // clear ref
-    node.prev=null; node.next=null
+    this.detach(node);
+    (node as any).result = null; // clear ref
+    node.prev = null;
+    node.next = null;
   }
 
   getStats() {

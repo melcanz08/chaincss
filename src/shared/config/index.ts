@@ -29,9 +29,9 @@ export interface ChainCSSConfig {
     /** Minimum usages before extracting to utility class */
     threshold?: number;
     /** Class naming strategy */
-    naming?: 'hash' | 'readable';
+    naming?: "hash" | "readable";
     /** Extraction mode */
-    mode?: 'standard' | 'hybrid' | 'atomic-only';
+    mode?: "standard" | "hybrid" | "atomic-only";
     /** Minify atomic class names */
     minify?: boolean;
     /** Log extraction statistics */
@@ -59,13 +59,13 @@ export interface ChainCSSConfig {
     /** Enable prefixing */
     enabled?: boolean;
     /** Prefixing mode */
-    mode?: 'auto' | 'full' | 'lightweight';
+    mode?: "auto" | "full" | "lightweight";
     /** Browserslist query (full mode only) */
     browsers?: string[];
     /** Add flexbox prefixes (full mode only) */
-    flexbox?: boolean | 'no-2009';
+    flexbox?: boolean | "no-2009";
     /** Add grid prefixes (full mode only) */
-    grid?: 'autoplace' | 'no-autoplace' | false;
+    grid?: "autoplace" | "no-autoplace" | false;
     /** Remove unnecessary prefixes */
     remove?: boolean;
     /** Add missing prefixes */
@@ -118,7 +118,12 @@ export interface ChainCSSConfig {
   intents?: Record<string, IntentDefinition>;
 
   /** Preset configurations to merge before user config */
-  presets?: Array<ChainCSSUserConfig | ((base: ChainCSSUserConfig) => ChainCSSUserConfig | Promise<ChainCSSUserConfig>)>;
+  presets?: Array<
+    | ChainCSSUserConfig
+    | ((
+        base: ChainCSSUserConfig,
+      ) => ChainCSSUserConfig | Promise<ChainCSSUserConfig>)
+  >;
 
   /** Allow overriding built-in macros/shorthands */
   allowOverride?: boolean;
@@ -127,7 +132,7 @@ export interface ChainCSSConfig {
   plugins?: ChainCSSPlugin[];
 
   /** Framework detection override */
-  framework?: 'react' | 'vue' | 'svelte' | 'solid' | 'auto';
+  framework?: "react" | "vue" | "svelte" | "solid" | "auto";
 
   /** Enable verbose logging */
   verbose?: boolean;
@@ -172,39 +177,44 @@ export type DerivedMethod =
   | `desaturate ${number}`;
 
 export interface DerivedRelationship {
-  type: 'derived';
+  type: "derived";
   source: string;
   target: string;
   method: DerivedMethod;
 }
 
 export interface ContrastRelationship {
-  type: 'contrast';
+  type: "contrast";
   foreground: string;
   background: string | string[];
   target?: number;
-  autoFix?: 'auto' | 'darken' | 'lighten';
+  autoFix?: "auto" | "darken" | "lighten";
   priority?: number;
 }
 
 export interface HarmonyRelationship {
-  type: 'harmony';
+  type: "harmony";
   source: string;
   targets: string[];
-  rule: 'complementary' | 'analogous' | 'triadic' | 'same-lightness';
+  rule: "complementary" | "analogous" | "triadic" | "same-lightness";
 }
 
-export type TokenRelationship = DerivedRelationship | ContrastRelationship | HarmonyRelationship;
+export type TokenRelationship =
+  DerivedRelationship | ContrastRelationship | HarmonyRelationship;
 
 // ============================================================================
 // Extension Types
 // ============================================================================
 
-export type MacroHandler = (value: any, catcher: Record<string, any>, useTokens: boolean) => void;
+export type MacroHandler = (
+  value: any,
+  catcher: Record<string, any>,
+  useTokens: boolean,
+) => void;
 
 export interface IntentDefinition {
   name?: string;
-  category?: 'layout' | 'component' | 'semantic' | 'interaction' | string;
+  category?: "layout" | "component" | "semantic" | "interaction" | string;
   description?: string;
   semantics?: Array<{ category: string; intent: string }>;
   properties?: Record<string, string | number>;

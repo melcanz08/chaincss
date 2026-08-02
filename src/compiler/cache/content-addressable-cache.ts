@@ -2,12 +2,12 @@
 // FILE: chaincss/src/compiler/cache/content-addressable-cache.ts
 // ============================================================================
 
-import crypto from 'crypto';
-import fs from 'fs';
-import path from 'path';
+import crypto from "crypto";
+import fs from "fs";
+import path from "path";
 
-const COMPILER_VERSION = '3.1.0';
-const CACHE_VERSION = '3.1.0';
+const COMPILER_VERSION = "3.1.0";
+const CACHE_VERSION = "3.1.0";
 const MAX_MEMORY_ENTRIES = 100;
 
 export interface PersistentCacheEntry {
@@ -45,7 +45,7 @@ export class PersistentCache {
 
   constructor(options: PersistentCacheOptions = {}) {
     this.options = {
-      cacheDir: options.cacheDir || './.chaincss/persistent-cache',
+      cacheDir: options.cacheDir || "./.chaincss/persistent-cache",
       maxAgeDays: options.maxAgeDays || 30,
       maxSizeMB: options.maxSizeMB || 500,
       enabled: options.enabled !== false,
@@ -53,7 +53,7 @@ export class PersistentCache {
     };
 
     this.cacheDir = path.resolve(process.cwd(), this.options.cacheDir);
-    this.metadataPath = path.join(this.cacheDir, 'metadata.json');
+    this.metadataPath = path.join(this.cacheDir, "metadata.json");
     this.metadata = { entries: {}, totalSize: 0, lastCleanup: 0 };
 
     if (this.options.enabled) {
@@ -67,7 +67,7 @@ export class PersistentCache {
   // ==========================================================================
 
   private hash(content: string | Buffer): string {
-    return crypto.createHash('sha256').update(content).digest('hex');
+    return crypto.createHash("sha256").update(content).digest("hex");
   }
 
   /**
@@ -124,7 +124,7 @@ export class PersistentCache {
 
   async getByFile(filePath: string): Promise<any | null> {
     if (!this.options.enabled || !fs.existsSync(filePath)) return null;
-    return this.getByContent(fs.readFileSync(filePath, 'utf8'));
+    return this.getByContent(fs.readFileSync(filePath, "utf8"));
   }
 
   async getByHash(hash: string): Promise<any | null> {
@@ -134,7 +134,8 @@ export class PersistentCache {
     const entry = this.touchMemoryCache(hash);
     if (entry) {
       if (!this.isExpired(entry)) {
-        if (this.options.verbose) console.log(`[persistent-cache] Memory HIT: ${hash.slice(0, 8)}`);
+        if (this.options.verbose)
+          console.log(`[persistent-cache] Memory HIT: ${hash.slice(0, 8)}`);
         return entry.result;
       }
       this.memoryCache.delete(hash);
@@ -144,12 +145,13 @@ export class PersistentCache {
     const cachePath = path.join(this.cacheDir, `${hash}.json`);
     try {
       await fs.promises.access(cachePath);
-      const raw = await fs.promises.readFile(cachePath, 'utf8');
+      const raw = await fs.promises.readFile(cachePath, "utf8");
       const diskEntry: PersistentCacheEntry = JSON.parse(raw);
 
       if (!this.isExpired(diskEntry)) {
         this.writeMemoryLRU(hash, diskEntry);
-        if (this.options.verbose) console.log(`[persistent-cache] Disk HIT: ${hash.slice(0, 8)}`);
+        if (this.options.verbose)
+          console.log(`[persistent-cache] Disk HIT: ${hash.slice(0, 8)}`);
         return diskEntry.result;
       }
 
@@ -162,17 +164,33 @@ export class PersistentCache {
     return null;
   }
 
-  async setByContent(source: string, result: any, dependencies: string[] = []): Promise<string> {
-    if (!this.options.enabled) return '';
+  async setByContent(
+    source: string,
+    result: any,
+    dependencies: string[] = [],
+  ): Promise<string> {
+    if (!this.options.enabled) return "";
     return this.setByHash(this.hash(source), result, dependencies);
   }
 
-  async setByFile(filePath: string, result: any, dependencies: string[] = []): Promise<string> {
-    if (!this.options.enabled || !fs.existsSync(filePath)) return '';
-    return this.setByContent(fs.readFileSync(filePath, 'utf8'), result, dependencies);
+  async setByFile(
+    filePath: string,
+    result: any,
+    dependencies: string[] = [],
+  ): Promise<string> {
+    if (!this.options.enabled || !fs.existsSync(filePath)) return "";
+    return this.setByContent(
+      fs.readFileSync(filePath, "utf8"),
+      result,
+      dependencies,
+    );
   }
 
-  async setByHash(hash: string, result: any, dependencies: string[] = []): Promise<string> {
+  async setByHash(
+    hash: string,
+    result: any,
+    dependencies: string[] = [],
+  ): Promise<string> {
     if (!this.options.enabled) return hash;
     this.ensureDir();
     // Deduplication: skip if already on disk
@@ -206,10 +224,10 @@ export class PersistentCache {
 
     // Write to disk atomically using unique temp paths to prevent worker collisions
     const stringified = JSON.stringify(entry, null, 2);
-    const entrySize = Buffer.byteLength(stringified, 'utf8');
+    const entrySize = Buffer.byteLength(stringified, "utf8");
 
     const tmpPath = `${cachePath}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`;
-    await fs.promises.writeFile(tmpPath, stringified, 'utf8');
+    await fs.promises.writeFile(tmpPath, stringified, "utf8");
     await fs.promises.rename(tmpPath, cachePath);
 
     await this.commitMetadataEntry(hash, entry.timestamp, entrySize);
@@ -234,7 +252,9 @@ export class PersistentCache {
     const cachePath = path.join(this.cacheDir, `${hash}.json`);
     if (fs.existsSync(cachePath)) {
       try {
-        const diskEntry: PersistentCacheEntry = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+        const diskEntry: PersistentCacheEntry = JSON.parse(
+          fs.readFileSync(cachePath, "utf8"),
+        );
         if (!this.isExpired(diskEntry)) {
           this.writeMemoryLRU(hash, diskEntry);
           return diskEntry.result;
@@ -248,7 +268,12 @@ export class PersistentCache {
     return null;
   }
 
-  setByHashSync(hash: string, result: any, source: any, dependencies: string[] = []): void {
+  setByHashSync(
+    hash: string,
+    result: any,
+    source: any,
+    dependencies: string[] = [],
+  ): void {
     if (!this.options.enabled) return;
 
     const cachePath = path.join(this.cacheDir, `${hash}.json`);
@@ -273,11 +298,11 @@ export class PersistentCache {
     this.writeMemoryLRU(hash, entry);
 
     const stringified = JSON.stringify(entry, null, 2);
-    const entrySize = Buffer.byteLength(stringified, 'utf8');
+    const entrySize = Buffer.byteLength(stringified, "utf8");
 
     // Atomic write with unique temp path
     const tmpPath = `${cachePath}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`;
-    fs.writeFileSync(tmpPath, stringified, 'utf8');
+    fs.writeFileSync(tmpPath, stringified, "utf8");
     fs.renameSync(tmpPath, cachePath);
 
     this.commitMetadataEntrySync(hash, entry.timestamp, entrySize);
@@ -305,7 +330,7 @@ export class PersistentCache {
     try {
       const files = fs.readdirSync(this.cacheDir);
       for (const file of files) {
-        if (file.endsWith('.json')) {
+        if (file.endsWith(".json")) {
           fs.unlinkSync(path.join(this.cacheDir, file));
         }
       }
@@ -320,9 +345,16 @@ export class PersistentCache {
   async getStats() {
     const entries = Object.values(this.metadata.entries);
     if (entries.length === 0) {
-      return { entryCount: 0, totalSizeMB: 0, totalSizeBytes: 0, oldestEntry: 0, newestEntry: 0, hitRate: 0 };
+      return {
+        entryCount: 0,
+        totalSizeMB: 0,
+        totalSizeBytes: 0,
+        oldestEntry: 0,
+        newestEntry: 0,
+        hitRate: 0,
+      };
     }
-    const timestamps = entries.map(e => e.timestamp);
+    const timestamps = entries.map((e) => e.timestamp);
     return {
       entryCount: entries.length,
       totalSizeMB: this.metadata.totalSize / 1024 / 1024,
@@ -342,14 +374,20 @@ export class PersistentCache {
   // ==========================================================================
 
   private isExpired(entry: PersistentCacheEntry): boolean {
-    return (Date.now() - entry.timestamp) > (this.options.maxAgeDays * 24 * 60 * 60 * 1000);
+    return (
+      Date.now() - entry.timestamp >
+      this.options.maxAgeDays * 24 * 60 * 60 * 1000
+    );
   }
 
   private loadMetadata(): void {
     if (fs.existsSync(this.metadataPath)) {
       try {
-        const diskMeta = JSON.parse(fs.readFileSync(this.metadataPath, 'utf8'));
-        this.metadata.entries = { ...diskMeta.entries, ...this.metadata.entries };
+        const diskMeta = JSON.parse(fs.readFileSync(this.metadataPath, "utf8"));
+        this.metadata.entries = {
+          ...diskMeta.entries,
+          ...this.metadata.entries,
+        };
         this.recalculateTotalSize();
       } catch {
         this.metadata = { entries: {}, totalSize: 0, lastCleanup: 0 };
@@ -360,11 +398,15 @@ export class PersistentCache {
   private recalculateTotalSize(): void {
     this.metadata.totalSize = Object.values(this.metadata.entries).reduce(
       (sum, entry) => sum + entry.size,
-      0
+      0,
     );
   }
 
-  private async commitMetadataEntry(hash: string, timestamp: number, size: number): Promise<void> {
+  private async commitMetadataEntry(
+    hash: string,
+    timestamp: number,
+    size: number,
+  ): Promise<void> {
     if (this.metadata.entries[hash]) {
       this.metadata.totalSize -= this.metadata.entries[hash].size;
     }
@@ -376,7 +418,11 @@ export class PersistentCache {
     await this.saveMetadataAsync();
   }
 
-  private commitMetadataEntrySync(hash: string, timestamp: number, size: number): void {
+  private commitMetadataEntrySync(
+    hash: string,
+    timestamp: number,
+    size: number,
+  ): void {
     if (this.metadata.entries[hash]) {
       this.metadata.totalSize -= this.metadata.entries[hash].size;
     }
@@ -390,20 +436,25 @@ export class PersistentCache {
 
   private async saveMetadataAsync(): Promise<void> {
     this.ensureDir();
-    
+
     // Read-Merge-Write: protect against multi-worker state clobbering
     if (fs.existsSync(this.metadataPath)) {
       try {
-        const diskMeta = JSON.parse(await fs.promises.readFile(this.metadataPath, 'utf8'));
-        this.metadata.entries = { ...diskMeta.entries, ...this.metadata.entries };
+        const diskMeta = JSON.parse(
+          await fs.promises.readFile(this.metadataPath, "utf8"),
+        );
+        this.metadata.entries = {
+          ...diskMeta.entries,
+          ...this.metadata.entries,
+        };
         this.recalculateTotalSize();
       } catch {}
     }
 
     const data = JSON.stringify(this.metadata, null, 2);
     const tmpPath = `${this.metadataPath}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`;
-    
-    await fs.promises.writeFile(tmpPath, data, 'utf8');
+
+    await fs.promises.writeFile(tmpPath, data, "utf8");
     await fs.promises.rename(tmpPath, this.metadataPath);
   }
 
@@ -412,16 +463,19 @@ export class PersistentCache {
 
     if (fs.existsSync(this.metadataPath)) {
       try {
-        const diskMeta = JSON.parse(fs.readFileSync(this.metadataPath, 'utf8'));
-        this.metadata.entries = { ...diskMeta.entries, ...this.metadata.entries };
+        const diskMeta = JSON.parse(fs.readFileSync(this.metadataPath, "utf8"));
+        this.metadata.entries = {
+          ...diskMeta.entries,
+          ...this.metadata.entries,
+        };
         this.recalculateTotalSize();
       } catch {}
     }
 
     const data = JSON.stringify(this.metadata, null, 2);
     const tmpPath = `${this.metadataPath}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`;
-    
-    fs.writeFileSync(tmpPath, data, 'utf8');
+
+    fs.writeFileSync(tmpPath, data, "utf8");
     fs.renameSync(tmpPath, this.metadataPath);
   }
 
@@ -441,7 +495,9 @@ export class PersistentCache {
     const limitBytes = this.options.maxSizeMB * 1024 * 1024;
     if (this.metadata.totalSize <= limitBytes) return;
 
-    const sorted = Object.values(this.metadata.entries).sort((a, b) => a.timestamp - b.timestamp);
+    const sorted = Object.values(this.metadata.entries).sort(
+      (a, b) => a.timestamp - b.timestamp,
+    );
     let freed = 0;
 
     for (const entry of sorted) {
@@ -494,7 +550,7 @@ export class PersistentCache {
     const cachePath = path.join(this.cacheDir, `${key}.json`);
     try {
       await fs.promises.access(cachePath);
-      return JSON.parse(await fs.promises.readFile(cachePath, 'utf8'));
+      return JSON.parse(await fs.promises.readFile(cachePath, "utf8"));
     } catch {}
     return null;
   }

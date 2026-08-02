@@ -1,7 +1,7 @@
 // src/compiler/pipeline/context-pass-adapter.ts
 // Adapts existing passes to receive CompilerContext instead of raw IR
 
-import type { CompilerContext } from './compiler-context.js';
+import type { CompilerContext } from "./compiler-context.js";
 import type {
   NormalizationPass,
   ValidationPass,
@@ -18,8 +18,8 @@ import type {
   AnalysisContext,
   OptimizationContext,
   LoweringContext,
-} from './pipeline-types.js';
-import type { StyleIR } from './ir/types.js';
+} from "./pipeline-types.js";
+import type { StyleIR } from "./ir/types.js";
 
 // ============================================================================
 // Context-Aware Pass Interfaces (new)
@@ -42,7 +42,7 @@ export interface ContextAnalysisPass {
 
 export interface ContextOptimizationPass {
   name: string;
-  cost: 'cheap' | 'moderate' | 'expensive';
+  cost: "cheap" | "moderate" | "expensive";
   requiredFor: string[];
   optimize(ctx: CompilerContext): OptimizationResult;
 }
@@ -61,7 +61,7 @@ export interface ContextLoweringPass {
  */
 export function adaptNormalizationPass(
   pass: NormalizationPass,
-  normCtx: NormalizationContext
+  normCtx: NormalizationContext,
 ): ContextNormalizationPass {
   return {
     name: pass.name,
@@ -76,7 +76,7 @@ export function adaptNormalizationPass(
  */
 export function adaptValidationPass(
   pass: ValidationPass,
-  valCtx: ValidationContext
+  valCtx: ValidationContext,
 ): ContextValidationPass {
   return {
     name: pass.name,
@@ -101,7 +101,7 @@ export function adaptValidationPass(
  */
 export function adaptAnalysisPass(
   pass: AnalysisPass,
-  analysisCtx: AnalysisContext
+  analysisCtx: AnalysisContext,
 ): ContextAnalysisPass {
   return {
     name: pass.name,
@@ -116,7 +116,7 @@ export function adaptAnalysisPass(
  */
 export function adaptOptimizationPass(
   pass: OptimizationPass,
-  optCtx: OptimizationContext
+  optCtx: OptimizationContext,
 ): ContextOptimizationPass {
   return {
     name: pass.name,
@@ -140,7 +140,7 @@ export function adaptOptimizationPass(
  */
 export function adaptLoweringPass(
   pass: LoweringPass,
-  lowerCtx: LoweringContext
+  lowerCtx: LoweringContext,
 ): ContextLoweringPass {
   return {
     name: pass.name,
@@ -166,7 +166,7 @@ export function runContextPipeline(
     analysis?: ContextAnalysisPass[];
     optimization?: ContextOptimizationPass[];
     lowering?: ContextLoweringPass[];
-  }
+  },
 ): CompilerContext {
   const startTime = Date.now();
 
@@ -177,7 +177,7 @@ export function runContextPipeline(
       ctx.updateIR(result.ir);
       ctx.setPassResult(pass.name, result as any);
       ctx.timeline.push({
-        stage: 'normalization',
+        stage: "normalization",
         pass: pass.name,
         duration: 0,
         result: result as any,
@@ -191,7 +191,7 @@ export function runContextPipeline(
       const result = pass.validate(ctx);
       ctx.setPassResult(pass.name, result as any);
       ctx.timeline.push({
-        stage: 'validation',
+        stage: "validation",
         pass: pass.name,
         duration: 0,
         result: result as any,
@@ -206,7 +206,7 @@ export function runContextPipeline(
       ctx.updateIR(result.ir);
       ctx.setPassResult(pass.name, result as any);
       ctx.timeline.push({
-        stage: 'analysis',
+        stage: "analysis",
         pass: pass.name,
         duration: 0,
         result: result as any,
@@ -221,7 +221,7 @@ export function runContextPipeline(
       ctx.updateIR(result.ir);
       ctx.setPassResult(pass.name, result as any);
       ctx.timeline.push({
-        stage: 'optimization',
+        stage: "optimization",
         pass: pass.name,
         duration: 0,
         result: result as any,
@@ -236,7 +236,7 @@ export function runContextPipeline(
       ctx.updateIR(result.ir);
       ctx.setPassResult(pass.name, result as any);
       ctx.timeline.push({
-        stage: 'lowering',
+        stage: "lowering",
         pass: pass.name,
         duration: 0,
         result: result as any,

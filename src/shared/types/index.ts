@@ -6,13 +6,28 @@
  */
 
 import type {
-  GridOptions, FlexOptions, AnimationOptions, BackgroundOptions,
-  TypographyOptions, BoxOptions, PositionOptions, TransitionOptions,
-  TransformOptions, FilterOptions, ShadowOptions, ContainerOptions, OutlineOptions,
-  ScrollOptions, ListOptions
-} from './shorthand-types.js';
+  GridOptions,
+  FlexOptions,
+  AnimationOptions,
+  BackgroundOptions,
+  TypographyOptions,
+  BoxOptions,
+  PositionOptions,
+  TransitionOptions,
+  TransformOptions,
+  FilterOptions,
+  ShadowOptions,
+  ContainerOptions,
+  OutlineOptions,
+  ScrollOptions,
+  ListOptions,
+} from "./shorthand-types.js";
 
-export type MacroHandler = (value: any, catcher: Record<string, any>, useTokens: boolean) => void;
+export type MacroHandler = (
+  value: any,
+  catcher: Record<string, any>,
+  useTokens: boolean,
+) => void;
 export type MacroMap = Record<string, MacroHandler>;
 export type ShorthandMap = Record<string, string>;
 
@@ -24,7 +39,7 @@ export interface StyleDefinition {
   themes?: ThemeBlock[];
   _componentName?: string;
   _generateComponent?: boolean;
-  _framework?: 'react' | 'vue' | 'svelte' | 'solid' | 'auto';
+  _framework?: "react" | "vue" | "svelte" | "solid" | "auto";
   _propsDefinition?: Record<string, any>;
   /** Explicit bucket for custom CSS properties */
   customProperties?: Record<string, string | number>;
@@ -33,7 +48,7 @@ export interface StyleDefinition {
 }
 
 // ============================================================================
-// DX - api v2.12.1 
+// DX - api v2.12.1
 // ============================================================================
 
 export interface ChainShorthandMethods {
@@ -58,7 +73,7 @@ export interface ChainShorthandMethods {
 export interface ChainProxy extends ChainShorthandMethods {
   // Direct CSS property access (existing proxy behavior)
   [cssProperty: string]: any;
-  
+
   // Pseudo-classes
   hover(): ChainProxy;
   focus(): ChainProxy;
@@ -68,37 +83,45 @@ export interface ChainProxy extends ChainShorthandMethods {
   before(): ChainProxy;
   after(): ChainProxy;
   placeholder(): ChainProxy;
-  
+
   // Pseudo-class end
   end(): ChainProxy;
-  
+
   // At-rules
   media(query: string, fn: (c: ChainProxy) => void): ChainProxy;
   supports(condition: string, fn: (c: ChainProxy) => void): ChainProxy;
   container(query: string, fn: (c: ChainProxy) => void): ChainProxy;
   layer(name: string, fn: (c: ChainProxy) => void): ChainProxy;
-  
+
   // Nesting
   nest(selector: string, fn: (c: ChainProxy) => void): ChainProxy;
   children(fn: (c: ChainProxy) => void): ChainProxy;
   when(condition: boolean, fn: (c: ChainProxy) => void): ChainProxy;
-  
+
   // Keyframes & Fonts
   keyframes(name: string, steps: Record<string, any>): ChainProxy;
   fontFace(properties: Record<string, string>): ChainProxy;
-  
+
   // Utilities
   addClass(className: string): ChainProxy;
   enableDebug(): ChainProxy;
   explain(): any;
-  
+
   // Terminal methods
   $el(...selectors: string[]): StyleObject;
   build(selectors?: string[] | string): StyleObject;
 }
 
 export interface AtRule {
-  type: 'media' | 'keyframes' | 'font-face' | 'supports' | 'container' | 'layer' | 'counter-style' | 'property';
+  type:
+    | "media"
+    | "keyframes"
+    | "font-face"
+    | "supports"
+    | "container"
+    | "layer"
+    | "counter-style"
+    | "property";
   query?: string;
   condition?: string;
   name?: string;
@@ -135,7 +158,7 @@ export interface CompileResult {
   classMap: Record<string, string>;
   atomicClasses: AtomicClass[];
   stats: CompileStats;
-  dynamic?: Record<string, () => any>;  // Dynamic values preserved for runtime
+  dynamic?: Record<string, () => any>; // Dynamic values preserved for runtime
   dynamicValues?: Record<string, any>;
   hasDynamic?: boolean;
   warnings?: string[];
@@ -172,7 +195,7 @@ export interface TokenContext {
 
 export interface IntentDefinition {
   name?: string;
-  category?: 'layout' | 'component' | 'semantic' | 'interaction' | string;
+  category?: "layout" | "component" | "semantic" | "interaction" | string;
   description?: string;
   semantics?: Array<{ category: string; intent: string }>;
   properties?: Record<string, string | number>;
@@ -181,7 +204,8 @@ export interface IntentDefinition {
   a11y?: string[];
 }
 export type IntentMap = Record<string, IntentDefinition>;
-export type TokenRelationship = DerivedRelationship | ContrastRelationship | HarmonyRelationship;
+export type TokenRelationship =
+  DerivedRelationship | ContrastRelationship | HarmonyRelationship;
 
 export interface ChainCSSConfig {
   inputs?: string[];
@@ -196,26 +220,26 @@ export interface ChainCSSConfig {
     enabled?: boolean;
     prefix?: string;
     tokens?: Record<string, any>;
-    relationships?: TokenRelationship[]; 
+    relationships?: TokenRelationship[];
   };
   atomic?: {
     enabled?: boolean;
     threshold?: number;
-    naming?: 'hash' | 'readable';
-    mode?: 'standard' | 'hybrid' | 'atomic-only';
+    naming?: "hash" | "readable";
+    mode?: "standard" | "hybrid" | "atomic-only";
     minify?: boolean;
     verbose?: boolean;
   };
   prefixer?: {
     enabled?: boolean;
-    mode?: 'auto' | 'full' | 'lightweight';
+    mode?: "auto" | "full" | "lightweight";
     browsers?: string[];
     sourceMap?: boolean;
     sourceMapInline?: boolean;
     remove?: boolean;
     add?: boolean;
-    flexbox?: boolean | 'no-2009';
-    grid?: 'autoplace' | 'no-autoplace' | false;
+    flexbox?: boolean | "no-2009";
+    grid?: "autoplace" | "no-autoplace" | false;
     verbose?: boolean;
   };
   a11y?: {
@@ -236,7 +260,7 @@ export interface ChainCSSConfig {
     publicDir?: string;
   };
   breakpoints?: Record<string, string>;
-  framework?: 'react' | 'vue' | 'svelte' | 'solid' | 'auto';
+  framework?: "react" | "vue" | "svelte" | "solid" | "auto";
   namespace?: string;
   verbose?: boolean;
   silent?: boolean;
@@ -254,7 +278,12 @@ export interface ChainCSSConfig {
   allowOverride?: boolean;
   plugins?: ChainCSSPlugin[];
   [key: string]: any;
-  presets?: Array<ChainCSSUserConfig | ((base: ChainCSSUserConfig) => ChainCSSUserConfig | Promise<ChainCSSUserConfig>)>;
+  presets?: Array<
+    | ChainCSSUserConfig
+    | ((
+        base: ChainCSSUserConfig,
+      ) => ChainCSSUserConfig | Promise<ChainCSSUserConfig>)
+  >;
 }
 
 export type ChainCSSUserConfig = ChainCSSConfig;
@@ -316,7 +345,7 @@ export interface BreakpointConfig {
 }
 
 // ============================================================================
-// Token Entanglement Types 
+// Token Entanglement Types
 // ============================================================================
 export type DerivedMethod =
   | `mix-white ${number}%`
@@ -330,39 +359,57 @@ export type DerivedMethod =
   | `desaturate ${number}`;
 
 export interface DerivedRelationship {
-  type: 'derived';
+  type: "derived";
   source: string; // dot path: colors.primary.500
   target: string;
   method: DerivedMethod;
 }
 
 export interface ContrastRelationship {
-  type: 'contrast';
+  type: "contrast";
   foreground: string;
   background: string | string[];
   target?: number; // default 4.5
-  autoFix?: 'auto' | 'darken' | 'lighten';
+  autoFix?: "auto" | "darken" | "lighten";
   priority?: number;
 }
 
 export interface HarmonyRelationship {
-  type: 'harmony';
+  type: "harmony";
   source: string;
   targets: string[];
-  rule: 'complementary' | 'analogous' | 'triadic' | 'same-lightness';
+  rule: "complementary" | "analogous" | "triadic" | "same-lightness";
 }
 
 // ============================================================================
 // Math Engine Types (v3.0)
 // ============================================================================
 
-export type CSSUnit = 
-  | 'px' | 'rem' | 'em' | '%' 
-  | 'vw' | 'vh' | 'vmin' | 'vmax' 
-  | 'ch' | 'ex' | 'cm' | 'mm' | 'in' | 'pt' | 'pc'
-  | 'deg' | 'rad' | 'turn' | 'grad'
-  | 's' | 'ms'
-  | 'dpi' | 'dpcm' | 'dppx';
+export type CSSUnit =
+  | "px"
+  | "rem"
+  | "em"
+  | "%"
+  | "vw"
+  | "vh"
+  | "vmin"
+  | "vmax"
+  | "ch"
+  | "ex"
+  | "cm"
+  | "mm"
+  | "in"
+  | "pt"
+  | "pc"
+  | "deg"
+  | "rad"
+  | "turn"
+  | "grad"
+  | "s"
+  | "ms"
+  | "dpi"
+  | "dpcm"
+  | "dppx";
 
 export interface CSSMathValue {
   value: number;
@@ -370,18 +417,18 @@ export interface CSSMathValue {
 }
 
 export interface MathContext {
-  rootFontSize?: number;    // px, default 16
-  viewportWidth?: number;   // px, default 1920
-  viewportHeight?: number;  // px, default 1080
-  parentFontSize?: number;  // px, default 16
-  dpi?: number;             // default 96
-  elementWidth?: number;    // px
-  elementHeight?: number;   // px
+  rootFontSize?: number; // px, default 16
+  viewportWidth?: number; // px, default 1920
+  viewportHeight?: number; // px, default 1080
+  parentFontSize?: number; // px, default 16
+  dpi?: number; // default 96
+  elementWidth?: number; // px
+  elementHeight?: number; // px
 }
 
 export interface MathResult {
   value: number;
-  unit: CSSUnit | 'calc' | 'mixed';
+  unit: CSSUnit | "calc" | "mixed";
   expression: string;
   resolved: CSSMathValue | null;
   explanations: string[];
@@ -392,9 +439,9 @@ export interface MathResult {
 export interface FluidTypeConfig {
   minSize: number;
   maxSize: number;
-  minWidth?: number;   // default 320
-  maxWidth?: number;   // default 1280
-  unit?: 'px' | 'rem';
+  minWidth?: number; // default 320
+  maxWidth?: number; // default 1280
+  unit?: "px" | "rem";
   rootFontSize?: number; // for rem conversion
 }
 
@@ -429,7 +476,7 @@ export interface IntentContext {
   themeContext?: string;
 }
 
-export type HealMode = 'strict' | 'dev' | 'smart';
+export type HealMode = "strict" | "dev" | "smart";
 export interface HealResult {
   fixed: Record<string, any>;
   corrections: CorrectionResult[];
@@ -438,7 +485,7 @@ export interface HealResult {
 }
 
 // ============================================================================
-// Style Graph Types 
+// Style Graph Types
 // ============================================================================
 
 export interface StyleGraphNode {
@@ -459,7 +506,7 @@ export interface StyleGraphNode {
 export interface StyleGraphEdge {
   from: string;
   to: string;
-  type: 'extends' | 'overrides' | 'references';
+  type: "extends" | "overrides" | "references";
 }
 
 export interface StyleGraph {
@@ -473,8 +520,8 @@ export interface GraphCompileOptions {
   eliminateDead?: boolean;
   knownSelectors?: string[];
   mergeIdentical?: boolean;
-  mergeThreshold?: number;     // min properties to consider merging
-  sortOutput?: 'specificity' | 'source-order' | 'topological';
+  mergeThreshold?: number; // min properties to consider merging
+  sortOutput?: "specificity" | "source-order" | "topological";
   verbose?: boolean;
 }
 
@@ -488,10 +535,10 @@ export interface GraphCompileResult extends CompileResult {
 }
 
 // ============================================================================
-// Analyzer / IDE Types 
+// Analyzer / IDE Types
 // ============================================================================
 
-export type DiagnosticSeverity = 'error' | 'warning' | 'info' | 'hint';
+export type DiagnosticSeverity = "error" | "warning" | "info" | "hint";
 
 export interface StyleDiagnostic {
   property: string;
@@ -546,7 +593,8 @@ export type DeepPartial<T> = {
 
 export type RequiredKeys<T, K extends keyof T> = T & Required<Pick<T, K>>;
 
-export type OptionalKeys<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
+export type OptionalKeys<T, K extends keyof T> = Omit<T, K> &
+  Partial<Pick<T, K>>;
 
 // ============================================================================
 // Strict Style Types — Eliminates `any` from style-compiler.ts
@@ -593,17 +641,17 @@ export interface StyleObject {
   _transforms?: Array<{ type: string; [key: string]: unknown }>;
   _name?: string;
   _mixed?: boolean;
-  
+
   /** Top-level CSS properties and structural mappings */
-  [property: string]: 
-    | CSSPrimitiveValue 
-    | PseudoStyles 
-    | AtRule[] 
-    | NestedRule[] 
-    | string 
-    | string[] 
-    | Array<{ type: string; [key: string]: unknown }> 
-    | boolean 
+  [property: string]:
+    | CSSPrimitiveValue
+    | PseudoStyles
+    | AtRule[]
+    | NestedRule[]
+    | string
+    | string[]
+    | Array<{ type: string; [key: string]: unknown }>
+    | boolean
     | undefined;
 }
 
@@ -623,65 +671,92 @@ export interface ParsedStyleObject {
 // ============================================================================
 
 export function isStyleDefinition(value: any): value is StyleDefinition {
-  return value && typeof value === 'object' && Array.isArray(value.selectors);
+  return value && typeof value === "object" && Array.isArray(value.selectors);
 }
 
 export function isAtRule(value: any): value is AtRule {
-  return value && typeof value === 'object' && value.type && 
-    ['media', 'keyframes', 'font-face', 'supports', 'container', 'layer'].includes(value.type);
+  return (
+    value &&
+    typeof value === "object" &&
+    value.type &&
+    [
+      "media",
+      "keyframes",
+      "font-face",
+      "supports",
+      "container",
+      "layer",
+    ].includes(value.type)
+  );
 }
 
 export function isAtomicClass(value: any): value is AtomicClass {
-  return value && typeof value === 'object' && 
-    typeof value.className === 'string' &&
-    typeof value.prop === 'string';
+  return (
+    value &&
+    typeof value === "object" &&
+    typeof value.className === "string" &&
+    typeof value.prop === "string"
+  );
 }
 
 export function isCompileResult(value: any): value is CompileResult {
-  return value && typeof value === 'object' && 
-    typeof value.css === 'string' &&
-    typeof value.classMap === 'object' &&
-    typeof value.stats === 'object';
+  return (
+    value &&
+    typeof value === "object" &&
+    typeof value.css === "string" &&
+    typeof value.classMap === "object" &&
+    typeof value.stats === "object"
+  );
 }
 
 // ============================================================================
 // Type Guards for strict style types
 // ============================================================================
 
-export function isCSSPrimitiveValue(value: unknown): value is CSSPrimitiveValue {
-  return typeof value === 'string' || typeof value === 'number';
+export function isCSSPrimitiveValue(
+  value: unknown,
+): value is CSSPrimitiveValue {
+  return typeof value === "string" || typeof value === "number";
 }
 
-export function isDynamicValue(value: unknown): value is ((...args: any[]) => string) {
-  return typeof value === 'function';
+export function isDynamicValue(
+  value: unknown,
+): value is (...args: any[]) => string {
+  return typeof value === "function";
 }
 
 export function isPseudoStyles(value: unknown): value is PseudoStyles {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return false;
   }
-  return Object.values(value as Record<string, unknown>).every(v => isCSSPrimitiveValue(v));
+  return Object.values(value as Record<string, unknown>).every((v) =>
+    isCSSPrimitiveValue(v),
+  );
 }
 
 export function isNestedRuleV2(value: unknown): value is NestedRule {
-  if (typeof value !== 'object' || value === null) return false;
+  if (typeof value !== "object" || value === null) return false;
   const obj = value as Record<string, unknown>;
-  return typeof obj.selector === 'string' && 
-         typeof obj.styles === 'object' && 
-         obj.styles !== null;
+  return (
+    typeof obj.selector === "string" &&
+    typeof obj.styles === "object" &&
+    obj.styles !== null
+  );
 }
 
 export function isAtRuleV2(value: unknown): value is AtRule {
-  if (typeof value !== 'object' || value === null) return false;
+  if (typeof value !== "object" || value === null) return false;
   const obj = value as Record<string, unknown>;
-  return typeof obj.type === 'string';
+  return typeof obj.type === "string";
 }
 
 /**
  * Parse a raw object into a structured ParsedStyleObject.
  * Centralizes all the type-checking in one place.
  */
-export function parseStyleObject(obj: Record<string, unknown>): ParsedStyleObject {
+export function parseStyleObject(
+  obj: Record<string, unknown>,
+): ParsedStyleObject {
   const regularProps: CSSProperties = {};
   const pseudoClasses: PseudoClasses = {};
   const atRules: AtRule[] = [];
@@ -692,8 +767,8 @@ export function parseStyleObject(obj: Record<string, unknown>): ParsedStyleObjec
   // Sort keys to ensure deterministic processing order for CSS generation
   const sortedKeys = Object.keys(obj).sort((a, b) => {
     // Structural/Internal keys (_...) should always be processed first
-    const aInternal = a.startsWith('_');
-    const bInternal = b.startsWith('_');
+    const aInternal = a.startsWith("_");
+    const bInternal = b.startsWith("_");
     if (aInternal && !bInternal) return -1;
     if (!aInternal && bInternal) return 1;
     return a.localeCompare(b);
@@ -703,43 +778,50 @@ export function parseStyleObject(obj: Record<string, unknown>): ParsedStyleObjec
     const value = obj[key];
 
     // Handle Internal Architectural Keys
-    if (key === '_atRules' && Array.isArray(value)) {
-        atRules.push(...(value.filter(isAtRuleV2)));
-        continue;
+    if (key === "_atRules" && Array.isArray(value)) {
+      atRules.push(...value.filter(isAtRuleV2));
+      continue;
     }
-    if (key === '_nestedRules' && Array.isArray(value)) {
-        nestedRules.push(...(value.filter((r): r is NestedRule => isNestedRuleV2(r))));
-        continue;
+    if (key === "_nestedRules" && Array.isArray(value)) {
+      nestedRules.push(
+        ...value.filter((r): r is NestedRule => isNestedRuleV2(r)),
+      );
+      continue;
     }
 
     // Handle Public Keys
-    if (key === 'selectors') {
-        if (typeof value === 'string' || (Array.isArray(value) && value.every(v => typeof v === 'string'))) {
-            selectors = value as string | string[];
-        }
-        continue;
+    if (key === "selectors") {
+      if (
+        typeof value === "string" ||
+        (Array.isArray(value) && value.every((v) => typeof v === "string"))
+      ) {
+        selectors = value as string | string[];
+      }
+      continue;
     }
 
-    if (key.startsWith('&:')) {
-        if (isPseudoStyles(value)) {
-            pseudoClasses[key as `&:${string}`] = value;
-        }
-        continue;
+    if (key.startsWith("&:")) {
+      if (isPseudoStyles(value)) {
+        pseudoClasses[key as `&:${string}`] = value;
+      }
+      continue;
     }
 
-    if (key === 'nestedRules' && Array.isArray(value)) {
-        nestedRules.push(...(value.filter((r): r is NestedRule => isNestedRuleV2(r))));
-        continue;
+    if (key === "nestedRules" && Array.isArray(value)) {
+      nestedRules.push(
+        ...value.filter((r): r is NestedRule => isNestedRuleV2(r)),
+      );
+      continue;
     }
 
-    if (key === 'atRules' && Array.isArray(value)) {
-        atRules.push(...(value.filter(isAtRuleV2)));
-        continue;
+    if (key === "atRules" && Array.isArray(value)) {
+      atRules.push(...value.filter(isAtRuleV2));
+      continue;
     }
 
     // Standard properties
     if (isCSSPrimitiveValue(value) || isDynamicValue(value)) {
-        regularProps[key] = value as CSSPrimitiveValue;
+      regularProps[key] = value as CSSPrimitiveValue;
     }
   }
 
@@ -751,22 +833,30 @@ export function parseStyleObject(obj: Record<string, unknown>): ParsedStyleObjec
 // ============================================================================
 
 export function isMathResult(value: any): value is MathResult {
-  return value && typeof value === 'object' && 
-    typeof value.expression === 'string' &&
-    typeof value.toString === 'function';
+  return (
+    value &&
+    typeof value === "object" &&
+    typeof value.expression === "string" &&
+    typeof value.toString === "function"
+  );
 }
 
 export function isCorrectionResult(value: any): value is CorrectionResult {
-  return value && typeof value === 'object' &&
-    typeof value.original === 'string' &&
-    typeof value.corrected === 'string' &&
-    typeof value.confidence === 'number';
+  return (
+    value &&
+    typeof value === "object" &&
+    typeof value.original === "string" &&
+    typeof value.corrected === "string" &&
+    typeof value.confidence === "number"
+  );
 }
 
 export function isGraphCompileResult(value: any): value is GraphCompileResult {
-  return isCompileResult(value) && 
-    typeof (value as any).graph === 'object' &&
-    typeof (value as any).eliminatedDead === 'number';
+  return (
+    isCompileResult(value) &&
+    typeof (value as any).graph === "object" &&
+    typeof (value as any).eliminatedDead === "number"
+  );
 }
 // ============================================================================
 // Runtime Types (re-exported from runtime/types)
@@ -791,18 +881,29 @@ export type {
   DebugOptions,
   CSSValue,
   ResponsiveValue,
-  RuntimeStyleDefinition
-} from '@frameworks/core/types.js';
+  RuntimeStyleDefinition,
+} from "@frameworks/core/types.js";
 
 // ============================================================================
 // Plugin Types (re-exported from plugins/types)
 // ============================================================================
 
-export type { ChainCSSPluginOptions } from '@frameworks/build-tools/types.js';
+export type { ChainCSSPluginOptions } from "@frameworks/build-tools/types.js";
 
 export type {
-  GridOptions, FlexOptions, AnimationOptions, BackgroundOptions,
-  TypographyOptions, BoxOptions, PositionOptions, TransitionOptions,
-  TransformOptions, FilterOptions, ShadowOptions, ContainerOptions, OutlineOptions,
-  ScrollOptions, ListOptions
-} from './shorthand-types.js';
+  GridOptions,
+  FlexOptions,
+  AnimationOptions,
+  BackgroundOptions,
+  TypographyOptions,
+  BoxOptions,
+  PositionOptions,
+  TransitionOptions,
+  TransformOptions,
+  FilterOptions,
+  ShadowOptions,
+  ContainerOptions,
+  OutlineOptions,
+  ScrollOptions,
+  ListOptions,
+} from "./shorthand-types.js";

@@ -2,17 +2,17 @@
 // Event counters for tracking compiler operations
 
 export type CounterName =
-  | 'files_processed'
-  | 'rules_compiled'
-  | 'atomic_classes_generated'
-  | 'tokens_resolved'
-  | 'cache_hits'
-  | 'cache_misses'
-  | 'optimizations_applied'
-  | 'diagnostics_generated'
-  | 'pipeline_passes_run'
-  | 'errors_encountered'
-  | 'warnings_issued';
+  | "files_processed"
+  | "rules_compiled"
+  | "atomic_classes_generated"
+  | "tokens_resolved"
+  | "cache_hits"
+  | "cache_misses"
+  | "optimizations_applied"
+  | "diagnostics_generated"
+  | "pipeline_passes_run"
+  | "errors_encountered"
+  | "warnings_issued";
 
 export class Counter {
   private counts: Map<CounterName, number> = new Map();

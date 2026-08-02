@@ -1,13 +1,18 @@
 // src/compiler/pipeline/persistent-compiler.ts
 // Persistent compiler state — keeps IR alive between compiles
 
-import crypto from 'crypto';
-import type { StyleIR, IRRule, IRNodeId } from './ir/types.js';
-import { buildIRGraph, findAffectedNodes } from './ir/graph-builder.js';
-import { cloneIR } from './ir/immutable.js';
-import type { PassMetadata } from './ir/metadata.js';
-import { setIncrementalMeta, markDirty, hasPassRun, getPassMetadata } from './ir/metadata.js';
-import type { PersistentCache } from '../cache/content-addressable-cache.js';
+import crypto from "crypto";
+import type { StyleIR, IRRule, IRNodeId } from "./ir/types.js";
+import { buildIRGraph, findAffectedNodes } from "./ir/graph-builder.js";
+import { cloneIR } from "./ir/immutable.js";
+import type { PassMetadata } from "./ir/metadata.js";
+import {
+  setIncrementalMeta,
+  markDirty,
+  hasPassRun,
+  getPassMetadata,
+} from "./ir/metadata.js";
+import type { PersistentCache } from "../cache/content-addressable-cache.js";
 
 export interface CompilerState {
   /** The current IR (persisted between compiles) */
@@ -55,7 +60,7 @@ export function createCompilerState(ir: StyleIR): CompilerState {
       incrementalCompiles: 0,
       fullCompiles: 1,
       totalRulesEver: ir.rules.length,
-      currentLiveRules: ir.rules.filter(r => !r.isDead).length,
+      currentLiveRules: ir.rules.filter((r) => !r.isDead).length,
       averageRecompilePercent: 100,
     },
     lastCompiledAt: Date.now(),
@@ -66,7 +71,10 @@ export function createCompilerState(ir: StyleIR): CompilerState {
  * Mark specific rules as changed (from file watcher).
  * Finds all affected rules via the dependency graph.
  */
-export function markChangedRules(state: CompilerState, changedRuleIds: IRNodeId[]): void {
+export function markChangedRules(
+  state: CompilerState,
+  changedRuleIds: IRNodeId[],
+): void {
   // Rebuild graph from current IR
   const graph = state.ir.graph || buildIRGraph(state.ir);
 
@@ -99,7 +107,9 @@ export function getDirtyRules(state: CompilerState): IRRule[] {
     for (const rule of rules) {
       if (rule.isDead) continue;
       const meta = state.metadata.get(rule.id);
-      const inc = meta ? getPassMetadata<{ dirty: boolean }>(meta, 'incremental') : undefined;
+      const inc = meta
+        ? getPassMetadata<{ dirty: boolean }>(meta, "incremental")
+        : undefined;
       if (inc?.dirty) {
         dirty.push(rule);
       }
@@ -129,10 +139,10 @@ export function markClean(state: CompilerState, ruleId: IRNodeId): void {
 export function updateState(
   state: CompilerState,
   newIR: StyleIR,
-  changedFiles: string[]
+  changedFiles: string[],
 ): void {
   state.ir = cloneIR(newIR);
-  
+
   for (const file of changedFiles) {
     state.compiledFiles.add(file);
   }
@@ -144,17 +154,19 @@ export function updateState(
 
   // Update stats
   state.stats.totalCompiles++;
-  state.stats.currentLiveRules = newIR.rules.filter(r => !r.isDead).length;
-  
+  state.stats.currentLiveRules = newIR.rules.filter((r) => !r.isDead).length;
+
   const dirtyCount = getDirtyRules(state).length;
   const totalRules = newIR.rules.length;
-  const recompilePercent = totalRules > 0 ? Math.round((dirtyCount / totalRules) * 100) : 100;
-  
+  const recompilePercent =
+    totalRules > 0 ? Math.round((dirtyCount / totalRules) * 100) : 100;
+
   state.stats.averageRecompilePercent = Math.round(
-    (state.stats.averageRecompilePercent * (state.stats.totalCompiles - 1) + recompilePercent) / 
-    state.stats.totalCompiles
+    (state.stats.averageRecompilePercent * (state.stats.totalCompiles - 1) +
+      recompilePercent) /
+      state.stats.totalCompiles,
   );
-  
+
   state.stats.incrementalCompiles++;
   state.lastCompiledAt = Date.now();
 }
@@ -162,14 +174,17 @@ export function updateState(
 /**
  * Check if a full recompilation is needed (e.g., config change, new file type).
  */
-export function needsFullRecompile(state: CompilerState, reason: string): boolean {
+export function needsFullRecompile(
+  state: CompilerState,
+  reason: string,
+): boolean {
   // Full recompile if more than 50% of rules are dirty
   const dirtyCount = getDirtyRules(state).length;
   const totalRules = state.ir.rules.length;
-  
+
   if (totalRules === 0) return true;
   if (dirtyCount > totalRules * 0.5) return true;
-  
+
   return false;
 }
 
@@ -184,7 +199,8 @@ export function getStateStats(state: CompilerState) {
     ...state.stats,
     dirtyRules: dirtyCount,
     totalRules,
-    recompilePercent: totalRules > 0 ? Math.round((dirtyCount / totalRules) * 100) : 0,
+    recompilePercent:
+      totalRules > 0 ? Math.round((dirtyCount / totalRules) * 100) : 0,
     compiledFiles: state.compiledFiles.size,
     uptime: Date.now() - state.lastCompiledAt,
   };
@@ -197,10 +213,10 @@ export function getStateStats(state: CompilerState) {
 export async function saveCompilerStateToDisk(
   state: CompilerState,
   cache: PersistentCache,
-  projectHash: string
+  projectHash: string,
 ): Promise<void> {
   const key = `compiler-state-${projectHash}`;
-  const hash = crypto.createHash('sha256').update(key).digest('hex');
+  const hash = crypto.createHash("sha256").update(key).digest("hex");
   const payload = {
     ir: state.ir,
     metadata: Array.from(state.metadata.entries()),
@@ -213,10 +229,10 @@ export async function saveCompilerStateToDisk(
 
 export async function restoreCompilerStateFromDisk(
   cache: PersistentCache,
-  projectHash: string
+  projectHash: string,
 ): Promise<CompilerState | null> {
   const key = `compiler-state-${projectHash}`;
-  const hash = crypto.createHash('sha256').update(key).digest('hex');
+  const hash = crypto.createHash("sha256").update(key).digest("hex");
   const cached = await cache.getByHash(hash);
   if (!cached) return null;
 

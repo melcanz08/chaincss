@@ -1,9 +1,9 @@
 // src/frameworks/core/adapter/factory.ts
 // Adapter factory
 
-import { RuntimeAdapter } from './types.js';
-import { BrowserAdapter } from './browser-adapter.js';
-import { SSRAdapter } from './ssr-adapter.js';
+import { RuntimeAdapter } from "./types.js";
+import { BrowserAdapter } from "./browser-adapter.js";
+import { SSRAdapter } from "./ssr-adapter.js";
 
 let currentAdapter: RuntimeAdapter | null = null;
 
@@ -11,7 +11,7 @@ let currentAdapter: RuntimeAdapter | null = null;
  * Create the appropriate runtime adapter based on environment
  */
 export function createRuntimeAdapter(): RuntimeAdapter {
-  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+  if (typeof window !== "undefined" && typeof document !== "undefined") {
     return new BrowserAdapter();
   }
   return new SSRAdapter();

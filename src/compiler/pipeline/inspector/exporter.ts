@@ -2,7 +2,7 @@
 // FILE: src/compiler/pipeline/inspector/exporter.ts
 // ============================================================================
 
-import type { InspectorRule, InspectorExport } from './types.js';
+import type { InspectorRule, InspectorExport } from "./types.js";
 import { VERSION } from "@shared/constants/index.js";
 
 export interface ExporterOptions {
@@ -18,24 +18,24 @@ export interface ExporterOptions {
  */
 export function buildInspectorExport(
   rules: Map<string, InspectorRule>,
-  options: ExporterOptions = {}
+  options: ExporterOptions = {},
 ): InspectorExport | null {
   if (!rules || rules.size === 0) return null;
 
-  // 1. Enforce strict build determinism: 
+  // 1. Enforce strict build determinism:
   // Prioritize compilation meta context timestamps over volatile live environment run clocks.
-  const finalTimestamp = options.compiledAt 
-    ? String(options.compiledAt) 
+  const finalTimestamp = options.compiledAt
+    ? String(options.compiledAt)
     : new Date().toISOString();
 
   // 2. Resolve environment mode settings cleanly
-  const currentPipeline = options.pipelinePreset 
-    ? String(options.pipelinePreset).trim() 
-    : 'standard-build';
+  const currentPipeline = options.pipelinePreset
+    ? String(options.pipelinePreset).trim()
+    : "standard-build";
 
   return {
     schemaVersion: 1,
-    compilerVersion: VERSION || 'unknown-version',
+    compilerVersion: VERSION || "unknown-version",
     pipeline: currentPipeline,
     generatedAt: finalTimestamp,
     rules: Array.from(rules.values()),

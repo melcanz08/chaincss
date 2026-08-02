@@ -2,10 +2,13 @@
 
 // @ts-nocheck — optional peer dependency
 
-import { compileRuntime, removeRuntimeModule } from '../core/injector.js';
-import type { UseAtomicClassesOptions, UseAtomicClassesReturnVue } from '@shared/types/index.js';
+import { compileRuntime, removeRuntimeModule } from "../core/injector.js";
+import type {
+  UseAtomicClassesOptions,
+  UseAtomicClassesReturnVue,
+} from "@shared/types/index.js";
 
-const CHAIN_CSS_KEY = Symbol('chaincss');
+const CHAIN_CSS_KEY = Symbol("chaincss");
 
 // ============================================================================
 // Lazy Vue loader — no static import, no crash if Vue isn't installed
@@ -18,12 +21,14 @@ function getVue(): any {
   if (_vueLoaded) return _vue;
 
   try {
-    _vue = require('vue');
+    _vue = require("vue");
   } catch {
     _vue = {
       ref: (v: any) => ({ value: v, __v_isRef: true }),
       computed: (fn: any) => ({
-        get value() { return fn(); },
+        get value() {
+          return fn();
+        },
       }),
       watch: () => {},
       onMounted: () => {},
@@ -31,7 +36,9 @@ function getVue(): any {
       h: (_tag: any, _props: any, _children: any) => null,
       defineComponent: (config: any) => ({
         ...config,
-        setup() { return config.setup?.() || {}; },
+        setup() {
+          return config.setup?.() || {};
+        },
       }),
       provide: () => {},
       inject: () => ({}),
@@ -51,8 +58,8 @@ function generateId(): string {
 }
 
 function resolveStyles(styles: any): Record<string, any> | null {
-  if (typeof styles === 'function') return styles();
-  if (styles && typeof styles === 'object' && (styles as any).__v_isRef) {
+  if (typeof styles === "function") return styles();
+  if (styles && typeof styles === "object" && (styles as any).__v_isRef) {
     return styles.value;
   }
   return styles;
@@ -64,7 +71,7 @@ function resolveStyles(styles: any): Record<string, any> | null {
  */
 function resolveDynamicStyles(
   styleObj: any,
-  context: Record<string, any>
+  context: Record<string, any>,
 ): Record<string, string> {
   const styleVars: Record<string, string> = {};
 
@@ -72,24 +79,27 @@ function resolveDynamicStyles(
 
   const baseClass =
     styleObj.className ||
-    styleObj.selectors?.[0]?.replace(/^\./, '') ||
-    'chain-el';
+    styleObj.selectors?.[0]?.replace(/^\./, "") ||
+    "chain-el";
 
   for (const [prop, fn] of Object.entries(styleObj.dynamic)) {
-    if (typeof fn === 'function') {
+    if (typeof fn === "function") {
       try {
         const value = (fn as Function)(context);
         const cleanProp = prop
-          .replace(/([A-Z])/g, '-$1')
+          .replace(/([A-Z])/g, "-$1")
           .toLowerCase()
-          .replace(/^-/, '');
+          .replace(/^-/, "");
         const varName = `--${baseClass}-${cleanProp}`;
 
         if (value !== undefined && value !== null) {
           styleVars[varName] = String(value);
         }
       } catch (err) {
-        console.warn(`[ChainCSS Vue] Error evaluating dynamic style "${prop}":`, err);
+        console.warn(
+          `[ChainCSS Vue] Error evaluating dynamic style "${prop}":`,
+          err,
+        );
       }
     }
   }
@@ -99,7 +109,7 @@ function resolveDynamicStyles(
 
 export function useChainStyles(
   styles: Record<string, any>,
-  contextSource: Record<string, any> = {}
+  contextSource: Record<string, any> = {},
 ) {
   const { ref, computed, watch, onMounted, onUnmounted } = getVue();
 
@@ -113,9 +123,11 @@ export function useChainStyles(
     const ctx: Record<string, any> = {};
     for (const [key, val] of Object.entries(contextSource)) {
       // Unwrap Vue refs automatically
-      ctx[key] = val?.__v_isRef || (val?.value !== undefined && val?.constructor?.name === 'RefImpl')
-        ? val.value
-        : val;
+      ctx[key] =
+        val?.__v_isRef ||
+        (val?.value !== undefined && val?.constructor?.name === "RefImpl")
+          ? val.value
+          : val;
     }
     return ctx;
   };
@@ -127,7 +139,7 @@ export function useChainStyles(
       if (!styleObj) continue;
       names[key] =
         styleObj.className ||
-        styleObj.selectors?.[0]?.replace(/^\./, '') ||
+        styleObj.selectors?.[0]?.replace(/^\./, "") ||
         key;
     }
     classMap.value = names;
@@ -153,15 +165,22 @@ export function useChainStyles(
   // Watch context sources for changes
   const watchSources: any[] = [];
   for (const val of Object.values(contextSource)) {
-    if (val?.__v_isRef || (val?.value !== undefined && val?.constructor?.name === 'RefImpl')) {
+    if (
+      val?.__v_isRef ||
+      (val?.value !== undefined && val?.constructor?.name === "RefImpl")
+    ) {
       watchSources.push(val);
     }
   }
 
   if (watchSources.length > 0) {
-    watch(watchSources, () => {
-      evaluateDynamics();
-    }, { deep: false });
+    watch(
+      watchSources,
+      () => {
+        evaluateDynamics();
+      },
+      { deep: false },
+    );
   }
 
   onUnmounted(() => {
@@ -174,8 +193,12 @@ export function useChainStyles(
   return {
     classes: computed(() => classMap.value),
     styleVars: computed(() => styleVars.value),
-    cx: (name: string) => classMap.value[name] || '',
-    cn: (...names: string[]) => names.map((n: string) => classMap.value[n]).filter(Boolean).join(' '),
+    cx: (name: string) => classMap.value[name] || "",
+    cn: (...names: string[]) =>
+      names
+        .map((n: string) => classMap.value[n])
+        .filter(Boolean)
+        .join(" "),
   };
 }
 
@@ -185,7 +208,7 @@ export function useChainStyles(
 
 export function useAtomicClasses(
   styles: any,
-  options: UseAtomicClassesOptions = {}
+  options: UseAtomicClassesOptions = {},
 ): UseAtomicClassesReturnVue {
   const { ref, computed, watch, onMounted, onUnmounted } = getVue();
 
@@ -211,9 +234,13 @@ export function useAtomicClasses(
 
   const sourceRef = computed(() => resolveStyles(styles));
 
-  watch(sourceRef, (newStyles) => {
-    if (newStyles) compileStyles(newStyles);
-  }, { deep: true });
+  watch(
+    sourceRef,
+    (newStyles) => {
+      if (newStyles) compileStyles(newStyles);
+    },
+    { deep: true },
+  );
 
   onMounted(() => {
     isMounted = true;
@@ -230,8 +257,12 @@ export function useAtomicClasses(
 
   return {
     classes: computed(() => classMap.value),
-    cx: (name: string) => classMap.value[name] || '',
-    cn: (...names: string[]) => names.map((n: string) => classMap.value[n]).filter(Boolean).join(' '),
+    cx: (name: string) => classMap.value[name] || "",
+    cn: (...names: string[]) =>
+      names
+        .map((n: string) => classMap.value[n])
+        .filter(Boolean)
+        .join(" "),
     inject: (newStyles: Record<string, any>) => {
       const injectId = `chaincss-injected-${generateId()}`;
       injectedModules.push(injectId);
@@ -245,46 +276,57 @@ export function useAtomicClasses(
 // ============================================================================
 
 export const ChainCSSGlobal = getVue().defineComponent({
-  name: 'ChainCSSGlobal',
+  name: "ChainCSSGlobal",
   props: {
     styles: {
       type: [String, Object],
-      required: true
-    }
+      required: true,
+    },
   },
   setup(props, { slots }) {
     const { watch, onUnmounted } = getVue();
     let el: HTMLStyleElement | null = null;
 
     const updateGlobalSheet = () => {
-      if (typeof document === 'undefined') return;
+      if (typeof document === "undefined") return;
       if (!props.styles) return;
 
       if (!el) {
-        el = document.createElement('style');
-        el.setAttribute('data-chaincss', 'global');
+        el = document.createElement("style");
+        el.setAttribute("data-chaincss", "global");
         document.head.appendChild(el);
       }
 
-      if (typeof props.styles === 'string') {
+      if (typeof props.styles === "string") {
         el.textContent = props.styles;
-      } else if (typeof props.styles === 'object') {
+      } else if (typeof props.styles === "object") {
         el.textContent = Object.entries(props.styles)
           .map(([_, def]: any) => {
-            if (!def?.selectors) return '';
+            if (!def?.selectors) return "";
             const cssProps = Object.entries(def)
-              .filter(([k, v]) => !k.startsWith('_') && k !== 'selectors' && typeof v !== 'object')
-              .map(([k, v]) => `  ${k.replace(/([A-Z])/g, '-$1').toLowerCase()}: ${v};`)
-              .join('\n');
-            return `${def.selectors.join(', ')} {\n${cssProps}\n}`;
+              .filter(
+                ([k, v]) =>
+                  !k.startsWith("_") &&
+                  k !== "selectors" &&
+                  typeof v !== "object",
+              )
+              .map(
+                ([k, v]) =>
+                  `  ${k.replace(/([A-Z])/g, "-$1").toLowerCase()}: ${v};`,
+              )
+              .join("\n");
+            return `${def.selectors.join(", ")} {\n${cssProps}\n}`;
           })
           .filter(Boolean)
-          .join('\n');
+          .join("\n");
       }
     };
 
-    if (typeof props.styles === 'object') {
-      watch(() => props.styles, updateGlobalSheet, { deep: true, immediate: true });
+    if (typeof props.styles === "object") {
+      watch(() => props.styles, updateGlobalSheet, {
+        deep: true,
+        immediate: true,
+      });
     } else {
       watch(() => props.styles, updateGlobalSheet, { immediate: true });
     }
@@ -297,34 +339,47 @@ export const ChainCSSGlobal = getVue().defineComponent({
     });
 
     return () => slots.default?.() || null;
-  }
+  },
 });
 
 // ============================================================================
 // createStyledComponent
 // ============================================================================
 
-export function createStyledComponent(baseStyle: any, tag: string = 'div'): any {
+export function createStyledComponent(
+  baseStyle: any,
+  tag: string = "div",
+): any {
   const { h, defineComponent } = getVue();
-  const cn = baseStyle?.className || baseStyle?.selectors?.[0]?.replace(/^\./, '') || '';
+  const cn =
+    baseStyle?.className || baseStyle?.selectors?.[0]?.replace(/^\./, "") || "";
 
   return defineComponent({
     name: `ChainCSSStyled-${tag}`,
     inheritAttrs: false,
     setup(_, { attrs, slots }) {
       return () => {
-        const { class: attrClass, className: attrClassName, ...restAttrs } = attrs;
-        const finalClass = [cn, attrClass, attrClassName].filter(Boolean).join(' ');
+        const {
+          class: attrClass,
+          className: attrClassName,
+          ...restAttrs
+        } = attrs;
+        const finalClass = [cn, attrClass, attrClassName]
+          .filter(Boolean)
+          .join(" ");
         return h(tag, { ...restAttrs, class: finalClass }, slots);
       };
-    }
+    },
   });
 }
 
 export function createStyledComponents(components: any): any {
   const result: Record<string, any> = {};
   for (const [name, config] of Object.entries(components)) {
-    result[name] = createStyledComponent((config as any).styles, (config as any).element || 'div');
+    result[name] = createStyledComponent(
+      (config as any).styles,
+      (config as any).element || "div",
+    );
   }
   return result;
 }
@@ -333,11 +388,15 @@ export function createStyledComponents(components: any): any {
 // useComputedStyles (legacy — updated to use new useChainStyles)
 // ============================================================================
 
-export function useComputedStyles(stylesFactory: () => Record<string, any>): any {
+export function useComputedStyles(
+  stylesFactory: () => Record<string, any>,
+): any {
   const { computed } = getVue();
   const sourceStyles = computed(stylesFactory);
   const result = useChainStyles(sourceStyles.value || {});
-  const rootClass = computed(() => Object.values(result.classes.value).join(' '));
+  const rootClass = computed(() =>
+    Object.values(result.classes.value).join(" "),
+  );
   return { classes: result.classes, rootClass };
 }
 
@@ -362,15 +421,19 @@ export function injectStyleContext(): any {
 // ============================================================================
 
 export function enableVueDebug(): void {
-  if (typeof window !== 'undefined') (window as any).__CHAINCSS_VUE_DEBUG__ = true;
+  if (typeof window !== "undefined")
+    (window as any).__CHAINCSS_VUE_DEBUG__ = true;
 }
 
 export function disableVueDebug(): void {
-  if (typeof window !== 'undefined') (window as any).__CHAINCSS_VUE_DEBUG__ = false;
+  if (typeof window !== "undefined")
+    (window as any).__CHAINCSS_VUE_DEBUG__ = false;
 }
 
 export function isVueDebugEnabled(): boolean {
-  return typeof window !== 'undefined' && !!(window as any).__CHAINCSS_VUE_DEBUG__;
+  return (
+    typeof window !== "undefined" && !!(window as any).__CHAINCSS_VUE_DEBUG__
+  );
 }
 
 /**

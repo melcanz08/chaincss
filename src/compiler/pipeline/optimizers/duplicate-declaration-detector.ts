@@ -3,19 +3,33 @@
 // ============================================================================
 // AST-based duplicate declaration detector. Uses semantic comparison via AST.
 
-import type { StyleIR, IRDeclaration } from '../ir/types.js';
-import type { OptimizationPass, OptimizationResult } from '../pipeline-types.js';
-import type { CSSValueNode } from '../ir/css-ast.js';
-import { astEqual } from '../ir/css-ast.js';
+import type { StyleIR, IRDeclaration } from "../ir/types.js";
+import type {
+  OptimizationPass,
+  OptimizationResult,
+} from "../pipeline-types.js";
+import type { CSSValueNode } from "../ir/css-ast.js";
+import { astEqual } from "../ir/css-ast.js";
 
 // Pre-allocated static set to avoid array creation inside fallback checks
-const INTENTIONAL_DISPLAYS = new Set(['block', 'inline', 'flex', 'inline-flex', 'grid', 'inline-grid']);
+const INTENTIONAL_DISPLAYS = new Set([
+  "block",
+  "inline",
+  "flex",
+  "inline-flex",
+  "grid",
+  "inline-grid",
+]);
 
 function isIntentionalFallback(prev: string, next: string): boolean {
   const p = prev.toLowerCase();
   const n = next.toLowerCase();
   if (p === n) return false;
-  if ((p.startsWith('#') || p.startsWith('rgb')) && (n.includes('gradient') || n.includes('var(') || n.includes('oklab'))) return true;
+  if (
+    (p.startsWith("#") || p.startsWith("rgb")) &&
+    (n.includes("gradient") || n.includes("var(") || n.includes("oklab"))
+  )
+    return true;
   if (INTENTIONAL_DISPLAYS.has(p) && INTENTIONAL_DISPLAYS.has(n)) return true;
   return false;
 }
@@ -27,8 +41,13 @@ function valuesEqual(a: IRDeclaration, b: IRDeclaration): boolean {
   return String(a.value) === String(b.value);
 }
 
-function pruneDuplicates(declarations: IRDeclaration[]): { pruned: IRDeclaration[]; removed: number; bytesSaved: number } {
-  if (!declarations || declarations.length === 0) return { pruned: declarations || [], removed: 0, bytesSaved: 0 };
+function pruneDuplicates(declarations: IRDeclaration[]): {
+  pruned: IRDeclaration[];
+  removed: number;
+  bytesSaved: number;
+} {
+  if (!declarations || declarations.length === 0)
+    return { pruned: declarations || [], removed: 0, bytesSaved: 0 };
 
   const pruned: IRDeclaration[] = [];
   const seen = new Map<string, number>();
@@ -69,16 +88,25 @@ function pruneDuplicates(declarations: IRDeclaration[]): { pruned: IRDeclaration
 }
 
 export const duplicateDeclarationDetector: OptimizationPass = {
-  name: 'duplicate-declaration-detector',
-  cost: 'cheap',
-  requiredFor: ['css'],
+  name: "duplicate-declaration-detector",
+  cost: "cheap",
+  requiredFor: ["css"],
 
   optimize(ir: StyleIR): OptimizationResult {
     let totalRemoved = 0;
     let totalBytes = 0;
 
     const rules = ir?.rules;
-    if (!rules) return { ir, savings: { rulesEliminated: 0, declarationsEliminated: 0, bytesSaved: 0 }, changes: 0 };
+    if (!rules)
+      return {
+        ir,
+        savings: {
+          rulesEliminated: 0,
+          declarationsEliminated: 0,
+          bytesSaved: 0,
+        },
+        changes: 0,
+      };
 
     for (let i = 0, len = rules.length; i < len; i++) {
       const rule = rules[i];
@@ -121,17 +149,21 @@ export const duplicateDeclarationDetector: OptimizationPass = {
         ir.diagnostics = [];
       }
       ir.diagnostics.push({
-        id: `dup-${ir.id || 'root'}`,
-        nodeId: ir.id || 'root',
-        severity: 'info',
+        id: `dup-${ir.id || "root"}`,
+        nodeId: ir.id || "root",
+        severity: "info",
         message: `Removed ${totalRemoved} duplicate declarations (~${totalBytes} bytes).`,
-        pass: 'duplicate-declaration-detector',
+        pass: "duplicate-declaration-detector",
       });
     }
 
     return {
       ir,
-      savings: { rulesEliminated: 0, declarationsEliminated: totalRemoved, bytesSaved: totalBytes },
+      savings: {
+        rulesEliminated: 0,
+        declarationsEliminated: totalRemoved,
+        bytesSaved: totalBytes,
+      },
       changes: totalRemoved,
     };
   },

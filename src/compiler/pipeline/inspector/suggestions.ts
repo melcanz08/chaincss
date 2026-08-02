@@ -2,21 +2,23 @@
 // FILE: src/compiler/pipeline/inspector/suggestions.ts
 // ============================================================================
 
-import type { InspectorSuggestion } from './types.js';
-import type { PipelineDiagnostic } from '../pipeline-types.js';
+import type { InspectorSuggestion } from "./types.js";
+import type { PipelineDiagnostic } from "../pipeline-types.js";
 
 const SUGGESTION_PASSES = [
-  'pattern-detector',
-  'layout-analyzer',
-  'responsive-analyzer',
-  'accessibility-validator',
-  'accessibility-optimizer',
+  "pattern-detector",
+  "layout-analyzer",
+  "responsive-analyzer",
+  "accessibility-validator",
+  "accessibility-optimizer",
 ];
 
 /**
  * Extracts distinct architectural improvements and usability hints from compiler passes.
  */
-export function collectSuggestions(diagnostics: PipelineDiagnostic[]): InspectorSuggestion[] {
+export function collectSuggestions(
+  diagnostics: PipelineDiagnostic[],
+): InspectorSuggestion[] {
   if (!diagnostics || diagnostics.length === 0) return [];
 
   const suggestions: InspectorSuggestion[] = [];
@@ -26,11 +28,11 @@ export function collectSuggestions(diagnostics: PipelineDiagnostic[]): Inspector
     if (!d || !d.pass || !d.suggestion || !d.message) continue;
 
     const lowerPassName = d.pass.toLowerCase();
-    
-    // Resilient check: matches if any registered signature acts as a substring 
+
+    // Resilient check: matches if any registered signature acts as a substring
     // or namespace prefix of the diagnostic tracking token.
-    const isTargetPass = SUGGESTION_PASSES.some(target => 
-      lowerPassName.includes(target.toLowerCase())
+    const isTargetPass = SUGGESTION_PASSES.some((target) =>
+      lowerPassName.includes(target.toLowerCase()),
     );
 
     if (!isTargetPass) continue;

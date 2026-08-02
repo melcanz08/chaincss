@@ -1,7 +1,7 @@
 // src/compiler/pipeline/pass-scheduler.ts
 // Declarative pass scheduling with requires/produces/invalidates
 
-import type { CompilerPass, PassPhase } from './pipeline-types.js';
+import type { CompilerPass, PassPhase } from "./pipeline-types.js";
 
 export interface PassDeclaration {
   /** Unique pass identifier */
@@ -15,7 +15,7 @@ export interface PassDeclaration {
   /** What this pass invalidates (forces re-run of dependents) */
   invalidates: string[];
   /** Estimated cost (used for parallel scheduling) */
-  cost: 'cheap' | 'moderate' | 'expensive';
+  cost: "cheap" | "moderate" | "expensive";
 }
 
 export interface ScheduleResult {
@@ -36,7 +36,7 @@ export interface ScheduleResult {
 export function schedulePasses(passes: PassDeclaration[]): ScheduleResult {
   const errors: string[] = [];
   const warnings: string[] = [];
-  const passMap = new Map(passes.map(p => [p.name, p]));
+  const passMap = new Map(passes.map((p) => [p.name, p]));
 
   // Validate: check that all requirements exist
   const allProduces = new Set<string>();
@@ -49,7 +49,9 @@ export function schedulePasses(passes: PassDeclaration[]): ScheduleResult {
   for (const pass of passes) {
     for (const req of pass.requires) {
       if (!allProduces.has(req)) {
-        errors.push(`Pass "${pass.name}" requires "${req}" but no pass produces it`);
+        errors.push(
+          `Pass "${pass.name}" requires "${req}" but no pass produces it`,
+        );
       }
     }
   }
@@ -79,7 +81,12 @@ export function schedulePasses(passes: PassDeclaration[]): ScheduleResult {
       const pa = passMap.get(a)!;
       const pb = passMap.get(b)!;
       const phaseOrder: Record<PassPhase, number> = {
-        normalize: 0, validate: 1, analyze: 2, optimize: 3, lower: 4, emit: 5,
+        normalize: 0,
+        validate: 1,
+        analyze: 2,
+        optimize: 3,
+        lower: 4,
+        emit: 5,
       };
       return phaseOrder[pa.phase] - phaseOrder[pb.phase];
     });
@@ -98,8 +105,12 @@ export function schedulePasses(passes: PassDeclaration[]): ScheduleResult {
 
   // Check for cycles
   if (ordered.length < passes.length) {
-    const missing = passes.filter(p => !ordered.includes(p)).map(p => p.name);
-    errors.push(`Cycle detected or unresolved dependencies: ${missing.join(', ')}`);
+    const missing = passes
+      .filter((p) => !ordered.includes(p))
+      .map((p) => p.name);
+    errors.push(
+      `Cycle detected or unresolved dependencies: ${missing.join(", ")}`,
+    );
   }
 
   // Group passes that can run in parallel
@@ -127,7 +138,7 @@ export function schedulePasses(passes: PassDeclaration[]): ScheduleResult {
  */
 function groupParallel(
   ordered: PassDeclaration[],
-  passMap: Map<string, PassDeclaration>
+  passMap: Map<string, PassDeclaration>,
 ): PassDeclaration[][] {
   const groups: PassDeclaration[][] = [];
   const completed = new Set<string>();
@@ -136,10 +147,11 @@ function groupParallel(
     // Check if this pass conflicts with any pass in the current group
     let placed = false;
     for (const group of groups) {
-      const conflicts = group.some(gp =>
-        pass.requires.includes(gp.name) ||
-        gp.requires.includes(pass.name) ||
-        sharesResource(pass, gp)
+      const conflicts = group.some(
+        (gp) =>
+          pass.requires.includes(gp.name) ||
+          gp.requires.includes(pass.name) ||
+          sharesResource(pass, gp),
       );
       if (!conflicts) {
         group.push(pass);
@@ -172,7 +184,7 @@ function sharesResource(a: PassDeclaration, b: PassDeclaration): boolean {
 export function optimizePassOrder(
   passes: PassDeclaration[],
   availableFeatures: Set<string>,
-  targetFeatures: Set<string>
+  targetFeatures: Set<string>,
 ): PassDeclaration[] {
   const { ordered, errors } = schedulePasses(passes);
   if (errors.length > 0) return ordered; // Return as-is if there are errors
@@ -184,11 +196,13 @@ export function optimizePassOrder(
 
   for (const pass of ordered) {
     // Skip if all requirements aren't met
-    const reqsMet = pass.requires.every(r => satisfied.has(r));
+    const reqsMet = pass.requires.every((r) => satisfied.has(r));
     if (!reqsMet) continue;
 
     // Skip if this pass produces nothing we need
-    const producesNeeded = pass.produces.some(p => needed.has(p) || !consumedByOthers(p, ordered));
+    const producesNeeded = pass.produces.some(
+      (p) => needed.has(p) || !consumedByOthers(p, ordered),
+    );
     if (!producesNeeded && pass.produces.length > 0) continue;
 
     result.push(pass);
@@ -204,16 +218,20 @@ export function optimizePassOrder(
 }
 
 function consumedByOthers(produce: string, passes: PassDeclaration[]): boolean {
-  return passes.some(p => p.requires.includes(produce));
+  return passes.some((p) => p.requires.includes(produce));
 }
 
 /**
  * Validate a set of passes for correctness.
  * Checks: no missing requirements, no cycles, no duplicate names.
  */
-export function validatePasses(passes: PassDeclaration[]): { valid: boolean; errors: string[]; warnings: string[] } {
+export function validatePasses(passes: PassDeclaration[]): {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+} {
   const { errors, warnings } = schedulePasses(passes);
-  
+
   // Check for duplicate names
   const names = new Set<string>();
   for (const pass of passes) {

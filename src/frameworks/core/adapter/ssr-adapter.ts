@@ -1,7 +1,7 @@
 // src/frameworks/core/adapter/ssr-adapter.ts
 // SSR runtime adapter
 
-import { RuntimeAdapter, StyleElement } from './types.js';
+import { RuntimeAdapter, StyleElement } from "./types.js";
 
 export class SSRAdapter implements RuntimeAdapter {
   isBrowser = false;
@@ -58,7 +58,7 @@ export class SSRAdapter implements RuntimeAdapter {
   getSSRStyles(): string {
     return Array.from(this.styles.values())
       .map((entry) => entry.css)
-      .join('\n');
+      .join("\n");
   }
 
   /** Get all head elements for SSR rendering */

@@ -2,7 +2,7 @@
 // FILE: src/compiler/pipeline/ir/types.ts
 // ============================================================================
 
-import type { PassMetadata } from './metadata.js';
+import type { PassMetadata } from "./metadata.js";
 
 export type IRNodeId = string;
 
@@ -17,7 +17,15 @@ export interface IRGraph {
 export interface IRGraphEdge {
   from: IRNodeId;
   to: IRNodeId;
-  type: 'overrides' | 'references' | 'extends' | 'derives' | 'contrasts' | 'contains' | 'animates' | 'layers';
+  type:
+    | "overrides"
+    | "references"
+    | "extends"
+    | "derives"
+    | "contrasts"
+    | "contains"
+    | "animates"
+    | "layers";
   metadata?: Record<string, unknown>;
 }
 
@@ -49,13 +57,13 @@ export interface IRDeclaration {
 
 /** Structured representation of a CSS declaration value. */
 export type ParsedValue =
-  | { kind: 'dimension'; value: number; unit: string }
-  | { kind: 'number'; value: number }
-  | { kind: 'keyword'; value: string }
-  | { kind: 'color'; hex: string }
-  | { kind: 'function'; name: string; args: ParsedValue[] }
-  | { kind: 'list'; items: ParsedValue[] }
-  | { kind: 'raw'; value: string };
+  | { kind: "dimension"; value: number; unit: string }
+  | { kind: "number"; value: number }
+  | { kind: "keyword"; value: string }
+  | { kind: "color"; hex: string }
+  | { kind: "function"; name: string; args: ParsedValue[] }
+  | { kind: "list"; items: ParsedValue[] }
+  | { kind: "raw"; value: string };
 
 /** Metadata attached to IR declarations */
 export interface IRDeclarationMeta {
@@ -67,12 +75,12 @@ export interface IRDeclarationMeta {
   generated?: boolean;
   /** Allow extensions by future passes */
   [key: string]: unknown;
-  ast?: import('./css-ast.js').CSSValueNode;
+  ast?: import("./css-ast.js").CSSValueNode;
 }
 
 /**
  * Metadata attached to IR rules.
- * 
+ *
  * @deprecated Flat fields like `atomic`, `component`, `framework` are migrating
  * to the namespaced `passMeta` structure. Use `rule.passMeta.optimization.atomic`
  * instead of `rule.meta.atomic`, `rule.passMeta.analysis.component` instead of
@@ -83,7 +91,7 @@ export interface IRRuleMeta {
   /** Component name that generated this rule */
   component?: string;
   /** Framework that generated this rule */
-  framework?: 'react' | 'vue' | 'svelte' | 'solid' | 'angular';
+  framework?: "react" | "vue" | "svelte" | "solid" | "angular";
   /** @deprecated Use rule.passMeta.optimization.atomic.isAtomic instead */
   atomic?: boolean;
   /** Allow extensions */
@@ -95,20 +103,20 @@ export interface IRRuleMeta {
 }
 
 export type DetectedFeature =
-  | 'constraints'
-  | 'semantic-tokens'
-  | 'intents'
-  | 'at-rules'
-  | 'pseudo-classes'
-  | 'declarations'
-  | 'viewport-units'
-  | 'large-fixed'
-  | 'flexbox-grid'
-  | 'css-grid'
-  | 'animations'
-  | 'keyframes'
-  | 'custom-properties'
-  | 'core';
+  | "constraints"
+  | "semantic-tokens"
+  | "intents"
+  | "at-rules"
+  | "pseudo-classes"
+  | "declarations"
+  | "viewport-units"
+  | "large-fixed"
+  | "flexbox-grid"
+  | "css-grid"
+  | "animations"
+  | "keyframes"
+  | "custom-properties"
+  | "core";
 
 /** A CSS rule (selector + declarations + nested rules) */
 export interface IRRule {
@@ -127,7 +135,7 @@ export interface IRRule {
   /**
    * Namespaced pass-owned metadata.
    * Each pass writes to its own namespace — no cross-pass pollution.
-   * 
+   *
    * Examples:
    * - rule.passMeta.analysis.semantic  (was rule.meta._semantic)
    * - rule.passMeta.analysis.constraints (was rule.meta._constraints)
@@ -167,9 +175,10 @@ export interface IRKeyframeFrame {
 export interface IRAtRule {
   id: IRNodeId;
   parentId?: IRNodeId;
-  type: 'media' | 'keyframes' | 'font-face' | 'supports' | 'container' | 'layer';
+  type:
+    "media" | "keyframes" | "font-face" | "supports" | "container" | "layer";
   query?: string; // Media query text (e.g. '(min-width: 768px)')
-  name?: string;  // Keyframes identifier name (e.g. 'fade-in')
+  name?: string; // Keyframes identifier name (e.g. 'fade-in')
   declarations: IRDeclaration[];
   nestedRules: IRRule[];
   keyframes?: IRKeyframeFrame[]; // Explicit container for Phase 2 animation frames
@@ -189,11 +198,11 @@ export interface IRCondition {
 
 /** Transform record — who touched this node and why. */
 export interface IRTransformRecord {
-  pass: string;      // e.g., 'intent-engine', 'math-engine'
-  action: string;    // e.g., 'corrected-value', 'eliminated'
+  pass: string; // e.g., 'intent-engine', 'math-engine'
+  action: string; // e.g., 'corrected-value', 'eliminated'
   timestamp: number;
   previous?: unknown; // Snapshot value before transform
-  reason?: string;    // Explanation text
+  reason?: string; // Explanation text
 }
 
 /** The complete consolidated IR tree */
@@ -220,7 +229,7 @@ export interface StyleIR {
 export interface IRDiagnostic {
   id: IRNodeId;
   nodeId: IRNodeId;
-  severity: 'error' | 'warning' | 'info' | 'hint';
+  severity: "error" | "warning" | "info" | "hint";
   message: string;
   suggestion?: string;
   pass: string;

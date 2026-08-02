@@ -2,7 +2,7 @@
 // Configuration utilities shared across the compiler.
 // CLI-specific file loading lives in adapters/cli/utils/config-loader.ts
 
-import type { ChainCSSConfig } from './index.js';
+import type { ChainCSSConfig } from "./index.js";
 
 /**
  * Deep merge two objects. Source values override target values.
@@ -10,7 +10,7 @@ import type { ChainCSSConfig } from './index.js';
  */
 export function deepMergeConfig<T extends Record<string, any>>(
   target: T,
-  source: Partial<T>
+  source: Partial<T>,
 ): T {
   const result: Record<string, any> = { ...target };
 
@@ -19,9 +19,9 @@ export function deepMergeConfig<T extends Record<string, any>>(
 
     if (
       value !== null &&
-      typeof value === 'object' &&
+      typeof value === "object" &&
       !Array.isArray(value) &&
-      typeof result[key] === 'object' &&
+      typeof result[key] === "object" &&
       result[key] !== null &&
       !Array.isArray(result[key])
     ) {
@@ -40,18 +40,18 @@ export function deepMergeConfig<T extends Record<string, any>>(
  */
 export function getDefaultConfig(): ChainCSSConfig {
   return {
-    inputs: ['src/**/*.chain.{ts,tsx}'],
+    inputs: ["src/**/*.chain.{ts,tsx}"],
     output: {
-      cssFile: 'dist/styles.css',
+      cssFile: "dist/styles.css",
       minify: false,
       generateGlobalCSS: true,
-      targets: ['css'],
+      targets: ["css"],
     },
     atomic: {
       enabled: false,
       threshold: 3,
-      naming: 'readable',
-      mode: 'hybrid',
+      naming: "readable",
+      mode: "hybrid",
       minify: false,
       verbose: false,
     },
@@ -60,16 +60,16 @@ export function getDefaultConfig(): ChainCSSConfig {
       relationships: [],
     },
     breakpoints: {
-      sm: '640px',
-      md: '768px',
-      lg: '1024px',
-      xl: '1280px',
-      '2xl': '1536px',
+      sm: "640px",
+      md: "768px",
+      lg: "1024px",
+      xl: "1280px",
+      "2xl": "1536px",
     },
     prefixer: {
       enabled: true,
-      mode: 'lightweight',
-      browsers: ['> 0.5%', 'last 2 versions', 'not dead'],
+      mode: "lightweight",
+      browsers: ["> 0.5%", "last 2 versions", "not dead"],
       sourceMap: false,
       sourceMapInline: false,
       remove: true,
@@ -79,14 +79,14 @@ export function getDefaultConfig(): ChainCSSConfig {
       enabled: true,
       maxAgeDays: 30,
       maxSizeMB: 500,
-      path: '.chaincss-cache',
+      path: ".chaincss-cache",
     },
     dev: {
       port: 3000,
-      publicDir: 'public',
+      publicDir: "public",
     },
-    framework: 'auto',
-    namespace: 'chain-',
+    framework: "auto",
+    namespace: "chain-",
     verbose: false,
     silent: false,
     debug: false,

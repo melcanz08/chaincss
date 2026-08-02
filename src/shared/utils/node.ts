@@ -1,27 +1,30 @@
 // src/shared/utils/node.ts
 
 // Node.js utilities (only safe for Node.js environment)
-import fs from 'fs';
-import path from 'path';
+import fs from "fs";
+import path from "path";
 
 export function writeFile(filePath: string, content: string): void {
   const dir = path.dirname(filePath);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
-  fs.writeFileSync(filePath, content, 'utf8');
+  fs.writeFileSync(filePath, content, "utf8");
 }
 
-export async function writeFileAsync(filePath: string, content: string): Promise<void> {
+export async function writeFileAsync(
+  filePath: string,
+  content: string,
+): Promise<void> {
   const dir = path.dirname(filePath);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
-  return fs.promises.writeFile(filePath, content, 'utf8');
+  return fs.promises.writeFile(filePath, content, "utf8");
 }
 
 export function readFile(filePath: string): string {
-  return fs.readFileSync(filePath, 'utf8');
+  return fs.readFileSync(filePath, "utf8");
 }
 
 export const fileExists = (p: string): boolean => fs.existsSync(p);
@@ -39,9 +42,11 @@ export async function ensureDirAsync(dir: string): Promise<void> {
 }
 
 export const getFileExtension = (p: string): string => path.extname(p);
-export const getBaseName = (p: string): string => path.basename(p, path.extname(p));
+export const getBaseName = (p: string): string =>
+  path.basename(p, path.extname(p));
 export const getDirName = (p: string): string => path.dirname(p);
-export const resolvePath = (p: string): string => path.resolve(process.cwd(), p);
+export const resolvePath = (p: string): string =>
+  path.resolve(process.cwd(), p);
 
 export function isDirectory(p: string): boolean {
   try {
@@ -70,7 +75,7 @@ export function getMemoryUsage(): number {
 }
 
 export function formatBytes(bytes: number): string {
-  const units = ['B', 'KB', 'MB', 'GB'];
+  const units = ["B", "KB", "MB", "GB"];
   let i = 0;
   while (bytes >= 1024 && i < units.length - 1) {
     bytes /= 1024;

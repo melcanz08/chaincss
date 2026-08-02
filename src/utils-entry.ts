@@ -5,58 +5,98 @@
 
 export {
   // String utilities
-  hashString, kebabCase, camelCase, pascalCase, snakeCase,
-  generateClassName, generateAtomicClassName, generateComponentClassName,
-  
+  hashString,
+  kebabCase,
+  camelCase,
+  pascalCase,
+  snakeCase,
+  generateClassName,
+  generateAtomicClassName,
+  generateComponentClassName,
+
   // Object utilities
-  deepMerge, deepClone, deepEqual, pick, omit,
+  deepMerge,
+  deepClone,
+  deepEqual,
+  pick,
+  omit,
 
   // Formatting
-  formatCSS, formatJS, truncate, indent, stripIndent,
-  
+  formatCSS,
+  formatJS,
+  truncate,
+  indent,
+  stripIndent,
+
   // Array utilities
-  unique, chunk, groupBy,
+  unique,
+  chunk,
+  groupBy,
 
   // Function utilities
-  debounce, throttle,
-  
+  debounce,
+  throttle,
+
   // Error handling
-  ChainCSSError, tryOrWarn, tryOrThrow,
-  
+  ChainCSSError,
+  tryOrWarn,
+  tryOrThrow,
+
   // Logging
-  setLogLevel, logDebug, logInfo, logWarn, logError,
-  
+  setLogLevel,
+  logDebug,
+  logInfo,
+  logWarn,
+  logError,
+
   // Validation
-  isValidSelector, isValidClassName, isValidCSSProperty,
-  
+  isValidSelector,
+  isValidClassName,
+  isValidCSSProperty,
+
   // Runtime utilities
-  generateStyleId, isBrowser, isDevelopment, isProduction, memoize,
-  cn as cnUtils, devWarn, devLog, createDebugger
-} from '@shared/utils/browser.js';
+  generateStyleId,
+  isBrowser,
+  isDevelopment,
+  isProduction,
+  memoize,
+  cn as cnUtils,
+  devWarn,
+  devLog,
+  createDebugger,
+} from "@shared/utils/browser.js";
 
 // Shorthand utilities
 export {
-  shorthandMap, macros, handleShorthand, isShorthand,
-  expandShorthand, getAvailableShorthands,
-} from '@compiler/utils/shorthands.js';
+  shorthandMap,
+  macros,
+  handleShorthand,
+  isShorthand,
+  expandShorthand,
+  getAvailableShorthands,
+} from "@compiler/utils/shorthands.js";
 
-export { helpers } from '@compiler/utils/helpers.js';
-
-export {
-  getSuggestion, getSuggestions, getPropertySuggestion,
-} from '@compiler/utils/suggestions.js';
-
-export {
-  animationPresets, createAnimation, getAnimationPreset,
-  hasAnimationPreset, getAnimationPresetNames,
-} from '@compiler/animations.js';
+export { helpers } from "@compiler/utils/helpers.js";
 
 export {
-  setBreakpoints, currentBreakpoints,
-} from '@compiler/breakpoints.js';
-
-export { ChainCSSPrefixer } from '@compiler/prefixer.js';
+  getSuggestion,
+  getSuggestions,
+  getPropertySuggestion,
+} from "@compiler/utils/suggestions.js";
 
 export {
-  generateComponentCode, detectFramework,
-} from '@compiler/features/framework-codegen.js';
+  animationPresets,
+  createAnimation,
+  getAnimationPreset,
+  hasAnimationPreset,
+  getAnimationPresetNames,
+} from "@compiler/animations.js";
+
+export { setBreakpoints, currentBreakpoints } from "@compiler/breakpoints.js";
+
+export { ChainCSSPrefixer } from "@compiler/prefixer.js";
+
+export {
+  generateComponentCode,
+  detectFramework,
+} from "@compiler/features/framework-codegen.js";

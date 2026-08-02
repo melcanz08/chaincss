@@ -1,8 +1,8 @@
-// chaincss/src/compiler/cache/cache-manager.ts 
+// chaincss/src/compiler/cache/cache-manager.ts
 // High-performance, concurrent-safe compilation cache subsystem with precise boundary controls
 
-import fs from 'fs';
-import path from 'path';
+import fs from "fs";
+import path from "path";
 
 export interface CacheEntry<T = any> {
   value: T;
@@ -41,7 +41,10 @@ export class CacheManager {
   private lastSize = 0;
   private lastSizeCheck = 0;
 
-  constructor(cachePath: string = './.chaincss-cache', options: CacheOptions = {}) {
+  constructor(
+    cachePath: string = "./.chaincss-cache",
+    options: CacheOptions = {},
+  ) {
     this.options = {
       maxAge: options.maxAge ?? 7 * 24 * 60 * 60 * 1000,
       maxSize: options.maxSize ?? 100 * 1024 * 1024,
@@ -50,7 +53,7 @@ export class CacheManager {
     };
     this.cachePath = path.resolve(process.cwd(), cachePath);
     this.cacheDir = path.dirname(this.cachePath);
-    
+
     this.load();
     if (this.options.autoSave) {
       this.startAutoSave();
@@ -66,8 +69,8 @@ export class CacheManager {
         this.save();
       }
     }, this.options.saveInterval);
-    
-    if (this.saveTimer && typeof this.saveTimer.unref === 'function') {
+
+    if (this.saveTimer && typeof this.saveTimer.unref === "function") {
       this.saveTimer.unref();
     }
   }
@@ -96,14 +99,14 @@ export class CacheManager {
           // Fallback if stat checks fail during system locks
         }
 
-        const rawData = fs.readFileSync(this.cachePath, 'utf8');
+        const rawData = fs.readFileSync(this.cachePath, "utf8");
         const parsed = JSON.parse(rawData);
         if (!parsed || !parsed.entries) {
           this.cache = this.getDefaultCache();
           this.dirty = true;
           return;
         }
-        
+
         this.cache = parsed;
         if (this.isExpired()) {
           this.clear();
@@ -118,7 +121,10 @@ export class CacheManager {
         this.dirty = true;
       }
     } catch (error) {
-      console.warn('Could not load compiler cache, starting fresh:', (error as Error).message);
+      console.warn(
+        "Could not load compiler cache, starting fresh:",
+        (error as Error).message,
+      );
       this.cache = this.getDefaultCache();
       this.dirty = true;
     }
@@ -126,7 +132,7 @@ export class CacheManager {
 
   private getDefaultCache(): CacheData {
     return {
-      version: '2.14.0',
+      version: "2.14.0",
       created: new Date().toISOString(),
       updated: new Date().toISOString(),
       stats: { totalStyles: 0, atomicStyles: 0, cacheHits: 0, cacheMisses: 0 },
@@ -135,7 +141,9 @@ export class CacheManager {
   }
 
   private isExpired(): boolean {
-    const created = this.cache.created ? new Date(this.cache.created).getTime() : 0;
+    const created = this.cache.created
+      ? new Date(this.cache.created).getTime()
+      : 0;
     return Date.now() - created > this.options.maxAge;
   }
 
@@ -149,7 +157,7 @@ export class CacheManager {
   get<T = any>(key: string): T | undefined {
     this.stats.reads++;
     const entry = this.cache.entries[key];
-    
+
     if (entry !== undefined) {
       if (entry.expires && entry.expires < Date.now()) {
         delete this.cache.entries[key];
@@ -160,7 +168,7 @@ export class CacheManager {
       this.stats.hits++;
       return entry.value as T;
     }
-    
+
     this.stats.misses++;
     return undefined;
   }
@@ -173,9 +181,9 @@ export class CacheManager {
     };
     this.dirty = true;
     this.stats.writes++;
-    
+
     if (this.cache.stats) {
-      if (key === 'atomic' && value && typeof value === 'object') {
+      if (key === "atomic" && value && typeof value === "object") {
         this.cache.stats.atomicStyles = Object.keys(value).length;
       }
       this.cache.stats.totalStyles = Object.keys(this.cache.entries).length;
@@ -218,7 +226,7 @@ export class CacheManager {
           fs.unlinkSync(this.cachePath);
         }
       } catch (e) {
-        console.warn('Could not delete cache file:', (e as Error).message);
+        console.warn("Could not delete cache file:", (e as Error).message);
       }
     }
   }
@@ -226,36 +234,42 @@ export class CacheManager {
   prune(): void {
     const now = Date.now();
     let prunedCount = 0;
-    
+
     for (const k in this.cache.entries) {
-      if (!Object.prototype.hasOwnProperty.call(this.cache.entries, k)) continue;
-      if (this.cache.entries[k].expires && this.cache.entries[k].expires! < now) {
+      if (!Object.prototype.hasOwnProperty.call(this.cache.entries, k))
+        continue;
+      if (
+        this.cache.entries[k].expires &&
+        this.cache.entries[k].expires! < now
+      ) {
         delete this.cache.entries[k];
         prunedCount++;
       }
     }
-    
+
     // Check real sizing context including volatile runtime additions
     const currentSize = this.getCacheSize(true);
     if (currentSize > this.options.maxSize) {
       const entries = Object.entries(this.cache.entries);
       entries.sort((a, b) => a[1].cachedAt - b[1].cachedAt);
-      
+
       const toEvict = Math.ceil(entries.length * 0.3);
       for (let i = 0; i < toEvict && i < entries.length; i++) {
         delete this.cache.entries[entries[i][0]];
         prunedCount++;
       }
     }
-    
+
     this.cache.updated = new Date().toISOString();
     if (this.cache.stats) {
       this.cache.stats.totalStyles = Object.keys(this.cache.entries).length;
     }
     this.dirty = true;
-    
+
     if (prunedCount > 0 && this.options.autoSave) {
-      console.log(`[ChainCSS Cache] Pruned ${prunedCount} entries to fit within footprint layout.`);
+      console.log(
+        `[ChainCSS Cache] Pruned ${prunedCount} entries to fit within footprint layout.`,
+      );
     }
   }
 
@@ -263,31 +277,33 @@ export class CacheManager {
     if (!this.dirty) return;
     try {
       this.cache.updated = new Date().toISOString();
-      
+
       // Flush volatile tracking counters out to the structural engine layout
       if (this.cache.stats) {
-        this.cache.stats.cacheHits = (this.cache.stats.cacheHits || 0) + this.stats.hits;
-        this.cache.stats.cacheMisses = (this.cache.stats.cacheMisses || 0) + this.stats.misses;
+        this.cache.stats.cacheHits =
+          (this.cache.stats.cacheHits || 0) + this.stats.hits;
+        this.cache.stats.cacheMisses =
+          (this.cache.stats.cacheMisses || 0) + this.stats.misses;
       }
-      
+
       // Reset the local operational tracker loops safely
       this.stats.hits = 0;
       this.stats.misses = 0;
-      
+
       const data = JSON.stringify(this.cache);
       if (!fs.existsSync(this.cacheDir)) {
         fs.mkdirSync(this.cacheDir, { recursive: true });
       }
-      
+
       const tmp = `${this.cachePath}.tmp`;
-      fs.writeFileSync(tmp, data, 'utf8');
+      fs.writeFileSync(tmp, data, "utf8");
       fs.renameSync(tmp, this.cachePath);
-      
-      this.lastSize = Buffer.byteLength(data, 'utf8');
+
+      this.lastSize = Buffer.byteLength(data, "utf8");
       this.lastSizeCheck = Date.now();
       this.dirty = false;
     } catch (error) {
-      console.warn('Could not save cache to disk:', (error as Error).message);
+      console.warn("Could not save cache to disk:", (error as Error).message);
     }
   }
 
@@ -297,7 +313,7 @@ export class CacheManager {
     const instantMisses = this.cache.stats.cacheMisses + this.stats.misses;
     const total = instantHits + instantMisses;
     const hitRate = total > 0 ? (instantHits / total) * 100 : 0;
-    
+
     return {
       hits: instantHits,
       misses: instantMisses,
@@ -315,11 +331,14 @@ export class CacheManager {
     if (!force && now - this.lastSizeCheck < 1000 && this.lastSize > 0) {
       return this.lastSize;
     }
-    
+
     // If the data structure has modified fields, compute space size dynamically from the live structure
     if (this.dirty || force || this.lastSize === 0) {
       try {
-        const structuralWeight = Buffer.byteLength(JSON.stringify(this.cache), 'utf8');
+        const structuralWeight = Buffer.byteLength(
+          JSON.stringify(this.cache),
+          "utf8",
+        );
         this.lastSize = structuralWeight;
         this.lastSizeCheck = now;
         return structuralWeight;
@@ -336,7 +355,7 @@ export class CacheManager {
         return s;
       }
     } catch {}
-    
+
     return this.lastSize;
   }
 
@@ -349,14 +368,20 @@ export class CacheManager {
     return 0;
   }
 
-  getKeys(): string[] { return Object.keys(this.cache.entries); }
-  getSize(): number { return this.getCacheSize(); }
-  isDirty(): boolean { return this.dirty; }
+  getKeys(): string[] {
+    return Object.keys(this.cache.entries);
+  }
+  getSize(): number {
+    return this.getCacheSize();
+  }
+  isDirty(): boolean {
+    return this.dirty;
+  }
 
-  async flush(): Promise<void> { 
+  async flush(): Promise<void> {
     if (this.dirty) {
       this.save();
-    } 
+    }
   }
 
   destroy(): void {
@@ -382,14 +407,14 @@ export class CacheManager {
     const now = Date.now();
     let changed = false;
     let newWrites = 0;
-    
+
     for (const k in entries) {
       if (!Object.prototype.hasOwnProperty.call(entries, k)) continue;
       this.cache.entries[k] = { value: entries[k], cachedAt: now };
       changed = true;
       newWrites++;
     }
-    
+
     if (changed) {
       this.dirty = true;
       this.stats.writes += newWrites;
@@ -410,7 +435,11 @@ export class CacheManager {
     return result;
   }
 
-  async getOrCompute<T>(key: string, compute: () => Promise<T>, ttl?: number): Promise<T> {
+  async getOrCompute<T>(
+    key: string,
+    compute: () => Promise<T>,
+    ttl?: number,
+  ): Promise<T> {
     const cached = this.get<T>(key);
     if (cached !== undefined) return cached;
     const computed = await compute();

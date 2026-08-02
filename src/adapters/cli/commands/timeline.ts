@@ -1,9 +1,9 @@
 // chaincss/src/adapters/cli/commands/timeline.ts
 
-import chalk from 'chalk';
-import fs from 'fs';
+import chalk from "chalk";
+import fs from "fs";
 import { formatBytes, formatDuration } from "../utils/format.js";
-import path from 'path';
+import path from "path";
 
 // Types
 interface StyleSnapshot {
@@ -22,7 +22,7 @@ interface StyleChange {
   property: string;
   oldValue: any;
   newValue: any;
-  type: 'add' | 'remove' | 'modify';
+  type: "add" | "remove" | "modify";
 }
 
 interface TimelineData {
@@ -42,18 +42,18 @@ function loadTimelineData(timelineFile: string): TimelineData | null {
   if (!fs.existsSync(timelineFile)) {
     return null;
   }
-  
+
   try {
-    const content = fs.readFileSync(timelineFile, 'utf8');
+    const content = fs.readFileSync(timelineFile, "utf8");
     if (!content.trim()) return null; // Avoid empty file parse crashes
-    
+
     const data = JSON.parse(content);
-    
+
     // Validate data structure
     if (!data.history || !Array.isArray(data.history)) {
-      throw new Error('Invalid timeline data: missing history array');
+      throw new Error("Invalid timeline data: missing history array");
     }
-    
+
     return data;
   } catch (error) {
     // If it's a momentary read lock, don't flood the console
@@ -65,23 +65,27 @@ function loadTimelineData(timelineFile: string): TimelineData | null {
 function displaySnapshotDetails(snapshot: StyleSnapshot, index: number): void {
   const date = new Date(snapshot.timestamp).toLocaleString();
   const propCount = Object.keys(snapshot.styles).length;
-  
-  console.log(`\n${chalk.green(`[${index}]`)} ${chalk.white.bold(snapshot.selector)}`);
+
+  console.log(
+    `\n${chalk.green(`[${index}]`)} ${chalk.white.bold(snapshot.selector)}`,
+  );
   console.log(`    ${chalk.gray(`ID: ${snapshot.id}`)}`);
   console.log(`    ${chalk.gray(`Time: ${date}`)}`);
   console.log(`    ${chalk.gray(`Source: ${snapshot.source}`)}`);
   console.log(`    ${chalk.gray(`Properties: ${propCount}`)}`);
   console.log(`    ${chalk.gray(`Hash: ${snapshot.hash.slice(0, 8)}...`)}`);
-  
+
   // Show first few properties as preview
   const previewProps = Object.entries(snapshot.styles).slice(0, 5);
   if (previewProps.length > 0) {
-    console.log(`    ${chalk.dim('Preview:')}`);
+    console.log(`    ${chalk.dim("Preview:")}`);
     for (const [prop, value] of previewProps) {
       console.log(`      ${chalk.blue(prop)}: ${chalk.yellow(value)}`);
     }
     if (Object.keys(snapshot.styles).length > 5) {
-      console.log(`      ${chalk.dim(`... and ${Object.keys(snapshot.styles).length - 5} more`)}`);
+      console.log(
+        `      ${chalk.dim(`... and ${Object.keys(snapshot.styles).length - 5} more`)}`,
+      );
     }
   }
 }
@@ -101,7 +105,10 @@ function shallowEqual(a: any, b: any): boolean {
 }
 
 // Optimized diff utility utilizing the fast shallowEqual helper
-function calculateDiff(snapshot1: StyleSnapshot, snapshot2: StyleSnapshot): {
+function calculateDiff(
+  snapshot1: StyleSnapshot,
+  snapshot2: StyleSnapshot,
+): {
   added: Record<string, any>;
   removed: Record<string, any>;
   modified: Record<string, { old: any; new: any }>;
@@ -109,7 +116,7 @@ function calculateDiff(snapshot1: StyleSnapshot, snapshot2: StyleSnapshot): {
   const added: Record<string, any> = {};
   const removed: Record<string, any> = {};
   const modified: Record<string, { old: any; new: any }> = {};
-  
+
   // Find added and modified properties
   for (const [key, value] of Object.entries(snapshot2.styles)) {
     if (!(key in snapshot1.styles)) {
@@ -122,102 +129,131 @@ function calculateDiff(snapshot1: StyleSnapshot, snapshot2: StyleSnapshot): {
         if (!shallowEqual(oldValue, value)) {
           modified[key] = {
             old: oldValue,
-            new: value
+            new: value,
           };
         }
       }
     }
   }
-  
+
   // Find removed properties
   for (const [key, value] of Object.entries(snapshot1.styles)) {
     if (!(key in snapshot2.styles)) {
       removed[key] = value;
     }
   }
-  
+
   return { added, removed, modified };
 }
 
 // Display diff with colors
-function displayDiff(diff: ReturnType<typeof calculateDiff>, selector1: string, selector2: string): void {
+function displayDiff(
+  diff: ReturnType<typeof calculateDiff>,
+  selector1: string,
+  selector2: string,
+): void {
   const { added, removed, modified } = diff;
-  const totalChanges = Object.keys(added).length + Object.keys(removed).length + Object.keys(modified).length;
-  
+  const totalChanges =
+    Object.keys(added).length +
+    Object.keys(removed).length +
+    Object.keys(modified).length;
+
   if (totalChanges === 0) {
-    console.log(chalk.gray('  No changes detected'));
+    console.log(chalk.gray("  No changes detected"));
     return;
   }
-  
+
   // Display removed properties
   for (const [prop, value] of Object.entries(removed)) {
-    console.log(`${chalk.red('−')} ${chalk.red(prop)}: ${chalk.red(String(value))}`);
+    console.log(
+      `${chalk.red("−")} ${chalk.red(prop)}: ${chalk.red(String(value))}`,
+    );
   }
-  
+
   // Display added properties
   for (const [prop, value] of Object.entries(added)) {
-    console.log(`${chalk.green('+')} ${chalk.green(prop)}: ${chalk.green(String(value))}`);
+    console.log(
+      `${chalk.green("+")} ${chalk.green(prop)}: ${chalk.green(String(value))}`,
+    );
   }
-  
+
   // Display modified properties
   for (const [prop, { old, new: newVal }] of Object.entries(modified)) {
-    console.log(`${chalk.yellow('~')} ${chalk.yellow(prop)}: ${chalk.red(String(old))} → ${chalk.green(String(newVal))}`);
+    console.log(
+      `${chalk.yellow("~")} ${chalk.yellow(prop)}: ${chalk.red(String(old))} → ${chalk.green(String(newVal))}`,
+    );
   }
 }
 
 export async function timelineCommand(action: string, options: any) {
-  const timelineFile = path.join(process.cwd(), '.chaincss-timeline.json');
+  const timelineFile = path.join(process.cwd(), ".chaincss-timeline.json");
   const data = loadTimelineData(timelineFile);
-  
+
   if (!data) {
-    console.log(chalk.yellow('\n⚠️  No timeline data found.'));
-    console.log(chalk.gray('    Run your build with --timeline flag first:'));
-    console.log(chalk.cyan('    $ chaincss build --timeline\n'));
+    console.log(chalk.yellow("\n⚠️  No timeline data found."));
+    console.log(chalk.gray("    Run your build with --timeline flag first:"));
+    console.log(chalk.cyan("    $ chaincss build --timeline\n"));
     return;
   }
-  
+
   // Calculate stats if not present
   if (!data.stats && data.history.length > 0) {
     data.stats = {
       totalSnapshots: data.history.length,
       totalChanges: data.changes?.length || 0,
       firstRecorded: data.history[0]?.timestamp || 0,
-      lastRecorded: data.history[data.history.length - 1]?.timestamp || 0
+      lastRecorded: data.history[data.history.length - 1]?.timestamp || 0,
     };
   }
-  
+
   switch (action) {
-    case 'list':
-      console.log(chalk.cyan.bold('\n📊 Style Timeline History\n'));
-      console.log(chalk.gray(`    Total Snapshots: ${data.stats?.totalSnapshots || data.history.length}`));
-      console.log(chalk.gray(`    Total Changes: ${data.stats?.totalChanges || data.changes?.length || 0}`));
-      
+    case "list":
+      console.log(chalk.cyan.bold("\n📊 Style Timeline History\n"));
+      console.log(
+        chalk.gray(
+          `    Total Snapshots: ${data.stats?.totalSnapshots || data.history.length}`,
+        ),
+      );
+      console.log(
+        chalk.gray(
+          `    Total Changes: ${data.stats?.totalChanges || data.changes?.length || 0}`,
+        ),
+      );
+
       if (data.stats?.firstRecorded && data.stats?.lastRecorded) {
         const duration = data.stats.lastRecorded - data.stats.firstRecorded;
         console.log(chalk.gray(`    Duration: ${formatDuration(duration)}`));
       }
-      
-      console.log(chalk.gray('\n    Snapshots:\n'));
-      
+
+      console.log(chalk.gray("\n    Snapshots:\n"));
+
       data.history.forEach((snapshot: StyleSnapshot, index: number) => {
         displaySnapshotDetails(snapshot, index);
       });
-      
+
       // Show file size
       try {
         const stats = fs.statSync(timelineFile);
-        console.log(chalk.gray(`\n📁 Timeline file size: ${formatBytes(stats.size)}`));
+        console.log(
+          chalk.gray(`\n📁 Timeline file size: ${formatBytes(stats.size)}`),
+        );
       } catch (e) {}
-      
+
       break;
-      
-    case 'diff':
+
+    case "diff":
       const id1 = options.snapshot1;
       const id2 = options.snapshot2;
-      
+
       if (!id1 || !id2) {
-        console.log(chalk.red('\n❌ Both snapshot1 and snapshot2 are required for diff'));
-        console.log(chalk.gray('    Usage: chaincss timeline diff --snapshot1 <id> --snapshot2 <id>\n'));
+        console.log(
+          chalk.red("\n❌ Both snapshot1 and snapshot2 are required for diff"),
+        );
+        console.log(
+          chalk.gray(
+            "    Usage: chaincss timeline diff --snapshot1 <id> --snapshot2 <id>\n",
+          ),
+        );
         return;
       }
 
@@ -225,50 +261,77 @@ export async function timelineCommand(action: string, options: any) {
       const idx1 = parseInt(id1, 10);
       const idx2 = parseInt(id2, 10);
 
-      const snapshot1 = (!isNaN(idx1) && idx1 >= 0 && idx1 < data.history.length)
-        ? data.history[idx1]
-        : data.history.find((s: StyleSnapshot) => s.id === id1 || s.selector === id1);
+      const snapshot1 =
+        !isNaN(idx1) && idx1 >= 0 && idx1 < data.history.length
+          ? data.history[idx1]
+          : data.history.find(
+              (s: StyleSnapshot) => s.id === id1 || s.selector === id1,
+            );
 
-      const snapshot2 = (!isNaN(idx2) && idx2 >= 0 && idx2 < data.history.length)
-        ? data.history[idx2]
-        : data.history.find((s: StyleSnapshot) => s.id === id2 || s.selector === id2);
-      
+      const snapshot2 =
+        !isNaN(idx2) && idx2 >= 0 && idx2 < data.history.length
+          ? data.history[idx2]
+          : data.history.find(
+              (s: StyleSnapshot) => s.id === id2 || s.selector === id2,
+            );
+
       if (!snapshot1) {
         console.log(chalk.red(`\n❌ Snapshot not found: ${id1}`));
-        console.log(chalk.gray('    Use "chaincss timeline list" to see available snapshots\n'));
+        console.log(
+          chalk.gray(
+            '    Use "chaincss timeline list" to see available snapshots\n',
+          ),
+        );
         return;
       }
-      
+
       if (!snapshot2) {
         console.log(chalk.red(`\n❌ Snapshot not found: ${id2}`));
-        console.log(chalk.gray('    Use "chaincss timeline list" to see available snapshots\n'));
+        console.log(
+          chalk.gray(
+            '    Use "chaincss timeline list" to see available snapshots\n',
+          ),
+        );
         return;
       }
-      
+
       const diff = calculateDiff(snapshot1, snapshot2);
-      const totalChanges = Object.keys(diff.added).length + 
-                           Object.keys(diff.removed).length + 
-                           Object.keys(diff.modified).length;
-      
-      console.log(chalk.cyan.bold(`\n🔍 Diff: ${snapshot1.selector} → ${snapshot2.selector}\n`));
+      const totalChanges =
+        Object.keys(diff.added).length +
+        Object.keys(diff.removed).length +
+        Object.keys(diff.modified).length;
+
+      console.log(
+        chalk.cyan.bold(
+          `\n🔍 Diff: ${snapshot1.selector} → ${snapshot2.selector}\n`,
+        ),
+      );
       console.log(chalk.gray(`    Changes: ${totalChanges}`));
-      console.log(chalk.gray(`    Time between: ${formatDuration(snapshot2.timestamp - snapshot1.timestamp)}\n`));
-      
+      console.log(
+        chalk.gray(
+          `    Time between: ${formatDuration(snapshot2.timestamp - snapshot1.timestamp)}\n`,
+        ),
+      );
+
       displayDiff(diff, snapshot1.selector, snapshot2.selector);
-      
+
       if (totalChanges > 0) {
-        console.log(chalk.gray(`\n    Legend: ${chalk.red('−')} removed  ${chalk.green('+')} added  ${chalk.yellow('~')} modified\n`));
+        console.log(
+          chalk.gray(
+            `\n    Legend: ${chalk.red("−")} removed  ${chalk.green("+")} added  ${chalk.yellow("~")} modified\n`,
+          ),
+        );
       }
       break;
-      
-    case 'changes':
-      console.log(chalk.cyan.bold('\n📝 Style Change History\n'));
-      
+
+    case "changes":
+      console.log(chalk.cyan.bold("\n📝 Style Change History\n"));
+
       if (!data.changes || data.changes.length === 0) {
-        console.log(chalk.gray('  No changes recorded\n'));
+        console.log(chalk.gray("  No changes recorded\n"));
         return;
       }
-      
+
       // Group changes by selector
       const changesBySelector = new Map<string, StyleChange[]>();
       for (const change of data.changes) {
@@ -277,63 +340,80 @@ export async function timelineCommand(action: string, options: any) {
         }
         changesBySelector.get(change.selector)!.push(change);
       }
-      
+
       for (const [selector, changes] of changesBySelector) {
         console.log(chalk.white.bold(`\n  ${selector}`));
-        
+
         for (const change of changes) {
           const date = new Date(change.timestamp).toLocaleTimeString();
           switch (change.type) {
-            case 'add':
-              console.log(`    ${chalk.green(`+ ${change.property}: ${change.newValue}`)} ${chalk.gray(`[${date}]`)}`);
+            case "add":
+              console.log(
+                `    ${chalk.green(`+ ${change.property}: ${change.newValue}`)} ${chalk.gray(`[${date}]`)}`,
+              );
               break;
-            case 'remove':
-              console.log(`    ${chalk.red(`- ${change.property}: ${change.oldValue}`)} ${chalk.gray(`[${date}]`)}`);
+            case "remove":
+              console.log(
+                `    ${chalk.red(`- ${change.property}: ${change.oldValue}`)} ${chalk.gray(`[${date}]`)}`,
+              );
               break;
-            case 'modify':
-              console.log(`    ${chalk.yellow(`~ ${change.property}: ${change.oldValue} → ${change.newValue}`)} ${chalk.gray(`[${date}]`)}`);
+            case "modify":
+              console.log(
+                `    ${chalk.yellow(`~ ${change.property}: ${change.oldValue} → ${change.newValue}`)} ${chalk.gray(`[${date}]`)}`,
+              );
               break;
           }
         }
       }
       console.log();
       break;
-      
-    case 'stats':
-      console.log(chalk.cyan.bold('\n📈 Timeline Statistics\n'));
+
+    case "stats":
+      console.log(chalk.cyan.bold("\n📈 Timeline Statistics\n"));
       console.log(chalk.gray(`    Total Snapshots: ${data.history.length}`));
-      console.log(chalk.gray(`    Total Changes: ${data.changes?.length || 0}`));
-      
+      console.log(
+        chalk.gray(`    Total Changes: ${data.changes?.length || 0}`),
+      );
+
       if (data.history.length > 0) {
         const firstSnapshot = data.history[0];
         const lastSnapshot = data.history[data.history.length - 1];
         const duration = lastSnapshot.timestamp - firstSnapshot.timestamp;
-        
-        console.log(chalk.gray(`    First Recorded: ${new Date(firstSnapshot.timestamp).toLocaleString()}`));
-        console.log(chalk.gray(`    Last Recorded: ${new Date(lastSnapshot.timestamp).toLocaleString()}`));
+
+        console.log(
+          chalk.gray(
+            `    First Recorded: ${new Date(firstSnapshot.timestamp).toLocaleString()}`,
+          ),
+        );
+        console.log(
+          chalk.gray(
+            `    Last Recorded: ${new Date(lastSnapshot.timestamp).toLocaleString()}`,
+          ),
+        );
         console.log(chalk.gray(`    Duration: ${formatDuration(duration)}`));
-        
+
         // Count changes by type
         const changesByType = { add: 0, remove: 0, modify: 0 };
         for (const change of data.changes || []) {
           changesByType[change.type]++;
         }
-        
+
         console.log(chalk.gray(`\n    Changes by Type:`));
         console.log(chalk.green(`      Added: ${changesByType.add}`));
         console.log(chalk.red(`      Removed: ${changesByType.remove}`));
         console.log(chalk.yellow(`      Modified: ${changesByType.modify}`));
-        
+
         // Most active selectors
         const changesBySelector: Record<string, number> = {};
         for (const change of data.changes || []) {
-          changesBySelector[change.selector] = (changesBySelector[change.selector] || 0) + 1;
+          changesBySelector[change.selector] =
+            (changesBySelector[change.selector] || 0) + 1;
         }
-        
+
         const topSelectors = Object.entries(changesBySelector)
           .sort((a, b) => b[1] - a[1])
           .slice(0, 5);
-        
+
         if (topSelectors.length > 0) {
           console.log(chalk.gray(`\n    Most Active Selectors:`));
           for (const [selector, count] of topSelectors) {
@@ -341,40 +421,43 @@ export async function timelineCommand(action: string, options: any) {
           }
         }
       }
-      
+
       try {
         const stats = fs.statSync(timelineFile);
         console.log(chalk.gray(`\n    File Size: ${formatBytes(stats.size)}`));
       } catch (e) {}
-      
+
       console.log();
       break;
-      
-    case 'export':
-      const exportPath = options.output || `chaincss-timeline-${Date.now()}.json`;
-      const fullExportPath = path.isAbsolute(exportPath) 
-        ? exportPath 
+
+    case "export":
+      const exportPath =
+        options.output || `chaincss-timeline-${Date.now()}.json`;
+      const fullExportPath = path.isAbsolute(exportPath)
+        ? exportPath
         : path.join(process.cwd(), exportPath);
-      
+
       // Add export metadata
       const exportData = {
         ...data,
         exportedAt: Date.now(),
         exportedFrom: timelineFile,
-        version: '1.0.0'
+        version: "1.0.0",
       };
-      
+
       try {
         fs.writeFileSync(fullExportPath, JSON.stringify(exportData, null, 2));
         const stats = fs.statSync(fullExportPath);
         console.log(chalk.green(`\n✓ Timeline exported to ${fullExportPath}`));
         console.log(chalk.gray(`  Size: ${formatBytes(stats.size)}`));
       } catch (error) {
-        console.log(chalk.red(`\n❌ Failed to export: ${(error as Error).message}`));
+        console.log(
+          chalk.red(`\n❌ Failed to export: ${(error as Error).message}`),
+        );
       }
       break;
-      
-    case 'clear':
+
+    case "clear":
       try {
         // Create backup before clearing
         const backupPath = `${timelineFile}.backup-${Date.now()}`;
@@ -383,44 +466,60 @@ export async function timelineCommand(action: string, options: any) {
         console.log(chalk.green(`\n✓ Timeline cleared`));
         console.log(chalk.gray(`  Backup saved to ${backupPath}`));
       } catch (error) {
-        console.log(chalk.red(`\n❌ Failed to clear timeline: ${(error as Error).message}`));
+        console.log(
+          chalk.red(
+            `\n❌ Failed to clear timeline: ${(error as Error).message}`,
+          ),
+        );
       }
       break;
-      
-    case 'watch':
-      console.log(chalk.cyan.bold('\n👁️  Watching timeline changes...\n'));
-      console.log(chalk.gray('    Press Ctrl+C to stop\n'));
-      
+
+    case "watch":
+      console.log(chalk.cyan.bold("\n👁️  Watching timeline changes...\n"));
+      console.log(chalk.gray("    Press Ctrl+C to stop\n"));
+
       let lastModified = 0;
       try {
         if (fs.existsSync(timelineFile)) {
           lastModified = fs.statSync(timelineFile).mtimeMs;
         }
       } catch (e) {}
-      
+
       const watcher = setInterval(() => {
         try {
           if (!fs.existsSync(timelineFile)) return;
-          
+
           const stats = fs.statSync(timelineFile);
           if (stats.mtimeMs > lastModified) {
             lastModified = stats.mtimeMs;
             const newData = loadTimelineData(timelineFile);
-            
+
             // Safe, guarded merge avoids crash of TypeError if files are concurrently locked
             if (newData && newData.history && Array.isArray(newData.history)) {
               if (newData.history.length !== data.history.length) {
-                console.log(chalk.yellow(`\n📝 Timeline updated - ${new Date().toLocaleTimeString()}`));
-                console.log(chalk.gray(`    New snapshot count: ${newData.history.length}`));
-                
+                console.log(
+                  chalk.yellow(
+                    `\n📝 Timeline updated - ${new Date().toLocaleTimeString()}`,
+                  ),
+                );
+                console.log(
+                  chalk.gray(
+                    `    New snapshot count: ${newData.history.length}`,
+                  ),
+                );
+
                 // Show the latest snapshot
                 const latest = newData.history[newData.history.length - 1];
                 if (latest) {
                   console.log(chalk.green(`    Latest: ${latest.selector}`));
-                  console.log(chalk.gray(`    Properties: ${Object.keys(latest.styles).length}`));
+                  console.log(
+                    chalk.gray(
+                      `    Properties: ${Object.keys(latest.styles).length}`,
+                    ),
+                  );
                 }
               }
-              
+
               // Safely mutate local references without wiping the object identity
               data.history = newData.history;
               data.changes = newData.changes || [];
@@ -428,27 +527,44 @@ export async function timelineCommand(action: string, options: any) {
             }
           }
         } catch (e) {
-          // Gracefully swallow temporary file system access errors 
+          // Gracefully swallow temporary file system access errors
         }
       }, 1000);
-      
+
       // Handle cleanup on exit
-      process.on('SIGINT', () => {
+      process.on("SIGINT", () => {
         clearInterval(watcher);
-        console.log(chalk.gray('\n\n👋 Stopped watching\n'));
+        console.log(chalk.gray("\n\n👋 Stopped watching\n"));
         process.exit(0);
       });
       break;
-      
+
     default:
       console.log(chalk.yellow(`\n❌ Unknown action: ${action}`));
-      console.log(chalk.gray('\nAvailable actions:'));
-      console.log(chalk.cyan('  list      ') + chalk.gray('- List all timeline snapshots'));
-      console.log(chalk.cyan('  diff      ') + chalk.gray('- Compare two snapshots'));
-      console.log(chalk.cyan('  changes   ') + chalk.gray('- Show individual style changes'));
-      console.log(chalk.cyan('  stats     ') + chalk.gray('- Show timeline statistics'));
-      console.log(chalk.cyan('  export    ') + chalk.gray('- Export timeline to JSON'));
-      console.log(chalk.cyan('  clear     ') + chalk.gray('- Clear timeline data'));
-      console.log(chalk.cyan('  watch     ') + chalk.gray('- Watch for timeline updates\n'));
+      console.log(chalk.gray("\nAvailable actions:"));
+      console.log(
+        chalk.cyan("  list      ") +
+          chalk.gray("- List all timeline snapshots"),
+      );
+      console.log(
+        chalk.cyan("  diff      ") + chalk.gray("- Compare two snapshots"),
+      );
+      console.log(
+        chalk.cyan("  changes   ") +
+          chalk.gray("- Show individual style changes"),
+      );
+      console.log(
+        chalk.cyan("  stats     ") + chalk.gray("- Show timeline statistics"),
+      );
+      console.log(
+        chalk.cyan("  export    ") + chalk.gray("- Export timeline to JSON"),
+      );
+      console.log(
+        chalk.cyan("  clear     ") + chalk.gray("- Clear timeline data"),
+      );
+      console.log(
+        chalk.cyan("  watch     ") +
+          chalk.gray("- Watch for timeline updates\n"),
+      );
   }
 }

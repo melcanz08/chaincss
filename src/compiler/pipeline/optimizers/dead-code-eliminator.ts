@@ -3,10 +3,13 @@
 // ============================================================================
 // Graph-based dead code elimination. Uses dependency graph as single source of truth.
 
-import type { StyleIR, IRRule } from '../ir/types.js';
-import type { OptimizationPass, OptimizationResult } from '../pipeline-types.js';
+import type { StyleIR, IRRule } from "../ir/types.js";
+import type {
+  OptimizationPass,
+  OptimizationResult,
+} from "../pipeline-types.js";
 
-function isRuleUsed(rule: IRRule, graph: StyleIR['graph']): boolean {
+function isRuleUsed(rule: IRRule, graph: StyleIR["graph"]): boolean {
   // A rule is "used" if it has dependents in the graph
   if (!graph) return true;
   const node = graph.nodes.get(rule.id);
@@ -17,13 +20,19 @@ function isRuleUsed(rule: IRRule, graph: StyleIR['graph']): boolean {
 
 function hasDeclarations(rule: IRRule): boolean {
   if (rule.declarations?.length) return true;
-  if (rule.pseudoClasses?.some(p => p.declarations?.length)) return true;
-  if (rule.atRules?.some(a => a.declarations?.length || a.nestedRules?.length)) return true;
+  if (rule.pseudoClasses?.some((p) => p.declarations?.length)) return true;
+  if (
+    rule.atRules?.some((a) => a.declarations?.length || a.nestedRules?.length)
+  )
+    return true;
   if (rule.nestedRules?.length) return true;
   return false;
 }
 
-function eliminateDeadRules(ir: StyleIR): { eliminated: number; bytesSaved: number } {
+function eliminateDeadRules(ir: StyleIR): {
+  eliminated: number;
+  bytesSaved: number;
+} {
   let eliminated = 0;
   let bytesSaved = 0;
 
@@ -31,9 +40,10 @@ function eliminateDeadRules(ir: StyleIR): { eliminated: number; bytesSaved: numb
   const usedById = new Set<string>();
   if (ir.graph) {
     if (ir.graph.nodes) {
-      const nodesEntries = ir.graph.nodes instanceof Map 
-        ? ir.graph.nodes.entries() 
-        : Object.entries(ir.graph.nodes);
+      const nodesEntries =
+        ir.graph.nodes instanceof Map
+          ? ir.graph.nodes.entries()
+          : Object.entries(ir.graph.nodes);
 
       for (const [id, rawNode] of nodesEntries) {
         const node = rawNode as any;
@@ -44,9 +54,12 @@ function eliminateDeadRules(ir: StyleIR): { eliminated: number; bytesSaved: numb
     }
 
     if (ir.graph.rootNodes) {
-      const rootNodesList = ir.graph.rootNodes instanceof Set 
-        ? Array.from(ir.graph.rootNodes) 
-        : (Array.isArray(ir.graph.rootNodes) ? ir.graph.rootNodes : Object.values(ir.graph.rootNodes));
+      const rootNodesList =
+        ir.graph.rootNodes instanceof Set
+          ? Array.from(ir.graph.rootNodes)
+          : Array.isArray(ir.graph.rootNodes)
+            ? ir.graph.rootNodes
+            : Object.values(ir.graph.rootNodes);
 
       for (const rootId of rootNodesList) {
         if (rootId) usedById.add(String(rootId));
@@ -75,14 +88,22 @@ function eliminateDeadRules(ir: StyleIR): { eliminated: number; bytesSaved: numb
 
     // Filter dead nested rules and at-rules
     if (rule.nestedRules) {
-      rule.nestedRules = rule.nestedRules.filter(n => {
-        if (n.isDead) { eliminated++; bytesSaved += 80; return false; }
+      rule.nestedRules = rule.nestedRules.filter((n) => {
+        if (n.isDead) {
+          eliminated++;
+          bytesSaved += 80;
+          return false;
+        }
         return true;
       });
     }
     if (rule.atRules) {
-      rule.atRules = rule.atRules.filter(a => {
-        if ((a as any).isDead) { eliminated++; bytesSaved += 50; return false; }
+      rule.atRules = rule.atRules.filter((a) => {
+        if ((a as any).isDead) {
+          eliminated++;
+          bytesSaved += 50;
+          return false;
+        }
         return true;
       });
     }
@@ -95,13 +116,21 @@ function eliminateDeadRules(ir: StyleIR): { eliminated: number; bytesSaved: numb
 }
 
 export const deadCodeEliminator: OptimizationPass = {
-  name: 'dead-code-eliminator',
-  cost: 'cheap',
-  requiredFor: ['css', 'atomic-css'],
+  name: "dead-code-eliminator",
+  cost: "cheap",
+  requiredFor: ["css", "atomic-css"],
 
   optimize(ir: StyleIR): OptimizationResult {
     if (!ir?.rules) {
-      return { ir, savings: { rulesEliminated: 0, declarationsEliminated: 0, bytesSaved: 0 }, changes: 0 };
+      return {
+        ir,
+        savings: {
+          rulesEliminated: 0,
+          declarationsEliminated: 0,
+          bytesSaved: 0,
+        },
+        changes: 0,
+      };
     }
 
     const { eliminated, bytesSaved } = eliminateDeadRules(ir);
@@ -110,15 +139,19 @@ export const deadCodeEliminator: OptimizationPass = {
       ir.diagnostics.push({
         id: `dce-${ir.id}`,
         nodeId: ir.id,
-        severity: 'info',
+        severity: "info",
         message: `Dead code eliminator: removed ${eliminated} unused rules.`,
-        pass: 'dead-code-eliminator',
+        pass: "dead-code-eliminator",
       });
     }
 
     return {
       ir,
-      savings: { rulesEliminated: eliminated, declarationsEliminated: 0, bytesSaved },
+      savings: {
+        rulesEliminated: eliminated,
+        declarationsEliminated: 0,
+        bytesSaved,
+      },
       changes: eliminated,
     };
   },

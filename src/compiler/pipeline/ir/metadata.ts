@@ -1,7 +1,7 @@
 // src/compiler/pipeline/ir/metadata.ts
 // Pass-owned metadata namespaces — cleaner than _prefixed grab-bag
 
-import type { IRNodeId } from './types.js';
+import type { IRNodeId } from "./types.js";
 
 /**
  * Namespaced metadata registry.
@@ -33,13 +33,13 @@ export interface PassMetadata {
 }
 
 export interface SemanticAnalysis {
-  tokens: string[];        // Token references ($primary.500)
-  intents: string[];       // Detected intents
-  constraints: string[];   // Detected constraints
+  tokens: string[]; // Token references ($primary.500)
+  intents: string[]; // Detected intents
+  constraints: string[]; // Detected constraints
 }
 
 export interface LayoutAnalysis {
-  type: 'flexbox' | 'grid' | 'block' | 'absolute' | 'unknown';
+  type: "flexbox" | "grid" | "block" | "absolute" | "unknown";
   hasViewportUnits: boolean;
   hasLargeFixed: boolean;
   responsiveBreakpoints: string[];
@@ -47,7 +47,7 @@ export interface LayoutAnalysis {
 
 export interface AccessibilityAnalysis {
   contrastRatio?: number;
-  wcagLevel?: 'A' | 'AA' | 'AAA';
+  wcagLevel?: "A" | "AA" | "AAA";
   hasFocusIndicator: boolean;
   hasAriaLabel: boolean;
   suggestions: string[];
@@ -85,11 +85,11 @@ export function initMetadata(): PassMetadata {
 export function setPassMetadata<T extends Record<string, unknown>>(
   meta: PassMetadata,
   namespace: string,
-  data: T
+  data: T,
 ): PassMetadata {
   return {
     ...meta,
-    [namespace]: { ...(meta[namespace] as any || {}), ...data },
+    [namespace]: { ...((meta[namespace] as any) || {}), ...data },
   };
 }
 
@@ -98,7 +98,7 @@ export function setPassMetadata<T extends Record<string, unknown>>(
  */
 export function getPassMetadata<T = Record<string, unknown>>(
   meta: PassMetadata,
-  namespace: string
+  namespace: string,
 ): T | undefined {
   return (meta as any)[namespace] as T | undefined;
 }
@@ -116,9 +116,9 @@ export function hasPassRun(meta: PassMetadata, namespace: string): boolean {
 export function setIncrementalMeta(
   meta: PassMetadata,
   deps: IRNodeId[],
-  dependents: IRNodeId[]
+  dependents: IRNodeId[],
 ): PassMetadata {
-  return setPassMetadata(meta, 'incremental', {
+  return setPassMetadata(meta, "incremental", {
     dependencies: deps,
     dependents,
     dirty: false,
@@ -130,8 +130,11 @@ export function setIncrementalMeta(
  * Mark a rule as dirty in its incremental metadata.
  */
 export function markDirty(meta: PassMetadata): PassMetadata {
-  const inc = getPassMetadata<{ dirty: boolean; lastCompiledAt: number }>(meta, 'incremental');
-  return setPassMetadata(meta, 'incremental', {
+  const inc = getPassMetadata<{ dirty: boolean; lastCompiledAt: number }>(
+    meta,
+    "incremental",
+  );
+  return setPassMetadata(meta, "incremental", {
     ...inc,
     dirty: true,
   });

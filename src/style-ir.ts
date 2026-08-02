@@ -5,15 +5,23 @@
 // ============================================================================
 
 // Re-export everything from the canonical IR module
-export * from '@compiler/pipeline/ir/index.js';
+export * from "@compiler/pipeline/ir/index.js";
 
 // Legacy pass system
-export type { IRPass } from '@compiler/pipeline/ir/types.js';
-export { applyPass, applyPasses, compileViaIR } from '@compiler/pipeline/ir/legacy.js';
+export type { IRPass } from "@compiler/pipeline/ir/types.js";
+export {
+  applyPass,
+  applyPasses,
+  compileViaIR,
+} from "@compiler/pipeline/ir/legacy.js";
 
 // Named namespace export for backward compat (used by advanced.ts and others)
-import * as ir from './compiler/pipeline/ir/index.js';
-import { applyPass, applyPasses, compileViaIR } from '@compiler/pipeline/ir/legacy.js';
+import * as ir from "./compiler/pipeline/ir/index.js";
+import {
+  applyPass,
+  applyPasses,
+  compileViaIR,
+} from "@compiler/pipeline/ir/legacy.js";
 
 export const styleIR = {
   createIR: ir.createIR,

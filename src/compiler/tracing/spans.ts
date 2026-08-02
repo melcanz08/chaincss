@@ -9,8 +9,12 @@ export interface Span {
   endTime?: number;
   duration?: number;
   attributes: Record<string, any>;
-  events: Array<{ name: string; timestamp: number; attributes?: Record<string, any> }>;
-  status: 'ok' | 'error' | 'unknown';
+  events: Array<{
+    name: string;
+    timestamp: number;
+    attributes?: Record<string, any>;
+  }>;
+  status: "ok" | "error" | "unknown";
 }
 
 export interface TracerOptions {
@@ -42,7 +46,7 @@ export class Tracer {
       startTime: performance.now(),
       attributes: {},
       events: [],
-      status: 'unknown',
+      status: "unknown",
     };
 
     this.spans.set(id, span);
@@ -53,7 +57,7 @@ export class Tracer {
     return span;
   }
 
-  endSpan(spanId: string, status: 'ok' | 'error' = 'ok'): Span | null {
+  endSpan(spanId: string, status: "ok" | "error" = "ok"): Span | null {
     const span = this.spans.get(spanId);
     if (!span || span.endTime) {
       return null;
@@ -66,7 +70,11 @@ export class Tracer {
     return span;
   }
 
-  addEvent(spanId: string, name: string, attributes?: Record<string, any>): boolean {
+  addEvent(
+    spanId: string,
+    name: string,
+    attributes?: Record<string, any>,
+  ): boolean {
     const span = this.spans.get(spanId);
     if (!span) return false;
 
@@ -96,7 +104,9 @@ export class Tracer {
   }
 
   getRootSpans(): Span[] {
-    return this.rootSpans.map(id => this.spans.get(id)).filter((s): s is Span => s !== undefined);
+    return this.rootSpans
+      .map((id) => this.spans.get(id))
+      .filter((s): s is Span => s !== undefined);
   }
 
   getTraceTree(): any {
@@ -151,20 +161,24 @@ export class Tracer {
   }
 
   private generateId(): string {
-    return Math.random().toString(36).substring(2, 10) + 
-           Math.random().toString(36).substring(2, 10);
+    return (
+      Math.random().toString(36).substring(2, 10) +
+      Math.random().toString(36).substring(2, 10)
+    );
   }
 
   private createDisabledSpan(name: string): Span {
     return {
-      id: 'disabled',
+      id: "disabled",
       name,
       startTime: 0,
       attributes: {},
       events: [],
-      status: 'unknown',
+      status: "unknown",
     };
   }
 }
 
-export const defaultTracer = new Tracer({ enabled: process.env.NODE_ENV !== 'production' });
+export const defaultTracer = new Tracer({
+  enabled: process.env.NODE_ENV !== "production",
+});

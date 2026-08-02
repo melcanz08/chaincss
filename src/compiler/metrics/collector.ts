@@ -1,8 +1,8 @@
 // src/compiler/metrics/collector.ts
 // Unified metrics collector
 
-import { Counter, type CounterName } from './counters.js';
-import { Timer, type TimerName, type TimerRecord } from './timers.js';
+import { Counter, type CounterName } from "./counters.js";
+import { Timer, type TimerName, type TimerRecord } from "./timers.js";
 
 export interface MetricsSnapshot {
   counters: Record<CounterName, number>;
@@ -18,7 +18,7 @@ export interface MetricsSnapshot {
 export class MetricsCollector {
   private counter: Counter;
   private timer: Timer;
-  private version: string = '2.14.5';
+  private version: string = "2.14.5";
   private history: MetricsSnapshot[] = [];
   private maxHistory: number = 100;
 
@@ -82,38 +82,40 @@ export class MetricsCollector {
   generateReport(): string {
     const snapshot = this.snapshot();
     const lines = [
-      '═══════════════════════════════════════════',
-      ' ChainCSS Compiler Metrics Report',
-      '═══════════════════════════════════════════',
-      '',
+      "═══════════════════════════════════════════",
+      " ChainCSS Compiler Metrics Report",
+      "═══════════════════════════════════════════",
+      "",
       ` Version: ${snapshot.version}`,
       ` Timestamp: ${new Date(snapshot.timestamp).toISOString()}`,
       ` Total Duration: ${snapshot.timers.totalDuration.toFixed(2)}ms`,
-      '',
-      ' ── Counters ──',
+      "",
+      " ── Counters ──",
     ];
 
     for (const [name, value] of Object.entries(snapshot.counters)) {
       lines.push(`   ${name.padEnd(30)} ${String(value).padStart(6)}`);
     }
 
-    lines.push('', ' ── Timers ──');
+    lines.push("", " ── Timers ──");
     for (const record of snapshot.timers.completed) {
-      const duration = record.duration?.toFixed(2) || '0.00';
+      const duration = record.duration?.toFixed(2) || "0.00";
       lines.push(`   ${record.name.padEnd(25)} ${duration.padStart(7)}ms`);
     }
 
     const running = snapshot.timers.running;
     if (running.length > 0) {
-      lines.push('', ' ⏳ Running Timers:');
+      lines.push("", " ⏳ Running Timers:");
       for (const record of running) {
         const elapsed = (performance.now() - record.startTime).toFixed(2);
-        lines.push(`   ${record.name.padEnd(25)} ${elapsed.padStart(7)}ms (running)`);
+        lines.push(
+          `   ${record.name.padEnd(25)} ${elapsed.padStart(7)}ms (running)`,
+        );
       }
     }
 
-    lines.push('', '═══════════════════════════════════════════');
-    return lines.join('\n');
+    lines.push("", "═══════════════════════════════════════════");
+    return lines.join("\n");
   }
 }
 

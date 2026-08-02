@@ -2,10 +2,10 @@
 // FILE: src/compiler/pipeline/inspector/snapshots.ts
 // ============================================================================
 
-import type { IRRule } from '../ir/types.js';
-import type { InspectorSnapshot } from './types.js';
-import type { PipelineReportEntry } from '../pipeline-types.js';
-import { getAffectedDeclarations } from './history.js';
+import type { IRRule } from "../ir/types.js";
+import type { InspectorSnapshot } from "./types.js";
+import type { PipelineReportEntry } from "../pipeline-types.js";
+import { getAffectedDeclarations } from "./history.js";
 
 /**
  * Reconstructs a clean step-by-step visual timeline of style changes across compiler passes.
@@ -13,31 +13,31 @@ import { getAffectedDeclarations } from './history.js';
  */
 export function buildSnapshots(
   rule: IRRule,
-  pipelineReport: PipelineReportEntry[]
+  pipelineReport: PipelineReportEntry[],
 ): InspectorSnapshot[] {
   if (!rule || !pipelineReport || pipelineReport.length === 0) return [];
 
   // 1. Establish initial baseline properties directly from declaration history roots
   const currentRollingState = new Map<string, string>();
-  
+
   if (rule.declarations) {
-    for (const d of (rule.declarations || [])) {
+    for (const d of rule.declarations || []) {
       if (!d || !d.property) continue;
-      
+
       const firstRecord = d.history?.[0];
       const original = String(
-        (firstRecord as any)?.previous??
-        (firstRecord as any)?.before??
-        (firstRecord as any)?.from??
-        d.value
+        (firstRecord as any)?.previous ??
+          (firstRecord as any)?.before ??
+          (firstRecord as any)?.from ??
+          d.value,
       );
-        
+
       currentRollingState.set(d.property, original);
     }
   }
 
   const snapshots: InspectorSnapshot[] = [];
-  let lastSerializedSnapshot = '';
+  let lastSerializedSnapshot = "";
 
   // 2. Step forward lineally through the pipeline execution report
   for (const entry of pipelineReport) {
@@ -45,7 +45,7 @@ export function buildSnapshots(
 
     // Pull modifications introduced specifically by *this* standalone pass
     const affected = getAffectedDeclarations(rule, entry);
-    
+
     // Mutation track: If no modifications occurred, skip calculation early
     if (affected.length === 0 && snapshots.length > 0) {
       continue;
@@ -68,12 +68,12 @@ export function buildSnapshots(
     if (currentSerialized === lastSerializedSnapshot) {
       continue;
     }
-    
+
     lastSerializedSnapshot = currentSerialized;
 
     snapshots.push({
-      pass: entry.pass || 'unknown-pass',
-      stage: entry.stage || 'unknown-stage',
+      pass: entry.pass || "unknown-pass",
+      stage: entry.stage || "unknown-stage",
       declarations,
     });
   }

@@ -2,13 +2,17 @@
 // Usage: import { chain, defineConfig } from 'chaincss'
 
 // Core exports
-export { VERSION } from './shared/constants/index.js';
-export { StyleCollector, chain } from '@core/entities/style-collector.js';
-export type { StyleObject, AtRule, NestedRule } from '@core/entities/style-collector.js';
+export { VERSION } from "./shared/constants/index.js";
+export { StyleCollector, chain } from "@core/entities/style-collector.js";
+export type {
+  StyleObject,
+  AtRule,
+  NestedRule,
+} from "@core/entities/style-collector.js";
 
 // Config
-export { defineConfig } from '@shared/config/index.js';
-export type { ChainCSSUserConfig, MacroHandler } from '@shared/config/index.js';
+export { defineConfig } from "@shared/config/index.js";
+export type { ChainCSSUserConfig, MacroHandler } from "@shared/config/index.js";
 
 // Types
 export type {
@@ -19,8 +23,8 @@ export type {
   CorrectionResult,
   MathResult,
   ChainCSSPlugin,
-  ChainCSSPluginOptions
-} from '@shared/types/index.js';
+  ChainCSSPluginOptions,
+} from "@shared/types/index.js";
 
 // Shorthand types (from shorthand-types.ts)
 export type {
@@ -38,12 +42,16 @@ export type {
   ContainerOptions,
   OutlineOptions,
   ScrollOptions,
-  ListOptions
-} from '@shared/types/shorthand-types.js';
+  ListOptions,
+} from "@shared/types/shorthand-types.js";
 
 // Value Classifier (runtime-safe)
-export { classifyValue, partitionStyles, hasDynamicValues } from '@core/usecases/value-classifier.js';
-export type { ValueClass } from '@core/usecases/value-classifier.js';
+export {
+  classifyValue,
+  partitionStyles,
+  hasDynamicValues,
+} from "@core/usecases/value-classifier.js";
+export type { ValueClass } from "@core/usecases/value-classifier.js";
 
 // Utilities (browser-safe only)
 export {
@@ -89,5 +97,5 @@ export {
   cn as cnUtils,
   devWarn,
   devLog,
-  createDebugger
-} from '@shared/utils/browser.js';
+  createDebugger,
+} from "@shared/utils/browser.js";

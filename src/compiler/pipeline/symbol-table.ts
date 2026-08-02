@@ -1,18 +1,18 @@
 // src/compiler/pipeline/symbol-table.ts
 // Central symbol table for resolving tokens, variables, components, animations
 
-import type { IRNodeId, StyleIR, IRRule, IRAtRule } from './ir/types.js';
+import type { IRNodeId, StyleIR, IRRule, IRAtRule } from "./ir/types.js";
 
-export type SymbolKind = 
-  | 'token' 
-  | 'variable' 
-  | 'component' 
-  | 'selector' 
-  | 'animation' 
-  | 'keyframe' 
-  | 'media-query' 
-  | 'layer' 
-  | 'alias';
+export type SymbolKind =
+  | "token"
+  | "variable"
+  | "component"
+  | "selector"
+  | "animation"
+  | "keyframe"
+  | "media-query"
+  | "layer"
+  | "alias";
 
 export interface SymbolEntry {
   name: string;
@@ -46,7 +46,7 @@ export interface SymbolTable {
 export function buildSymbolTable(ir: StyleIR): SymbolTable {
   const symbols = new Map<string, SymbolEntry>();
   const byKind = new Map<SymbolKind, Map<string, SymbolEntry>>();
-  
+
   const addSymbol = (entry: SymbolEntry) => {
     symbols.set(entry.name, entry);
     if (!byKind.has(entry.kind)) {
@@ -62,7 +62,7 @@ export function buildSymbolTable(ir: StyleIR): SymbolTable {
     // Selector as a symbol
     addSymbol({
       name: rule.selector,
-      kind: 'selector',
+      kind: "selector",
       nodeId: rule.id,
       source: rule.source?.component,
       dependencies: rule.meta.dependencies || [],
@@ -74,7 +74,7 @@ export function buildSymbolTable(ir: StyleIR): SymbolTable {
     if (rule.source?.component) {
       addSymbol({
         name: rule.source.component,
-        kind: 'component',
+        kind: "component",
         nodeId: rule.id,
         source: rule.source.file,
         dependencies: [],
@@ -84,7 +84,7 @@ export function buildSymbolTable(ir: StyleIR): SymbolTable {
     }
 
     // Declarations with token references ($name)
-    for (const decl of (rule.declarations || [])) {
+    for (const decl of rule.declarations || []) {
       // Token references
       const tokenMatches = String(decl.value).matchAll(/\$([a-zA-Z0-9_.-]+)/g);
       for (const match of tokenMatches) {
@@ -92,7 +92,7 @@ export function buildSymbolTable(ir: StyleIR): SymbolTable {
         if (!symbols.has(tokenName)) {
           addSymbol({
             name: tokenName,
-            kind: 'token',
+            kind: "token",
             nodeId: decl.id,
             value: decl.value,
             source: rule.source?.file,
@@ -110,10 +110,10 @@ export function buildSymbolTable(ir: StyleIR): SymbolTable {
       }
 
       // CSS custom properties (--name)
-      if (decl.property.startsWith('--')) {
+      if (decl.property.startsWith("--")) {
         addSymbol({
           name: decl.property,
-          kind: 'variable',
+          kind: "variable",
           nodeId: decl.id,
           value: decl.value,
           source: rule.source?.file,
@@ -126,22 +126,22 @@ export function buildSymbolTable(ir: StyleIR): SymbolTable {
 
     // At-rules (keyframes, media queries)
     if (rule.atRules) {
-      for (const atRule of (rule.atRules || [])) {
-        if (atRule.type === 'keyframes' && atRule.name) {
+      for (const atRule of rule.atRules || []) {
+        if (atRule.type === "keyframes" && atRule.name) {
           addSymbol({
             name: atRule.name,
-            kind: 'animation',
+            kind: "animation",
             nodeId: atRule.id,
             source: rule.source?.file,
             dependencies: [],
             dependents: [rule.id],
-            meta: { type: 'keyframes' },
+            meta: { type: "keyframes" },
           });
         }
-        if (atRule.type === 'media' && atRule.query) {
+        if (atRule.type === "media" && atRule.query) {
           addSymbol({
             name: atRule.query,
-            kind: 'media-query',
+            kind: "media-query",
             nodeId: atRule.id,
             source: rule.source?.file,
             dependencies: [],
@@ -168,36 +168,48 @@ export function buildSymbolTable(ir: StyleIR): SymbolTable {
 /**
  * Resolve a symbol by name. Returns undefined if not found.
  */
-export function resolveSymbol(table: SymbolTable, name: string): SymbolEntry | undefined {
+export function resolveSymbol(
+  table: SymbolTable,
+  name: string,
+): SymbolEntry | undefined {
   return table.symbols.get(name);
 }
 
 /**
  * Find all symbols that depend on a given symbol.
  */
-export function findDependents(table: SymbolTable, name: string): SymbolEntry[] {
+export function findDependents(
+  table: SymbolTable,
+  name: string,
+): SymbolEntry[] {
   const entry = table.symbols.get(name);
   if (!entry) return [];
   return entry.dependents
-    .map(id => table.symbols.get(id))
+    .map((id) => table.symbols.get(id))
     .filter(Boolean) as SymbolEntry[];
 }
 
 /**
  * Find all symbols that a given symbol depends on.
  */
-export function findDependencies(table: SymbolTable, name: string): SymbolEntry[] {
+export function findDependencies(
+  table: SymbolTable,
+  name: string,
+): SymbolEntry[] {
   const entry = table.symbols.get(name);
   if (!entry) return [];
   return entry.dependencies
-    .map(id => table.symbols.get(id))
+    .map((id) => table.symbols.get(id))
     .filter(Boolean) as SymbolEntry[];
 }
 
 /**
  * Get all symbols of a specific kind.
  */
-export function getSymbolsByKind(table: SymbolTable, kind: SymbolKind): SymbolEntry[] {
+export function getSymbolsByKind(
+  table: SymbolTable,
+  kind: SymbolKind,
+): SymbolEntry[] {
   const map = table.byKind.get(kind);
   return map ? Array.from(map.values()) : [];
 }
@@ -214,5 +226,7 @@ export function isUnused(table: SymbolTable, name: string): boolean {
  * Find unused symbols (tokens, variables, animations that nothing references).
  */
 export function findUnusedSymbols(table: SymbolTable): SymbolEntry[] {
-  return Array.from(table.symbols.values()).filter(s => s.dependents.length === 0);
+  return Array.from(table.symbols.values()).filter(
+    (s) => s.dependents.length === 0,
+  );
 }

@@ -2,8 +2,8 @@
 // Uses CSS custom properties instead of DOM injection for dynamic styles.
 // No textContent mutation, no memory leaks, React concurrent-mode safe.
 
-import React, { useMemo, useEffect, createContext, useContext } from 'react';
-import type { UseChainStylesOptions } from '@shared/types/index.js';
+import React, { useMemo, useEffect, createContext, useContext } from "react";
+import type { UseChainStylesOptions } from "@shared/types/index.js";
 
 interface StyleDefinition {
   className?: string;
@@ -40,14 +40,13 @@ interface StyleDefinition {
 export function useChainStyles(
   styles: Record<string, StyleDefinition>,
   deps: Record<string, any> = {},
-  options: UseChainStylesOptions = {}
+  options: UseChainStylesOptions = {},
 ): {
   classes: Record<string, string>;
   styleVars: Record<string, string>;
   cx: (...names: any[]) => string;
   cn: (...names: any[]) => string;
 } {
-
   // Build dependency array for useMemo from deps object values
   const depValues = Object.values(deps);
 
@@ -64,23 +63,23 @@ export function useChainStyles(
       // Get the base class name
       const baseClass =
         styleObj.className ||
-        styleObj.selectors?.[0]?.replace(/^\./, '') ||
+        styleObj.selectors?.[0]?.replace(/^\./, "") ||
         key;
       classes[key] = baseClass;
 
       // Evaluate dynamic functions into CSS custom properties
       if (styleObj.dynamic) {
         for (const [prop, fn] of Object.entries(styleObj.dynamic)) {
-          if (typeof fn === 'function') {
+          if (typeof fn === "function") {
             try {
               // Pass merged context (theme + deps) to the function
               const value = (fn as Function)(context);
 
               // Convert camelCase to kebab-case for CSS custom property name
               const cleanProp = prop
-                .replace(/([A-Z])/g, '-$1')
+                .replace(/([A-Z])/g, "-$1")
                 .toLowerCase()
-                .replace(/^-/, '');
+                .replace(/^-/, "");
               const varName = `--${baseClass}-${cleanProp}`;
 
               if (value !== undefined && value !== null) {
@@ -90,7 +89,7 @@ export function useChainStyles(
               if (options.debug) {
                 console.warn(
                   `[ChainCSS] Error evaluating dynamic style "${key}.${prop}":`,
-                  err
+                  err,
                 );
               }
             }
@@ -110,12 +109,12 @@ export function useChainStyles(
 export function useChainStylesApplied(
   styles: Record<string, StyleDefinition>,
   deps: Record<string, any> = {},
-  options?: UseChainStylesOptions
+  options?: UseChainStylesOptions,
 ): { className: string; style: Record<string, string> } {
   const { classes, styleVars } = useChainStyles(styles, deps, options);
 
   return {
-    className: [...new Set(Object.values(classes))].filter(Boolean).join(' '),
+    className: [...new Set(Object.values(classes))].filter(Boolean).join(" "),
     style: styleVars,
   };
 }
@@ -124,13 +123,17 @@ export function useChainStylesApplied(
 export function useDynamicChainStyles(s: any, d: any[], o?: any) {
   // Convert array to object using indices as keys (backward compat)
   const depsObj: Record<string, any> = {};
-  d.forEach((val, i) => { depsObj[`arg${i}`] = val; });
+  d.forEach((val, i) => {
+    depsObj[`arg${i}`] = val;
+  });
   return useChainStyles(s, depsObj, { ...o, watch: true });
 }
 
 export function useThemeChainStyles(t: any, s: any, d: any[]) {
   const depsObj: Record<string, any> = { ...t };
-  d.forEach((val, i) => { depsObj[`arg${i}`] = val; });
+  d.forEach((val, i) => {
+    depsObj[`arg${i}`] = val;
+  });
   return useChainStyles(s, depsObj);
 }
 
@@ -140,36 +143,50 @@ export function useThemeChainStyles(t: any, s: any, d: any[]) {
 
 export function ChainCSSGlobal({ styles, children }: any) {
   const serializedStyles = useMemo(() => {
-    if (typeof styles === 'string') return styles;
-    if (typeof styles === 'object' && styles !== null) {
-      try { return JSON.stringify(styles); } catch { return ''; }
+    if (typeof styles === "string") return styles;
+    if (typeof styles === "object" && styles !== null) {
+      try {
+        return JSON.stringify(styles);
+      } catch {
+        return "";
+      }
     }
-    return '';
+    return "";
   }, [styles]);
 
   useEffect(() => {
     if (!serializedStyles) return;
-    const el = document.createElement('style');
-    el.setAttribute('data-chaincss', 'global');
+    const el = document.createElement("style");
+    el.setAttribute("data-chaincss", "global");
 
-    if (typeof styles === 'string') {
+    if (typeof styles === "string") {
       el.textContent = styles;
-    } else if (typeof styles === 'object') {
+    } else if (typeof styles === "object") {
       el.textContent = Object.entries(styles as Record<string, any>)
         .map(([_, def]) => {
-          if (!def?.selectors) return '';
+          if (!def?.selectors) return "";
           const props = Object.entries(def)
-            .filter(([k, v]) => !k.startsWith('_') && k !== 'selectors' && typeof v !== 'object')
-            .map(([k, v]) => `  ${k.replace(/([A-Z])/g, '-$1').toLowerCase()}: ${v};`)
-            .join('\n');
-          return `${def.selectors.join(', ')} {\n${props}\n}`;
+            .filter(
+              ([k, v]) =>
+                !k.startsWith("_") &&
+                k !== "selectors" &&
+                typeof v !== "object",
+            )
+            .map(
+              ([k, v]) =>
+                `  ${k.replace(/([A-Z])/g, "-$1").toLowerCase()}: ${v};`,
+            )
+            .join("\n");
+          return `${def.selectors.join(", ")} {\n${props}\n}`;
         })
         .filter(Boolean)
-        .join('\n');
+        .join("\n");
     }
 
     document.head.appendChild(el);
-    return () => { el.remove(); };
+    return () => {
+      el.remove();
+    };
   }, [serializedStyles]);
 
   return children || null;
@@ -183,8 +200,8 @@ export function cx(...classes: any[]): string {
   return classes
     .flatMap((c) => {
       if (!c) return [];
-      if (typeof c === 'string') return [c];
-      if (typeof c === 'object') {
+      if (typeof c === "string") return [c];
+      if (typeof c === "object") {
         if (c.className) return [c.className];
         return Object.entries(c)
           .filter(([_, v]) => v)
@@ -192,7 +209,7 @@ export function cx(...classes: any[]): string {
       }
       return [];
     })
-    .join(' ');
+    .join(" ");
 }
 
 // ============================================================================
@@ -201,19 +218,23 @@ export function cx(...classes: any[]): string {
 
 const styledComponentCache = new Map<string, any>();
 
-export function createStyledComponent(tag: string = 'div', baseStyle?: any): any {
-  const cacheKey = `${tag}:${baseStyle?.className || baseStyle?.selectors?.[0] || 'div'}`;
+export function createStyledComponent(
+  tag: string = "div",
+  baseStyle?: any,
+): any {
+  const cacheKey = `${tag}:${baseStyle?.className || baseStyle?.selectors?.[0] || "div"}`;
 
   if (styledComponentCache.has(cacheKey)) {
     return styledComponentCache.get(cacheKey);
   }
 
-  const cn = baseStyle?.className || baseStyle?.selectors?.[0]?.replace(/^\./, '') || '';
+  const cn =
+    baseStyle?.className || baseStyle?.selectors?.[0]?.replace(/^\./, "") || "";
 
   const StyledComponent = React.forwardRef((props: any, ref: any) => {
     const { class: omitClass, className, ...restProps } = props;
 
-    return React.createElement(tag || 'div', {
+    return React.createElement(tag || "div", {
       ...restProps,
       ref,
       className: cx(cn, className, omitClass),
@@ -229,7 +250,10 @@ export function createStyledComponent(tag: string = 'div', baseStyle?: any): any
 export function createStyledComponents(comps: any): any {
   const r: any = {};
   for (const [n, c] of Object.entries(comps)) {
-    r[n] = createStyledComponent((c as any).element || 'div', (c as any).styles);
+    r[n] = createStyledComponent(
+      (c as any).element || "div",
+      (c as any).styles,
+    );
   }
   return r;
 }
@@ -240,14 +264,18 @@ export function createStyledComponents(comps: any): any {
 
 export function withChainStyles<P extends object>(
   Component: React.ComponentType<P>,
-  styles: any
+  styles: any,
 ): React.FC<P> {
   function WrappedComponent(props: P) {
     const { classes, styleVars } = useChainStyles(styles);
-    return React.createElement(Component, { ...props, classes, styleVars } as any);
+    return React.createElement(Component, {
+      ...props,
+      classes,
+      styleVars,
+    } as any);
   }
   WrappedComponent.displayName = `withChainStyles(${
-    Component.displayName || Component.name || 'Component'
+    Component.displayName || Component.name || "Component"
   })`;
   return WrappedComponent as React.FC<P>;
 }
@@ -258,7 +286,7 @@ export function withChainStyles<P extends object>(
 
 export function useComputedStyles<T extends Record<string, any>>(
   s: T,
-  d: Record<string, any> = {}
+  d: Record<string, any> = {},
 ) {
   return useChainStyles(s as any, d);
 }
@@ -268,6 +296,12 @@ export function useComputedStyles<T extends Record<string, any>>(
 // ============================================================================
 
 let debugEnabled = false;
-export function enableChainCSSDebug() { debugEnabled = true; }
-export function disableChainCSSDebug() { debugEnabled = false; }
-export function isDebugEnabled() { return debugEnabled; }
+export function enableChainCSSDebug() {
+  debugEnabled = true;
+}
+export function disableChainCSSDebug() {
+  debugEnabled = false;
+}
+export function isDebugEnabled() {
+  return debugEnabled;
+}

@@ -2,19 +2,22 @@
 // FILE: src/compiler/pipeline/optimizers/source-optimizer.ts
 // ============================================================================
 
-import type { StyleIR, IRRule, IRDeclaration } from '../ir/types.js';
-import type { OptimizationPass, OptimizationResult } from '../pipeline-types.js';
+import type { StyleIR, IRRule, IRDeclaration } from "../ir/types.js";
+import type {
+  OptimizationPass,
+  OptimizationResult,
+} from "../pipeline-types.js";
 
 function stringifyDeclarations(decls: IRDeclaration[] | undefined): string {
-  if (!decls) return '';
+  if (!decls) return "";
   return decls
-    .map(d => `${d.property}:${d.value}`)
+    .map((d) => `${d.property}:${d.value}`)
     .sort()
-    .join(';');
+    .join(";");
 }
 
 function computeRuleHash(rule: IRRule): string {
-  const selector = rule.selector || '';
+  const selector = rule.selector || "";
   const declString = stringifyDeclarations(rule.declarations);
 
   // Safely sort and normalize pseudo-classes to avoid compilation order variance
@@ -22,31 +25,42 @@ function computeRuleHash(rule: IRRule): string {
     ? [...(rule as any).pseudoClasses]
         .map((p: any) => `${p.name}:${stringifyDeclarations(p.declarations)}`)
         .sort()
-        .join(';')
-    : '';
+        .join(";")
+    : "";
 
   // Safely sort and normalize nested media/container queries
   const atRuleStr = rule.atRules
     ? [...rule.atRules]
-        .map((a: any) => `${a.type}:${a.query || ''}:${stringifyDeclarations(a.declarations)}`)
+        .map(
+          (a: any) =>
+            `${a.type}:${a.query || ""}:${stringifyDeclarations(a.declarations)}`,
+        )
         .sort()
-        .join(';')
-    : '';
+        .join(";")
+    : "";
 
   return `${selector}|${pseudoStr}|${atRuleStr}|${declString}`;
 }
 
 export const sourceOptimizer: OptimizationPass = {
-  name: 'source-optimizer',
-  cost: 'expensive',
-  requiredFor: ['css'],
+  name: "source-optimizer",
+  cost: "expensive",
+  requiredFor: ["css"],
 
   optimize(ir: StyleIR): OptimizationResult {
     let changes = 0;
     let bytesSaved = 0;
 
     if (!ir || !ir.rules) {
-      return { ir, savings: { rulesEliminated: 0, declarationsEliminated: 0, bytesSaved: 0 }, changes: 0 };
+      return {
+        ir,
+        savings: {
+          rulesEliminated: 0,
+          declarationsEliminated: 0,
+          bytesSaved: 0,
+        },
+        changes: 0,
+      };
     }
 
     if (!ir.diagnostics) {
@@ -71,16 +85,20 @@ export const sourceOptimizer: OptimizationPass = {
         previousRule.isDead = true;
         changes++;
 
-        const approximateBytes = (rule.selector || '').length + stringifyDeclarations(rule.declarations).length + 20;
+        const approximateBytes =
+          (rule.selector || "").length +
+          stringifyDeclarations(rule.declarations).length +
+          20;
         bytesSaved += approximateBytes;
 
         ir.diagnostics.push({
           id: `dup-rule-${previousRule.id}-${rule.id}`,
           nodeId: previousRule.id,
-          severity: 'info',
+          severity: "info",
           message: `Duplicate rule "${rule.selector}" eliminated — overridden by identical subsequent block at index ${i}`,
-          suggestion: 'Consolidate redundant styles or combine shared definitions.',
-          pass: 'source-optimizer',
+          suggestion:
+            "Consolidate redundant styles or combine shared definitions.",
+          pass: "source-optimizer",
         });
       }
 
@@ -92,9 +110,9 @@ export const sourceOptimizer: OptimizationPass = {
       ir.diagnostics.push({
         id: `source-opt-summary-${Date.now()}`,
         nodeId: ir.id,
-        severity: 'info',
+        severity: "info",
         message: `Source optimizer: eliminated ${changes} redundant rule blocks, recovering ~${bytesSaved} bytes`,
-        pass: 'source-optimizer',
+        pass: "source-optimizer",
       });
     }
 

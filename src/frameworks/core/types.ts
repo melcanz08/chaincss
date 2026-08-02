@@ -1,7 +1,7 @@
 // @ts-nocheck — optional peer dependency
 // src/runtime/types.ts
 
-import type { StyleObject } from '@core/usecases/style-compiler.js';
+import type { StyleObject } from "@core/usecases/style-compiler.js";
 
 /**
  * Runtime ChainCSS Type Definitions
@@ -42,7 +42,10 @@ export interface RuntimeCompiledResult {
 
 export interface StyleInjector {
   inject(className: string, css: string, debug?: boolean): void;
-  injectMultiple(styles: Record<string, StyleObject>, moduleId?: string): Record<string, string>;
+  injectMultiple(
+    styles: Record<string, StyleObject>,
+    moduleId?: string,
+  ): Record<string, string>;
   remove(className: string): void;
   removeModule(moduleId: string): void;
   removeAll(): void;
@@ -51,7 +54,11 @@ export interface StyleInjector {
   getToken(path: string): any;
   resolveTokens(value: any): any;
   getStyleElement(): HTMLStyleElement | null;
-  getStats(): { injectedStyles: number; modules: number; deduplicatedHashes: number };
+  getStats(): {
+    injectedStyles: number;
+    modules: number;
+    deduplicatedHashes: number;
+  };
 }
 
 // ============================================================================
@@ -168,7 +175,7 @@ export interface HMRPayload {
 }
 
 export interface HMRUpdateEvent {
-  type: 'chaincss:update';
+  type: "chaincss:update";
   data: HMRPayload;
 }
 
@@ -200,22 +207,24 @@ export interface DebugOptions {
 export type CSSValue = string | number | undefined;
 export type CSSProperties = Record<string, CSSValue>;
 
-export type ResponsiveValue<T> = T | {
-  base?: T;
-  sm?: T;
-  md?: T;
-  lg?: T;
-  xl?: T;
-  '2xl'?: T;
-  [key: string]: T | undefined;
-};
+export type ResponsiveValue<T> =
+  | T
+  | {
+      base?: T;
+      sm?: T;
+      md?: T;
+      lg?: T;
+      xl?: T;
+      "2xl"?: T;
+      [key: string]: T | undefined;
+    };
 
 export type TokenValue<T = string> = T | `$${string}`;
 
 export interface RuntimeStyleDefinition {
   className?: string;
   selectors?: string[];
-  dynamic?: Record<string, Function>;  // Functions accept context: (ctx) => value
+  dynamic?: Record<string, Function>; // Functions accept context: (ctx) => value
   [key: string]: any;
 }
 
@@ -240,23 +249,24 @@ declare global {
 // ============================================================================
 
 export function isStyleInjector(obj: any): obj is StyleInjector {
-  return obj && typeof obj === 'object' && 
-    typeof obj.injectMultiple === 'function' &&
-    typeof obj.removeModule === 'function';
+  return (
+    obj &&
+    typeof obj === "object" &&
+    typeof obj.injectMultiple === "function" &&
+    typeof obj.removeModule === "function"
+  );
 }
 
 export function isChainCSSManifest(obj: any): obj is ChainCSSManifest {
-  return obj && typeof obj === 'object' && 
-    'atomicMap' in obj && 
-    'version' in obj;
+  return (
+    obj && typeof obj === "object" && "atomicMap" in obj && "version" in obj
+  );
 }
 
 export function isTokenStore(obj: any): obj is TokenStore {
-  return obj && typeof obj === 'object';
+  return obj && typeof obj === "object";
 }
 
 export function isHMRPayload(obj: any): obj is HMRPayload {
-  return obj && typeof obj === 'object' && 
-    'file' in obj && 
-    'timestamp' in obj;
+  return obj && typeof obj === "object" && "file" in obj && "timestamp" in obj;
 }

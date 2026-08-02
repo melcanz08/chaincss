@@ -2,21 +2,21 @@
 // Performance timers for measuring compilation stages
 
 export type TimerName =
-  | 'total_compile'
-  | 'parse'
-  | 'normalize'
-  | 'validate'
-  | 'analyze'
-  | 'optimize'
-  | 'lower'
-  | 'emit'
-  | 'cache_lookup'
-  | 'cache_write'
-  | 'graph_build'
-  | 'symbol_table_build'
-  | 'token_resolution'
-  | 'accessibility_check'
-  | 'atomic_extraction';
+  | "total_compile"
+  | "parse"
+  | "normalize"
+  | "validate"
+  | "analyze"
+  | "optimize"
+  | "lower"
+  | "emit"
+  | "cache_lookup"
+  | "cache_write"
+  | "graph_build"
+  | "symbol_table_build"
+  | "token_resolution"
+  | "accessibility_check"
+  | "atomic_extraction";
 
 export interface TimerRecord {
   name: TimerName;
@@ -59,7 +59,7 @@ export class Timer {
   }
 
   getDuration(name: TimerName): number | null {
-    const record = this.completed.find(r => r.name === name);
+    const record = this.completed.find((r) => r.name === name);
     return record?.duration || null;
   }
 

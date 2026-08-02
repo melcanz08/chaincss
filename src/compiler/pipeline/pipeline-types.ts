@@ -1,7 +1,7 @@
 // src/compiler/pipeline/pipeline-types.ts
 
-import type { StyleIR, IRRule, IRDeclaration, IRNodeId } from './ir/types.js';
-import type { PassDeclaration } from './pass-scheduler.js';
+import type { StyleIR, IRRule, IRDeclaration, IRNodeId } from "./ir/types.js";
+import type { PassDeclaration } from "./pass-scheduler.js";
 // ============================================================================
 // Stage 1: Normalization
 // ============================================================================
@@ -32,14 +32,14 @@ export interface NormalizationPass {
 // Stage 2: Validation
 // ============================================================================
 export interface ValidationContext {
-  wcagLevel?: 'A' | 'AA' | 'AAA';
+  wcagLevel?: "A" | "AA" | "AAA";
   strictMode?: boolean;
 }
 
 export interface Diagnostic {
   id: string;
   nodeId: IRNodeId;
-  severity: 'error' | 'warning' | 'info' | 'hint';
+  severity: "error" | "warning" | "info" | "hint";
   category: string;
   message: string;
   suggestion?: string;
@@ -92,8 +92,8 @@ export interface AnalysisPass {
 // Stage 4: Optimization
 // ============================================================================
 export interface OptimizationContext {
-  tokens?: Record<string, any>;  // Design tokens for $token resolution
-  atomicUsageMap?: Map<string, number>;  // Shared atomic usage counter across files
+  tokens?: Record<string, any>; // Design tokens for $token resolution
+  atomicUsageMap?: Map<string, number>; // Shared atomic usage counter across files
   minify?: boolean;
   atomic?: boolean;
   threshold?: number;
@@ -113,12 +113,12 @@ export interface OptimizationResult {
   changes: number;
 }
 
-export type GenerationTarget = 'css' | 'atomic-css' | 'component' | 'sourcemap';
+export type GenerationTarget = "css" | "atomic-css" | "component" | "sourcemap";
 
 export interface OptimizationPass {
   name: string;
   optimize(ir: StyleIR, context: OptimizationContext): OptimizationResult;
-  cost: 'cheap' | 'moderate' | 'expensive';
+  cost: "cheap" | "moderate" | "expensive";
   requiredFor: GenerationTarget[];
 }
 
@@ -126,7 +126,7 @@ export interface OptimizationPass {
 // Stage 5: Generation / Lowering
 // ============================================================================
 export interface LoweringContext {
-  tokens?: Record<string, any>;  // Design tokens for $token resolution
+  tokens?: Record<string, any>; // Design tokens for $token resolution
   target?: GenerationTarget;
   minify?: boolean;
   sourceMap?: boolean;
@@ -148,10 +148,16 @@ export interface LoweringPass {
 // Pipeline Orchestrator
 // ============================================================================
 export interface PipelineStageResult {
-  stage: 'normalization' | 'validation' | 'analysis' | 'optimization' | 'lowering';
+  stage:
+    "normalization" | "validation" | "analysis" | "optimization" | "lowering";
   pass: string;
   duration: number;
-  result: NormalizationResult | ValidationResult | AnalysisResult | OptimizationResult | LoweringResult;
+  result:
+    | NormalizationResult
+    | ValidationResult
+    | AnalysisResult
+    | OptimizationResult
+    | LoweringResult;
 }
 
 export interface PipelineResult {
@@ -186,18 +192,19 @@ export interface PipelineConfig {
 // Unified CompilerPass Interface (v3.0)
 // ============================================================================
 
-export type PassPhase = 'normalize' | 'validate' | 'analyze' | 'optimize' | 'lower' | 'emit';
+export type PassPhase =
+  "normalize" | "validate" | "analyze" | "optimize" | "lower" | "emit";
 
 export interface CompilerPass {
   /** Unique pass identifier */
   readonly name: string;
-  
+
   /** Which pipeline stage this pass belongs to */
   readonly phase: PassPhase;
-  
+
   /** Passes that must run before this one */
   readonly dependencies: string[];
-  
+
   /** Execute the pass on the IR */
   run(ir: StyleIR, context: PassContext): PassResult;
 }
@@ -205,13 +212,13 @@ export interface CompilerPass {
 export interface PassContext {
   sourceFile?: string;
   config?: Record<string, any>;
-  wcagLevel?: 'A' | 'AA' | 'AAA';
+  wcagLevel?: "A" | "AA" | "AAA";
   strictMode?: boolean;
   theme?: Record<string, any>;
   breakpoints?: Record<string, string>;
   minify?: boolean;
   atomic?: boolean;
-  target?: 'css' | 'atomic-css' | 'component' | 'sourcemap';
+  target?: "css" | "atomic-css" | "component" | "sourcemap";
   namespace?: string;
 }
 

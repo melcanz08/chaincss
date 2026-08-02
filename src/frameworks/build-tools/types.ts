@@ -2,54 +2,54 @@
 // FILE: src/plugins/types.ts
 // ============================================================================
 export type Plugin = any;
-import type { ChainCSSConfig } from '@shared/types/index.js';
+import type { ChainCSSConfig } from "@shared/types/index.js";
 
 export interface ChainCSSPluginOptions {
-  /** 
+  /**
    * Enables or disables atomic utility class generation.
-   * @default true 
+   * @default true
    */
   atomic?: boolean;
-  
-  /** 
+
+  /**
    * Enables verbose logging for compilation updates.
-   * @default false 
+   * @default false
    */
   verbose?: boolean;
-  
-  /** 
+
+  /**
    * Silences all log outputs from the plugin.
-   * @default false 
+   * @default false
    */
   silent?: boolean;
-  
-  /** 
+
+  /**
    * Generates extended pipeline transformation metrics.
-   * @default false 
+   * @default false
    */
   pipelineReport?: boolean;
-  
-  /** 
+
+  /**
    * Bypasses the unified processing pipeline entirely.
-   * @default false 
+   * @default false
    */
   disablePipeline?: boolean;
-  
-  /** 
+
+  /**
    * Minifies generated CSS output sheets.
-   * @default false in dev, true in prod 
+   * @default false in dev, true in prod
    */
   minify?: boolean;
-  
+
   /** Custom media query responsive breakpoints */
   breakpoints?: Record<string, string>;
-  
+
   /** Direct token maps for variable substitution mapping */
-  tokens?: ChainCSSConfig['tokens'];
-  
+  tokens?: ChainCSSConfig["tokens"];
+
   /** Explicit file inclusion paths */
   include?: string[];
-  
+
   /** Explicit file exclusion paths */
   exclude?: string[];
 
@@ -64,16 +64,16 @@ export interface ChainCSSPluginOptions {
   sourceMap?: boolean;
   classPrefix?: string;
   timeline?: boolean;
-  cache?: { 
-    enabled?: boolean; 
-    directory?: string; 
-    maxAge?: number; 
+  cache?: {
+    enabled?: boolean;
+    directory?: string;
+    maxAge?: number;
   };
-  atomicOptions?: { 
-    threshold?: number; 
-    naming?: 'hash' | 'readable'; 
-    alwaysAtomic?: string[]; 
-    neverAtomic?: string[]; 
+  atomicOptions?: {
+    threshold?: number;
+    naming?: "hash" | "readable";
+    alwaysAtomic?: string[];
+    neverAtomic?: string[];
   };
 }
 
