@@ -1,7 +1,7 @@
 // __tests__/fixtures/with-tokens.chain.ts
 // Token-based styles fixture
 
-import { chain } from '../../src/core/style-collector.js';
+import { chain } from '../../src/core/entities/style-collector.js';
 
 // Set up design tokens
   tokens: {

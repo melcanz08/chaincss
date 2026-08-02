@@ -6,8 +6,8 @@
  */
 
 import type { StyleIR, IRPseudoClass } from '../pipeline/ir/types.js';
-import type { IRPass } from '../../style-ir.js';
-import { createDeclaration } from '../pipeline/ir/factory.js';
+import type { IRPass } from '../pipeline/ir/types.js';
+import { createDeclaration } from '../pipeline/ir/index.js';
 
 let _semIdCounter = 0;
 function nextSemId(prefix: string): string { return `${prefix}-${++_semIdCounter}`; }
@@ -212,7 +212,11 @@ export function getSemanticDescription(category: 'surface' | 'text' | 'elevation
 export const semanticTokensPass: IRPass = (ir: StyleIR): StyleIR => {
 
   for (const rule of ir.rules) {
-    const semanticIntents = (rule.meta._semantic || []) as Array<{ category: string; intent: string; theme?: ThemeContext }>;
+    const semanticIntents = (
+      rule.passMeta?.analysis?.semantic?.tokens ??
+      rule.meta._semantic ??
+      []
+    ) as Array<{ category: string; intent: string; theme?: ThemeContext }>;
 
     for (const { category, intent, theme } of semanticIntents) {
       const resolved = resolveSemantic(category as any, intent, theme);

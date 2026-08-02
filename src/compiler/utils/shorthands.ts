@@ -84,8 +84,6 @@ export const macros: Record<string, MacroHandler> = {
   borderInline: (v,c)=>{ c.borderInline=v; },
   borderBlock: (v,c)=>{ c.borderBlock=v; },
 
-  // REMOVED: flex, inlineFlex, grid, inlineGrid, block, inline, contents, hidden -> now in typed API
-
   cols: (v,c)=>{ c.gridTemplateColumns=typeof v==='number'?`repeat(${v}, minmax(0, 1fr))`:v; },
   rows: (v,c)=>{ c.gridTemplateRows=typeof v==='number'?`repeat(${v}, minmax(0, 1fr))`:v; },
 

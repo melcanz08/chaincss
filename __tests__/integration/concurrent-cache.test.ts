@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ChainCSSCompiler } from '../../src/core/compiler';
+import { ChainCSSCompiler } from '../../src/core/usecases/compiler';
 import fs from 'fs';
 
 describe('Cache Persistence & Concurrency', () => {

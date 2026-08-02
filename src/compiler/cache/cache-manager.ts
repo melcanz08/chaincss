@@ -210,10 +210,15 @@ export class CacheManager {
     this.lastSize = 0;
     this.lastSizeCheck = 0;
     if (fs.existsSync(this.cachePath)) {
-      try { 
-        fs.unlinkSync(this.cachePath); 
-      } catch (e) { 
-        console.warn('Could not delete cache file:', (e as Error).message); 
+      try {
+        const stats = fs.statSync(this.cachePath);
+        if (stats.isDirectory()) {
+          fs.rmSync(this.cachePath, { recursive: true, force: true });
+        } else {
+          fs.unlinkSync(this.cachePath);
+        }
+      } catch (e) {
+        console.warn('Could not delete cache file:', (e as Error).message);
       }
     }
   }

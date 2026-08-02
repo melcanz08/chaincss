@@ -1,0 +1,404 @@
+{
+  "compiler": "chaincss",
+  "version": "2.8.15",
+  "pipeline": "5-stage (normalize→validate→analyze→optimize→lower)",
+  "timestamp": "2026-07-30T09-45-24-074Z",
+  "systemInfo": {
+    "node": "v22.23.1",
+    "platform": "linux",
+    "arch": "x64",
+    "cpus": 4,
+    "memoryGB": 4
+  },
+  "coldWarm": {
+    "coldMs": 414.39,
+    "warmAvgMs": 315.69,
+    "overheadMs": 98.7
+  },
+  "results": [
+    {
+      "scenario": "small",
+      "label": "Small (5 rules)",
+      "rulesIn": 5,
+      "rulesOut": 4,
+      "declarationsIn": 20,
+      "declarationsOut": 16,
+      "pseudoClasses": 1,
+      "atRules": 1,
+      "deadRulesIn": 1,
+      "deadRulesOut": 1,
+      "cssBytes": 383,
+      "bytesSaved": 177,
+      "savingsPct": "31.6",
+      "iterations": 100,
+      "metrics": {
+        "avg": 0.792,
+        "median": 0.604,
+        "min": 0.464,
+        "max": 5.504,
+        "p95": 1.751,
+        "p99": 5.504,
+        "stdDev": 0.6
+      },
+      "memory": {
+        "startMB": 19.58,
+        "endMB": 25.18,
+        "peakMB": 34.54,
+        "deltaMB": 5.6
+      },
+      "passBreakdown": {
+        "normalization": {
+          "total": 0.11488699999608798,
+          "passes": [
+            {
+              "name": "intent-normalizer",
+              "duration": 0.0813769999986107
+            },
+            {
+              "name": "unit-normalizer",
+              "duration": 0.021466999998665415
+            },
+            {
+              "name": "token-lowering-bridge",
+              "duration": 0.012042999998811865
+            }
+          ]
+        },
+        "optimization": {
+          "total": 0.1510029999917606,
+          "passes": [
+            {
+              "name": "ast-optimizer",
+              "duration": 0.023055999998177867
+            },
+            {
+              "name": "dynamic-animation-resolver",
+              "duration": 0.01530599999750848
+            },
+            {
+              "name": "dead-code-eliminator",
+              "duration": 0.010805000001710141
+            },
+            {
+              "name": "css-compressor",
+              "duration": 0.025483000001258915
+            },
+            {
+              "name": "specificity-sorter",
+              "duration": 0.027556999997614184
+            },
+            {
+              "name": "media-query-packer",
+              "duration": 0.00649399999747402
+            },
+            {
+              "name": "source-optimizer",
+              "duration": 0.04230199999801698
+            }
+          ]
+        },
+        "lowering": {
+          "total": 0.0302479999991192,
+          "passes": [
+            {
+              "name": "intent-resolver",
+              "duration": 0.0067939999971713405
+            },
+            {
+              "name": "css-emitter",
+              "duration": 0.02345400000194786
+            }
+          ]
+        }
+      }
+    },
+    {
+      "scenario": "medium",
+      "label": "Medium (50 rules)",
+      "rulesIn": 50,
+      "rulesOut": 49,
+      "declarationsIn": 400,
+      "declarationsOut": 430,
+      "pseudoClasses": 10,
+      "atRules": 5,
+      "deadRulesIn": 1,
+      "deadRulesOut": 1,
+      "cssBytes": 11547,
+      "bytesSaved": -347,
+      "savingsPct": "-3.1",
+      "iterations": 50,
+      "metrics": {
+        "avg": 22.183,
+        "median": 22.051,
+        "min": 19.496,
+        "max": 31.413,
+        "p95": 27.367,
+        "p99": 31.413,
+        "stdDev": 2.364
+      },
+      "memory": {
+        "startMB": 28.27,
+        "endMB": 46.4,
+        "peakMB": 56.44,
+        "deltaMB": 18.13
+      },
+      "passBreakdown": {
+        "normalization": {
+          "total": 1.7837560000007215,
+          "passes": [
+            {
+              "name": "intent-normalizer",
+              "duration": 1.4828960000013467
+            },
+            {
+              "name": "unit-normalizer",
+              "duration": 0.21228599999813014
+            },
+            {
+              "name": "token-lowering-bridge",
+              "duration": 0.08857400000124471
+            }
+          ]
+        },
+        "optimization": {
+          "total": 1.234970000004978,
+          "passes": [
+            {
+              "name": "ast-optimizer",
+              "duration": 0.272649000002275
+            },
+            {
+              "name": "dynamic-animation-resolver",
+              "duration": 0.049327000000630505
+            },
+            {
+              "name": "dead-code-eliminator",
+              "duration": 0.03475500000058673
+            },
+            {
+              "name": "css-compressor",
+              "duration": 0.4131390000002284
+            },
+            {
+              "name": "specificity-sorter",
+              "duration": 0.16092099999877973
+            },
+            {
+              "name": "media-query-packer",
+              "duration": 0.014033000003109919
+            },
+            {
+              "name": "source-optimizer",
+              "duration": 0.29014599999936763
+            }
+          ]
+        },
+        "lowering": {
+          "total": 0.5131590000055439,
+          "passes": [
+            {
+              "name": "intent-resolver",
+              "duration": 0.2265510000033828
+            },
+            {
+              "name": "css-emitter",
+              "duration": 0.28660800000216113
+            }
+          ]
+        }
+      }
+    },
+    {
+      "scenario": "large",
+      "label": "Large (500 rules)",
+      "rulesIn": 500,
+      "rulesOut": 490,
+      "declarationsIn": 5000,
+      "declarationsOut": 5290,
+      "pseudoClasses": 100,
+      "atRules": 50,
+      "deadRulesIn": 10,
+      "deadRulesOut": 10,
+      "cssBytes": 136192,
+      "bytesSaved": 3808,
+      "savingsPct": "2.7",
+      "iterations": 30,
+      "metrics": {
+        "avg": 2105.647,
+        "median": 2023.976,
+        "min": 1992.138,
+        "max": 2954.974,
+        "p95": 2501.19,
+        "p99": 2954.974,
+        "stdDev": 192.133
+      },
+      "memory": {
+        "startMB": 34.03,
+        "endMB": 32.59,
+        "peakMB": 74.65,
+        "deltaMB": -1.44
+      },
+      "passBreakdown": {
+        "normalization": {
+          "total": 22.06375200000184,
+          "passes": [
+            {
+              "name": "intent-normalizer",
+              "duration": 18.573159999999916
+            },
+            {
+              "name": "unit-normalizer",
+              "duration": 2.763707999998587
+            },
+            {
+              "name": "token-lowering-bridge",
+              "duration": 0.7268840000033379
+            }
+          ]
+        },
+        "optimization": {
+          "total": 15.334660000022268,
+          "passes": [
+            {
+              "name": "ast-optimizer",
+              "duration": 2.7094080000097165
+            },
+            {
+              "name": "dynamic-animation-resolver",
+              "duration": 0.46267700000316836
+            },
+            {
+              "name": "dead-code-eliminator",
+              "duration": 0.24667999999655876
+            },
+            {
+              "name": "css-compressor",
+              "duration": 5.7772729999996955
+            },
+            {
+              "name": "specificity-sorter",
+              "duration": 1.7799460000096587
+            },
+            {
+              "name": "media-query-packer",
+              "duration": 0.1282740000024205
+            },
+            {
+              "name": "source-optimizer",
+              "duration": 4.23040200000105
+            }
+          ]
+        },
+        "lowering": {
+          "total": 8.110262000001967,
+          "passes": [
+            {
+              "name": "intent-resolver",
+              "duration": 4.1611940000002505
+            },
+            {
+              "name": "css-emitter",
+              "duration": 3.9490680000017164
+            }
+          ]
+        }
+      }
+    },
+    {
+      "scenario": "xlarge",
+      "label": "X-Large (2000 rules)",
+      "rulesIn": 2000,
+      "rulesOut": 1960,
+      "declarationsIn": 20000,
+      "declarationsOut": 21160,
+      "pseudoClasses": 400,
+      "atRules": 200,
+      "deadRulesIn": 40,
+      "deadRulesOut": 40,
+      "cssBytes": 546017,
+      "bytesSaved": 13983,
+      "savingsPct": "2.5",
+      "iterations": 10,
+      "metrics": {
+        "avg": 40271.415,
+        "median": 39778.044,
+        "min": 38886.069,
+        "max": 42699.812,
+        "p95": 42699.812,
+        "p99": 42699.812,
+        "stdDev": 1386.249
+      },
+      "memory": {
+        "startMB": 62.74,
+        "endMB": 127.58,
+        "peakMB": 129.63,
+        "deltaMB": 64.84
+      },
+      "passBreakdown": {
+        "normalization": {
+          "total": 93.23083700006828,
+          "passes": [
+            {
+              "name": "intent-normalizer",
+              "duration": 79.44728299998678
+            },
+            {
+              "name": "unit-normalizer",
+              "duration": 10.319614000036381
+            },
+            {
+              "name": "token-lowering-bridge",
+              "duration": 3.4639400000451133
+            }
+          ]
+        },
+        "optimization": {
+          "total": 65.36147599993274,
+          "passes": [
+            {
+              "name": "ast-optimizer",
+              "duration": 11.808896000031382
+            },
+            {
+              "name": "dynamic-animation-resolver",
+              "duration": 8.998744999989867
+            },
+            {
+              "name": "dead-code-eliminator",
+              "duration": 1.0440819999203086
+            },
+            {
+              "name": "css-compressor",
+              "duration": 19.369300000020303
+            },
+            {
+              "name": "specificity-sorter",
+              "duration": 8.45783600001596
+            },
+            {
+              "name": "media-query-packer",
+              "duration": 0.22040800005197525
+            },
+            {
+              "name": "source-optimizer",
+              "duration": 15.462208999902941
+            }
+          ]
+        },
+        "lowering": {
+          "total": 18.35295099997893,
+          "passes": [
+            {
+              "name": "intent-resolver",
+              "duration": 5.264312000013888
+            },
+            {
+              "name": "css-emitter",
+              "duration": 13.088638999965042
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

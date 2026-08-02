@@ -1,7 +1,3 @@
-// ============================================================================
-// FILE: src/compiler/pipeline/normalizers/scroll-timeline.ts
-// ============================================================================
-
 export interface ScrollTimelineConfig {
   name: string;
   source: 'scroll' | 'view';
@@ -36,7 +32,6 @@ export interface ScrollTimelineResult {
   needsFallback?: boolean;
 }
 
-// --- Presets matrix preserved verbatim ---
 export const SCROLL_PRESETS: Record<string, ScrollAnimation> = {
   fadeIn: {
     selector: '', timeline: { name: 'fade-in', source: 'view', range: 'entry' },
@@ -75,56 +70,63 @@ export const SCROLL_PRESETS: Record<string, ScrollAnimation> = {
 let animCounter = 0;
 function generateName(prefix: string): string { return prefix + '-' + (animCounter++).toString(36); }
 
+const kebabCache = new Map<string, string>();
+function toKebab(str: string): string {
+  const cached = kebabCache.get(str);
+  if (cached !== undefined) return cached;
+  const kebab = str.replace(/([A-Z])/g, '-$1').toLowerCase();
+  if (kebabCache.size > 500) kebabCache.clear();
+  kebabCache.set(str, kebab);
+  return kebab;
+}
+
 export function compileScrollAnimation(animation: ScrollAnimation): ScrollTimelineResult {
   const animName = animation.timeline.name || generateName('scroll-anim');
   const timelineName = '--' + animName + '-tl';
   const target = animation.selector ? `${animation.selector}` : '*';
   
-  let css = `/* Scroll Timeline: ${animName} */\n`;
+  const chunks: string[] = [`/* Scroll Timeline: ${animName} */\n`, `${target} {\n`];
 
-  // Coherent, unified structural block configuration
-  css += `${target} {\n`;
   if (animation.timeline.source === 'view') {
-    css += `  view-timeline-name: ${timelineName};\n  view-timeline-axis: ${animation.timeline.axis || 'block'};\n`;
+    chunks.push(`  view-timeline-name: ${timelineName};\n  view-timeline-axis: ${animation.timeline.axis || 'block'};\n`);
     if (animation.timeline.inset) {
       const inset = typeof animation.timeline.inset === 'string' ? animation.timeline.inset : `${animation.timeline.inset.start} ${animation.timeline.inset.end}`;
-      css += `  view-timeline-inset: ${inset};\n`;
+      chunks.push(`  view-timeline-inset: ${inset};\n`);
     }
   } else {
-    css += `  scroll-timeline-name: ${timelineName};\n  scroll-timeline-axis: ${animation.timeline.axis || 'block'};\n`;
+    chunks.push(`  scroll-timeline-name: ${timelineName};\n  scroll-timeline-axis: ${animation.timeline.axis || 'block'};\n`);
   }
   
-  css += `  animation: ${animName} linear both;\n  animation-timeline: ${timelineName};\n`;
+  chunks.push(`  animation: ${animName} linear both;\n  animation-timeline: ${timelineName};\n`);
   if (animation.timeline.source === 'view') {
-    css += `  animation-range: ${animation.timeline.range || 'entry 0% cover 50%'};\n`;
+    chunks.push(`  animation-range: ${animation.timeline.range || 'entry 0% cover 50%'};\n`);
   }
   if (animation.delay) {
-    css += `  animation-delay: ${animation.delay};\n`;
+    chunks.push(`  animation-delay: ${animation.delay};\n`);
   }
-  css += `}\n\n`;
+  chunks.push(`}\n\n@keyframes ${animName} {\n`);
 
-  // Write structural keyframes
-  css += `@keyframes ${animName} {\n`;
-  for (const step of animation.keyframes) {
-    css += `  ${step.offset} {\n`;
-    for (const [prop, value] of Object.entries(step.properties)) {
-      const kebab = prop.replace(/([A-Z])/g, '-$1').toLowerCase();
-      css += `    ${kebab}: ${value};\n`;
+  for (let i = 0; i < animation.keyframes.length; i++) {
+    const step = animation.keyframes[i];
+    chunks.push(`  ${step.offset} {\n`);
+    const props = step.properties;
+    for (const prop in props) {
+      if (!Object.prototype.hasOwnProperty.call(props, prop)) continue;
+      chunks.push(`    ${toKebab(prop)}: ${props[prop]};\n`);
     }
-    css += `  }\n`;
+    chunks.push(`  }\n`);
   }
-  css += `}\n\n`;
+  chunks.push(`}\n\n@supports not (animation-timeline: scroll()) and not (animation-timeline: view()) {\n  ${target} { animation: none; }\n}\n`);
 
-  css += `@supports not (animation-timeline: scroll()) and not (animation-timeline: view()) {\n  ${target} { animation: none; }\n}\n`;
-
-  return { css, animationName: animName, timelineName, fallback: '', keyframesName: animName, needsFallback: true };
+  return { css: chunks.join(''), animationName: animName, timelineName, fallback: '', keyframesName: animName, needsFallback: true };
 }
 
 export function compileScrollAnimations(animations: ScrollAnimation[]): string {
-  // Deterministic output header matching modern static analysis requirements
-  let css = `/* ChainCSS Scroll-Driven Animations - Production Build */\n\n`;
-  for (const a of animations) css += compileScrollAnimation(a).css + '\n';
-  return css;
+  const chunks = [`/* ChainCSS Scroll-Driven Animations - Production Build */\n\n`];
+  for (let i = 0; i < animations.length; i++) {
+    chunks.push(compileScrollAnimation(animations[i]).css + '\n');
+  }
+  return chunks.join('');
 }
 
 export function createScrollAnimation(preset: keyof typeof SCROLL_PRESETS, selector: string, overrides?: Partial<ScrollAnimation>): ScrollAnimation {
@@ -135,7 +137,6 @@ export function createScrollAnimation(preset: keyof typeof SCROLL_PRESETS, selec
 
 export function getScrollPresets(): string[] { return Object.keys(SCROLL_PRESETS); }
 
-// --- Shorthand entangle API ---
 export interface ScrollEntangleOptions {
   range?: string; y?: string; x?: string; opacity?: string; scale?: string; rotate?: string;
   timeline?: 'scroll' | 'view'; axis?: 'block' | 'inline' | 'y' | 'x';
@@ -144,8 +145,8 @@ export interface ScrollEntangleOptions {
 let entangleCounter = 0;
 function parseRange(v: string) { 
   if (!v?.includes('->')) return { from: v, to: v }; 
-  const [f, t] = v.split('->').map(s => s.trim()); 
-  return { from: f, to: t }; 
+  const parts = v.split('->');
+  return { from: parts[0].trim(), to: parts[1].trim() }; 
 }
 
 export function createScrollTimeline(selector: string, opts: ScrollEntangleOptions) {
@@ -177,7 +178,9 @@ export function createScrollTimeline(selector: string, opts: ScrollEntangleOptio
     frames['100%'].opacity = to; 
   }
   
-  const kf = `@keyframes ${kfName} { 0% { ${Object.entries(frames['0%']).map(([k, v]) => `${k}:${v};`).join(' ')} } 100% { ${Object.entries(frames['100%']).map(([k, v]) => `${k}:${v};`).join(' ')} } }`;
+  const kf0Entries = Object.entries(frames['0%']).map(([k, v]) => `${k}:${v};`).join(' ');
+  const kf100Entries = Object.entries(frames['100%']).map(([k, v]) => `${k}:${v};`).join(' ');
+  const kf = `@keyframes ${kfName} { 0% { ${kf0Entries} } 100% { ${kf100Entries} } }`;
   const nativeCSS = `${kf}\n${selector}{animation:${kfName} linear both;animation-timeline:${timeline}(${axis});animation-range:${range};}\n@supports not (animation-timeline: view()){${selector}{animation:none;}}`;
   return { css: nativeCSS, keyframesName: kfName, needsFallback: true };
 }

@@ -1,25 +1,28 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "lib": ["ES2022", "DOM"],
-    "outDir": "./dist",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "jsx": "react-jsx", 
     "rootDir": "./src",
-    "jsx": "react-jsx",
-    "declaration": true,
-    "declarationMap": true,
-    "emitDeclarationOnly": true,
-    "sourceMap": true,
+    "paths": {
+      "@core/*": ["./src/core/*"],
+      "@compiler/*": ["./src/compiler/*"],
+      "@adapters/*": ["./src/adapters/*"],
+      "@shared/*": ["./src/shared/*"],
+      "@frameworks/*": ["./src/frameworks/*"]
+    },
     "strict": true,
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noEmit": false
+    "esModuleInterop": true,
+    "declaration": true,
+    "sourceMap": true,
+    "outDir": "dist"
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "tests", "examples"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "__tests__"
+  ]
 }

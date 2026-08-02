@@ -3,7 +3,7 @@ import {
   enableTimeline, getStyleHistory, getStyleChanges,
   getStyleDiff, exportTimeline, clearTimeline,
   takeSnapshot, isTimelineEnabled
-} from '../../src/cli/utils/timeline.js';
+} from '@adapters/cli/utils/timeline.js';
 
 describe('Timeline System', () => {
   beforeEach(() => {

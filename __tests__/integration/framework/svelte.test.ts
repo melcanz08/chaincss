@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // Mock the injector
-vi.mock('../../../src/runtime/injector.js', () => ({
+vi.mock('@frameworks/core/injector.js', () => ({
   compileRuntime: vi.fn((styles: Record<string, any>, moduleId: string) => {
     const result: Record<string, string> = {};
     for (const key of Object.keys(styles)) {
@@ -19,12 +19,12 @@ vi.mock('../../../src/runtime/injector.js', () => ({
   },
 }));
 
-import { compileRuntime } from '../../../src/runtime/injector.js';
+import { compileRuntime } from '@frameworks/core/injector.js';
 import {
   useAtomicClasses,
   cx,
   chainStyles,
-} from '../../../src/runtime/svelte.js';
+} from '@frameworks/svelte/index.js';
 
 describe('Svelte Runtime', () => {
   beforeEach(() => {

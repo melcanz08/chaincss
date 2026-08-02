@@ -111,7 +111,7 @@ export function App() {
   });
 
   it('should compile multiple components and produce CSS', async () => {
-    const { chain } = await import('../../src/core/style-collector.js');
+    const { chain } = await import('../../src/core/entities/style-collector.js');
     
     // Simulate a full page with multiple components
     const container = chain().flex({direction:'column', gap:16}).box({p:24}).$el('page-container');
@@ -127,7 +127,7 @@ const button = chain().raw('display','inline-flex').box({p:'12px 24px', radius:8
   });
 
   it('should generate hover styles correctly', async () => {
-    const { chain } = await import('../../src/core/style-collector.js');
+    const { chain } = await import('../../src/core/entities/style-collector.js');
     
     const buttonWithHover = chain()
   .background('#3b82f6').typography({color:'white'})
@@ -147,7 +147,7 @@ const button = chain().raw('display','inline-flex').box({p:'12px 24px', radius:8
 
   it('should produce valid CSS selectors that are strings', async () => {
     // Import chain and test that it outputs usable class names
-    const { chain } = await import('../../src/core/style-collector.js');
+    const { chain } = await import('../../src/core/entities/style-collector.js');
     
     const styles = chain().flex().box({p:20}).typography({color:'#1e293b'}).$el('test-component');
 
@@ -161,8 +161,8 @@ const button = chain().raw('display','inline-flex').box({p:'12px 24px', radius:8
   });
 
   it('should generate CSS that matches the selector', async () => {
-    const { chain } = await import('../../src/core/style-collector.js');
-    const { ChainCSSCompiler } = await import('../../src/core/compiler.js');
+    const { chain } = await import('../../src/core/entities/style-collector.js');
+    const { ChainCSSCompiler } = await import('../../src/core/usecases/compiler.js');
     
     const styles = chain().flex().box({p:20}).$el('css-test');
 
@@ -186,7 +186,7 @@ const button = chain().raw('display','inline-flex').box({p:'12px 24px', radius:8
   });
 
   it('should properly resolve nested selectors', async () => {
-    const { chain } = await import('../../src/core/style-collector.js');
+    const { chain } = await import('../../src/core/entities/style-collector.js');
     
     const styles = chain().typography({color:'#1e293b'}).nest('.child', (c:any) => c.typography({color:'red'})).$el('parent-component');
 

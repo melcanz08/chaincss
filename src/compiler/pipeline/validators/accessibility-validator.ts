@@ -64,7 +64,7 @@ function detectContrastIssues(rule: IRRule, globalContext: Map<string, string>):
 
 function detectFontSizeIssues(rule: IRRule): Diagnostic[] {
   const issues: Diagnostic[] = [];
-  for (const decl of rule.declarations) {
+  for (const decl of (rule.declarations || [])) {
     const isFontProp = decl.property === 'fontSize' || decl.property === 'font-size';
     if (isFontProp && typeof decl.value === 'string') {
       const pxValue = convertToPx(decl.value);
@@ -99,7 +99,7 @@ function detectTouchTargetIssues(rule: IRRule): Diagnostic[] {
   let hasWidth = false;
   let hasHeight = false;
 
-  for (const d of rule.declarations) {
+  for (const d of (rule.declarations || [])) {
     if (typeof d.value !== 'string') continue;
     const px = convertToPx(d.value);
     if (px === Infinity) continue;
@@ -224,7 +224,7 @@ export const accessibilityValidator: ValidationPass = {
     const globalContext = new Map<string, string>();
     for (const rule of ir.rules) {
       if ([':root', 'body', 'html'].includes(rule.selector)) {
-        for (const d of rule.declarations) {
+        for (const d of (rule.declarations || [])) {
           if (d.property === 'color') globalContext.set('color', String(d.value));
           if (['backgroundColor', 'background-color', 'background'].includes(d.property)) {
             globalContext.set('background', String(d.value));

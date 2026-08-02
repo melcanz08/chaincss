@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // Mock the injector
-vi.mock('../../../src/runtime/injector.js', () => ({
+vi.mock('@frameworks/core/injector.js', () => ({
   compileRuntime: vi.fn((styles: Record<string, any>, moduleId: string) => {
     const result: Record<string, string> = {};
     for (const key of Object.keys(styles)) {
@@ -21,14 +21,14 @@ vi.mock('../../../src/runtime/injector.js', () => ({
   setTokens: vi.fn(),
 }));
 
-import { setTokens as injectorSetTokens } from '../../../src/runtime/injector.js';
+import { setTokens as injectorSetTokens } from '@frameworks/core/injector.js';
 import {
   cx,
   setTokens,
   enableSolidDebug,
   disableSolidDebug,
   isSolidDebugEnabled,
-} from '../../../src/runtime/solid.js';
+} from '@frameworks/solid/index.js';
 
 // Ensure window exists for debug tests (vitest with jsdom provides it)
 const win = typeof window !== 'undefined' ? window : (globalThis as any);
@@ -96,7 +96,7 @@ describe('Solid Runtime', () => {
 
   describe('Type exports', () => {
     it('exports all expected symbols', async () => {
-      const solid = await import('../../../src/runtime/solid.js');
+      const solid = await import('@frameworks/solid/index.js');
 
       expect(solid.useAtomicClasses).toBeDefined();
       expect(solid.styled).toBeDefined();

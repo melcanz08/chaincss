@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { chain } from '../../src/index';
-import { compileToCSS } from '../../src/core/style-compiler';
+import { compileToCSS } from '../../src/core/usecases/style-compiler';
 
 function getCss(obj: any): string {
   return compileToCSS(obj, { scopeSelector: obj.selectors?.[0] || '.t' });

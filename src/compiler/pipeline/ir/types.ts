@@ -2,7 +2,24 @@
 // FILE: src/compiler/pipeline/ir/types.ts
 // ============================================================================
 
+import type { PassMetadata } from './metadata.js';
+
 export type IRNodeId = string;
+
+/** Graph representation of the IR */
+export interface IRGraph {
+  nodes: Map<IRNodeId, IRRule>;
+  edges: IRGraphEdge[];
+  rootNodes: IRNodeId[];
+  leafNodes: IRNodeId[];
+}
+
+export interface IRGraphEdge {
+  from: IRNodeId;
+  to: IRNodeId;
+  type: 'overrides' | 'references' | 'extends' | 'derives' | 'contrasts' | 'contains' | 'animates' | 'layers';
+  metadata?: Record<string, unknown>;
+}
 
 /** Source location for debugging and source maps */
 export interface SourceLocation {
@@ -50,18 +67,31 @@ export interface IRDeclarationMeta {
   generated?: boolean;
   /** Allow extensions by future passes */
   [key: string]: unknown;
+  ast?: import('./css-ast.js').CSSValueNode;
 }
 
-/** Metadata attached to IR rules */
+/**
+ * Metadata attached to IR rules.
+ * 
+ * @deprecated Flat fields like `atomic`, `component`, `framework` are migrating
+ * to the namespaced `passMeta` structure. Use `rule.passMeta.optimization.atomic`
+ * instead of `rule.meta.atomic`, `rule.passMeta.analysis.component` instead of
+ * `rule.meta.component`, etc. The old flat fields remain for backward compat
+ * during the migration window.
+ */
 export interface IRRuleMeta {
   /** Component name that generated this rule */
   component?: string;
   /** Framework that generated this rule */
   framework?: 'react' | 'vue' | 'svelte' | 'solid' | 'angular';
-  /** Marked as atomic utility */
+  /** @deprecated Use rule.passMeta.optimization.atomic.isAtomic instead */
   atomic?: boolean;
   /** Allow extensions */
   [key: string]: unknown;
+  /** Graph dependencies — rule IDs that this rule depends on */
+  dependencies?: IRNodeId[];
+  /** Graph dependents — rule IDs that depend on this rule */
+  dependents?: IRNodeId[];
 }
 
 export type DetectedFeature =
@@ -92,7 +122,21 @@ export interface IRRule {
   conditions: IRCondition[];
   /** Incremental: dirty flag — optional for backward compat with cached IR */
   _dirty?: boolean;
+  /** Flat metadata (deprecated fields migrating to passMeta) */
   meta: IRRuleMeta;
+  /**
+   * Namespaced pass-owned metadata.
+   * Each pass writes to its own namespace — no cross-pass pollution.
+   * 
+   * Examples:
+   * - rule.passMeta.analysis.semantic  (was rule.meta._semantic)
+   * - rule.passMeta.analysis.constraints (was rule.meta._constraints)
+   * - rule.passMeta.analysis.intents   (was rule.meta._intent)
+   * - rule.passMeta.optimization.atomic (was rule.meta.atomic)
+   * - rule.passMeta.analysis.component  (was rule.meta.component)
+   * - rule.passMeta.analysis.framework  (was rule.meta.framework)
+   */
+  passMeta?: PassMetadata;
   isDead: boolean;
   specificity: number;
   hash: string;
@@ -168,6 +212,8 @@ export interface StyleIR {
     /** Incremental: timestamp of this compilation */
     compiledAt: number;
   };
+  /** Optional graph representation (nodes + edges) */
+  graph?: IRGraph;
 }
 
 /** Diagnostic attached to an IR node */
@@ -188,3 +234,12 @@ export interface IRDirtyFlag {
   dirty: boolean;
   changedAt: number;
 }
+
+// ============================================================================
+// Legacy Pass System (v3.0 — use Pipeline + CompilerContext instead)
+// ============================================================================
+
+/** Legacy IR pass — function that transforms IR in place */
+export type IRPass = (ir: StyleIR) => StyleIR;
+
+export type IRKeyframe = IRKeyframeFrame;

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createStyleProxy } from '../../../src/core/style-proxy';
+import { createStyleProxy } from '../../../src/core/entities/style-proxy';
 
 function createMockCollector() {
   const styles: Record<string, any> = {};

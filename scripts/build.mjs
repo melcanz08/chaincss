@@ -56,7 +56,7 @@ const targets = [
   // CLI
   {
     name: 'cli',
-    entryPoints: ['src/cli/index.ts'],
+    entryPoints: ['src/adapters/cli/index.ts'],
     outfile: 'dist/cli/index.js',
     platform: 'node',
     format: 'esm',
@@ -71,24 +71,24 @@ const targets = [
     outfile: 'dist/browser.js',
     platform: 'browser',
     format: 'esm',
-    external: ['react', 'react-dom', 'vue', 'svelte', 'url'],
+    external: ["react", "react-dom", "vue", "svelte", "url", "fs", "fs/promises", "module", "path", "node:fs", "node:fs/promises", "node:path"],
   },
   // Runtime
   {
     name: 'runtime',
-    entryPoints: ['src/runtime/index.ts'],
+    entryPoints: ['src/frameworks/index.ts'],
     outfile: 'dist/runtime/index.js',
     platform: 'browser',
     format: 'esm',
-    external: ['react', 'react-dom', 'vue', 'svelte', 'url'],
+    external: ["react", "react-dom", "vue", "svelte", "url", "fs", "fs/promises", "module", "path"],
   },
   {
     name: 'runtime-cjs',
-    entryPoints: ['src/runtime/index.ts'],
+    entryPoints: ['src/frameworks/index.ts'],
     outfile: 'dist/runtime/index.cjs',
     platform: 'browser',
     format: 'cjs',
-    external: ['react', 'react-dom', 'vue', 'svelte', 'url'],
+    external: ["react", "react-dom", "vue", "svelte", "url", "fs", "fs/promises", "module", "path"],
   },
   // Compiler (for programmatic use)
   {
@@ -110,7 +110,7 @@ const targets = [
   // Utilities (shorthands, macros, helpers, suggestions, animations, breakpoints)
   {
     name: 'utils',
-    entryPoints: ['src/utils.ts'],
+    entryPoints: ['src/shared/utils/index.ts'],
     outfile: 'dist/utils.js',
     platform: 'node',
     format: 'esm',
@@ -118,7 +118,7 @@ const targets = [
   },
   {
     name: 'utils-cjs',
-    entryPoints: ['src/utils.ts'],
+    entryPoints: ['src/shared/utils/index.ts'],
     outfile: 'dist/utils.cjs',
     platform: 'node',
     format: 'cjs',
@@ -127,7 +127,7 @@ const targets = [
   // Plugins
   {
     name: 'plugin-vite',
-    entryPoints: ['src/plugins/vite.ts'],
+    entryPoints: ['src/frameworks/build-tools/vite/index.ts'],
     outfile: 'dist/plugins/vite.js',
     platform: 'node',
     format: 'esm',
@@ -135,7 +135,7 @@ const targets = [
   },
   {
     name: 'plugin-vite-cjs',
-    entryPoints: ['src/plugins/vite.ts'],
+    entryPoints: ['src/frameworks/build-tools/vite/index.ts'],
     outfile: 'dist/plugins/vite.cjs',
     platform: 'node',
     format: 'cjs',
@@ -143,7 +143,7 @@ const targets = [
   },
   {
     name: 'plugin-webpack',
-    entryPoints: ['src/plugins/webpack.ts'],
+    entryPoints: ['src/frameworks/build-tools/webpack/index.ts'],
     outfile: 'dist/plugins/webpack.js',
     platform: 'node',
     format: 'esm',
@@ -161,7 +161,7 @@ const targets = [
   // Figma sync plugin
   {
     name: "figma-sync",
-    entryPoints: ["src/plugins/figma-sync.ts"],
+    entryPoints: ["src/frameworks/build-tools/figma-sync/index.ts"],
     outfile: "dist/plugins/figma-sync.js",
     platform: "node",
     format: "esm",
@@ -179,7 +179,7 @@ const targets = [
     // Next.js Server
   {
     name: 'next-server',
-    entryPoints: ['src/next/server.tsx'],
+    entryPoints: ['src/frameworks/next/server.tsx'],
     outfile: 'dist/next/server.js',
     platform: 'node',
     format: 'esm',
@@ -188,7 +188,7 @@ const targets = [
   },
   {
     name: 'next-server-cjs',
-    entryPoints: ['src/next/server.tsx'],
+    entryPoints: ['src/frameworks/next/server.tsx'],
     outfile: 'dist/next/server.cjs',
     platform: 'node',
     format: 'cjs',
@@ -198,24 +198,24 @@ const targets = [
   // Next.js Client
   {
     name: 'next-client',
-    entryPoints: ['src/next/client.tsx'],
+    entryPoints: ['src/frameworks/next/client.tsx'],
     outfile: 'dist/next/client.js',
     platform: 'browser',
     format: 'esm',
-    external: ['react', 'react-dom'],
+    external: ["react", "react-dom", "fs", "path", "crypto", "os", "events", "module", "url", "util", "stream", "jiti", "node:module", "node:fs", "node:path", "node:os", "node:url", "node:assert", "node:process", "node:v8", "node:util", "node:crypto", "node:tty", "node:fs/promises", "node:perf_hooks", "node:vm"],
   },
   {
     name: 'next-client-cjs',
-    entryPoints: ['src/next/client.tsx'],
+    entryPoints: ['src/frameworks/next/client.tsx'],
     outfile: 'dist/next/client.cjs',
     platform: 'browser',
     format: 'cjs',
-    external: ['react', 'react-dom'],
+    external: ["react", "react-dom", "fs", "path", "crypto", "os", "events", "module", "url", "util", "stream", "jiti", "node:module", "node:fs", "node:path", "node:os", "node:url", "node:assert", "node:process", "node:v8", "node:util", "node:crypto", "node:tty", "node:fs/promises", "node:perf_hooks", "node:vm"],
   },
   // Next.js Plugin
   {
     name: 'next-plugin',
-    entryPoints: ['src/next/plugin.ts'],
+    entryPoints: ['src/frameworks/next/plugin.ts'],
     outfile: 'dist/next/plugin.js',
     platform: 'node',
     format: 'esm',
@@ -224,7 +224,7 @@ const targets = [
   },
   {
     name: 'next-plugin-cjs',
-    entryPoints: ['src/next/plugin.ts'],
+    entryPoints: ['src/frameworks/next/plugin.ts'],
     outfile: 'dist/next/plugin.cjs',
     platform: 'node',
     format: 'cjs',
@@ -234,7 +234,7 @@ const targets = [
   // PostCSS Plugin
   {
     name: 'postcss',
-    entryPoints: ['src/postcss/index.cjs'],
+    entryPoints: ['src/frameworks/build-tools/postcss/index.cjs'],
     outfile: 'dist/postcss/index.js',
     platform: 'node',
     format: 'esm',
@@ -243,11 +243,79 @@ const targets = [
   },
   {
     name: 'postcss-cjs',
-    entryPoints: ['src/postcss/index.cjs'],
+    entryPoints: ['src/frameworks/build-tools/postcss/index.cjs'],
     outfile: 'dist/postcss/index.cjs',
     platform: 'node',
     format: 'cjs',
     external: ['fs', 'path', 'glob', 'postcss'],
+    packages: 'external',
+  },
+    // Compiler entry (Node.js only)
+  {
+    name: 'compiler-entry',
+    entryPoints: ['src/compiler-entry.ts'],
+    outfile: 'dist/compiler-entry.js',
+    platform: 'node',
+    format: 'esm',
+    packages: 'external',
+  },
+  {
+    name: 'compiler-entry-cjs',
+    entryPoints: ['src/compiler-entry.ts'],
+    outfile: 'dist/compiler-entry.cjs',
+    platform: 'node',
+    format: 'cjs',
+    packages: 'external',
+  },
+  // Core entry (minimal)
+  {
+    name: 'core-entry',
+    entryPoints: ['src/core-entry.ts'],
+    outfile: 'dist/core-entry.js',
+    platform: 'node',
+    format: 'esm',
+    packages: 'external',
+  },
+  {
+    name: 'core-entry-cjs',
+    entryPoints: ['src/core-entry.ts'],
+    outfile: 'dist/core-entry.cjs',
+    platform: 'node',
+    format: 'cjs',
+    packages: 'external',
+  },
+  // Runtime entry
+  {
+    name: 'runtime-entry',
+    entryPoints: ['src/runtime-entry.ts'],
+    outfile: 'dist/runtime-entry.js',
+    platform: 'node',
+    format: 'esm',
+    packages: 'external',
+  },
+  {
+    name: 'runtime-entry-cjs',
+    entryPoints: ['src/runtime-entry.ts'],
+    outfile: 'dist/runtime-entry.cjs',
+    platform: 'node',
+    format: 'cjs',
+    packages: 'external',
+  },
+  // Utils entry
+  {
+    name: 'utils-entry',
+    entryPoints: ['src/utils-entry.ts'],
+    outfile: 'dist/utils-entry.js',
+    platform: 'node',
+    format: 'esm',
+    packages: 'external',
+  },
+  {
+    name: 'utils-entry-cjs',
+    entryPoints: ['src/utils-entry.ts'],
+    outfile: 'dist/utils-entry.cjs',
+    platform: 'node',
+    format: 'cjs',
     packages: 'external',
   },
 ];
@@ -285,6 +353,13 @@ async function run() {
         return ctx;
       })
     );
+    
+    // Ensure package.json is written in watch mode too
+    writeFileSync(
+      resolve(dist, 'package.json'),
+      JSON.stringify({ type: 'module' }, null, 2)
+    );
+
     console.log('👀 Watching for changes...\n');
   } else {
     // Single build
@@ -319,6 +394,12 @@ async function run() {
         if (!isWatch) process.exit(1);
       }
     }
+
+    // Write package.json into dist AFTER building targets so clean doesn't wipe it out
+    writeFileSync(
+      resolve(dist, 'package.json'),
+      JSON.stringify({ type: 'module' }, null, 2)
+    );
 
     console.log(`\n✨ Build complete! ${targets.length} targets built.`);
   }

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { chain } from '../../src/index';
-import { compileToCSS } from '../../src/core/style-compiler';
+import { compileToCSS } from '../../src/core/usecases/style-compiler';
 
 describe('Stress - 1000 components cssChunks join', () => {
   it('1000 appends should be fast and not O(n^2)', () => {

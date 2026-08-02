@@ -14,33 +14,41 @@ const UNITLESS_PROPERTIES = new Set([
   'fill-opacity', 'stroke-opacity', 'animation-composition'
 ]);
 
+// Pre-compiled regex constants
+const REGEX_UPPER_CASE = /[A-Z]/g;
+const REGEX_NUMERIC_STRING = /^-?\d+(\.\d+)?$/;
+
 export const unitNormalizer: NormalizationPass = {
   name: 'unit-normalizer',
   
   normalize(ir: StyleIR): NormalizationResult {
     const corrections: Correction[] = [];
 
-    // Phase 2 Recursive Normalization Engine
     function normalizeRule(rule: IRRule) {
       if (rule.isDead) return;
+      const decls = rule.declarations;
+      if (!decls) return;
 
-      for (const decl of rule.declarations) {
+      for (let i = 0, len = decls.length; i < len; i++) {
+        const decl = decls[i];
+        if (!decl || !decl.property) continue;
         if (decl.property.startsWith('--')) continue;
         
-        // Safe casing normalizer match check
-        const kebabProp = decl.property
-          .replace(/[A-Z]/g, (m, offset) => (offset > 0 ? '-' : '') + m.toLowerCase());
+        const propLower = decl.property.toLowerCase();
+        const kebabProp = propLower === decl.property 
+          ? decl.property 
+          : decl.property.replace(REGEX_UPPER_CASE, (m, offset) => (offset > 0 ? '-' : '') + m.toLowerCase());
 
-        if (UNITLESS_PROPERTIES.has(kebabProp) || UNITLESS_PROPERTIES.has(decl.property.toLowerCase())) {
+        if (UNITLESS_PROPERTIES.has(kebabProp) || UNITLESS_PROPERTIES.has(propLower)) {
           continue;
         }
 
-        // Normalize number values — add px where appropriate
-        if (typeof decl.value === 'number') {
-          if (decl.value === 0) continue;
+        const val = decl.value;
+        if (typeof val === 'number') {
+          if (val === 0) continue;
           
-          const original = decl.value;
-          decl.value = decl.value + 'px';
+          const original = val;
+          decl.value = val + 'px';
           corrections.push({
             nodeId: decl.id,
             property: decl.property,
@@ -49,14 +57,11 @@ export const unitNormalizer: NormalizationPass = {
             reason: 'Added px unit to number value',
           });
           recordHistory(decl, 'unit-normalizer', 'added-unit', original, 'Added px unit to number value');
-        }
-
-        // Normalize string values that look like numbers
-        else if (typeof decl.value === 'string' && /^-?\d+(\.\d+)?$/.test(decl.value)) {
-          if (parseFloat(decl.value) === 0) continue;
+        } else if (typeof val === 'string' && REGEX_NUMERIC_STRING.test(val)) {
+          if (parseFloat(val) === 0) continue;
           
-          const original = decl.value;
-          decl.value = decl.value + 'px';
+          const original = val;
+          decl.value = val + 'px';
           corrections.push({
             nodeId: decl.id,
             property: decl.property,
@@ -68,39 +73,45 @@ export const unitNormalizer: NormalizationPass = {
         }
       }
 
-      // Natively cascade modifications into structural sub-branches
-      if (rule.pseudoClasses) {
-        for (let i = 0; i < rule.pseudoClasses.length; i++) {
-          normalizeRule(rule.pseudoClasses[i] as unknown as IRRule);
+      const pseudoClasses = rule.pseudoClasses;
+      if (pseudoClasses) {
+        for (let i = 0, len = pseudoClasses.length; i < len; i++) {
+          normalizeRule(pseudoClasses[i] as unknown as IRRule);
         }
       }
 
-      if (rule.nestedRules) {
-        for (let i = 0; i < rule.nestedRules.length; i++) {
-          normalizeRule(rule.nestedRules[i]);
+      const nestedRules = rule.nestedRules;
+      if (nestedRules) {
+        for (let i = 0, len = nestedRules.length; i < len; i++) {
+          normalizeRule(nestedRules[i]);
         }
       }
 
-      if (rule.atRules) {
-        for (let i = 0; i < rule.atRules.length; i++) {
-          const at = rule.atRules[i];
-          if (at.nestedRules) {
-            for (let j = 0; j < at.nestedRules.length; j++) {
-              normalizeRule(at.nestedRules[j]);
+      const atRules = rule.atRules;
+      if (atRules) {
+        for (let i = 0, len = atRules.length; i < len; i++) {
+          const at = atRules[i];
+          const atNested = at.nestedRules;
+          if (atNested) {
+            for (let j = 0, jLen = atNested.length; j < jLen; j++) {
+              normalizeRule(atNested[j]);
             }
           }
-          if (at.keyframes) {
-            for (let j = 0; j < at.keyframes.length; j++) {
-              normalizeRule(at.keyframes[j] as unknown as IRRule);
+          const keyframes = at.keyframes;
+          if (keyframes) {
+            for (let j = 0, jLen = keyframes.length; j < jLen; j++) {
+              normalizeRule(keyframes[j] as unknown as IRRule);
             }
           }
         }
       }
     }
 
-    // Process all root rules
-    for (let i = 0; i < ir.rules.length; i++) {
-      normalizeRule(ir.rules[i]);
+    const rules = ir?.rules;
+    if (rules) {
+      for (let i = 0, len = rules.length; i < len; i++) {
+        normalizeRule(rules[i]);
+      }
     }
 
     return { ir, corrections };

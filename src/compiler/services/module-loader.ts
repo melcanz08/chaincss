@@ -1,5 +1,3 @@
-// src/compiler/services/module-loader.ts
-
 import fs from 'fs/promises';
 import { existsSync, readFileSync, statSync } from 'fs';
 import path from 'path';
@@ -31,9 +29,8 @@ export class ModuleLoader {
       if (!jitiMod) return null;
 
       const createJiti = jitiMod.createJiti || jitiMod.default?.createJiti || jitiMod.default;
-      if (typeof createJiti!== 'function') return null;
+      if (typeof createJiti !== 'function') return null;
 
-      // Use the file being imported as parent for correct relative resolution
       const parentURL = pathToFileURL(parentPath).href;
       this.jitiInstance = createJiti(parentURL, {
         interopDefault: true,
@@ -46,13 +43,47 @@ export class ModuleLoader {
     }
   }
 
+  async importSource(source: string, virtualPath: string): Promise<Record<string, any>> {
+    const jiti = await this.getJiti(virtualPath);
+    if (!jiti) {
+      throw new Error('Jiti is required for virtual module compilation.');
+    }
+
+    const contentHash = this.hashContent(source);
+    
+    try {
+      // Use jiti to evaluate the source directly
+      // This creates a temporary module from the source string
+      const mod = await jiti.import(virtualPath, { default: true });
+      
+      this.importedModules.set(virtualPath, {
+        timestamp: Date.now(),
+        hash: contentHash,
+        size: source.length,
+        version: 0,
+      });
+      
+      // Ensure we return a proper object
+      const result = this.interopModule(mod);
+      
+      // If the result is not an object or is null/undefined, return empty object
+      if (result === null || result === undefined || typeof result !== 'object') {
+        return {};
+      }
+      
+      return result;
+    } catch (e) {
+      throw new Error(`Failed to compile virtual module: ${(e as Error).message}`);
+    }
+  }
+
   private purgeRequireCache(resolvedPath: string, projectRequire: NodeRequire, seen = new Set<string>()): void {
     if (seen.has(resolvedPath) || resolvedPath.includes('node_modules')) return;
     seen.add(resolvedPath);
 
     const cached = projectRequire.cache[resolvedPath];
     if (cached) {
-      for (const child of cached.children) {
+      for (const child of (cached.children || [])) {
         this.purgeRequireCache(child.id, projectRequire, seen);
       }
       delete projectRequire.cache[resolvedPath];
@@ -60,16 +91,49 @@ export class ModuleLoader {
   }
 
   private interopModule(mod: any) {
-    if (!mod || mod.default == null) return mod
-    const def = mod.default
-    if (Object.isFrozen(def)) return def
-    // don't mutate original, create wrapper
-    const out = (typeof def === 'function')? Object.assign(def.bind({}), def) : {...def }
-    for (const k of Object.keys(mod)) {
-      if (k!== 'default' &&!(k in out)) (out as any)[k] = mod[k]
+    if (!mod) return {};
+    
+    // If mod is already a plain object, return it
+    if (typeof mod === 'object' && !Array.isArray(mod) && !mod.default) {
+      return mod;
     }
-    out.default = def
-    return out
+    
+    const def = mod.default;
+    if (def === undefined || def === null) {
+      return mod;
+    }
+    
+    // Preserve function type if default is a function (e.g. recipes)
+    if (typeof def === 'function') {
+      const out = Object.assign(def.bind({}), def);
+      for (const k of Object.keys(mod)) {
+        if (k !== 'default' && !(k in out)) {
+          out[k] = mod[k];
+        }
+      }
+      out.default = def;
+      return out;
+    }
+    
+    // Default is an object
+    if (typeof def === 'object') {
+      const out = { ...def };
+      for (const k of Object.keys(mod)) {
+        if (k !== 'default' && !(k in out)) {
+          out[k] = mod[k];
+        }
+      }
+      return out;
+    }
+    
+    // Fallback
+    const out: Record<string, any> = {};
+    for (const k of Object.keys(mod)) {
+      if (k !== 'default') {
+        out[k] = mod[k];
+      }
+    }
+    return out;
   }
 
   async import(filePath: string): Promise<Record<string, any>> {
@@ -92,8 +156,8 @@ export class ModuleLoader {
     let currentVersion = 0;
 
     if (existingCache) {
-      currentVersion = existingCache.hash!== contentHash
-       ? existingCache.version + 1
+      currentVersion = existingCache.hash !== contentHash
+        ? existingCache.version + 1
         : existingCache.version;
     }
 
@@ -104,18 +168,22 @@ export class ModuleLoader {
       version: currentVersion
     };
 
-    // Attempt 1: Jiti compilation path
     if (/\.(ts|mts|cts|js|cjs|mjs)$/.test(absolutePath)) {
       const jiti = await this.getJiti(absolutePath);
       if (jiti) {
         try {
           const r = await (typeof jiti.import === 'function'
-           ? jiti.import(absolutePath, { default: true })
+            ? jiti.import(absolutePath, { default: true })
             : jiti(absolutePath));
 
           this.dependencyGraph.delete(absolutePath);
           this.importedModules.set(absolutePath, cachePayload);
-          return this.interopModule(r);
+          const result = this.interopModule(r);
+          // Ensure we return a valid object
+          if (result && typeof result === 'object') {
+            return result;
+          }
+          return {};
         } catch (jitiError: any) {
           if (jitiError.name === 'SyntaxError' || jitiError.message?.includes('Transform')) {
             throw new Error(`Compilation error in ${path.basename(filePath)}: ${jitiError.message}`);
@@ -124,10 +192,9 @@ export class ModuleLoader {
       }
     }
 
-    // Attempt 2: Standard Node.js CommonJS Require
     try {
       const pkgPath = path.join(process.cwd(), 'package.json');
-      const baseRequire = existsSync(pkgPath)? pkgPath : absolutePath;
+      const baseRequire = existsSync(pkgPath) ? pkgPath : absolutePath;
       const projectRequire = createRequire(baseRequire);
       const resolvedPath = projectRequire.resolve(absolutePath);
 
@@ -136,10 +203,12 @@ export class ModuleLoader {
 
       this.dependencyGraph.delete(absolutePath);
       this.importedModules.set(absolutePath, cachePayload);
-      return this.interopModule(imported);
+      const result = this.interopModule(imported);
+      if (result && typeof result === 'object') {
+        return result;
+      }
+      return {};
     } catch (error: any) {
-      // Attempt 3: Native ESM Fallback via cache-busted URL
-      // NOTE: each?v= creates a new module instance that stays in memory
       if (error.code === 'ERR_REQUIRE_ESM') {
         try {
           const uniqueQuery = `v=${this.instanceSeed}-${currentVersion}`;
@@ -148,7 +217,11 @@ export class ModuleLoader {
           const imported = await import(fileUrl);
           this.dependencyGraph.delete(absolutePath);
           this.importedModules.set(absolutePath, cachePayload);
-          return this.interopModule(imported);
+          const result = this.interopModule(imported);
+          if (result && typeof result === 'object') {
+            return result;
+          }
+          return {};
         } catch (importError: any) {
           throw new Error(`Failed to native-import ${path.basename(filePath)}: ${importError.message}`);
         }

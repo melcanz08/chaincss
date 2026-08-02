@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseStyleObject } from '../../src/core/types.js';
+import { parseStyleObject } from '../../src/shared/types/index.js';
 
 interface MinimistParsed {
   _: string[];

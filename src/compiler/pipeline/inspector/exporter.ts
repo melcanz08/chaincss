@@ -3,7 +3,7 @@
 // ============================================================================
 
 import type { InspectorRule, InspectorExport } from './types.js';
-import { VERSION } from '../../../core/constants.js';
+import { VERSION } from "@shared/constants/index.js";
 
 export interface ExporterOptions {
   /** Target execution context layout tag (e.g., 'dev', 'prod', 'ci') */

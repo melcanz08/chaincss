@@ -2,8 +2,8 @@
 // FILE: src/compiler/pipeline/ir/parser.ts
 // ============================================================================
 
-import type { StyleDefinition } from '../../../core/types.js';
-import { createIR, createRule, createDeclaration, nextId, record } from './factory.js';
+import type { StyleDefinition } from '@shared/types/index.js';
+import { createIR, createRule, createDeclaration, nextId, record } from './index.js';
 import type { IRPseudoClass, IRAtRule, IRCondition, StyleIR, IRRule, IRKeyframeFrame } from './types.js';
 
 // ============================================================================

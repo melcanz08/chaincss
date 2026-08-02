@@ -27,3 +27,22 @@ afterAll(() => {
   console.log = originalConsole.log;
   console.info = originalConsole.info;
 });
+// Show metrics after tests
+import { defaultMetrics } from './src/compiler/metrics/index.js';
+
+afterAll(() => {
+  const snapshot = defaultMetrics.snapshot();
+  const hasData = Object.values(snapshot.counters).some(v => v > 0) || 
+                  snapshot.timers.completed.length > 0;
+  
+  if (hasData) {
+    console.log('');
+    console.log('╔══════════════════════════════════════════════════════════════╗');
+    console.log('║              📊 Test Metrics                                ║');
+    console.log('╚══════════════════════════════════════════════════════════════╝');
+    console.log(`  Total Duration: ${snapshot.timers.totalDuration.toFixed(2)}ms`);
+    console.log(`  Pipeline Passes: ${snapshot.counters.pipeline_passes_run || 0}`);
+    console.log(`  Rules Compiled: ${snapshot.counters.rules_compiled || 0}`);
+    console.log('');
+  }
+});

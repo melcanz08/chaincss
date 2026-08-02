@@ -1,49 +1,93 @@
-// src/index.ts — Main entry for `chaincss`
-// Zero runtime dependencies. No CLI, no Vite, no Node APIs.
+// chaincss - Main entry point (minimal)
+// Usage: import { chain, defineConfig } from 'chaincss'
 
-// ============================================================================
-// Core API
-// ============================================================================
-export { chain, StyleCollector } from './core/style-collector.js';
-export type { StyleObject, Explanation } from './core/style-collector.js';
+// Core exports
+export { VERSION } from './shared/constants/index.js';
+export { StyleCollector, chain } from '@core/entities/style-collector.js';
+export type { StyleObject, AtRule, NestedRule } from '@core/entities/style-collector.js';
 
-export { compileToCSS, partitionForBuild } from './core/style-compiler.js';
-export { classifyValue, partitionStyles, hasDynamicValues } from './core/value-classifier.js';
+// Config
+export { defineConfig } from '@shared/config/index.js';
+export type { ChainCSSUserConfig, MacroHandler } from '@shared/config/index.js';
 
-// ============================================================================
-// Design Tokens
-// ============================================================================
-export { DesignTokens, createTokens } from './compiler/tokens/tokens.js';
-export type { TokensStructure } from './compiler/tokens/tokens.js';
+// Types
+export type {
+  StyleDefinition,
+  ChainShorthandMethods,
+  CompileResult,
+  GraphCompileResult,
+  CorrectionResult,
+  MathResult,
+  ChainCSSPlugin,
+  ChainCSSPluginOptions
+} from '@shared/types/index.js';
 
-// ============================================================================
-// Theme Contracts
-// ============================================================================
+// Shorthand types (from shorthand-types.ts)
+export type {
+  GridOptions,
+  FlexOptions,
+  AnimationOptions,
+  BackgroundOptions,
+  TypographyOptions,
+  BoxOptions,
+  PositionOptions,
+  TransitionOptions,
+  TransformOptions,
+  FilterOptions,
+  ShadowOptions,
+  ContainerOptions,
+  OutlineOptions,
+  ScrollOptions,
+  ListOptions
+} from '@shared/types/shorthand-types.js';
+
+// Value Classifier (runtime-safe)
+export { classifyValue, partitionStyles, hasDynamicValues } from '@core/usecases/value-classifier.js';
+export type { ValueClass } from '@core/usecases/value-classifier.js';
+
+// Utilities (browser-safe only)
 export {
-  createThemeContract,
-  validateTheme,
-  createTheme,
-  Theme
-} from './compiler/tokens/theme-contract.js';
-export type { ThemeContract, ThemeTokens } from './compiler/tokens/theme-contract.js';
-
-// ============================================================================
-// Recipes
-// ============================================================================
-export { recipe } from './compiler/recipe.js';
-export type { RecipeOptions, Recipe } from './compiler/recipe.js';
-
-// ============================================================================
-// Config & Types
-// ============================================================================
-export { defineConfig } from './core/config.js';
-export type { ChainProxy, ChainCSSConfig, ChainCSSUserConfig } from './core/types.js';
-
-// ============================================================================
-// Version
-// ============================================================================
-declare const __CHAINCSS_VERSION__: string;
-export const VERSION: string = typeof __CHAINCSS_VERSION__ !== 'undefined' ? __CHAINCSS_VERSION__ : '0.0.0';
-
-// Default export
-export { default } from './core/style-collector.js';
+  hashString,
+  kebabCase,
+  camelCase,
+  pascalCase,
+  snakeCase,
+  generateClassName,
+  generateAtomicClassName,
+  generateComponentClassName,
+  deepMerge,
+  deepClone,
+  deepEqual,
+  pick,
+  omit,
+  formatCSS,
+  formatJS,
+  truncate,
+  indent,
+  stripIndent,
+  unique,
+  chunk,
+  groupBy,
+  debounce,
+  throttle,
+  ChainCSSError,
+  tryOrWarn,
+  tryOrThrow,
+  setLogLevel,
+  logDebug,
+  logInfo,
+  logWarn,
+  logError,
+  isValidSelector,
+  isValidClassName,
+  isValidCSSProperty,
+  generateStyleId,
+  isBrowser,
+  isDevelopment,
+  isProduction,
+  memoize,
+  cn as cnUtils,
+  devWarn,
+  devLog,
+  createDebugger
+} from '@shared/utils/browser.js';

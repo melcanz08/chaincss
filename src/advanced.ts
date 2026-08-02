@@ -61,13 +61,6 @@ export type {
 export { CacheManager } from './compiler/cache/cache-manager.js';
 export { PersistentCache } from './compiler/cache/content-addressable-cache.js';
 
-// Atomic Optimizer (deprecated — use pipeline atomic-extractor pass instead)
-/** @deprecated Atomic extraction is now handled by the pipeline's atomic-extractor pass. */
-export { AtomicOptimizer } from './compiler/pipeline/optimizers/atomic-optimizer.js';
-/** @deprecated Use pipeline's IR types instead. */
-export type { AtomicClass } from './core/types.js';
-export type { AtomicOptimizerStats } from './compiler/pipeline/optimizers/atomic-optimizer.js';
-
 // Design Orchestrator
 export {
   orchestrator,

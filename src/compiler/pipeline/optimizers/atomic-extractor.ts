@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { recordHistory } from '../ir/utils.js';
-import { createRule, createDeclaration } from '../ir/factory.js';
+import { createRule, createDeclaration } from '../ir/index.js';
 import type { StyleIR, IRRule } from '../ir/types.js';
 import type { OptimizationPass, OptimizationResult } from '../pipeline-types.js';
 
@@ -37,7 +37,7 @@ export const atomicExtractor: OptimizationPass = {
       const pseudo = 'root';
       const media = 'all';
 
-      for (const decl of rule.declarations) {
+      for (const decl of (rule.declarations || [])) {
         const key = `${scopeKey}::${decl.property}:${String(decl.value)}`;
         const existing = usageMap.get(key);
         if (existing) {

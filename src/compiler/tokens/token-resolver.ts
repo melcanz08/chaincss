@@ -13,7 +13,7 @@
 
 import { tokens as globalTokens } from './tokens.js';
 import type { DesignTokens } from './tokens.js';
-import { createLogger } from '../../cli/utils/logger.js';
+import { createLogger } from "@shared/logger/index.js";
 
 const logger = createLogger(false, 'token-resolver');
 

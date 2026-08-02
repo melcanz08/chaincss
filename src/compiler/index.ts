@@ -7,7 +7,7 @@
  */
 
 // --- 1. Core Compiler & Pipeline Engine (v2.7+) ---
-export { ChainCSSCompiler } from '../core/compiler.js';
+export { ChainCSSCompiler } from '@core/usecases/compiler.js';
 export { 
   Pipeline,
   type PipelineConfig,
@@ -23,7 +23,7 @@ export {
   createDefaultPipeline, 
   createFullPipeline,
   type PipelinePreset 
-} from './pipeline/unified-pipeline.js';
+} from './pipeline/pipeline.js';
 
 // --- 2. Design Tokens & Theme Contracts ---
 export { 
@@ -118,7 +118,7 @@ export {
   getStyleDiff,
   exportTimeline,
   clearTimeline,
-} from '../cli/utils/timeline.js';
+} from '@adapters/cli/utils/timeline.js';
 
 // --- 9. Animation System & Presets ---
 export { 

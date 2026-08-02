@@ -11,6 +11,14 @@ interface ComponentInfo {
   framework: 'react' | 'vue' | 'svelte' | 'solid' | 'auto';
 }
 
+const getMetaUrl = () => {
+  try {
+    return typeof import.meta !== 'undefined' && import.meta.url ? import.meta.url : __filename;
+  } catch {
+    return '';
+  }
+};
+
 /**
  * Safely sniff out package presence across dynamic CJS and ESM toolchains
  */
@@ -19,7 +27,9 @@ export function detectFramework(): 'react' | 'vue' | 'svelte' | 'solid' {
   
   try {
     // ESM safe resolution check
-    lookup = typeof require !== 'undefined' ? require.resolve : createRequire(import.meta.url).resolve;
+    lookup = typeof require !== 'undefined' && typeof require.resolve === 'function' 
+    ? require.resolve 
+    : createRequire(getMetaUrl()).resolve;
   } catch {
     return 'react';
   }

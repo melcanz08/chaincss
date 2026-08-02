@@ -98,7 +98,7 @@ export function removeBreakpoint(name: string): boolean {
 export const currentBreakpoints: BreakpointsMap = _current;
 export const breakpointValues: BreakpointValues = _values;
 
-import { kebabCase as kebabCaseUtil } from '../core/utils.js';
+import { kebabCase as kebabCaseUtil } from "../shared/utils/index.js";
 const toKebab = (s: string) => {
   try { return kebabCaseUtil(s); } catch { return s.replace(/([A-Z])/g, '-$1').toLowerCase(); }
 };

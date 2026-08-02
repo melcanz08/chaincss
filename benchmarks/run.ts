@@ -1,17 +1,18 @@
 #!/usr/bin/env node
 
-// benchmarks/run.js
+// benchmarks/run.ts
 //
 // Consolidated ChainCSS Pipeline Benchmark Suite
 // Replaces: run.js, run-profile.js
 //
 // Measures: cold/warm start, per-scenario throughput, pass breakdown,
-//           memory usage, and scaling across 4 component sizes
-// with realistic CSS properties that exercise the full pipeline.
+//           memory usage, and scaling across component sizes
+// with realistic CSS properties and high-concurrency worker thread streaming.
 
 import { writeFileSync, mkdirSync } from 'fs';
 import { resolve } from 'path';
 import os from 'os';
+import { ConcurrentFixtureStreamer } from './fixture-generator.js';
 
 // ============================================================================
 // Configuration
@@ -88,6 +89,7 @@ async function generateRealisticIR(rules: number, declPerRule: number) {
     if (i % 5 === 0) {
       rule.pseudoClasses.push({
         id: `pseudo-${i}`,
+        parentId: rule.id, 
         name: 'hover',
         declarations: [
           createDeclaration('opacity', '0.8'),
@@ -167,7 +169,7 @@ async function main() {
   console.log('🚀 ChainCSS Pipeline Benchmark Suite\n');
 
   const { createPipeline } = await import(
-    '../src/compiler/pipeline/unified-pipeline.js'
+    '../src/compiler/pipeline/index.js'
   );
   const pipeline = createPipeline('production');
 
@@ -183,6 +185,14 @@ async function main() {
   console.log(`🔬 Pipeline: 5-stage (normalize → validate → analyze → optimize → lower)`);
   console.log(`📦 Realistic fixtures: hex colors, misspellings, intents, media queries, dead rules\n`);
   console.log('─'.repeat(90) + '\n');
+
+  // ==========================================================================
+  // Concurrent Worker Thread Disk Streaming
+  // ==========================================================================
+  console.log('🧵 CONCURRENT WORKER THREAD FIXTURE STREAMING\n');
+  const streamer = new ConcurrentFixtureStreamer();
+  await streamer.generateAndStream(500, 'extreme', true);
+  console.log('\n' + '─'.repeat(90) + '\n');
 
   const results = [];
   const startTime = Date.now();
@@ -234,7 +244,6 @@ async function main() {
     // Measurement
     const times: number[] = [];
     const memorySnapshots: Array<{ before: number; after: number }> = [];
-    let passBreakdown: Record<string, any> | null = null;
     let lastPipelineResult: any = null;
 
     if (global.gc) global.gc();

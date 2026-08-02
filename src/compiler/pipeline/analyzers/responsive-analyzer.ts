@@ -32,7 +32,7 @@ function toPxSafe(value: string): number {
 
 function detectFixedWidth(rule: IRRule, bp: { md: number; lg: number }): ResponsiveIssue[] {
   const issues: ResponsiveIssue[] = [];
-  for (const decl of rule.declarations) {
+  for (const decl of (rule.declarations || [])) {
     if ((decl.property === 'width' || decl.property === 'max-width') && typeof decl.value === 'string') {
       const px = toPxSafe(decl.value);
       if (px === 0) continue;
@@ -60,7 +60,7 @@ function detectFixedWidth(rule: IRRule, bp: { md: number; lg: number }): Respons
 function detectGridColumns(rule: IRRule, bp: { md: number; lg: number }): ResponsiveIssue[] {
   // unchanged - no units
   const issues: ResponsiveIssue[] = [];
-  for (const decl of rule.declarations) {
+  for (const decl of (rule.declarations || [])) {
     const isGridProp = decl.property === 'gridTemplateColumns' || decl.property === 'grid-template-columns';
     if (isGridProp && typeof decl.value === 'string') {
       const repeatMatch = decl.value.match(/repeat\((\d+)/);
@@ -86,7 +86,7 @@ function detectGridColumns(rule: IRRule, bp: { md: number; lg: number }): Respon
 
 function detectLargeTypography(rule: IRRule): ResponsiveIssue[] {
   const issues: ResponsiveIssue[] = [];
-  for (const decl of rule.declarations) {
+  for (const decl of (rule.declarations || [])) {
     if ((decl.property === 'fontSize' || decl.property === 'font-size') && typeof decl.value === 'string') {
       const px = toPxSafe(decl.value);
       if (px > LARGE_FONT_THRESHOLD) {
@@ -106,7 +106,7 @@ function detectLargeTypography(rule: IRRule): ResponsiveIssue[] {
 
 function detectViewportUnits(rule: IRRule): ResponsiveIssue[] {
   const issues: ResponsiveIssue[] = [];
-  for (const decl of rule.declarations) {
+  for (const decl of (rule.declarations || [])) {
     const isHeightProp = decl.property === 'height' || decl.property === 'min-height';
     if (!isHeightProp || typeof decl.value!== 'string') continue;
     const parsed = math.parse(decl.value);
@@ -130,7 +130,7 @@ function detectViewportUnits(rule: IRRule): ResponsiveIssue[] {
 
 function detectLargePadding(rule: IRRule): ResponsiveIssue[] {
   const issues: ResponsiveIssue[] = [];
-  for (const decl of rule.declarations) {
+  for (const decl of (rule.declarations || [])) {
     if (!decl.property.includes('padding') || typeof decl.value!== 'string') continue;
     const px = toPxSafe(decl.value);
     if (px > LARGE_PADDING_THRESHOLD) {
@@ -148,7 +148,7 @@ function detectLargePadding(rule: IRRule): ResponsiveIssue[] {
 
 function detectLargeGap(rule: IRRule): ResponsiveIssue[] {
   const issues: ResponsiveIssue[] = [];
-  for (const decl of rule.declarations) {
+  for (const decl of (rule.declarations || [])) {
     if (!decl.property.includes('gap') || typeof decl.value!== 'string') continue;
     const px = toPxSafe(decl.value);
     if (px > LARGE_GAP_THRESHOLD) {

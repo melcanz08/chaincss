@@ -3,13 +3,7 @@
 // ============================================================================
 
 // Factory
-export {
-  createDeclaration,
-  createRule,
-  createKeyframeFrame, // Added structural frame factory for Phase 2 layouts
-  createIR,
-  resetIdCounter,
-} from './factory.js';
+export * from './factory.js';
 
 // Parser
 export { parseIR } from './parser.js';
@@ -38,4 +32,6 @@ export type {
   IRTransformRecord,
   StyleIR,
   IRDiagnostic,
-} from './types.js';
+} from './types.js';export { buildIRGraph, traverseGraph, findAffectedNodes, getGraphStats } from './graph-builder.js';
+export { parseCSSValue, optimizeAST, printAST, isConstant, fromParsedValue, type CSSValueNode } from './css-ast.js';
+export { type PassMetadata, initMetadata, setPassMetadata, getPassMetadata, hasPassRun, setIncrementalMeta, markDirty } from './metadata.js';

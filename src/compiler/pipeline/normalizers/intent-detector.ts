@@ -1,8 +1,4 @@
-// ============================================================================
-// FILE: src/compiler/pipeline/normalizers/intent-detector.ts
-// ============================================================================
-
-import type { CorrectionResult, HealMode, HealResult, IntentContext } from '../../../core/types.js';
+import type { CorrectionResult, HealMode, HealResult, IntentContext } from '@shared/types/index.js';
 import { detectIfPatterns, emitCSSIf } from '../lowering/css-if-lowering.js';
 export type { CorrectionResult, HealMode, HealResult, IntentContext };
 
@@ -24,11 +20,20 @@ import {
   autoContrast,
 } from './layout-macros.js';
 
+const MAX_CACHE_SIZE = 2000;
 const correctionCache = new Map<string, CorrectionResult | null>();
 let customKeys = new Set<string>();
 
+function setCached(key: string, value: CorrectionResult | null) {
+  if (correctionCache.size >= MAX_CACHE_SIZE) {
+    const firstKey = correctionCache.keys().next().value;
+    if (firstKey !== undefined) correctionCache.delete(firstKey);
+  }
+  correctionCache.set(key, value);
+}
+
 export function registerCustomIntentKeys(keys: string[]) {
-  for (const k of keys) customKeys.add(k);
+  for (let i = 0; i < keys.length; i++) customKeys.add(keys[i]);
   correctionCache.clear();
 }
 export function clearCustomIntentKeys() {
@@ -39,17 +44,17 @@ export function invalidateIntentCache() { correctionCache.clear(); }
 
 export const intent = {
   correct(property: string, value: string, context?: IntentContext): CorrectionResult | null {
-    // Never correct user-defined keys — they are intentional
     if (customKeys.has(property)) return null;
 
     const normalizedProp = property.toLowerCase();
     const pc = findClosestProperty(property);
 
     if (pc && pc !== normalizedProp) {
-      if (customKeys.has(pc)) return null; // Don't correct to a custom key either
-      const cacheKey = `prop-err:${normalizedProp}`;
+      if (customKeys.has(pc)) return null;
+      const cacheKey = `p:${normalizedProp}`;
       const cached = correctionCache.get(cacheKey);
       if (cached !== undefined) return cached;
+
       const d = levenshtein(normalizedProp, pc);
       const result: CorrectionResult = {
         original: property, property, corrected: pc, defaults: {},
@@ -57,50 +62,56 @@ export const intent = {
         intent: 'property-correction',
         explanation: `Unknown property "${property}". Did you mean "${pc}"?`
       };
-      correctionCache.set(cacheKey, result);
+      setCached(cacheKey, result);
       return result;
     }
 
-    const cacheKey = `val-err:${property}:${value}`;
+    const cacheKey = `v:${property}:${value}`;
     const cached = correctionCache.get(cacheKey);
     if (cached !== undefined) return cached;
 
     const ctx = { property, value, ...context };
     const si = detectIntent(value, ctx);
-    if (si) { correctionCache.set(cacheKey, si); return si; }
+    if (si) { setCached(cacheKey, si); return si; }
 
-    if (VALUE_CORRECTIONS[property]) {
-      const c = VALUE_CORRECTIONS[property].find(c => c.wrong === value.toLowerCase());
-      if (c) {
-        const result: CorrectionResult = {
-          original: value, property, corrected: c.correct,
-          defaults: { [property]: c.correct }, confidence: c.confidence,
-          intent: 'value-correction',
-          explanation: `"${value}" is not valid for ${property}. Did you mean "${c.correct}"?`
-        };
-        correctionCache.set(cacheKey, result);
-        return result;
+    const correctionsList = VALUE_CORRECTIONS[property];
+    if (correctionsList) {
+      const valLower = value.toLowerCase();
+      for (let i = 0; i < correctionsList.length; i++) {
+        const c = correctionsList[i];
+        if (c.wrong === valLower) {
+          const result: CorrectionResult = {
+            original: value, property, corrected: c.correct,
+            defaults: { [property]: c.correct }, confidence: c.confidence,
+            intent: 'value-correction',
+            explanation: `"${value}" is not valid for ${property}. Did you mean "${c.correct}"?`
+          };
+          setCached(cacheKey, result);
+          return result;
+        }
       }
     }
 
-    correctionCache.set(cacheKey, null);
+    setCached(cacheKey, null);
     return null;
   },
 
   heal(styles: Record<string, any>, mode: HealMode = 'smart', context?: IntentContext): HealResult {
     const corrections: CorrectionResult[] = [], warnings: string[] = [], fixed: Record<string, any> = {};
     
-    for (const [prop, value] of Object.entries(styles)) {
-      if (prop.startsWith('_') || prop === 'selectors' || customKeys.has(prop)) { 
+    for (const prop in styles) {
+      if (!Object.prototype.hasOwnProperty.call(styles, prop)) continue;
+      const value = styles[prop];
+
+      if (prop.charCodeAt(0) === 95 /* '_' */ || prop === 'selectors' || customKeys.has(prop)) { 
         fixed[prop] = value; 
         continue; 
       }
       
-      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-        // Phase 2 Upgrade: Natively discover nested blocks, pseudo selectors, structural keyframes, or at-rules
-        const isPseudoState = ['hover','focus','active','focus-visible','disabled','before','after'].includes(prop);
-        const isSelectorToken = prop.startsWith(':') || prop.startsWith('&') || prop.startsWith('@');
-        const isStructuralFrame = !isNaN(Number(prop.replace('%', ''))) || prop === 'from' || prop === 'to' || prop === 'keyframes';
+      if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+        const isPseudoState = prop === 'hover' || prop === 'focus' || prop === 'active' || prop === 'focus-visible' || prop === 'disabled' || prop === 'before' || prop === 'after';
+        const isSelectorToken = prop.charCodeAt(0) === 58 /* ':' */ || prop.charCodeAt(0) === 38 /* '&' */ || prop.charCodeAt(0) === 64 /* '@' */;
+        const isStructuralFrame = prop === 'from' || prop === 'to' || prop === 'keyframes' || !isNaN(Number(prop.replace('%', '')));
 
         if (isPseudoState || isSelectorToken || isStructuralFrame) {
           const hr = this.heal(value as Record<string, any>, mode, { ...context, property: prop });
@@ -145,9 +156,15 @@ export const intent = {
 
   validate(property: string, value: string): { valid: boolean; suggestion?: string } {
     if (customKeys.has(property)) return { valid: true };
-    if (VALUE_CORRECTIONS[property]) {
-      const c = VALUE_CORRECTIONS[property].find(c => c.wrong === value.toLowerCase());
-      if (c) return c.confidence < 1 ? { valid: false, suggestion: c.correct } : { valid: true };
+    const correctionsList = VALUE_CORRECTIONS[property];
+    if (correctionsList) {
+      const valLower = value.toLowerCase();
+      for (let i = 0; i < correctionsList.length; i++) {
+        const c = correctionsList[i];
+        if (c.wrong === valLower) {
+          return c.confidence < 1 ? { valid: false, suggestion: c.correct } : { valid: true };
+        }
+      }
     }
     if (!KNOWN_PROPERTIES.includes(property.toLowerCase())) {
       const s = findClosestProperty(property);
@@ -164,7 +181,7 @@ export const intent = {
 
   macro(name: string): Record<string, any> | null { return expandLayoutMacro(name); },
   getMacros(): string[] { 
-    return getAvailableMacros().filter(k => !['__proto__','constructor','prototype'].includes(k));
+    return getAvailableMacros().filter(k => k !== '__proto__' && k !== 'constructor' && k !== 'prototype');
   },
   autoContrast(bgColor: string): string { return autoContrast(bgColor); },
   getMacroDescription(name: string): string | null { return getMacroDescription(name); },
@@ -177,10 +194,12 @@ export const intent = {
     if (!macro) return null;
     const merged = typeof structuredClone === 'function' ? structuredClone(macro) : JSON.parse(JSON.stringify(macro));
     if (!overrides) return merged;
-    for (const [key, value] of Object.entries(overrides)) {
+    for (const key in overrides) {
+      if (!Object.prototype.hasOwnProperty.call(overrides, key)) continue;
+      const value = overrides[key];
       if (key === 'atRules' && Array.isArray(value) && Array.isArray(merged.atRules)) {
         merged.atRules = [...merged.atRules, ...value];
-      } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+      } else if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
         merged[key] = { ...(merged[key] || {}), ...value };
       } else {
         merged[key] = value;

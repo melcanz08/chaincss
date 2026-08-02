@@ -1,13 +1,12 @@
 // __tests__/unit/compiler.test.ts
 // Core compiler tests
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ChainCSSCompiler } from '../../src/core/compiler.js';
-import { chain } from '../../src/core/style-collector.js';
+import { describe, it, expect, beforeEach, vi, afterEach} from 'vitest';
+import { ChainCSSCompiler } from '../../src/core/usecases/compiler.js';
+import { chain } from '../../src/core/entities/style-collector.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { StyleGraphCompiler } from '../../src/compiler/style-graph.js';
 
 describe('ChainCSSCompiler', () => {
   let compiler: ChainCSSCompiler;
@@ -187,56 +186,6 @@ describe('ChainCSSCompiler', () => {
   describe('getCombinedCSS', () => {
     it('should return empty string initially', () => {
       expect(compiler.getCombinedCSS()).toBe('');
-    });
-  });
-
-  describe('ChainCSSCompiler — Graph Compilation (v3.0)', () => {
-    it('compileWithGraph is available', () => {
-      const compiler = new ChainCSSCompiler({});
-      expect(typeof compiler.compileWithGraph).toBe('function');
-    });
-
-    it('compileWithGraph returns GraphCompileResult', () => {
-      const compiler = new ChainCSSCompiler({ verbose: false });
-      const styles = {
-        testButton: {
-          selectors: ['.test-btn'],
-          color: 'white',
-          backgroundColor: 'blue',
-        } as StyleDefinition,
-      };
-
-      const result = compiler.compileWithGraph(styles);
-      
-      expect(result.css).toContain('.test-btn');
-      expect(result.graph).toBeDefined();
-      expect(result.graph.nodes.size).toBeGreaterThan(0);
-      expect(result.eliminatedDead).toBe(0);
-      expect(result.mergedRules).toBe(0);
-      expect(result.optimizationTime).toBeGreaterThanOrEqual(0);
-    });
-
-    it('compileWithGraph eliminates dead styles', () => {
-      const compiler = new ChainCSSCompiler({ verbose: false });
-      const styles = {
-        used: {
-          selectors: ['.used'],
-          color: 'white',
-        } as StyleDefinition,
-        unused: {
-          selectors: ['.unused'],
-          color: 'gray',
-        } as StyleDefinition,
-      };
-
-      const result = compiler.compileWithGraph(styles, {
-        eliminateDead: true,
-        knownSelectors: ['.used'],
-      });
-
-      expect(result.eliminatedDead).toBeGreaterThan(0);
-      expect(result.css).toContain('.used');
-      expect(result.css).not.toContain('.unused');
     });
   });
 });

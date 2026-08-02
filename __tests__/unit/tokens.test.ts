@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { chain } from '../../src/core/style-collector.js';
+import { chain } from '../../src/core/entities/style-collector.js';
 
 describe('Token Resolution', () => {
   describe('Chain with tokens', () => {

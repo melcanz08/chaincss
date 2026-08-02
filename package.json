@@ -12,35 +12,34 @@
       "browser": "./dist/browser.js",
       "require": "./dist/index.cjs"
     },
+    "./core": {
+      "types": "./dist/core-entry.d.ts",
+      "import": "./dist/core-entry.js",
+      "require": "./dist/core-entry.cjs"
+    },
+    "./runtime": {
+      "types": "./dist/runtime-entry.d.ts",
+      "import": "./dist/runtime-entry.js",
+      "require": "./dist/runtime-entry.cjs"
+    },
+    "./compiler": {
+      "types": "./dist/compiler-entry.d.ts",
+      "import": "./dist/compiler-entry.js",
+      "require": "./dist/compiler-entry.cjs"
+    },
+    "./utils": {
+      "types": "./dist/utils-entry.d.ts",
+      "import": "./dist/utils-entry.js",
+      "require": "./dist/utils-entry.cjs"
+    },
     "./browser": {
       "types": "./dist/browser.d.ts",
-      "import": "./dist/browser.js",
-      "require": "./dist/browser.js"
+      "import": "./dist/browser.js"
     },
     "./advanced": {
       "types": "./dist/advanced.d.ts",
       "import": "./dist/advanced.js",
       "require": "./dist/advanced.js"
-    },
-    "./runtime": {
-      "types": "./dist/runtime/index.d.ts",
-      "import": "./dist/runtime/index.js",
-      "require": "./dist/runtime/index.cjs"
-    },
-    "./runtime/react": {
-      "types": "./dist/runtime/index.d.ts",
-      "import": "./dist/runtime/index.js",
-      "require": "./dist/runtime/index.cjs"
-    },
-    "./compiler": {
-      "types": "./dist/compiler/index.d.ts",
-      "import": "./dist/compiler/index.js",
-      "require": "./dist/compiler/index.cjs"
-    },
-    "./utils": {
-      "types": "./dist/utils.d.ts",
-      "import": "./dist/utils.js",
-      "require": "./dist/utils.cjs"
     },
     "./vite": {
       "types": "./dist/plugins/vite.d.ts",
@@ -85,8 +84,8 @@
   "scripts": {
     "audit": "chaincss audit --fail-on AA",
     "audit:fix": "chaincss audit --fix --write",
-    "audit:report": "chaincss audit --fix --json./reports/a11y.json",
-    "audit:contrast": "chaincss audit --fail-on AA --json./reports/a11y.json",
+    "audit:report": "chaincss audit --fix --json ./reports/a11y.json",
+    "audit:contrast": "chaincss audit --fail-on AA --json ./reports/a11y.json",
     "audit:contrast:strict": "chaincss audit --fail-on AAA --strict",
     "build": "npm run build:clean && node scripts/build.mjs && npm run build:types",
     "build_test": "rm -rf dist .chaincss-cache && npm run build:clean && node scripts/build.mjs && npm run build:types && vitest run",
@@ -94,8 +93,8 @@
     "build:clean": "rm -rf dist",
     "build:types": "tsc -p tsconfig.build.json",
     "build:core": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js --packages=external --external:vue --external:react --external:react-dom --external:svelte",
-    "build:cli": "esbuild src/cli/index.ts --bundle --platform=node --format=esm --outfile=dist/cli/index.js --packages=external && printf '#!/usr/bin/env node\\n' | cat - dist/cli/index.js > dist/cli/tmp && mv dist/cli/tmp dist/cli/index.js && chmod +x dist/cli/index.js",
-    "build:plugins": "esbuild src/plugins/vite.ts --bundle --platform=node --format=esm --outfile=dist/plugins/vite.js --packages=external && esbuild src/plugins/figma-sync.ts --bundle --platform=node --format=esm --outfile=dist/plugins/figma-sync.js --packages=external && esbuild src/plugins/webpack.ts --bundle --platform=node --format=esm --outfile=dist/plugins/webpack.js --packages=external",
+    "build:cli": "esbuild src/adapters/cli/index.ts --bundle --platform=node --format=esm --outfile=dist/cli/index.js --packages=external && printf '#!/usr/bin/env node\\n' | cat - dist/cli/index.js > dist/cli/tmp && mv dist/cli/tmp dist/cli/index.js && chmod +x dist/cli/index.js",
+    "build:plugins": "esbuild src/frameworks/build-tools/vite/index.ts --bundle --platform=node --format=esm --outfile=dist/plugins/vite.js --packages=external && esbuild src/frameworks/build-tools/figma-sync/index.ts --bundle --platform=node --format=esm --outfile=dist/plugins/figma-sync.js --packages=external && esbuild src/frameworks/build-tools/webpack/index.ts --bundle --platform=node --format=esm --outfile=dist/plugins/webpack.js --packages=external",
     "build:runtime": "esbuild src/runtime/index.ts --bundle --platform=browser --format=esm --outfile=dist/runtime/index.js --external:react --external:react-dom --external:vue --external:svelte --external:url",
     "build:browser": "esbuild src/browser.ts --bundle --platform=browser --format=esm --outfile=dist/browser.js --external:react --external:react-dom --external:vue --external:svelte --external:url",
     "build:compiler": "esbuild src/compiler/index.ts --bundle --platform=node --format=esm --outfile=dist/compiler/index.js --packages=external",
@@ -113,7 +112,10 @@
     "bench:check": "node --expose-gc --import tsx benchmarks/check-regression.js",
     "bench:ci": "npm run bench:check",
     "tokens:watch": "chaincss entanglement --input figma-tokens.json --watch --figma",
-    "tokens:fix": "chaincss entanglement --fix"
+    "tokens:fix": "chaincss entanglement --fix",
+    "migrate:analyze": "node scripts/migrate-to-new-architecture.mjs",
+    "analyze:deps": "npx madge --circular --extensions ts,tsx src/",
+    "arch:check": "npm run analyze:deps && npm run migrate:analyze"
   },
   "peerDependencies": {
     "react": ">=16.8.0",
@@ -134,6 +136,7 @@
   "devDependencies": {
     "@types/node": "^22.7.0",
     "@types/react": "^19.2.14",
+    "@types/semver": "^7.7.1",
     "@vitejs/plugin-react": "^4.3.3",
     "@vitest/coverage-v8": "^1.6.0",
     "csstype": "^3.2.3",
@@ -141,8 +144,9 @@
     "jiti": "^2.7.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "semver": "^7.8.5",
     "tsx": "^4.22.4",
-    "typescript": "^5.6.3",
+    "typescript": "^7.0.2",
     "vite": "^5.0.0",
     "vitest": "^1.6.0"
   },
@@ -173,7 +177,19 @@
   "bugs": {
     "url": "https://github.com/melcanz08/chaincss/issues"
   },
-  "sideEffects": false,
+  "sideEffects": [
+    "*.css",
+    "./dist/runtime/**/*.js",
+    "./dist/runtime/**/*.cjs",
+    "./dist/browser.js",
+    "./dist/next/client.js",
+    "./dist/next/client.cjs",
+    "./dist/plugins/vite.js",
+    "./dist/plugins/vite.cjs",
+    "./dist/plugins/webpack.js",
+    "./dist/plugins/figma-sync.js",
+    "./dist/cli/index.js"
+  ],
   "engines": {
     "node": ">=18.0.0"
   },

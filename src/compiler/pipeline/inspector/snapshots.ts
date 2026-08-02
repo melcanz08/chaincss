@@ -21,7 +21,7 @@ export function buildSnapshots(
   const currentRollingState = new Map<string, string>();
   
   if (rule.declarations) {
-    for (const d of rule.declarations) {
+    for (const d of (rule.declarations || [])) {
       if (!d || !d.property) continue;
       
       const firstRecord = d.history?.[0];

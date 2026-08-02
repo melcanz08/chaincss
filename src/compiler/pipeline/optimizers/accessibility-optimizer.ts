@@ -1,9 +1,9 @@
 // ============================================================================
-// FILE: src/compiler/pipeline/optimizers/accessibility-optimizer.ts
+// FILE: src/compiler/pipeline/optimizers/accessibility-optimizer.ts (OPTIMIZED)
 // ============================================================================
 
 import { recordHistory } from '../ir/utils.js';
-import { createDeclaration } from '../ir/factory.js';
+import { createDeclaration } from '../ir/index.js';
 import type { StyleIR, IRRule } from '../ir/types.js';
 import type { OptimizationPass, OptimizationResult } from '../pipeline-types.js';
 
@@ -12,53 +12,11 @@ const WCAG = {
   MIN_TOUCH_TARGET: 44,
 };
 
-function extractPx(value: string): number {
+// Fast-path guard prevents running RegExp on non-pixel values (colors, percentages, keywords)
+function extractPx(value: string | number | undefined): number {
+  if (typeof value !== 'string' || !value.endsWith('px')) return Infinity;
   const match = value.match(/^(\d+(\.\d+)?)px$/);
   return match ? parseFloat(match[1]) : Infinity;
-}
-
-function hasAdequateTouchTarget(rule: IRRule): { width: boolean; height: boolean } {
-  const declarations = rule.declarations || [];
-  const checkProp = (props: string[]) => {
-    for (const decl of declarations) {
-      if (props.includes(decl.property) && extractPx(String(decl.value)) >= WCAG.MIN_TOUCH_TARGET) {
-        return true;
-      }
-    }
-    return false;
-  };
-
-  return {
-    width: checkProp(['min-width', 'minWidth', 'width']),
-    height: checkProp(['min-height', 'minHeight', 'height']),
-  };
-}
-
-function isSmallElement(rule: IRRule): boolean {
-  if (!rule.selector) return false;
-  const selector = rule.selector.toLowerCase();
-  const smallPatterns = [
-    'icon', 'close', 'x-btn', 'badge', 'tag', 'chip',
-    'breadcrumb', 'crumb', 'arrow', 'dot', 'indicator',
-    'avatar-xs', 'avatar-sm',
-  ];
-  
-  if (smallPatterns.some(p => selector.includes(p))) return true;
-
-  const declarations = rule.declarations || [];
-  for (const decl of declarations) {
-    const prop = decl.property;
-    if ((prop === 'width' || prop === 'height') && typeof decl.value === 'string') {
-      const px = extractPx(decl.value);
-      if (px > 0 && px < 30) return true;
-    }
-    if ((prop === 'fontSize' || prop === 'font-size') && typeof decl.value === 'string') {
-      const px = extractPx(decl.value);
-      if (px > 0 && px < 14) return true;
-    }
-  }
-
-  return false;
 }
 
 export const accessibilityOptimizer: OptimizationPass = {
@@ -76,39 +34,62 @@ export const accessibilityOptimizer: OptimizationPass = {
     for (const rule of ir.rules) {
       if (rule.isDead || !rule.declarations) continue;
 
-      // Ensure pseudoClasses array structure exists safely
       if (!rule.pseudoClasses) {
         rule.pseudoClasses = [];
       }
 
-      // 1. Auto-fix font sizes safely using CSS max() fallback structures
-      for (const decl of rule.declarations) {
-        if ((decl.property === 'fontSize' || decl.property === 'font-size') && typeof decl.value === 'string') {
-          const pxMatch = decl.value.match(/^(\d+(\.\d+)?)px$/);
-          if (pxMatch && parseFloat(pxMatch[1]) < WCAG.MIN_FONT_SIZE) {
+      const declarations = rule.declarations;
+      let hasCursorPointer = false;
+      let explicitlyStripsOutline = false;
+      let minWidthFound = false;
+      let minHeightFound = false;
+
+      // Single-pass inspection of declarations to avoid looping 4+ times
+      for (const decl of declarations) {
+        const prop = decl.property;
+        const valStr = String(decl.value);
+
+        // 1. Font size check & auto-fix
+        if ((prop === 'fontSize' || prop === 'font-size') && typeof decl.value === 'string') {
+          const px = extractPx(decl.value);
+          if (px !== Infinity && px < WCAG.MIN_FONT_SIZE) {
             const originalValue = decl.value;
             decl.value = `max(${WCAG.MIN_FONT_SIZE}px, ${originalValue})`;
             recordHistory(decl as any, 'accessibility-optimizer', 'auto-fix-min-font', undefined, `Ensured minimum font size of ${WCAG.MIN_FONT_SIZE}px`);
             changes++;
           }
         }
+
+        // 2. Interactive & Touch Target flags
+        if (prop === 'cursor' && decl.value === 'pointer') {
+          hasCursorPointer = true;
+        }
+        if (prop === 'min-width' || prop === 'minWidth' || prop === 'width') {
+          if (extractPx(decl.value) >= WCAG.MIN_TOUCH_TARGET) minWidthFound = true;
+        }
+        if (prop === 'min-height' || prop === 'minHeight' || prop === 'height') {
+          if (extractPx(decl.value) >= WCAG.MIN_TOUCH_TARGET) minHeightFound = true;
+        }
+
+        // 3. Outline stripping checks
+        if (
+          (prop === 'outline' && ['none', '0', 'transparent'].includes(valStr.trim())) ||
+          (prop === 'outline-style' && valStr.trim() === 'none')
+        ) {
+          explicitlyStripsOutline = true;
+        }
       }
 
-      // 2. Touch target parsing infrastructure validation
-      const isInteractive = rule.declarations.some(d => d.property === 'cursor' && d.value === 'pointer');
+      // Touch target adjustments
       const isButton = rule.selector && /(\bbutton\b|\[role=["']button["']\]|btn)/i.test(rule.selector);
-
-      if (isInteractive || isButton) {
-        const small = isSmallElement(rule);
-        const targets = hasAdequateTouchTarget(rule);
-
+      if (hasCursorPointer || isButton) {
+        const small = isSmallElementFast(rule, declarations);
         if (small) {
-          if (!targets.width || !targets.height) {
+          if (!minWidthFound || !minHeightFound) {
             const existingAfter = rule.pseudoClasses.find(pc => pc.name === 'after' &&
               pc.declarations?.some(d => d.meta?.a11yTouchTarget));
 
             if (!existingAfter) {
-              // Centered dynamic hit-box enlargement structure to avoid small bounds skewing
               const afterDecls = [
                 createDeclaration('content', '""', rule.source, { a11yTouchTarget: true }),
                 createDeclaration('position', 'absolute', rule.source, { a11yTouchTarget: true }),
@@ -133,38 +114,29 @@ export const accessibilityOptimizer: OptimizationPass = {
                 }],
               });
 
-              // Guarantee relative bounding context mapping on host layer
-              const hasPosition = rule.declarations.some(d =>
+              const hasPosition = declarations.some(d =>
                 d.property === 'position' && ['relative', 'absolute', 'fixed', 'sticky'].includes(String(d.value))
               );
               if (!hasPosition) {
-                rule.declarations.push(
-                  createDeclaration('position', 'relative', rule.source, { a11yTouchTarget: true })
-                );
+                declarations.push(createDeclaration('position', 'relative', rule.source, { a11yTouchTarget: true }));
               }
 
               changes++;
             }
           }
         } else {
-          // Standard structural layouts get safe min boundaries
-          if (!targets.width) {
-            rule.declarations.push(createDeclaration('min-width', `${WCAG.MIN_TOUCH_TARGET}px`, rule.source, { a11y: true }));
+          if (!minWidthFound) {
+            declarations.push(createDeclaration('min-width', `${WCAG.MIN_TOUCH_TARGET}px`, rule.source, { a11y: true }));
             changes++;
           }
-          if (!targets.height) {
-            rule.declarations.push(createDeclaration('min-height', `${WCAG.MIN_TOUCH_TARGET}px`, rule.source, { a11y: true }));
+          if (!minHeightFound) {
+            declarations.push(createDeclaration('min-height', `${WCAG.MIN_TOUCH_TARGET}px`, rule.source, { a11y: true }));
             changes++;
           }
         }
       }
 
-      // 3. Robust validation of missing focus rings (catches none, 0, transparent, outline-style)
-      const explicitlyStripsOutline = rule.declarations.some(d => 
-        (d.property === 'outline' && ['none', '0', 'transparent'].includes(String(d.value).trim())) ||
-        (d.property === 'outline-style' && String(d.value).trim() === 'none')
-      );
-
+      // Missing focus ring check
       const hasFocusStyle = rule.pseudoClasses.some(pc =>
         (pc.name === 'focus' || pc.name === 'focus-visible') && pc.declarations && pc.declarations.length > 0
       );
@@ -174,7 +146,6 @@ export const accessibilityOptimizer: OptimizationPass = {
           id: `a11y-focus-${rule.id}`,
           name: 'focus-visible',
           parentId: rule.id,
-          // Utilizes currentcolor fallback mapping to stay highly context-agnostic and accessible
           declarations: [
             createDeclaration('outline', '2px dashed currentColor', rule.source),
             createDeclaration('outlineOffset', '2px', rule.source),
@@ -198,3 +169,20 @@ export const accessibilityOptimizer: OptimizationPass = {
     };
   },
 };
+
+function isSmallElementFast(rule: IRRule, declarations: any[]): boolean {
+  if (!rule.selector) return false;
+  const selector = rule.selector.toLowerCase();
+  const smallPatterns = ['icon', 'close', 'x-btn', 'badge', 'tag', 'chip', 'breadcrumb', 'crumb', 'arrow', 'dot', 'indicator', 'avatar-xs', 'avatar-sm'];
+  
+  if (smallPatterns.some(p => selector.includes(p))) return true;
+
+  for (const decl of declarations) {
+    const prop = decl.property;
+    if (prop === 'width' || prop === 'height' || prop === 'fontSize' || prop === 'font-size') {
+      const px = extractPx(decl.value);
+      if (px > 0 && px < (prop.includes('font') ? 14 : 30)) return true;
+    }
+  }
+  return false;
+}

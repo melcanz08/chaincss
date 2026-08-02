@@ -1,7 +1,3 @@
-// ============================================================================
-// FILE: src/compiler/pipeline/normalizers/layout-macros.ts
-// ============================================================================
-
 export interface LayoutMacro {
   name: string;
   description: string;
@@ -71,10 +67,14 @@ export function registerLayoutMacro(name: string, macro: LayoutMacro, allowOverr
   if (!allowOverride && BUILTIN_LAYOUT_MACROS[name]) {
     console.warn(`[ChainCSS] layout macro '${name}' overrides builtin. Use allowOverride:true to silence.`);
   }
-  LAYOUT_MACROS[name] = {...macro, name };
+  LAYOUT_MACROS[name] = { ...macro, name };
 }
 export function registerLayoutMacros(macros: Record<string, LayoutMacro>, allowOverride = false) {
-  for (const [k, v] of Object.entries(macros || {})) registerLayoutMacro(k, v, allowOverride);
+  for (const k in macros) {
+    if (Object.prototype.hasOwnProperty.call(macros, k)) {
+      registerLayoutMacro(k, macros[k], allowOverride);
+    }
+  }
 }
 export function resetLayoutMacros() { LAYOUT_MACROS = { ...BUILTIN_LAYOUT_MACROS }; }
 
@@ -87,16 +87,17 @@ export function expandLayoutMacro(name: string): Record<string, any> | null {
   const result: Record<string, any> = { ...macro.properties };
   if (macro.defaults) Object.assign(result, macro.defaults);
   
-  if (macro.mediaQueries) {
-    for (const [query, props] of Object.entries(macro.mediaQueries)) {
-      // Phase 2 Upgrade: Correctly classify native container rules, nested configurations, or traditional media queries
+  const mq = macro.mediaQueries;
+  if (mq) {
+    for (const query in mq) {
+      if (!Object.prototype.hasOwnProperty.call(mq, query)) continue;
+      const props = mq[query];
       if (query.startsWith('@container')) {
         result.atRules = result.atRules || [];
         const cleanQuery = query.replace('@container', '').trim();
         result.atRules.push({ type: 'container', query: cleanQuery, styles: props, nestedRules: [] });
       } 
-      else if (query.startsWith('&') || query.startsWith(':')) {
-        // Direct nested blocks mapped dynamically inside standard styles declaration layer
+      else if (query.charCodeAt(0) === 38 /* '&' */ || query.charCodeAt(0) === 58 /* ':' */) {
         result[query] = props;
       } 
       else {
@@ -111,13 +112,18 @@ export function expandLayoutMacro(name: string): Record<string, any> | null {
 export function getAvailableMacros(): string[] { return Object.keys(LAYOUT_MACROS); }
 export function getMacroDescription(name: string): string | null { return resolveLayoutMacro(name)?.description || null; }
 
+const contrastCache = new Map<string, string>();
+
 export function autoContrast(bgColor: string): string {
-  let r = 128, g = 128, b = 128;
   const input = (bgColor || '').trim().toLowerCase();
   if (!input || input.includes('var(')) return '#000000';
+  
+  const cached = contrastCache.get(input);
+  if (cached !== undefined) return cached;
 
+  let r = 128, g = 128, b = 128;
   let hex = '';
-  if (input.startsWith('#')) hex = input.slice(1);
+  if (input.charCodeAt(0) === 35 /* '#' */) hex = input.slice(1);
   else if (/^[a-f0-9]{3,8}$/.test(input)) hex = input;
 
   if (hex) {
@@ -147,5 +153,9 @@ export function autoContrast(bgColor: string): string {
   const lum = 0.2126*toLinear(r) + 0.7152*toLinear(g) + 0.0722*toLinear(b);
   const contrastBlack = (lum + 0.05) / 0.05;
   const contrastWhite = 1.05 / (lum + 0.05);
-  return contrastBlack > contrastWhite ? "#000000" : "#ffffff";
+  const result = contrastBlack > contrastWhite ? "#000000" : "#ffffff";
+  
+  if (contrastCache.size > 500) contrastCache.clear();
+  contrastCache.set(input, result);
+  return result;
 }

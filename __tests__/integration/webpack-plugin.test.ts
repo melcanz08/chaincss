@@ -4,8 +4,16 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // Mock compiler to avoid real FS compile
-vi.mock('../../src/core/compiler.js', () => ({
+vi.mock('@core/usecases/compiler.js', () => ({
   ChainCSSCompiler: class {
+    compileVirtualSource = vi.fn().mockResolvedValue({
+      btn: {
+        css: '.btn{color:red}',
+        classMap: { btn: 'btn-class' },
+        dynamic: { useBtn: () => 'btn-class' },
+        inspector: { ir: [{ id: 'test' }], pipelineReport: [], diagnostics: [] }
+      }
+    })
     compileFile = vi.fn().mockResolvedValue({
       btn: {
         css: '.btn{color:red}',
@@ -21,7 +29,7 @@ vi.mock('../../src/compiler/pipeline/inspector/serializer.js', () => ({
   serializeForInspector: vi.fn(() => [{ id: 'test' }])
 }));
 
-import chaincssLoader, { clearInspectorData, getInspectorData, ChainCSSWebpackPlugin } from '../../src/plugins/webpack.js';
+import chaincssLoader, { clearInspectorData, getInspectorData, ChainCSSWebpackPlugin } from '@frameworks/build-tools/webpack/index.js';
 
 describe('Webpack Loader v1', () => {
   let callback: ReturnType<typeof vi.fn>;

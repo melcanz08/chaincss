@@ -2,6 +2,7 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "outDir": "./dist",
+    "rootDir": "./src",
     "emitDeclarationOnly": true,
     "noEmit": false,
     "declaration": true,
@@ -17,11 +18,9 @@
     "src/utils.ts",
     "src/core/**/*",
     "src/compiler/**/*",
-    "src/cli/**/*",
-    "src/plugins/**/*",
-    "src/runtime/**/*",
-    "src/next/**/*",
-    "src/postcss/**/*"
+    "src/adapters/**/*",
+    "src/frameworks/**/*",
+    "src/shared/**/*"
   ],
   "exclude": ["node_modules", "dist", "__tests__", "benchmarks", "examples"]
 }

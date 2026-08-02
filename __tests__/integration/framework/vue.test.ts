@@ -2,7 +2,7 @@
 // Vue integration tests
 
 import { describe, it, expect } from 'vitest';
-import { chain } from '../../../src/core/style-collector.js';
+import { chain } from '../../../src/core/entities/style-collector.js';
 
 describe('Vue Integration - Chain Styles', () => {
   it('should generate selector strings for Vue class bindings', () => {

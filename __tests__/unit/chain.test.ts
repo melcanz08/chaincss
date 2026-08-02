@@ -4,9 +4,9 @@
  * + kept macros (center, pill, hide, mx/my, size, glass, etc)
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { chain } from '../../src/core/style-collector.js';
-import { compileToCSS, partitionForBuild } from '../../src/core/style-compiler.js';
-import { classifyValue } from '../../src/core/value-classifier.js';
+import { chain } from '@core/entities/style-collector.js';
+import { compileToCSS, partitionForBuild } from '@core/usecases/style-compiler.js';
+import { classifyValue } from '@core/usecases/value-classifier.js';
 
 const getHover = (s: any) => s._nestedRules?.find((r: any) => r.selector === '&:hover')?.styles
 

@@ -11,8 +11,8 @@
     "types": ["vite/client", "node"]
   },
   "include": [
-    "src/runtime/react.tsx",
-    "src/runtime/vue.ts", 
-    "src/runtime/svelte.ts"
+    "./src/frameworks/react/index.tsx",
+    "./src/frameworks/vue/index.ts", 
+    "./src/frameworks/svelte/index.ts"
   ]
 }

@@ -15,7 +15,7 @@ export function getAffectedDeclarations(
   const affected: InspectorAffectedDeclaration[] = [];
   const targetPass = entry.pass;
 
-  for (const d of rule.declarations) {
+  for (const d of (rule.declarations || [])) {
     if (!d?.history?.length) continue;
 
     const passEvents = d.history.filter(h => h?.pass === targetPass);

@@ -4,7 +4,7 @@
 
 import type { StyleIR } from '../ir/types.js';
 import type { LoweringPass, LoweringResult } from '../pipeline-types.js';
-import { createDeclaration } from '../ir/factory.js';
+import { createDeclaration } from '../ir/index.js';
 import { recordHistory } from '../ir/utils.js';
 
 interface Constraint {
@@ -125,7 +125,11 @@ export const constraintResolver: LoweringPass = {
     }
 
     for (const rule of ir.rules) {
-      const constraints = (rule.meta?._constraints as Constraint[]) || [];
+      const constraints = (
+        rule.passMeta?.analysis?.semantic?.constraints ??
+        rule.meta?._constraints ??
+        []
+      ) as Constraint[];
       if (constraints.length === 0) continue;
 
       if (!rule.declarations) {

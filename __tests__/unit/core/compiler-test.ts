@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { ChainCSSCompiler } from '../../../src/core/compiler';
+import { ChainCSSCompiler } from '../../../src/core/usecases/compiler';
 
 describe('Compiler - Orchestration Robust', () => {
   let compiler: ChainCSSCompiler;

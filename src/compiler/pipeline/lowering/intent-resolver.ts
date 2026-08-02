@@ -5,7 +5,7 @@
 import { recordHistory } from '../ir/utils.js';
 import type { StyleIR } from '../ir/types.js';
 import type { LoweringPass, LoweringResult, LoweringContext } from '../pipeline-types.js';
-import { createDeclaration } from '../ir/factory.js';
+import { createDeclaration } from '../ir/index.js';
 import { resolveSemantic } from '../../tokens/semantic-tokens.js';
 
 export interface IntentDefinition {
@@ -177,7 +177,11 @@ export const intentResolver: LoweringPass = {
     let generatedNodes = 0;
     
     for (const rule of ir.rules) {
-      const intentName: string = (rule.meta as any)._intent as string;
+      const intentName: string = (
+        rule.passMeta?.analysis?.semantic?.intents?.[0] ??
+        (rule.meta as any)._intent ??
+        ''
+      ) as string;
       if (!intentName) continue;
       
       const resolved = resolveIntent(intentName);
@@ -212,8 +216,21 @@ export const intentResolver: LoweringPass = {
           });
         }
       }
-      if (Object.keys(resolved.responsive).length > 0) (rule.meta as any)._responsiveIntents = resolved.responsive;
-      if (resolved.a11y.length > 0) (rule.meta as any)._a11yRequirements = resolved.a11y;
+      if (Object.keys(resolved.responsive).length > 0) {
+        if (!rule.passMeta) rule.passMeta = {};
+        if (!rule.passMeta.analysis) rule.passMeta.analysis = {};
+        if (!rule.passMeta.analysis.semantic) rule.passMeta.analysis.semantic = { tokens: [], intents: [], constraints: [] };
+        (rule.passMeta.analysis as any).responsiveIntents = resolved.responsive;
+        // Backward compat
+        (rule.meta as any)._responsiveIntents = resolved.responsive;
+      }
+      if (resolved.a11y.length > 0) {
+        if (!rule.passMeta) rule.passMeta = {};
+        if (!rule.passMeta.analysis) rule.passMeta.analysis = {};
+        (rule.passMeta.analysis as any).a11yRequirements = resolved.a11y;
+        // Backward compat
+        (rule.meta as any)._a11yRequirements = resolved.a11y;
+      }
     }
     return { ir, generatedNodes };
   },

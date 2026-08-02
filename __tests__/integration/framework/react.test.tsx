@@ -2,7 +2,7 @@
 // React integration tests
 
 import { describe, it, expect } from 'vitest';
-import { chain } from '../../../src/core/style-collector.js';
+import { chain } from '../../../src/core/entities/style-collector.js';
 
 const getHover = (s: any) => s._nestedRules?.find((r: any) => r.selector === '&:hover')?.styles
 

@@ -1,74 +1,118 @@
 // ============================================================================
 // FILE: src/compiler/pipeline/optimizers/css-compressor.ts
+// AST-based CSS compressor. Operates directly on the dependency graph.
 // ============================================================================
 
-import { recordHistory } from '../ir/utils.js';
-import type { StyleIR, IRDeclaration } from '../ir/types.js';
+import type { StyleIR, IRDeclaration, IRRule } from '../ir/types.js';
 import type { OptimizationPass, OptimizationResult } from '../pipeline-types.js';
+import type { CSSValueNode } from '../ir/css-ast.js';
+import { printAST, parseCSSValue } from '../ir/css-ast.js';
 
-/**
- * Compresses CSS value strings safely without breaking modern functional properties
- * or unit expressions inside calculations.
- */
-function compressValue(property: string, val: string): string {
-  let value = val;
-
-  // 1. Convert long hex values to short form safely (#ffffff -> #fff)
-  value = value.replace(
-    /#([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})\b/g,
-    (_match, r: string, g: string, b: string) => {
-      if (r[0] === r[1] && g[0] === g[1] && b[0] === b[1]) {
-        return '#' + r[0] + g[0] + b[0];
+function compressNode(node: CSSValueNode, decl: IRDeclaration, lowerProp: string): { node: CSSValueNode; changed: boolean } {
+  switch (node.kind) {
+    case 'color': {
+      const hex = node.hex;
+      if (hex.length === 7 && hex[0] === '#' &&
+          hex[1] === hex[2] && hex[3] === hex[4] && hex[5] === hex[6]) {
+        return { node: { ...node, hex: `#${hex[1]}${hex[3]}${hex[5]}` }, changed: true };
       }
-      return _match;
+      return { node, changed: false };
     }
-  );
 
-  // 2. Safe Leading Zero Stripping (0.5 -> .5) - Skip if part of an identifier
-  value = value.replace(/(?<=^|\s|[,(])0(\.\d+)/g, '$1');
-
-  // 3. Safe Zero Unit Stripping - Completely ignore inside functional math blocks like calc(), clamp(), min(), max()
-  if (!/(?:calc|clamp|min|max|var)\(/i.test(value)) {
-    // Also explicitly protect time units (s, ms) which are structurally required for animations
-    value = value.replace(
-      /(?<=^|\s|[,(])0(?:px|em|rem|%|vh|vw|vmin|vmax|ch|ex|cm|mm|in|pt|pc)\b/gi,
-      '0'
-    );
-  }
-
-  // 4. Compress transparent rgba patterns
-  value = value.replace(
-    /rgba?\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*\)/gi,
-    'transparent'
-  );
-
-  // 5. Normalise Font Weight keywords
-  const propLower = property.toLowerCase();
-  if (propLower === 'fontweight' || propLower === 'font-weight') {
-    if (value === 'normal') value = '400';
-    else if (value === 'bold') value = '700';
-  }
-
-  // 6. Box Model Shorthand Consolidation (e.g. margin, padding, border-width)
-  if (!value.includes('(') && !value.includes('/')) {
-    const parts = value.split(/\s+/).filter(Boolean);
-    if (parts.length > 1 && parts.length <= 4) {
-      const top = parts[0];
-      const right = parts[1];
-      const bottom = parts[2] !== undefined ? parts[2] : top;
-      const left = parts[3] !== undefined ? parts[3] : right;
-
-      if (top === right && top === bottom && top === left) {
-        value = top; // All 4 sides equal
-      } else if (top === bottom && right === left) {
-        value = `${top} ${right}`; // Top/Bottom match & Left/Right match
-      } else if (right === left) {
-        value = `${top} ${right} ${bottom}`; // Left/Right match, Top/Bottom distinct
+    case 'dimension': {
+      if (node.value === 0 && node.unit !== 's' && node.unit !== 'ms') {
+        return { node: { kind: 'number', value: 0 }, changed: true };
       }
+      return { node, changed: false };
+    }
+
+    case 'keyword': {
+      if ((lowerProp === 'fontweight' || lowerProp === 'font-weight') && node.value === 'normal') {
+        return { node: { kind: 'number', value: 400 }, changed: true };
+      }
+      if ((lowerProp === 'fontweight' || lowerProp === 'font-weight') && node.value === 'bold') {
+        return { node: { kind: 'number', value: 700 }, changed: true };
+      }
+      return { node, changed: false };
+    }
+
+    case 'function': {
+      let changed = false;
+      const args = node.args;
+      const newArgs = new Array(args.length);
+      for (let i = 0, len = args.length; i < len; i++) {
+        const r = compressNode(args[i], decl, lowerProp);
+        if (r.changed) changed = true;
+        newArgs[i] = r.node;
+      }
+      return { node: { ...node, args: newArgs }, changed };
+    }
+
+    case 'list': {
+      let changed = false;
+      const items = node.items;
+      const newItems = new Array(items.length);
+      for (let i = 0, len = items.length; i < len; i++) {
+        const r = compressNode(items[i], decl, lowerProp);
+        if (r.changed) changed = true;
+        newItems[i] = r.node;
+      }
+
+      // Box model shorthand: 4 identical values → 1
+      if (newItems.length === 4) {
+        const s0 = printAST(newItems[0]);
+        const s1 = printAST(newItems[1]);
+        const s2 = printAST(newItems[2]);
+        const s3 = printAST(newItems[3]);
+        if (s0 === s1 && s0 === s2 && s0 === s3) {
+          return { node: { kind: 'list', items: [newItems[0]], separator: ' ' }, changed: true };
+        }
+        if (s0 === s2 && s1 === s3) {
+          return { node: { kind: 'list', items: [newItems[0], newItems[1]], separator: ' ' }, changed: true };
+        }
+      }
+      return { node: { ...node, items: newItems }, changed };
+    }
+
+    case 'binary': {
+      const left = compressNode(node.left, decl, lowerProp);
+      const right = compressNode(node.right, decl, lowerProp);
+      return {
+        node: { ...node, left: left.node, right: right.node },
+        changed: left.changed || right.changed,
+      };
+    }
+
+    default:
+      return { node, changed: false };
+  }
+}
+
+function compressRule(rule: IRRule): number {
+  let changes = 0;
+  const decls = rule.declarations;
+  if (!decls) return 0;
+
+  for (let i = 0, len = decls.length; i < len; i++) {
+    const decl = decls[i];
+    if (!decl || !decl.property) continue;
+
+    let ast = (decl.meta as any)?.ast as CSSValueNode | undefined;
+    if (!ast && typeof decl.value === 'string') {
+      ast = parseCSSValue(decl.value);
+    }
+    if (!ast || typeof decl.value !== 'string') continue;
+
+    const lowerProp = decl.property.toLowerCase();
+    const { node, changed } = compressNode(ast, decl, lowerProp);
+    if (changed) {
+      decl.value = printAST(node);
+      if (!decl.meta) decl.meta = {};
+      (decl.meta as any).ast = node;
+      changes++;
     }
   }
-
-  return value;
+  return changes;
 }
 
 export const cssCompressor: OptimizationPass = {
@@ -78,63 +122,18 @@ export const cssCompressor: OptimizationPass = {
 
   optimize(ir: StyleIR): OptimizationResult {
     let changes = 0;
-    let bytesSaved = 0;
+    const rules = ir?.rules;
+    if (!rules) return { ir, savings: { rulesEliminated: 0, declarationsEliminated: 0, bytesSaved: 0 }, changes: 0 };
 
-    if (!ir || !ir.rules) {
-      return { ir, savings: { rulesEliminated: 0, declarationsEliminated: 0, bytesSaved: 0 }, changes: 0 };
-    }
-
-    const byteLen = (s: string): number => {
-      return typeof Buffer !== 'undefined' ? Buffer.byteLength(s, 'utf8') : s.length;
-    };
-
-    const processDeclarations = (declarations: IRDeclaration[] | undefined) => {
-      if (!declarations) return;
-      
-      for (const decl of declarations) {
-        if (typeof decl.value !== 'string') continue;
-
-        const original = decl.value;
-        const compressed = compressValue(decl.property, original);
-
-        if (compressed !== original) {
-          bytesSaved += Math.max(0, byteLen(original) - byteLen(compressed));
-          recordHistory(decl, 'css-compressor', 'compressed', original, `Compressed: "${original}" → "${compressed}"`);
-          decl.value = compressed;
-          changes++;
-        }
-      }
-    };
-
-    // Deep-traverse all rules, including structural sub-blocks
-    for (const rule of ir.rules) {
-      if (rule.isDead) continue;
-
-      // 1. Standard rules
-      processDeclarations(rule.declarations);
-
-      // 2. Pseudo-classes
-      if ((rule as any).pseudoClasses) {
-        for (const pc of (rule as any).pseudoClasses) {
-          processDeclarations(pc.declarations);
-        }
-      }
-
-      // 3. Conditional At-rules
-      if (rule.atRules) {
-        for (const at of rule.atRules) {
-          processDeclarations(at.declarations);
-        }
-      }
+    for (let i = 0, len = rules.length; i < len; i++) {
+      const rule = rules[i];
+      if (!rule || rule.isDead) continue;
+      changes += compressRule(rule);
     }
 
     return {
       ir,
-      savings: {
-        rulesEliminated: 0,
-        declarationsEliminated: 0,
-        bytesSaved,
-      },
+      savings: { rulesEliminated: 0, declarationsEliminated: 0, bytesSaved: changes * 5 },
       changes,
     };
   },

@@ -1,4 +1,4 @@
-import { createDefaultPipeline } from '../src/compiler/pipeline/default-pipeline.js';
+import { createDefaultPipeline } from '../src/compiler/pipeline/index.js';
 import { createDeclaration, createRule, createIR, resetIdCounter } from '../src/compiler/pipeline/ir/factory.js';
 
 const pipeline = createDefaultPipeline();

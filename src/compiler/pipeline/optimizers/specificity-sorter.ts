@@ -5,6 +5,10 @@
 import type { StyleIR, IRRule } from '../ir/types.js';
 import type { OptimizationPass, OptimizationResult } from '../pipeline-types.js';
 
+// Module-level WeakMap cache to memoize specificity tuples per IRRule instance 
+// without mutating or polluting the underlying rule schema.
+const specificityCache = new WeakMap<IRRule, [number, number, number]>();
+
 /**
  * Calculates a standard 3-part specificity tuple [A, B, C] for a single selector.
  * A = IDs, B = Classes/Attributes/Pseudo-classes, C = Elements/Pseudo-elements
@@ -33,15 +37,13 @@ function calculateSelectorSpecificity(selector: string): [number, number, number
   if (pseudoElems) c += pseudoElems.length;
 
   // 4. Match and strip Pseudo-classes (:hover, :focus)
-  // Be careful to filter out functional wrappers or remaining double-colon segments
   const remainingStr = cleanSelector.replace(/::[a-zA-Z0-9_-]+/g, '');
   const pseudoClasses = remainingStr.match(/:[a-zA-Z0-9_-]+/g);
   if (pseudoClasses) {
-    for (const pc of pseudoClasses) {
-      // Exclude structural pseudo-elements typed with single colon legacy fallbacks
+    for (const pc of (pseudoClasses || [])) {
       if ([':before', ':after', ':first-line', ':first-letter'].includes(pc.toLowerCase())) {
         c++;
-      } else if (pc.toLowerCase() !== ':not') { // :not itself carries no weight, its arguments do
+      } else if (pc.toLowerCase() !== ':not') {
         b++;
       }
     }
@@ -61,12 +63,23 @@ function calculateSelectorSpecificity(selector: string): [number, number, number
 
   for (const word of words) {
     if (word && /^[a-zA-Z0-9_-]+$/.test(word) && !/^[0-9]+$/.test(word)) {
-      // Ignore absolute universal wildcards (*) or bare digits
       if (word !== '*') c++;
     }
   }
 
   return [a, b, c];
+}
+
+/**
+ * Gets cached specificity or computes and caches it safely.
+ */
+function getOrComputeSpecificity(rule: IRRule): [number, number, number] {
+  let cached = specificityCache.get(rule);
+  if (cached) return cached;
+
+  const tuple = calculateSelectorSpecificity(rule.selector || '');
+  specificityCache.set(rule, tuple);
+  return tuple;
 }
 
 /**
@@ -92,10 +105,8 @@ export const specificitySorter: OptimizationPass = {
 
     // Capture initial order to guarantee stable fallback comparisons
     const rulesWithMetadata = ir.rules.map((rule, index) => {
-      const specTuple = calculateSelectorSpecificity(rule.selector || '');
+      const specTuple = getOrComputeSpecificity(rule);
       
-      // Compute compressed score for backward compatibility properties if needed
-      // using safer spacing bitmasks to prevent overlapping column errors
       const combinedScore = specTuple[0] * 1000000 + specTuple[1] * 1000 + specTuple[2];
       
       if (rule.specificity !== combinedScore) {
@@ -115,13 +126,11 @@ export const specificitySorter: OptimizationPass = {
       const diff = compareSpecificity(a.specificity, b.specificity);
       if (diff !== 0) return diff;
       
-      // Stable sort fallback: maintain initial source position order
       return a.originalIndex - b.originalIndex;
     });
 
     const finalOrderedRules = rulesWithMetadata.map(m => m.rule);
 
-    // Verify if array sorting order actually changed positions
     let orderChanged = false;
     for (let i = 0; i < ir.rules.length; i++) {
       if (ir.rules[i] !== finalOrderedRules[i]) {

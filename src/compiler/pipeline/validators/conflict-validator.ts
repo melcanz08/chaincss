@@ -16,7 +16,7 @@ export const conflictValidator: ValidationPass = {
     for (const rule of ir.rules) {
       if (rule.isDead) continue;
       const declMap = new Map<string, string>();
-      for (const d of rule.declarations) {
+      for (const d of (rule.declarations || [])) {
         if (d.property && d.value !== undefined && d.value !== null) {
           const kebabProp = d.property.replace(/([A-Z])/g, '-$1').toLowerCase();
           // strip !important for comparison

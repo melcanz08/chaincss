@@ -1,47 +1,19 @@
-// src/style-ir.ts — canonical IR re-exports + legacy pass system
+// ============================================================================
+// FILE: src/style-ir.ts
+// Backward-compat barrel — deprecated in v3.0.
+// Import directly from 'compiler/pipeline/ir/' instead.
+// ============================================================================
 
-export * from './compiler/pipeline/ir/index.js';
+// Re-export everything from the canonical IR module
+export * from '@compiler/pipeline/ir/index.js';
 
-import type { StyleIR } from './compiler/pipeline/ir/types.js';
-import { parseIR } from './compiler/pipeline/ir/parser.js';
-import { generateCSS } from './compiler/pipeline/ir/css-printer.js';
+// Legacy pass system
+export type { IRPass } from '@compiler/pipeline/ir/types.js';
+export { applyPass, applyPasses, compileViaIR } from '@compiler/pipeline/ir/legacy.js';
 
-// Legacy pass system (moved from compiler/legacy/style-ir.ts)
-export type IRPass = (ir: StyleIR) => StyleIR;
-
-export function applyPass(ir: StyleIR, pass: IRPass, passName: string): StyleIR {
-  const result = pass(ir);
-  result.meta.passCount++;
-  result.meta.passes.push(passName);
-  return result;
-}
-
-export function applyPasses(
-  ir: StyleIR, 
-  passes: Array<{ name: string; pass: IRPass }>
-): StyleIR {
-  let current = ir;
-  for (const { name, pass } of passes) {
-    current = applyPass(current, pass, name);
-  }
-  return current;
-}
-
-export function compileViaIR(
-  styles: Record<string, any>,
-  passes: Array<{ name: string; pass: IRPass }> = [],
-  options?: { minify?: boolean; sourceFile?: string }
-): { css: string; ir: StyleIR } {
-  let ir = parseIR(styles, options?.sourceFile);
-  for (const { name, pass } of passes) {
-    ir = applyPass(ir, pass, name);
-  }
-  const css = generateCSS(ir, options);
-  return { css, ir };
-}
-
-// Backward-compat namespace
+// Named namespace export for backward compat (used by advanced.ts and others)
 import * as ir from './compiler/pipeline/ir/index.js';
+import { applyPass, applyPasses, compileViaIR } from '@compiler/pipeline/ir/legacy.js';
 
 export const styleIR = {
   createIR: ir.createIR,

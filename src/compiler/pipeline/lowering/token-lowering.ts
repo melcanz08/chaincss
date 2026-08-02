@@ -5,7 +5,7 @@
 import { recordHistory } from '../ir/utils.js';
 import type { StyleIR } from '../ir/types.js';
 import type { LoweringPass, LoweringResult } from '../pipeline-types.js';
-import { createDeclaration } from '../ir/factory.js';
+import { createDeclaration } from '../ir/index.js';
 import { resolveSemantic } from '../../tokens/semantic-tokens.js';
 // Pull in the core contract system safely
 import { TokenResolver } from '../../tokens/token-resolver.js';
@@ -68,7 +68,7 @@ export const tokenLowering: LoweringPass = {
     for (const rule of ir.rules) {
       if (!rule.declarations) continue;
       
-      for (const decl of rule.declarations) {
+      for (const decl of (rule.declarations || [])) {
         if (typeof decl.value === 'string' && decl.value.includes('$')) {
           const originalRawValue = decl.value;
           
@@ -121,7 +121,7 @@ export const tokenLowering: LoweringPass = {
     for (const rule of ir.rules) {
       if (!rule.pseudoClasses) continue;
       
-      for (const pc of rule.pseudoClasses) {
+      for (const pc of (rule.pseudoClasses || [])) {
         if (!pc.declarations) continue;
         for (const decl of pc.declarations) {
           if (typeof decl.value === 'string' && decl.value.includes('$')) {
@@ -148,7 +148,11 @@ export const tokenLowering: LoweringPass = {
 
     // Phase 2: Resolve semantic layout intents
     for (const rule of ir.rules) {
-      const semanticIntents = (rule.meta?._semantic as Array<{ category: string; intent: string; theme?: any }>) || [];
+      const semanticIntents = (
+        rule.passMeta?.analysis?.semantic?.tokens ??
+        rule.meta?._semantic ??
+        []
+      ) as Array<{ category: string; intent: string; theme?: any }>;
       const resolvedProps = new Set<string>();
 
       if (!rule.pseudoClasses) {

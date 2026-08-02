@@ -4,7 +4,6 @@ dist/
 .chaincss-cache/
 .chaincss-cache.tmp
 .chaincss-webpack-tmp
-.chaincss-cache.tmp
 *.class.js
 *.class.ts
 
@@ -18,10 +17,8 @@ npm-debug.log*
 *.bck
 *.tmp
 
-# benchmarks - keep baseline.json, ignore everything else generated
+# benchmarks
 benchmarks/results/
-benchmarks/baseline.json
-!benchmarks/baseline.json
 benchmarks/node_modules/
 
 # local playgrounds

@@ -138,7 +138,7 @@ export function intentAPIPass(ir: StyleIR): StyleIR {
   const result = intentResolver.generate(ir, mockContext as any);
   
   for (const rule of result.ir.rules) {
-    for (const decl of rule.declarations) {
+    for (const decl of (rule.declarations || [])) {
       if (decl.history) {
         for (const entry of decl.history) {
           if (entry.pass === 'intent-resolver') {

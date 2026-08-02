@@ -1,7 +1,7 @@
 // __tests__/unit/audit-fix.test.ts — v3.4
 import { describe, it, expect } from 'vitest'
-import { findClosestFix } from '../../src/cli/commands/audit.js'
-import { contrastRatio } from '../../src/compiler/tokens/design-orchestrator.js'
+import { findClosestFix } from '@adapters/cli/commands/audit.js'
+import { contrastRatio } from '@compiler/tokens/design-orchestrator.js'
 
 describe('audit --fix', ()=>{
   it('fixes low contrast by darkening light text on white', ()=>{

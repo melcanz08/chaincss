@@ -1,7 +1,7 @@
 // src/compiler/pipeline/pipeline-types.ts
 
 import type { StyleIR, IRRule, IRDeclaration, IRNodeId } from './ir/types.js';
-
+import type { PassDeclaration } from './pass-scheduler.js';
 // ============================================================================
 // Stage 1: Normalization
 // ============================================================================
@@ -179,6 +179,7 @@ export interface PipelineConfig {
     optimization?: OptimizationContext;
     lowering?: LoweringContext;
   };
+  passDeclarations?: PassDeclaration[];
 }
 
 // ============================================================================

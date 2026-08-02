@@ -3,8 +3,8 @@
 // ChainCSS Type-Safe Component Variant Compiler Engine
 // ============================================================================
 
-import type { StyleDefinition } from '../core/types.js';
-import { run } from '../core/style-compiler.js';
+import type { StyleDefinition } from '../shared/types/index.js';
+import { run } from '@core/usecases/style-compiler.js';
 
 export interface RecipeOptions<TVariants extends Record<string, Record<string, StyleDefinition | (() => StyleDefinition)>>> {
   base?: StyleDefinition | (() => StyleDefinition);
