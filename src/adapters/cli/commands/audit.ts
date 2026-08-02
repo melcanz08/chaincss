@@ -218,9 +218,7 @@ function resolveTokenValue(
   return value;
 }
 
-function extractPairs(
-  tokens: any,
-): Array<{
+function extractPairs(tokens: any): Array<{
   selector: string;
   color: string;
   backgroundColor: string;
