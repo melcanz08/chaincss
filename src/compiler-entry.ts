@@ -41,3 +41,5 @@ export {
   getMemoryUsage,
   formatBytes,
 } from "@shared/utils/node.js";
+
+export { ChainCSSCompiler, createPipeline } from "@compiler/index.js";

@@ -1,3 +1,5 @@
+// src/index.ts
+
 // chaincss - Main entry point (minimal)
 // Usage: import { chain, defineConfig } from 'chaincss'
 
