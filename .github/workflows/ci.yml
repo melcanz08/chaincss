@@ -62,6 +62,8 @@ jobs:
           node-version: 22
           cache: 'npm'
       - run: npm ci
+      - name: Build all targets
+        run: npm run build
       - name: Check code formatting
         run: npx prettier --check "src/**/*.ts"
       - name: Assert zero circular module trends
