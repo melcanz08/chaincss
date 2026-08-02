@@ -544,12 +544,24 @@ export default function chaincssPlugin(
     },
     async generateBundle() {
       const ir = exportIRData();
-      if (ir)
+      if (ir) {
+        // 1. Emit the IR data JSON
         this.emitFile({
           type: "asset",
           fileName: "assets/chaincss-ir.json",
           source: JSON.stringify(ir),
         });
+
+        // 2. Emit the aggregated production CSS stylesheet using getCSS()
+        const cssContent = getCSS();
+        if (cssContent) {
+          this.emitFile({
+            type: "asset",
+            fileName: "assets/chaincss.css",
+            source: formatCSS(cssContent, false),
+          });
+        }
+      }
     },
     async buildEnd() {
       if (
