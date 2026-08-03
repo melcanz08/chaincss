@@ -6,10 +6,10 @@ import { resolve } from 'path';
 const baseline = JSON.parse(readFileSync(resolve('benchmarks/baseline.json'), 'utf-8'));
 
 // Run current benchmark (same as save-baseline)
-const { createDefaultPipeline } = await import('../src/compiler/pipeline/default-pipeline.js');
+const { createPipeline } = await import('../src/compiler/pipeline/pipeline.js');
 const { createDeclaration, createRule, createIR, resetIdCounter } = await import('../src/compiler/pipeline/ir/factory.js');
 
-const pipeline = createDefaultPipeline();
+const pipeline = createPipeline();
 const scenarios = [
   { name: 'small', rules: 5, declPerRule: 4, iterations: 100 },
   { name: 'medium', rules: 50, declPerRule: 8, iterations: 50 },

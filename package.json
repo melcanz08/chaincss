@@ -1,7 +1,7 @@
 {
   "name": "chaincss",
   "version": "2.15.7",
-  "description": "A compiler-driven styling platform with a fluent, declarative UI language that compiles to optimized CSS",
+  "description": "The design-system compiler with compile-time accessibility and multi-target emission.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
