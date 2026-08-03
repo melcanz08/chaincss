@@ -1,7 +1,7 @@
 {
   "name": "chaincss",
   "version": "2.15.7",
-  "description": "ChainCSS - The first CSS-in-JS library with true auto-detection mixed mode. Zero runtime by default, dynamic when you need it.",
+  "description": "A compiler-driven styling platform with a fluent, declarative UI language that compiles to optimized CSS",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
