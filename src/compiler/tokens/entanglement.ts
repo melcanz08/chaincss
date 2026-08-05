@@ -7,6 +7,7 @@ import {
 
 export type TokenPath = string;
 export type ContrastMethod = "auto" | "darken" | "lighten";
+
 export interface ContrastRelationship {
   type: "contrast";
   id?: string;
@@ -16,6 +17,7 @@ export interface ContrastRelationship {
   autoFix?: ContrastMethod;
   priority?: number;
 }
+
 export type DerivedMethod =
   | `mix-white ${number}%`
   | `mix-black ${number}%`
@@ -34,6 +36,7 @@ export interface DerivedRelationship {
   target: TokenPath;
   method: DerivedMethod;
 }
+
 export interface HarmonyRelationship {
   type: "harmony";
   id?: string;
@@ -41,8 +44,12 @@ export interface HarmonyRelationship {
   targets: TokenPath[];
   rule: "complementary" | "analogous" | "triadic" | "same-lightness";
 }
+
 export type Relationship =
-  ContrastRelationship | DerivedRelationship | HarmonyRelationship;
+  | ContrastRelationship
+  | DerivedRelationship
+  | HarmonyRelationship;
+
 export interface Violation {
   relationship: Relationship;
   foreground: string;
@@ -51,6 +58,7 @@ export interface Violation {
   target: number;
   message: string;
 }
+
 export interface Change {
   path: TokenPath;
   from: string;
@@ -59,6 +67,7 @@ export interface Change {
   method?: string;
   ratio?: number;
 }
+
 export interface EntanglementReport {
   valid: boolean;
   violations: Violation[];
@@ -75,6 +84,7 @@ function parseColor(input: string): RGB | null {
   if (!c) return null;
   return { r: c.r, g: c.g, b: c.b, a: c.a ?? 1 };
 }
+
 function rgbToHex(r: number, g: number, b: number): string {
   return (
     "#" +
@@ -82,19 +92,26 @@ function rgbToHex(r: number, g: number, b: number): string {
       .map((v) =>
         Math.max(0, Math.min(255, Math.round(v)))
           .toString(16)
-          .padStart(2, "0"),
+          .padStart(2, "0")
       )
       .join("")
   );
 }
+
 const toLinear = (c: number) => {
   c /= 255;
   return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
 };
+
 const toSrgb = (c: number) => {
-  const v = c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
+  const clamped = Math.max(0, Math.min(1, c));
+  const v =
+    clamped <= 0.0031308
+      ? 12.92 * clamped
+      : 1.055 * Math.pow(clamped, 1 / 2.4) - 0.055;
   return Math.max(0, Math.min(255, Math.round(v * 255)));
 };
+
 function rgbToOklch({ r, g, b }: RGB): OKLCH {
   const rl = toLinear(r),
     gl = toLinear(g),
@@ -113,6 +130,7 @@ function rgbToOklch({ r, g, b }: RGB): OKLCH {
   if (h < 0) h += 360;
   return { l: L, c: C, h };
 }
+
 function oklchToRgb({ l, c, h }: OKLCH): RGB {
   const hRad = (h * Math.PI) / 180;
   const a = c * Math.cos(hRad),
@@ -128,6 +146,7 @@ function oklchToRgb({ l, c, h }: OKLCH): RGB {
   const bL = -0.0041960863 * l3 - 0.7034186147 * m3 + 1.707614701 * s3;
   return { r: toSrgb(rL), g: toSrgb(gL), b: toSrgb(bL) };
 }
+
 function luminance({ r, g, b }: RGB): number {
   const lin = (c: number) => {
     const s = c / 255;
@@ -135,11 +154,13 @@ function luminance({ r, g, b }: RGB): number {
   };
   return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
 }
+
 function contrast(fg: RGB, bg: RGB): number {
   const l1 = luminance(fg) + 0.05,
     l2 = luminance(bg) + 0.05;
   return Math.max(l1, l2) / Math.min(l1, l2);
 }
+
 function mixOklch(a: RGB, b: RGB, t: number): RGB {
   const ca = rgbToOklch(a),
     cb = rgbToOklch(b);
@@ -152,11 +173,12 @@ function mixOklch(a: RGB, b: RGB, t: number): RGB {
     h: (ca.h + dh * t + 360) % 360,
   });
 }
+
 function findClosestFix(
   fgStr: string,
   bgStr: string,
   target = 4.5,
-  method: ContrastMethod = "auto",
+  method: ContrastMethod = "auto"
 ): { fixed: string; ratio: number; fixMethod: string } | null {
   const fg = parseColor(fgStr),
     bg = parseColor(bgStr);
@@ -203,6 +225,7 @@ function findClosestFix(
     fixMethod: shouldDarken ? "darken" : "lighten",
   };
 }
+
 function applyDerived(source: string, method: DerivedMethod): string | null {
   const rgb = parseColor(source);
   if (!rgb) return null;
@@ -248,10 +271,11 @@ function applyDerived(source: string, method: DerivedMethod): string | null {
   }
   return null;
 }
+
 function applyHarmony(
   sourceStr: string,
   rule: HarmonyRelationship["rule"],
-  index: number,
+  index: number
 ): string | null {
   const rgb = parseColor(sourceStr);
   if (!rgb) return null;
@@ -285,6 +309,7 @@ function getByPath(obj: any, dot: string): any {
     return (cur as any).value;
   return cur;
 }
+
 function setByPath(obj: any, dot: string, value: any) {
   const parts = dot.split(".");
   let cur = obj;
@@ -298,6 +323,7 @@ function setByPath(obj: any, dot: string, value: any) {
     (cur[last] as any).value = value;
   else cur[last] = value;
 }
+
 function cloneTokens<T>(t: T): T {
   try {
     // @ts-ignore
@@ -308,36 +334,42 @@ function cloneTokens<T>(t: T): T {
     return JSON.parse(JSON.stringify(t));
   }
 }
+
+type PipelineStep =
+  | DerivedRelationship
+  | {
+      type: "harmony_single";
+      source: string;
+      target: string;
+      rule: HarmonyRelationship["rule"];
+      index: number;
+      total: number;
+    };
+
 function topoSort(
   derived: DerivedRelationship[],
-  harmonies: HarmonyRelationship[],
-) {
-  type Flat =
-    | DerivedRelationship
-    | {
-        type: "harmony_single";
-        source: string;
-        target: string;
-        rule: HarmonyRelationship["rule"];
-        index: number;
-        total: number;
-      };
+  harmonies: HarmonyRelationship[]
+): PipelineStep[] {
   const graph = new Map<string, Set<string>>();
   const indeg = new Map<string, number>();
-  const flat: Flat[] = [];
+  const flat: PipelineStep[] = [];
+
   const touch = (n: string) => {
     if (!indeg.has(n)) indeg.set(n, 0);
   };
+
   for (const r of derived) {
     flat.push(r);
     touch(r.source);
+    touch(r.target);
     indeg.set(r.target, (indeg.get(r.target) || 0) + 1);
     if (!graph.has(r.source)) graph.set(r.source, new Set());
     graph.get(r.source)!.add(r.target);
   }
+
   for (const h of harmonies) {
     h.targets.forEach((target, index) => {
-      const single: Flat = {
+      const single: PipelineStep = {
         type: "harmony_single",
         source: h.source,
         target,
@@ -347,15 +379,18 @@ function topoSort(
       };
       flat.push(single);
       touch(h.source);
+      touch(target);
       indeg.set(target, (indeg.get(target) || 0) + 1);
       if (!graph.has(h.source)) graph.set(h.source, new Set());
       graph.get(h.source)!.add(target);
     });
   }
+
   const q: string[] = [...indeg.entries()]
     .filter(([, d]) => d === 0)
     .map(([n]) => n);
   const order: string[] = [];
+
   while (q.length) {
     const n = q.shift()!;
     order.push(n);
@@ -365,30 +400,53 @@ function topoSort(
       if (nd === 0) q.push(o);
     }
   }
-  if (order.length !== indeg.size)
+
+  if (order.length !== indeg.size) {
     throw new Error(
       `[entanglement] Cycle detected: ${[...indeg.entries()]
         .filter(([, d]) => d > 0)
         .map(([n]) => n)
-        .join(", ")}`,
+        .join(", ")}`
     );
+  }
+
   const pos = new Map(order.map((n, i) => [n, i]));
   return flat.sort(
-    (a, b) => (pos.get(a.source) ?? 0) - (pos.get(b.source) ?? 0),
+    (a, b) => (pos.get(a.source) ?? 0) - (pos.get(b.source) ?? 0)
   );
 }
 
 export class TokenEntanglementEngine {
   private relationships: Relationship[] = [];
+  private compiledPipeline: PipelineStep[] | null = null;
+
   constructor(relationships: Relationship[] = []) {
-    this.relationships = relationships;
+    this.addMany(relationships);
   }
+
   add(r: Relationship) {
     this.relationships.push(r);
+    this.compiledPipeline = null;
   }
+
   addMany(rs: Relationship[]) {
     this.relationships.push(...rs);
+    this.compiledPipeline = null;
   }
+
+  private getPipeline(): PipelineStep[] {
+    if (!this.compiledPipeline) {
+      const derived = this.relationships.filter(
+        (r) => r.type === "derived"
+      ) as DerivedRelationship[];
+      const harmonies = this.relationships.filter(
+        (r) => r.type === "harmony"
+      ) as HarmonyRelationship[];
+      this.compiledPipeline = topoSort(derived, harmonies);
+    }
+    return this.compiledPipeline;
+  }
+
   validate(tokens: Record<string, any>): Violation[] {
     const v: Violation[] = [];
     for (const rel of this.relationships) {
@@ -399,77 +457,87 @@ export class TokenEntanglementEngine {
         ? rel.background
         : [rel.background];
       const target = rel.target ?? 4.5;
+
       for (const bgPath of bgs) {
         const bgVal = getByPath(tokens, bgPath);
         if (!bgVal) continue;
         const ratio = baseContrastRatio(String(fgVal), String(bgVal));
-        if (ratio < target && ratio !== -1)
+        if (ratio < target && ratio !== -1) {
           v.push({
             relationship: rel,
             foreground: String(fgVal),
             background: String(bgVal),
             ratio: Math.round(ratio * 100) / 100,
             target,
-            message: `${rel.foreground} on ${bgPath} is ${ratio.toFixed(2)}:1, needs ${target}:1`,
+            message: `${rel.foreground} on ${bgPath} is ${ratio.toFixed(
+              2
+            )}:1, needs ${target}:1`,
           });
+        }
       }
     }
     return v;
   }
+
   propagate(
     tokens: Record<string, any>,
     sourcePath: TokenPath,
     newValue: string,
-    opts: { autoFixContrast?: boolean } = {},
+    opts: { autoFixContrast?: boolean } = {}
   ): EntanglementReport {
     const next = cloneTokens(tokens);
     const changes: Change[] = [];
     const from = String(getByPath(next, sourcePath) ?? "");
+
     setByPath(next, sourcePath, newValue);
-    if (from && from !== newValue)
+    if (from !== newValue) {
       changes.push({
         path: sourcePath,
         from,
         to: newValue,
         reason: "source change",
       });
-    const derived = this.relationships.filter(
-      (r) => r.type === "derived",
-    ) as DerivedRelationship[];
-    const harmonies = this.relationships.filter(
-      (r) => r.type === "harmony",
-    ) as HarmonyRelationship[];
-    const pipeline = topoSort(derived, harmonies);
-    let mutated = true,
-      iter = 0;
+    }
+
+    const pipeline = this.getPipeline();
+    let mutated = true;
+    let iter = 0;
+
     while (mutated && iter < 25) {
       mutated = false;
       iter++;
+
       for (const edge of pipeline) {
         const srcVal = getByPath(next, edge.source);
         if (!srcVal) continue;
-        let computed: string | null = null,
-          reason = "";
+
+        let computed: string | null = null;
+        let reason = "";
+
         if ("method" in edge) {
           computed = applyDerived(String(srcVal), edge.method);
           reason = `derived from ${edge.source} via ${edge.method}`;
         } else {
           if (edge.rule === "same-lightness") {
             const curTarget = getByPath(next, edge.target);
-            const srcRgb = parseColor(String(srcVal)),
-              tgtRgb = parseColor(String(curTarget || "#ffffff"));
+            const srcRgb = parseColor(String(srcVal));
+            const tgtRgb = parseColor(String(curTarget || "#ffffff"));
             if (srcRgb && tgtRgb) {
-              const srcO = rgbToOklch(srcRgb),
-                tgtO = rgbToOklch(tgtRgb);
+              const srcO = rgbToOklch(srcRgb);
+              const tgtO = rgbToOklch(tgtRgb);
               const out = oklchToRgb({ ...tgtO, l: srcO.l });
               computed = rgbToHex(out.r, out.g, out.b);
             }
-          } else computed = applyHarmony(String(srcVal), edge.rule, edge.index);
+          } else {
+            computed = applyHarmony(String(srcVal), edge.rule, edge.index);
+          }
           reason = `harmony ${edge.rule} from ${edge.source}`;
         }
+
         if (!computed) continue;
         const cur = getByPath(next, edge.target);
         if (String(cur) === computed) continue;
+
         setByPath(next, edge.target, computed);
         changes.push({
           path: edge.target,
@@ -481,22 +549,25 @@ export class TokenEntanglementEngine {
         mutated = true;
       }
     }
+
     if (opts.autoFixContrast !== false) {
       const contrastRels = (
         this.relationships.filter(
-          (r) => r.type === "contrast",
+          (r) => r.type === "contrast"
         ) as ContrastRelationship[]
       ).sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+
       for (const rel of contrastRels) {
         const bgs = Array.isArray(rel.background)
           ? rel.background
           : [rel.background];
         const target = rel.target ?? 4.5;
-        let worstRatio = Infinity,
-          worstBg = "";
+        let worstRatio = Infinity;
+        let worstBg = "";
+
         for (const bgPath of bgs) {
-          const fgVal = getByPath(next, rel.foreground),
-            bgVal = getByPath(next, bgPath);
+          const fgVal = getByPath(next, rel.foreground);
+          const bgVal = getByPath(next, bgPath);
           if (!fgVal || !bgVal) continue;
           const ratio = baseContrastRatio(String(fgVal), String(bgVal));
           if (ratio === -1) continue;
@@ -505,27 +576,32 @@ export class TokenEntanglementEngine {
             worstBg = bgPath;
           }
         }
+
         if (worstRatio >= target) continue;
-        const fgVal = getByPath(next, rel.foreground),
-          bgVal = getByPath(next, worstBg);
+        const fgVal = getByPath(next, rel.foreground);
+        const bgVal = getByPath(next, worstBg);
         const fix = findClosestFix(
           String(fgVal),
           String(bgVal),
           target,
-          rel.autoFix ?? "auto",
+          rel.autoFix ?? "auto"
         );
         if (!fix) continue;
+
         setByPath(next, rel.foreground, fix.fixed);
         changes.push({
           path: rel.foreground,
           from: String(fgVal),
           to: fix.fixed,
-          reason: `auto fix contrast ${worstRatio.toFixed(2)} -> ${fix.ratio} on ${worstBg}`,
+          reason: `auto fix contrast ${worstRatio.toFixed(2)} -> ${
+            fix.ratio
+          } on ${worstBg}`,
           method: fix.fixMethod,
           ratio: fix.ratio,
         });
       }
     }
+
     const violations = this.validate(next);
     return {
       valid: violations.length === 0,
@@ -534,51 +610,62 @@ export class TokenEntanglementEngine {
       tokens: next,
     };
   }
+
   fixAll(tokens: Record<string, any>): EntanglementReport {
-    const next = cloneTokens(tokens);
-    const changes: Change[] = [];
+    let currentTokens = cloneTokens(tokens);
+    const allChanges: Change[] = [];
+
     const rels = (
       this.relationships.filter(
-        (r) => r.type === "contrast",
+        (r) => r.type === "contrast"
       ) as ContrastRelationship[]
     ).sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+
     for (const rel of rels) {
       const bgs = Array.isArray(rel.background)
         ? rel.background
         : [rel.background];
+
       for (const bgPath of bgs) {
-        const fgVal = getByPath(next, rel.foreground),
-          bgVal = getByPath(next, bgPath);
+        const fgVal = getByPath(currentTokens, rel.foreground);
+        const bgVal = getByPath(currentTokens, bgPath);
         if (!fgVal || !bgVal) continue;
+
         const ratio = baseContrastRatio(String(fgVal), String(bgVal));
         if (ratio >= (rel.target ?? 4.5) || ratio === -1) continue;
+
         const fix = findClosestFix(
           String(fgVal),
           String(bgVal),
           rel.target ?? 4.5,
-          rel.autoFix ?? "auto",
+          rel.autoFix ?? "auto"
         );
         if (!fix) continue;
-        setByPath(next, rel.foreground, fix.fixed);
-        changes.push({
-          path: rel.foreground,
-          from: String(fgVal),
-          to: fix.fixed,
-          reason: `fixAll: ${rel.foreground} on ${bgPath}`,
-          method: fix.fixMethod,
-          ratio: fix.ratio,
-        });
+
+        // Re-propagate the auto-fixed token so derived children stay synchronized
+        const report = this.propagate(
+          currentTokens,
+          rel.foreground,
+          fix.fixed,
+          { autoFixContrast: false }
+        );
+
+        currentTokens = report.tokens;
+        allChanges.push(...report.changes);
         break;
       }
     }
+
+    const violations = this.validate(currentTokens);
     return {
-      valid: this.validate(next).length === 0,
-      violations: this.validate(next),
-      changes,
-      tokens: next,
+      valid: violations.length === 0,
+      violations,
+      changes: allChanges,
+      tokens: currentTokens,
     };
   }
 }
+
 export function createEntanglementEngine(config: {
   relationships: Relationship[];
 }) {

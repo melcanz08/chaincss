@@ -1,3 +1,5 @@
+// src/compiler/pipeline/normalizers/intent-detector.ts
+
 import type {
   CorrectionResult,
   HealMode,
@@ -162,7 +164,7 @@ export const intent = {
           !isNaN(Number(prop.replace("%", "")));
 
         if (isPseudoState || isSelectorToken || isStructuralFrame) {
-          const hr = this.heal(value as Record<string, any>, mode, {
+          const hr = intent.heal(value as Record<string, any>, mode, {
             ...context,
             property: prop,
           });
@@ -184,18 +186,26 @@ export const intent = {
         property: prop,
         value: sv,
       });
+
       if (corr) {
         corrections.push(corr);
         if (mode === "strict") {
           warnings.push("[strict] " + corr.explanation);
           fixed[prop] = sv;
-        } else if (mode === "dev") {
-          fixed[prop] = corr.corrected;
-          Object.assign(fixed, corr.defaults);
         } else {
-          warnings.push("[auto-fix] " + corr.explanation);
-          fixed[prop] = corr.corrected;
-          Object.assign(fixed, corr.defaults);
+          if (mode !== "dev") {
+            warnings.push("[auto-fix] " + corr.explanation);
+          }
+
+          if (corr.intent === "property-correction") {
+            fixed[corr.corrected] = sv;
+          } else {
+            const targetProp = corr.property || prop;
+            fixed[targetProp] = corr.corrected;
+            if (corr.defaults) {
+              Object.assign(fixed, corr.defaults);
+            }
+          }
         }
       } else {
         fixed[prop] = value;
@@ -214,6 +224,20 @@ export const intent = {
     value: string,
   ): { valid: boolean; suggestion?: string } {
     if (customKeys.has(property)) return { valid: true };
+
+    const normProp = property.toLowerCase();
+    if (!KNOWN_PROPERTIES.includes(normProp)) {
+      const s = findClosestProperty(property);
+      return s && !customKeys.has(s)
+        ? { valid: false, suggestion: s }
+        : { valid: false };
+    }
+
+    const si = detectIntent(value, { property, value });
+    if (si) {
+      return { valid: false, suggestion: si.corrected };
+    }
+
     const correctionsList = VALUE_CORRECTIONS[property];
     if (correctionsList) {
       const valLower = value.toLowerCase();
@@ -226,12 +250,7 @@ export const intent = {
         }
       }
     }
-    if (!KNOWN_PROPERTIES.includes(property.toLowerCase())) {
-      const s = findClosestProperty(property);
-      return s && !customKeys.has(s)
-        ? { valid: false, suggestion: s }
-        : { valid: false };
-    }
+
     return { valid: true };
   },
 

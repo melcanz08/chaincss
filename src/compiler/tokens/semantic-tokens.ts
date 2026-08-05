@@ -5,25 +5,53 @@
  * Intent-based styling that maps semantic concepts to design tokens.
  */
 
-import type { StyleIR, IRPseudoClass } from "../pipeline/ir/types.js";
+import type { StyleIR, IRPseudoClass, IRDeclaration } from "../pipeline/ir/types.js";
 import type { IRPass } from "../pipeline/ir/types.js";
 import { createDeclaration } from "../pipeline/ir/index.js";
+import { ensureRuleMeta, ensureDeclMeta } from "../pipeline/ir/utils.js";
 
 let _semIdCounter = 0;
 function nextSemId(prefix: string): string {
   return `${prefix}-${++_semIdCounter}`;
 }
 
+export type SemanticCategory = "surface" | "text" | "elevation" | "state" | "spacing";
+
 export type SurfaceIntent =
-  "interactive" | "container" | "overlay" | "sheet" | "tooltip" | "input";
+  | "interactive"
+  | "container"
+  | "overlay"
+  | "sheet"
+  | "tooltip"
+  | "input";
 export type TextIntent =
-  "primary" | "secondary" | "muted" | "link" | "inverse" | "code";
+  | "primary"
+  | "secondary"
+  | "muted"
+  | "link"
+  | "inverse"
+  | "code";
 export type ElevationIntent =
-  "flat" | "raised" | "floating" | "sticky" | "overlay" | "modal";
+  | "flat"
+  | "raised"
+  | "floating"
+  | "sticky"
+  | "overlay"
+  | "modal";
 export type StateIntent =
-  "hover" | "active" | "focus" | "disabled" | "loading" | "selected";
+  | "hover"
+  | "active"
+  | "focus"
+  | "disabled"
+  | "loading"
+  | "selected";
 export type SpacingIntent =
-  "none" | "tight" | "compact" | "comfortable" | "spacious" | "generous";
+  | "none"
+  | "tight"
+  | "compact"
+  | "comfortable"
+  | "spacious"
+  | "generous";
 
 export interface SemanticMapping {
   properties: Record<string, string | number>;
@@ -256,7 +284,7 @@ const DARK_OVERRIDES: Record<
     interactive: {
       backgroundColor: "$colors.blue.400",
       color: "$colors.white",
-    }, // <-- was $colors.primary, now different
+    },
     container: {
       backgroundColor: "$colors.gray.800",
       color: "$colors.gray.100",
@@ -313,7 +341,7 @@ const HIGH_CONTRAST_OVERRIDES: Record<
 // ============================================================================
 
 export function resolveSemantic(
-  category: "surface" | "text" | "elevation" | "state" | "spacing",
+  category: SemanticCategory,
   intent: string,
   themeContext: ThemeContext = { mode: "light" },
 ): SemanticMapping | null {
@@ -330,7 +358,7 @@ export function resolveSemantic(
     Object.assign(properties, DARK_OVERRIDES[category][intent]);
   }
 
-  // Apply high contrast overrides - THIS WAS MISSING
+  // Apply high contrast overrides
   if (
     themeContext.mode === "high-contrast" &&
     HIGH_CONTRAST_OVERRIDES[category]?.[intent]
@@ -338,13 +366,38 @@ export function resolveSemantic(
     Object.assign(properties, HIGH_CONTRAST_OVERRIDES[category][intent]);
   }
 
-  // Container context
-  if (
-    themeContext.containerContext === "dark" &&
-    category === "surface" &&
-    intent === "interactive"
-  ) {
-    properties.backgroundColor = "$colors.primary";
+  // Container Context Inversions
+  if (themeContext.containerContext) {
+    if (
+      themeContext.containerContext === "dark" &&
+      category === "surface" &&
+      intent === "interactive"
+    ) {
+      properties.backgroundColor = "$colors.primary";
+    } else if (
+      themeContext.containerContext === "light" &&
+      themeContext.mode === "dark" &&
+      category === "text" &&
+      intent === "primary"
+    ) {
+      properties.color = "$colors.gray.900";
+    }
+  }
+
+  // Brand Token Substitution
+  if (themeContext.brand) {
+    for (const [prop, val] of Object.entries(properties)) {
+      if (typeof val === "string" && val.startsWith("$")) {
+        const rawKey = val.slice(1); // e.g. "colors.primary"
+        const shortKey = rawKey.split(".").pop(); // e.g. "primary"
+
+        if (rawKey in themeContext.brand) {
+          properties[prop] = themeContext.brand[rawKey];
+        } else if (shortKey && shortKey in themeContext.brand) {
+          properties[prop] = themeContext.brand[shortKey];
+        }
+      }
+    }
   }
 
   return {
@@ -354,18 +407,34 @@ export function resolveSemantic(
   };
 }
 
-export function getSemanticIntents(
-  category: "surface" | "text" | "elevation" | "state" | "spacing",
-): string[] {
+export function getSemanticIntents(category: SemanticCategory): string[] {
   const map = DEFAULT_THEME[category];
   return map ? Object.keys(map) : [];
 }
 
 export function getSemanticDescription(
-  category: "surface" | "text" | "elevation" | "state" | "spacing",
+  category: SemanticCategory,
   intent: string,
 ): string | null {
   return DEFAULT_THEME[category]?.[intent]?.description || null;
+}
+
+export function registerSemanticMapping(
+  category: SemanticCategory,
+  intent: string,
+  mapping: SemanticMapping,
+  mode: "light" | "dark" | "high-contrast" = "light",
+): void {
+  if (mode === "light") {
+    DEFAULT_THEME[category] = DEFAULT_THEME[category] || {};
+    DEFAULT_THEME[category][intent] = mapping;
+  } else if (mode === "dark") {
+    DARK_OVERRIDES[category] = DARK_OVERRIDES[category] || {};
+    DARK_OVERRIDES[category][intent] = mapping.properties;
+  } else if (mode === "high-contrast") {
+    HIGH_CONTRAST_OVERRIDES[category] = HIGH_CONTRAST_OVERRIDES[category] || {};
+    HIGH_CONTRAST_OVERRIDES[category][intent] = mapping.properties;
+  }
 }
 
 // ============================================================================
@@ -374,24 +443,18 @@ export function getSemanticDescription(
 
 export const semanticTokensPass: IRPass = (ir: StyleIR): StyleIR => {
   for (const rule of ir.rules) {
+    ensureRuleMeta(rule);
+    rule.pseudoClasses = rule.pseudoClasses || [];
+
     const semanticIntents = (rule.passMeta?.analysis?.semantic?.tokens ??
-      rule.meta._semantic ??
+      rule.meta?._semantic ??
       []) as Array<{ category: string; intent: string; theme?: ThemeContext }>;
 
     for (const { category, intent, theme } of semanticIntents) {
-      const resolved = resolveSemantic(category as any, intent, theme);
+      const resolved = resolveSemantic(category as SemanticCategory, intent, theme);
       if (!resolved) continue;
 
       for (const [prop, value] of Object.entries(resolved.properties)) {
-        const decl = createDeclaration(prop, value);
-        decl.history.push({
-          pass: "semantic-tokens",
-          action: "resolved-intent",
-          timestamp: Date.now(),
-          reason: `${category}:${intent} → ${prop}: ${value}`,
-        });
-        decl.meta.semantic = { category, intent };
-
         if (resolved.pseudoClass) {
           let pc = rule.pseudoClasses.find(
             (p: IRPseudoClass) => p.name === resolved.pseudoClass,
@@ -399,7 +462,7 @@ export const semanticTokensPass: IRPass = (ir: StyleIR): StyleIR => {
           if (!pc) {
             pc = {
               id: nextSemId("semantic-pc"),
-              name: resolved.pseudoClass!,
+              name: resolved.pseudoClass,
               parentId: rule.id,
               declarations: [],
               source: rule.source,
@@ -407,9 +470,38 @@ export const semanticTokensPass: IRPass = (ir: StyleIR): StyleIR => {
             };
             rule.pseudoClasses.push(pc);
           }
-          pc.declarations.push(decl);
+
+          let decl = pc.declarations.find((d: IRDeclaration) => d.property === prop);
+          if (decl) {
+            decl.value = value;
+          } else {
+            decl = createDeclaration(prop, value);
+            pc.declarations.push(decl);
+          }
+
+          decl.history.push({
+            pass: "semantic-tokens",
+            action: "resolved-intent",
+            timestamp: Date.now(),
+            reason: `${category}:${intent}:${resolved.pseudoClass} → ${prop}: ${value}`,
+          });
+          ensureDeclMeta(decl).semantic = { category, intent };
         } else {
-          rule.declarations.push(decl);
+          let decl = rule.declarations.find((d: IRDeclaration) => d.property === prop);
+          if (decl) {
+            decl.value = value;
+          } else {
+            decl = createDeclaration(prop, value);
+            rule.declarations.push(decl);
+          }
+
+          decl.history.push({
+            pass: "semantic-tokens",
+            action: "resolved-intent",
+            timestamp: Date.now(),
+            reason: `${category}:${intent} → ${prop}: ${value}`,
+          });
+          ensureDeclMeta(decl).semantic = { category, intent };
         }
       }
     }
@@ -423,6 +515,7 @@ export const semanticTokens = {
   resolve: resolveSemantic,
   getIntents: getSemanticIntents,
   getDescription: getSemanticDescription,
+  register: registerSemanticMapping,
   pass: semanticTokensPass,
   theme: DEFAULT_THEME,
   darkOverrides: DARK_OVERRIDES,

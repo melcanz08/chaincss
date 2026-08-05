@@ -29,6 +29,10 @@ interface ResponsiveIssue {
   autoFixAvailable: boolean;
 }
 
+// ============================================================================
+// Helpers
+// ============================================================================
+
 function toPxSafe(value: string): number {
   try {
     const n = math.toPx(value);
@@ -38,19 +42,77 @@ function toPxSafe(value: string): number {
   }
 }
 
+/** Fix 4: Normalize property name to kebab-case for consistent matching */
+function normalizeProp(prop: string): string {
+  return prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+}
+
+/** Fix 2: Check if a value is already fluid */
+function isAlreadyFluid(value: string): boolean {
+  return (
+    value.includes("clamp(") ||
+    value.includes("min(") ||
+    value.includes("max(") ||
+    /\d+(\.\d+)?vw\b/.test(value) ||
+    /\d+(\.\d+)?vh\b/.test(value) ||
+    value.includes("%")
+  );
+}
+
+/** Fix 1: Check if a rule is scoped inside a desktop media query */
+function isDesktopScoped(rule: IRRule, mdBp: number): boolean {
+  if (!rule.atRules || rule.atRules.length === 0) return false;
+  return rule.atRules.some((at) => {
+    if (!at.query || !at.query.includes("min-width")) return false;
+    const match = at.query.match(/min-width:\s*(\d+)(px|rem|em)/);
+    if (!match) return false;
+    const val = parseFloat(match[1]);
+    const px = match[2] === "rem" || match[2] === "em" ? val * 16 : val;
+    return px >= mdBp;
+  });
+}
+
+/** Fix 5: Count grid columns including tracks outside repeat() */
+function countGridColumns(value: string): number {
+  const repeatMatch = value.match(/repeat\(\s*(\d+)/);
+  if (repeatMatch) {
+    const repeatedCount = parseInt(repeatMatch[1], 10);
+    const remainder = value.replace(/repeat\([^)]+\)/g, "").trim();
+    if (!remainder) return repeatedCount;
+    const extraTracks = remainder.split(/\s+/).filter(Boolean).length;
+    return repeatedCount + extraTracks;
+  }
+  const sanitizedValue = value.replace(/\([^)]*\)/g, "X");
+  return sanitizedValue
+    .split(/\s+/)
+    .filter(
+      (c: string) =>
+        c.includes("fr") || c.includes("px") || c.includes("%") || c === "X",
+    ).length;
+}
+
+// ============================================================================
+// Detectors
+// ============================================================================
+
 function detectFixedWidth(
   rule: IRRule,
   bp: { md: number; lg: number },
 ): ResponsiveIssue[] {
   const issues: ResponsiveIssue[] = [];
   for (const decl of rule.declarations || []) {
+    const prop = normalizeProp(decl.property);
+
+    // Fix 3: Only flag "width" and "min-width", not "max-width"
     if (
-      (decl.property === "width" || decl.property === "max-width") &&
+      (prop === "width" || prop === "min-width") &&
       typeof decl.value === "string"
     ) {
+      // Fix 2: Skip already-fluid values
+      if (isAlreadyFluid(decl.value)) continue;
+
       const px = toPxSafe(decl.value);
       if (px === 0) continue;
-      // only flag if it's a fixed absolute value, not %
       const parsed = math.parse(decl.value);
       if ((parsed as any).unit === "expression") continue;
       if (px > bp.md) {
@@ -73,30 +135,16 @@ function detectFixedWidth(
 
 function detectGridColumns(
   rule: IRRule,
-  bp: { md: number; lg: number },
+  _bp: { md: number; lg: number },
 ): ResponsiveIssue[] {
-  // unchanged - no units
   const issues: ResponsiveIssue[] = [];
   for (const decl of rule.declarations || []) {
+    const prop = normalizeProp(decl.property);
     const isGridProp =
-      decl.property === "gridTemplateColumns" ||
-      decl.property === "grid-template-columns";
+      prop === "grid-template-columns" || prop === "gridtemplatecolumns";
     if (isGridProp && typeof decl.value === "string") {
-      const repeatMatch = decl.value.match(/repeat\((\d+)/);
-      let colCount = 0;
-      if (repeatMatch) colCount = parseInt(repeatMatch[1], 10);
-      else {
-        const sanitizedValue = decl.value.replace(/\([^)]*\)/g, "X");
-        colCount = sanitizedValue
-          .split(/\s+/)
-          .filter(
-            (c: string) =>
-              c.includes("fr") ||
-              c.includes("px") ||
-              c.includes("%") ||
-              c === "X",
-          ).length;
-      }
+      // Fix 5: Use accurate column counter
+      const colCount = countGridColumns(decl.value);
       if (colCount > MAX_GRID_COLUMNS) {
         issues.push({
           ruleId: rule.id,
@@ -105,7 +153,7 @@ function detectGridColumns(
           currentValue: decl.value,
           severity: colCount >= 4 ? "error" : "warning",
           category: "grid",
-          message: `${colCount} columns will not fit on mobile screens (≤ ${bp.md}px)`,
+          message: `${colCount} columns will not fit on mobile screens`,
           suggestedFix: `grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));`,
           autoFixAvailable: true,
         });
@@ -118,10 +166,11 @@ function detectGridColumns(
 function detectLargeTypography(rule: IRRule): ResponsiveIssue[] {
   const issues: ResponsiveIssue[] = [];
   for (const decl of rule.declarations || []) {
-    if (
-      (decl.property === "fontSize" || decl.property === "font-size") &&
-      typeof decl.value === "string"
-    ) {
+    const prop = normalizeProp(decl.property);
+    if (prop === "font-size" && typeof decl.value === "string") {
+      // Fix 2: Skip already-fluid values
+      if (isAlreadyFluid(decl.value)) continue;
+
       const px = toPxSafe(decl.value);
       if (px > LARGE_FONT_THRESHOLD) {
         const minSize = Math.round(px * 0.5);
@@ -145,13 +194,15 @@ function detectLargeTypography(rule: IRRule): ResponsiveIssue[] {
 function detectViewportUnits(rule: IRRule): ResponsiveIssue[] {
   const issues: ResponsiveIssue[] = [];
   for (const decl of rule.declarations || []) {
+    const prop = normalizeProp(decl.property);
+    // Fix 4: Also catch min-height, max-height, and camelCase variants
     const isHeightProp =
-      decl.property === "height" || decl.property === "min-height";
+      prop === "height" || prop === "min-height" || prop === "max-height";
     if (!isHeightProp || typeof decl.value !== "string") continue;
+
     const parsed = math.parse(decl.value);
     const cat = math.unitCategory(parsed.unit as any);
     const raw = decl.value;
-    // catches 100vh, 100dvh, calc(100vh -...), etc.
     if (
       cat === "viewport" ||
       raw.includes("vh") ||
@@ -180,8 +231,13 @@ function detectViewportUnits(rule: IRRule): ResponsiveIssue[] {
 function detectLargePadding(rule: IRRule): ResponsiveIssue[] {
   const issues: ResponsiveIssue[] = [];
   for (const decl of rule.declarations || []) {
-    if (!decl.property.includes("padding") || typeof decl.value !== "string")
-      continue;
+    const prop = normalizeProp(decl.property);
+    if (!prop.includes("padding") || typeof decl.value !== "string") continue;
+
+    // Fix 2: Skip multi-value shorthands and already-fluid values
+    if (isAlreadyFluid(decl.value)) continue;
+    if (decl.value.trim().split(/\s+/).length > 1) continue;
+
     const px = toPxSafe(decl.value);
     if (px > LARGE_PADDING_THRESHOLD) {
       issues.push({
@@ -203,8 +259,12 @@ function detectLargePadding(rule: IRRule): ResponsiveIssue[] {
 function detectLargeGap(rule: IRRule): ResponsiveIssue[] {
   const issues: ResponsiveIssue[] = [];
   for (const decl of rule.declarations || []) {
-    if (!decl.property.includes("gap") || typeof decl.value !== "string")
-      continue;
+    const prop = normalizeProp(decl.property);
+    if (!prop.includes("gap") || typeof decl.value !== "string") continue;
+
+    // Fix 2: Skip already-fluid values
+    if (isAlreadyFluid(decl.value)) continue;
+
     const px = toPxSafe(decl.value);
     if (px > LARGE_GAP_THRESHOLD) {
       issues.push({
@@ -223,6 +283,10 @@ function detectLargeGap(rule: IRRule): ResponsiveIssue[] {
   return issues;
 }
 
+// ============================================================================
+// Analyzer
+// ============================================================================
+
 export const responsiveAnalyzer: AnalysisPass = {
   name: "responsive-analyzer",
   analyze(ir: StyleIR, context: AnalysisContext = {} as any): AnalysisResult {
@@ -239,26 +303,46 @@ export const responsiveAnalyzer: AnalysisPass = {
     const annotations: AnalysisAnnotation[] = [];
     const allIssues: ResponsiveIssue[] = [];
 
-    for (const rule of ir.rules) {
-      if (rule.isDead) continue;
-      const issues = [
-        ...detectFixedWidth(rule, bp),
-        ...detectGridColumns(rule, bp),
-        ...detectLargeTypography(rule),
-        ...detectViewportUnits(rule),
-        ...detectLargePadding(rule),
-        ...detectLargeGap(rule),
-      ];
-      allIssues.push(...issues);
-      if (issues.length > 0) {
-        annotations.push({
-          nodeId: rule.id,
-          type: "responsive-issues",
-          data: { issues, count: issues.length },
-          confidence: issues.some((i) => i.severity === "error") ? 1 : 0.7,
-        });
+    // Fix 6: Guard against undefined diagnostics
+    if (!ir.diagnostics) ir.diagnostics = [];
+
+    // Fix 1: Recursively collect rules, checking for desktop scope
+    function analyzeRules(rules: IRRule[], isDesktop: boolean): void {
+      for (const rule of rules) {
+        if (rule.isDead) continue;
+
+        // Determine if this rule is desktop-scoped
+        const ruleIsDesktop = isDesktop || isDesktopScoped(rule, md);
+
+        // Only analyze non-desktop rules for responsive issues
+        if (!ruleIsDesktop) {
+          const issues = [
+            ...detectFixedWidth(rule, bp),
+            ...detectGridColumns(rule, bp),
+            ...detectLargeTypography(rule),
+            ...detectViewportUnits(rule),
+            ...detectLargePadding(rule),
+            ...detectLargeGap(rule),
+          ];
+          allIssues.push(...issues);
+          if (issues.length > 0) {
+            annotations.push({
+              nodeId: rule.id,
+              type: "responsive-issues",
+              data: { issues, count: issues.length },
+              confidence: issues.some((i) => i.severity === "error") ? 1 : 0.7,
+            });
+          }
+        }
+
+        // Fix 1: Recurse into nested rules
+        if (rule.nestedRules && rule.nestedRules.length > 0) {
+          analyzeRules(rule.nestedRules, ruleIsDesktop);
+        }
       }
     }
+
+    analyzeRules(ir.rules, false);
 
     for (const issue of allIssues) {
       ir.diagnostics.push({

@@ -14,6 +14,7 @@ import type {
   NestedRule as _NestedRule,
 } from "@shared/types/index.js";
 import { getBreakpoint } from "@compiler/breakpoints.js";
+import { hashString } from "@shared/utils/browser.js";
 
 export type StyleObject = _StyleObject;
 export type AtRule = _AtRule;
@@ -873,7 +874,19 @@ export class StyleCollector {
             !s.startsWith(":") &&
             s !== "*"
           ) {
-            return "." + this.classPrefix + s;
+            const prefixed = "." + this.classPrefix + s;
+            // Validate: CSS class selectors can't start with digit, can't contain spaces
+            if (/^\.[a-zA-Z_][\w-]*$/.test(prefixed)) {
+              return prefixed;
+            }
+            // Invalid selector after prefixing — warn and use hash fallback
+            if (typeof process !== "undefined" && process.env?.NODE_ENV === "development") {
+              console.warn(
+                `[ChainCSS] Invalid selector "${s}" — using hash-based fallback. ` +
+                `Class names must start with a letter or underscore.`
+              );
+            }
+            return "." + this.classPrefix + "c-" + hashString(s);
           }
           return s;
         });

@@ -23,25 +23,45 @@ interface InternalCompileOptions {
 }
 
 const kebabCache = new Map<string, string>();
+// Track access order for LRU (linked list via Map iteration order)
+const kebabAccessOrder: string[] = [];
 const KEBAB_CACHE_LIMIT = 1000;
+
 function camelToKebab(str: string): string {
   const cached = kebabCache.get(str);
-  if (cached !== undefined) return cached;
-  if (kebabCache.size >= KEBAB_CACHE_LIMIT) {
-    const first = kebabCache.keys().next().value;
-    if (first !== undefined) kebabCache.delete(first);
+  if (cached !== undefined) {
+    // Move to end of access order (most recently used)
+    const idx = kebabAccessOrder.indexOf(str);
+    if (idx > -1) {
+      kebabAccessOrder.splice(idx, 1);
+      kebabAccessOrder.push(str);
+    }
+    return cached;
   }
+  
+  // Evict least recently used if at capacity
+  if (kebabCache.size >= KEBAB_CACHE_LIMIT && kebabAccessOrder.length > 0) {
+    const lruKey = kebabAccessOrder.shift()!;
+    kebabCache.delete(lruKey);
+  }
+  
   const result = str.replace(/([A-Z])/g, "-$1").toLowerCase();
   kebabCache.set(str, result);
+  kebabAccessOrder.push(str);
   return result;
 }
+
 function safeIndent(cssText: string, indent: string): string {
   if (!indent) return cssText;
   return cssText.replace(/^(?=.+)/gm, indent);
 }
 function sanitizeCSSValue(v: string): string {
-  if (/[{}]/.test(v) || /<\/style/i.test(v))
-    throw new Error(`[ChainCSS] Invalid CSS value: ${v.slice(0, 80)}`);
+  // Only block </style> tag injection attacks
+  if (/<\/style/i.test(v)) {
+    throw new Error(
+      `[ChainCSS] Invalid CSS value containing style tag injection: ${v.slice(0, 80)}`
+    );
+  }
   return v.replace(/[\r\n]+/g, " ").trim();
 }
 function getEffectiveSelector(
@@ -63,19 +83,6 @@ function buildAtRuleKey(atRule: AtRule): string {
   if (atRule.name) parts.push(atRule.name);
   return parts.join(" ");
 }
-function stripMetadata(obj: StyleObject): StyleObject {
-  const cleaned: StyleObject = {};
-  for (const [k, v] of Object.entries(obj))
-    if (!k.startsWith("_")) (cleaned as any)[k] = v;
-  return cleaned;
-}
-function preserveStructure(obj: StyleObject): StyleObject {
-  const cleaned = stripMetadata(obj);
-  if ((obj as any)._nestedRules?.length)
-    cleaned._nestedRules = (obj as any)._nestedRules;
-  if ((obj as any)._atRules?.length) cleaned._atRules = (obj as any)._atRules;
-  return cleaned;
-}
 
 export function compileToCSS(
   styleObject: StyleObject,
@@ -94,7 +101,12 @@ export function compileToCSS(
     const allNestedRules = parsed.nestedRules || [];
     const allAtRules = parsed.atRules || [];
 
-    const varPrefix = effectiveSelector.replace(/^\./, "").replace(/^#/, "");
+    const varPrefix = effectiveSelector
+      .replace(/^\./, "")
+      .replace(/^#/, "")
+      .replace(/[^a-zA-Z0-9_-]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-+|-+$/g, "") || "chain-dynamic";
     const mainDeclarations = compileDeclarations(
       parsed.regularProps,
       indent,
@@ -176,14 +188,23 @@ function compileDeclarations(
 ): string {
   let css = "";
   for (const [prop, value] of Object.entries(properties)) {
+    const kebabProp = camelToKebab(prop);
+
     if (isDynamicValue(value)) {
       const prefix = varPrefix || "chain-dynamic";
-      const kebabProp = camelToKebab(prop);
       css += `${indent}${kebabProp}: var(--${prefix}-${kebabProp});${newline}`;
       continue;
     }
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (typeof item === "string" || typeof item === "number") {
+          css += `${indent}${kebabProp}: ${sanitizeCSSValue(String(item))};${newline}`;
+        }
+      }
+      continue;
+    }
     if (isCSSPrimitiveValue(value)) {
-      css += `${indent}${camelToKebab(prop)}: ${sanitizeCSSValue(String(value))};${newline}`;
+      css += `${indent}${kebabProp}: ${sanitizeCSSValue(String(value))};${newline}`;
     }
   }
   return css.endsWith(newline) ? css.slice(0, -newline.length) : css;
@@ -250,7 +271,8 @@ function compileAtRule(
           : rule.type === "container"
             ? "@container"
             : "@layer";
-      return compileWrapper(`${prefix} ${rule.query}`, inner, indent, newline);
+      const queryStr = rule.query || rule.condition || rule.name || "";
+      return compileWrapper(`${prefix} ${queryStr}`.trim(), inner, indent, newline);
     }
     default:
       return "";
@@ -303,7 +325,7 @@ export function partitionForBuild(
         }
         staticAtRules.push({
           ...atRule,
-          styles: preserveStructure(atRule.styles as StyleObject),
+          styles: atResult.staticObject,
         });
       } else staticAtRules.push(atRule);
     }

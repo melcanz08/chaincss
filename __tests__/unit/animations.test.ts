@@ -29,10 +29,10 @@ describe('Animation System', () => {
 
   describe('createAnimation', () => {
     it('should create animation styles', () => {
-      const styles = createAnimation('fadeIn');
+      const styles = createAnimation('fadeIn', {}, true);
       expect(styles.animation).toContain('fadeIn');
-      expect(styles.animationName).toBe('fadeIn');
-      expect(styles.animationDuration).toBe('0.3s');
+      expect(styles.animation).toContain('0.3s');
+      expect(styles.animation).toContain('ease');
     });
 
     it('should accept custom config', () => {

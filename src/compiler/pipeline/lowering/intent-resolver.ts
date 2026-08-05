@@ -253,8 +253,6 @@ export function registerIntents(
   intents: Record<string, IntentDefinition>,
   allowOverride = false,
 ) {
-  // Guard entry mutation by flushing non-builtin allocations before merging new cycles
-  //resetIntents(); // <- delete this line -  BUG: this flushes previous custom intents
   for (const [k, v] of Object.entries(intents || {})) {
     registerIntent(k, v, allowOverride);
   }
@@ -337,25 +335,29 @@ export const intentResolver: LoweringPass = {
         "") as string;
       if (!intentName) continue;
 
-      const resolved = resolveIntent(intentName);
+      const theme = (context as any)?.config?.theme as "light" | "dark" | "high-contrast" | undefined;
+      const resolved = resolveIntent(intentName, theme);
       if (!resolved) continue;
 
       for (const [prop, value] of Object.entries(resolved.properties)) {
-        rule.declarations.push(
-          createDeclaration(prop, value, rule.source, {
-            intent: intentName,
-            category: "lowered-intent",
-          }),
-        );
-        const decl = rule.declarations[rule.declarations.length - 1];
-        recordHistory(
-          decl,
-          "intent-resolver",
-          "lowered-intent",
-          undefined,
-          `intent("${intentName}") → ${prop}: ${value}`,
-        );
-        generatedNodes++;
+        const existingDecl = rule.declarations.find((d) => d.property === prop);
+        if (!existingDecl) {
+          rule.declarations.push(
+            createDeclaration(prop, value, rule.source, {
+              intent: intentName,
+              category: "lowered-intent",
+            }),
+          );
+          const decl = rule.declarations[rule.declarations.length - 1];
+          recordHistory(
+            decl,
+            "intent-resolver",
+            "lowered-intent",
+            undefined,
+            `intent("${intentName}") → ${prop}: ${value}`,
+          );
+          generatedNodes++;
+        }
       }
 
       for (const [stateName, stateProps] of Object.entries(resolved.states)) {

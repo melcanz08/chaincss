@@ -25,7 +25,8 @@ export interface IRGraphEdge {
     | "contrasts"
     | "contains"
     | "animates"
-    | "layers";
+    | "layers"
+    | "defines";
   metadata?: Record<string, unknown>;
 }
 
@@ -48,7 +49,7 @@ export interface IRDeclaration {
   /** Transform history — who modified this and why */
   history: IRTransformRecord[];
   /** Metadata from passes */
-  meta: IRDeclarationMeta;
+  meta?: IRDeclarationMeta;
 }
 
 // ============================================================================
@@ -59,10 +60,12 @@ export interface IRDeclaration {
 export type ParsedValue =
   | { kind: "dimension"; value: number; unit: string }
   | { kind: "number"; value: number }
-  | { kind: "keyword"; value: string }
+  | { kind: "percentage"; value: number }
   | { kind: "color"; hex: string }
+  | { kind: "keyword"; value: string }
+  | { kind: "string"; value: string }
   | { kind: "function"; name: string; args: ParsedValue[] }
-  | { kind: "list"; items: ParsedValue[] }
+  | { kind: "list"; items: ParsedValue[]; separator?: " " | "," }
   | { kind: "raw"; value: string };
 
 /** Metadata attached to IR declarations */
@@ -131,18 +134,10 @@ export interface IRRule {
   /** Incremental: dirty flag — optional for backward compat with cached IR */
   _dirty?: boolean;
   /** Flat metadata (deprecated fields migrating to passMeta) */
-  meta: IRRuleMeta;
+  meta?: IRRuleMeta;
   /**
    * Namespaced pass-owned metadata.
    * Each pass writes to its own namespace — no cross-pass pollution.
-   *
-   * Examples:
-   * - rule.passMeta.analysis.semantic  (was rule.meta._semantic)
-   * - rule.passMeta.analysis.constraints (was rule.meta._constraints)
-   * - rule.passMeta.analysis.intents   (was rule.meta._intent)
-   * - rule.passMeta.optimization.atomic (was rule.meta.atomic)
-   * - rule.passMeta.analysis.component  (was rule.meta.component)
-   * - rule.passMeta.analysis.framework  (was rule.meta.framework)
    */
   passMeta?: PassMetadata;
   isDead: boolean;
@@ -176,7 +171,12 @@ export interface IRAtRule {
   id: IRNodeId;
   parentId?: IRNodeId;
   type:
-    "media" | "keyframes" | "font-face" | "supports" | "container" | "layer";
+    | "media"
+    | "keyframes"
+    | "font-face"
+    | "supports"
+    | "container"
+    | "layer";
   query?: string; // Media query text (e.g. '(min-width: 768px)')
   name?: string; // Keyframes identifier name (e.g. 'fade-in')
   declarations: IRDeclaration[];

@@ -15,8 +15,31 @@ import type { SymbolTable } from "../symbol-table.js";
 import {
   buildSymbolTable,
   findUnusedSymbols,
-  findDependents,
 } from "../symbol-table.js";
+
+// ============================================================================
+// Helper Utilities
+// ============================================================================
+
+/**
+ * Normalizes property names to lowercase kebab-case (e.g. "marginLeft" -> "margin-left").
+ */
+function normalizeProp(prop: string): string {
+  return prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+}
+
+/**
+ * Maps declarations in a rule to normalized property names for fast lookup.
+ */
+function getNormalizedDeclMap(declarations: IRDeclaration[] = []): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const d of declarations) {
+    if (d?.property && d.value !== undefined && d.value !== null) {
+      map.set(normalizeProp(d.property), String(d.value).trim());
+    }
+  }
+  return map;
+}
 
 // ============================================================================
 // Quick Fix: Add transition when hover is present without one
@@ -27,16 +50,20 @@ function detectMissingTransition(rule: IRRule): Diagnostic[] {
   const pseudoClasses = rule.pseudoClasses || [];
 
   const hasHover = pseudoClasses.some(
-    (pc) => pc.name === "hover" && pc.declarations?.length > 0,
+    (pc) => pc.name === "hover" && (pc.declarations?.length ?? 0) > 0,
   );
   if (!hasHover) return issues;
 
   const allDecls = [
-    ...rule.declarations,
+    ...(rule.declarations || []),
     ...pseudoClasses.flatMap((pc) => pc.declarations || []),
   ];
 
-  const hasTransition = allDecls.some((d) => d.property === "transition");
+  const hasTransition = allDecls.some((d) => {
+    if (!d?.property) return false;
+    const norm = normalizeProp(d.property);
+    return norm === "transition" || norm.startsWith("transition-");
+  });
 
   if (!hasTransition) {
     issues.push({
@@ -54,56 +81,44 @@ function detectMissingTransition(rule: IRRule): Diagnostic[] {
 }
 
 // ============================================================================
-// Quick Fix: Use margin-inline when margin-left + margin-right are equal
+// Quick Fix: Logical Property Consolidation (inline & block pairs)
 // ============================================================================
 
-function detectMarginInlineOpportunity(rule: IRRule): Diagnostic[] {
+interface DirectionalPair {
+  prefix: "margin" | "padding" | "border";
+  axis: "inline" | "block";
+  firstProp: string;
+  secondProp: string;
+}
+
+const DIRECTIONAL_PAIRS: DirectionalPair[] = [
+  { prefix: "margin", axis: "inline", firstProp: "margin-left", secondProp: "margin-right" },
+  { prefix: "padding", axis: "inline", firstProp: "padding-left", secondProp: "padding-right" },
+  { prefix: "border", axis: "inline", firstProp: "border-left", secondProp: "border-right" },
+  { prefix: "margin", axis: "block", firstProp: "margin-top", secondProp: "margin-bottom" },
+  { prefix: "padding", axis: "block", firstProp: "padding-top", secondProp: "padding-bottom" },
+  { prefix: "border", axis: "block", firstProp: "border-top", secondProp: "border-bottom" },
+];
+
+function detectLogicalPropertyOpportunities(
+  rule: IRRule,
+  declMap: Map<string, string>,
+): Diagnostic[] {
   const issues: Diagnostic[] = [];
 
-  const marginLeft = rule.declarations.find(
-    (d) => d.property === "margin-left" || d.property === "marginLeft",
-  );
-  const marginRight = rule.declarations.find(
-    (d) => d.property === "margin-right" || d.property === "marginRight",
-  );
+  for (const { prefix, axis, firstProp, secondProp } of DIRECTIONAL_PAIRS) {
+    const val1 = declMap.get(firstProp);
+    const val2 = declMap.get(secondProp);
 
-  if (!marginLeft || !marginRight) return issues;
-
-  const leftVal = String(marginLeft.value).trim();
-  const rightVal = String(marginRight.value).trim();
-
-  if (leftVal === rightVal) {
-    issues.push({
-      id: `ide-margin-inline-${rule.id}`,
-      nodeId: rule.id,
-      severity: "hint",
-      category: "quick-fix",
-      message: `"${rule.selector}" uses margin-left + margin-right with identical values.`,
-      suggestion: `margin-inline: ${leftVal};`,
-      autoFixable: true,
-    });
-  }
-
-  // Same for padding
-  const paddingLeft = rule.declarations.find(
-    (d) => d.property === "padding-left" || d.property === "paddingLeft",
-  );
-  const paddingRight = rule.declarations.find(
-    (d) => d.property === "padding-right" || d.property === "paddingRight",
-  );
-
-  if (paddingLeft && paddingRight) {
-    const plVal = String(paddingLeft.value).trim();
-    const prVal = String(paddingRight.value).trim();
-
-    if (plVal === prVal) {
+    if (val1 && val2 && val1 === val2) {
+      const targetProp = `${prefix}-${axis}`;
       issues.push({
-        id: `ide-padding-inline-${rule.id}`,
+        id: `ide-${targetProp}-${rule.id}`,
         nodeId: rule.id,
         severity: "hint",
         category: "quick-fix",
-        message: `"${rule.selector}" uses padding-left + padding-right with identical values.`,
-        suggestion: `padding-inline: ${plVal};`,
+        message: `"${rule.selector}" uses ${firstProp} + ${secondProp} with identical values.`,
+        suggestion: `${targetProp}: ${val1};`,
         autoFixable: true,
       });
     }
@@ -113,117 +128,26 @@ function detectMarginInlineOpportunity(rule: IRRule): Diagnostic[] {
 }
 
 // ============================================================================
-// Quick Fix: margin-top + margin-bottom → margin-block
+// Quick Fix: Redundant max-width check
 // ============================================================================
 
-function detectMarginBlockOpportunity(rule: IRRule): Diagnostic[] {
+function detectRedundantMaxWidth(
+  rule: IRRule,
+  declMap: Map<string, string>,
+): Diagnostic[] {
   const issues: Diagnostic[] = [];
 
-  const marginTop = rule.declarations.find(
-    (d) => d.property === "margin-top" || d.property === "marginTop",
-  );
-  const marginBottom = rule.declarations.find(
-    (d) => d.property === "margin-bottom" || d.property === "marginBottom",
-  );
+  const width = declMap.get("width");
+  const maxWidth = declMap.get("max-width");
 
-  if (marginTop && marginBottom) {
-    const topVal = String(marginTop.value).trim();
-    const bottomVal = String(marginBottom.value).trim();
-
-    if (topVal === bottomVal) {
-      issues.push({
-        id: `ide-margin-block-${rule.id}`,
-        nodeId: rule.id,
-        severity: "hint",
-        category: "quick-fix",
-        message: `"${rule.selector}" uses margin-top + margin-bottom with identical values.`,
-        suggestion: `margin-block: ${topVal};`,
-        autoFixable: true,
-      });
-    }
-  }
-
-  const paddingTop = rule.declarations.find(
-    (d) => d.property === "padding-top" || d.property === "paddingTop",
-  );
-  const paddingBottom = rule.declarations.find(
-    (d) => d.property === "padding-bottom" || d.property === "paddingBottom",
-  );
-
-  if (paddingTop && paddingBottom) {
-    const ptVal = String(paddingTop.value).trim();
-    const pbVal = String(paddingBottom.value).trim();
-
-    if (ptVal === pbVal) {
-      issues.push({
-        id: `ide-padding-block-${rule.id}`,
-        nodeId: rule.id,
-        severity: "hint",
-        category: "quick-fix",
-        message: `"${rule.selector}" uses padding-top + padding-bottom with identical values.`,
-        suggestion: `padding-block: ${ptVal};`,
-        autoFixable: true,
-      });
-    }
-  }
-
-  return issues;
-}
-
-// ============================================================================
-// Quick Fix: border-left + border-right → border-inline (same pattern)
-// ============================================================================
-
-function detectBorderInlineOpportunity(rule: IRRule): Diagnostic[] {
-  const issues: Diagnostic[] = [];
-
-  const borderLeft = rule.declarations.find(
-    (d) => d.property === "border-left" || d.property === "borderLeft",
-  );
-  const borderRight = rule.declarations.find(
-    (d) => d.property === "border-right" || d.property === "borderRight",
-  );
-
-  if (borderLeft && borderRight) {
-    const leftVal = String(borderLeft.value).trim();
-    const rightVal = String(borderRight.value).trim();
-
-    if (leftVal === rightVal) {
-      issues.push({
-        id: `ide-border-inline-${rule.id}`,
-        nodeId: rule.id,
-        severity: "hint",
-        category: "quick-fix",
-        message: `"${rule.selector}" uses border-left + border-right with identical values.`,
-        suggestion: `border-inline: ${leftVal};`,
-        autoFixable: true,
-      });
-    }
-  }
-
-  return issues;
-}
-
-// ============================================================================
-// Quick Fix: width + max-width that are identical
-// ============================================================================
-
-function detectRedundantMaxWidth(rule: IRRule): Diagnostic[] {
-  const issues: Diagnostic[] = [];
-
-  const width = rule.declarations.find((d) => d.property === "width");
-  const maxWidth = rule.declarations.find(
-    (d) => d.property === "max-width" || d.property === "maxWidth",
-  );
-
-  if (width && maxWidth && String(width.value) === String(maxWidth.value)) {
+  if (width && maxWidth && width === maxWidth) {
     issues.push({
       id: `ide-redundant-maxwidth-${rule.id}`,
       nodeId: rule.id,
       severity: "hint",
       category: "quick-fix",
       message: `"${rule.selector}" has identical width and max-width values.`,
-      suggestion: `Remove max-width (redundant when equal to width).`,
+      suggestion: "Remove max-width (redundant when equal to width).",
       autoFixable: true,
     });
   }
@@ -241,16 +165,16 @@ function detectTokenDependencyChains(
 ): Diagnostic[] {
   const issues: Diagnostic[] = [];
 
-  // Find all tokens referenced by this rule
   for (const decl of rule.declarations || []) {
+    if (!decl?.value) continue;
     const val = String(decl.value);
     const tokenMatches = val.matchAll(/\$([a-zA-Z0-9_.-]+)/g);
+
     for (const match of tokenMatches) {
       const tokenName = match[1];
       const symbol = symbols.symbols.get(tokenName);
       if (!symbol) continue;
 
-      // Build dependency chain string
       const chain = buildTokenChain(tokenName, symbols);
       if (chain.length > 1) {
         issues.push({
@@ -299,18 +223,24 @@ function detectUnusedTokens(symbols: SymbolTable): Diagnostic[] {
   const unused = findUnusedSymbols(symbols);
 
   for (const symbol of unused) {
-    // Only flag tokens and variables (not selectors/components which are always "used" by existing)
     if (
       symbol.kind === "token" ||
       symbol.kind === "variable" ||
       symbol.kind === "animation"
     ) {
+      const kindLabel =
+        symbol.kind === "token"
+          ? "Token"
+          : symbol.kind === "animation"
+            ? "Animation"
+            : "Variable";
+
       issues.push({
         id: `ide-unused-${symbol.kind}-${symbol.name.replace(/[^a-zA-Z0-9]/g, "-")}`,
         nodeId: symbol.nodeId,
         severity: "warning",
         category: "unused-symbol",
-        message: `${symbol.kind === "token" ? "Token" : symbol.kind === "animation" ? "Animation" : "Variable"} "${symbol.name}" is defined but never referenced.`,
+        message: `${kindLabel} "${symbol.name}" is defined but never referenced.`,
         suggestion:
           symbol.kind === "token"
             ? `Remove unused token "${symbol.name}" from your token definitions.`
@@ -343,25 +273,21 @@ export const ideDiagnostics: ValidationPass = {
       };
     }
 
-    // Build symbol table once for all checks
     const symbols = buildSymbolTable(ir);
 
     for (const rule of ir.rules) {
       if (rule.isDead) continue;
 
+      const declMap = getNormalizedDeclMap(rule.declarations);
+
       diagnostics.push(
-        // Quick Fixes
         ...detectMissingTransition(rule),
-        ...detectMarginInlineOpportunity(rule),
-        ...detectMarginBlockOpportunity(rule),
-        ...detectBorderInlineOpportunity(rule),
-        ...detectRedundantMaxWidth(rule),
-        // Hover Info
+        ...detectLogicalPropertyOpportunities(rule, declMap),
+        ...detectRedundantMaxWidth(rule, declMap),
         ...detectTokenDependencyChains(rule, symbols),
       );
     }
 
-    // Global checks (not per-rule)
     diagnostics.push(...detectUnusedTokens(symbols));
 
     const errors = diagnostics.filter((d) => d.severity === "error").length;

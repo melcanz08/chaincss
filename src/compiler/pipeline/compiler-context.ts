@@ -3,15 +3,11 @@
 // Shared compiler context — connects all subsystems into one unified interface
 // ============================================================================
 
-import type { StyleIR, IRRule, IRNodeId } from "./ir/types.js";
+import type { StyleIR, IRNodeId } from "./ir/types.js";
 import type { IRGraph } from "./ir/types.js";
 import type { SymbolTable } from "./symbol-table.js";
 import type { DiagnosticsReport } from "./diagnostics-reporter.js";
-import type {
-  PipelineResult,
-  PipelineStageResult,
-  PassResult,
-} from "./pipeline-types.js";
+import type { PipelineStageResult, PassResult } from "./pipeline-types.js";
 import {
   buildIRGraph,
   findAffectedNodes,
@@ -26,6 +22,7 @@ import {
   findUnusedSymbols,
 } from "./symbol-table.js";
 import { generateDiagnosticsReport } from "./diagnostics-reporter.js";
+import { cloneIR } from "./ir/immutable.js";
 
 // ============================================================================
 // Types
@@ -65,6 +62,8 @@ export interface CompilerContextConfig {
   verbose?: boolean;
   /** Custom plugin state */
   plugins?: Map<string, unknown>;
+  minify?: boolean;
+  sourceMap?: boolean;
 }
 
 // ============================================================================
@@ -114,8 +113,9 @@ export class CompilerContext {
   private lastIR: StyleIR | null = null;
 
   constructor(ir: StyleIR, config: CompilerContextConfig = {}) {
-    this.ir = config.immutable ? this.cloneIR(ir) : ir;
     this.config = config;
+    this.ir = config.immutable ? cloneIR(ir) : ir;
+    this.lastIR = this.ir;
     this.graph = buildIRGraph(this.ir);
     this.symbols = buildSymbolTable(this.ir);
     this.previousResults = new Map();
@@ -124,9 +124,9 @@ export class CompilerContext {
     this.pluginState = config.plugins || new Map();
     this.cache = new Map();
     this.performance = {
-      totalCompiles: 1,
+      totalCompiles: 0,
       incrementalCompiles: 0,
-      fullCompiles: 1,
+      fullCompiles: 0,
       lastCompileDuration: 0,
       averageCompileDuration: 0,
     };
@@ -165,7 +165,7 @@ export class CompilerContext {
    * Compatible with D3.js, Cytoscape.js, Graphviz, and custom visualizers.
    */
   exportGraph(): GraphExport {
-    return exportGraphAsJSON(this.graph, this.ir);
+    return exportGraphAsJSON(this.graph);
   }
 
   /**
@@ -320,9 +320,8 @@ export class CompilerContext {
    * Emits 'ruleAdded' and 'ruleRemoved' events for changed rules.
    */
   updateIR(ir: StyleIR) {
-    // Detect added/removed rules for event emission
     if (this.lastIR) {
-      const oldIds = new Set(this.ir.rules.map((r) => r.id));
+      const oldIds = new Set(this.lastIR.rules.map((r) => r.id));
       const newIds = new Set(ir.rules.map((r) => r.id));
 
       for (const id of newIds) {
@@ -334,14 +333,14 @@ export class CompilerContext {
 
       for (const id of oldIds) {
         if (!newIds.has(id)) {
-          const rule = this.ir.rules.find((r) => r.id === id);
+          const rule = this.lastIR.rules.find((r) => r.id === id);
           this.emit("ruleRemoved", { ruleId: id, selector: rule?.selector });
         }
       }
     }
 
-    this.lastIR = this.config.immutable ? this.cloneIR(ir) : this.ir;
-    this.ir = this.config.immutable ? this.cloneIR(ir) : ir;
+    this.lastIR = this.config.immutable ? cloneIR(ir) : ir;
+    this.ir = this.config.immutable ? cloneIR(ir) : ir;
     this.graph = buildIRGraph(this.ir);
     this.symbols = buildSymbolTable(this.ir);
   }
@@ -384,7 +383,11 @@ export class CompilerContext {
     const affected = new Set<IRNodeId>();
 
     for (const rule of this.ir.rules) {
-      if (rule.source?.file === filePath) {
+      const ruleFile =
+        typeof rule.source === "string"
+          ? rule.source
+          : (rule.source as { file?: string } | undefined)?.file;
+      if (ruleFile === filePath) {
         affected.add(rule.id);
         const graphAffected = this.getAffectedRules(rule.id);
         for (const id of graphAffected) affected.add(id);
@@ -392,7 +395,11 @@ export class CompilerContext {
     }
 
     for (const [, symbol] of this.symbols.symbols) {
-      if (symbol.source === filePath) {
+      const symbolFile =
+        typeof symbol.source === "string"
+          ? symbol.source
+          : (symbol.source as { file?: string } | undefined)?.file;
+      if (symbolFile === filePath) {
         affected.add(symbol.nodeId);
         for (const depId of symbol.dependents) {
           affected.add(depId);
@@ -501,14 +508,6 @@ export class CompilerContext {
       performance: this.performance,
       passesRun: this.previousResults.size,
     };
-  }
-
-  private cloneIR(ir: StyleIR): StyleIR {
-    const cloned = JSON.parse(JSON.stringify(ir));
-    if (ir.graph) {
-      cloned.graph = buildIRGraph(cloned);
-    }
-    return cloned;
   }
 }
 

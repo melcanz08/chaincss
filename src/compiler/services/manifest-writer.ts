@@ -55,6 +55,10 @@ export class ManifestWriter {
     this.outputDir = this.options.outputDir;
   }
 
+  private get manifestPath(): string {
+    return path.join(this.outputDir, "manifest.json");
+  }
+
   private serialize(data: ManifestData): string {
     return this.options.minify
       ? JSON.stringify(data)
@@ -66,13 +70,31 @@ export class ManifestWriter {
     return stable;
   }
 
+  /**
+   * Produces a canonical string representation for hashing.
+   * Sorts keys recursively and normalizes non-deterministic array fields.
+   */
   private stableStringify(data: Omit<ManifestData, "timestamp">): string {
-    return JSON.stringify(data, (key, value) => {
-      if (value && typeof value === "object" && !Array.isArray(value)) {
-        return Object.fromEntries(Object.entries(value).sort());
+    const normalize = (val: any): any => {
+      if (Array.isArray(val)) {
+        // Sort arrays of primitive strings (like classFiles) for stable hashing
+        if (val.every((item) => typeof item === "string")) {
+          return [...val].sort();
+        }
+        return val.map(normalize);
       }
-      return value;
-    });
+      if (val && typeof val === "object") {
+        const sortedKeys = Object.keys(val).sort();
+        const result: Record<string, any> = {};
+        for (const k of sortedKeys) {
+          result[k] = normalize(val[k]);
+        }
+        return result;
+      }
+      return val;
+    };
+
+    return JSON.stringify(normalize(data));
   }
 
   private hashString(content: string): string {
@@ -93,20 +115,19 @@ export class ManifestWriter {
   }
 
   async write(data: ManifestData): Promise<{ path: string; skipped: boolean }> {
-    const manifestPath = path.join(this.outputDir, "manifest.json");
+    const targetPath = this.manifestPath;
     const stableHash = this.computeStableHash(data);
 
     if (stableHash === this.lastWrittenContentHash) {
-      return { path: manifestPath, skipped: true };
+      return { path: targetPath, skipped: true };
     }
 
-    // Also check on-disk file to survive restart
+    // Check existing on-disk file to survive process restarts
     try {
-      const existingRaw = await fs.readFile(manifestPath, "utf8");
-      const existingHash = this.computeStableHashFromRaw(existingRaw);
-      if (existingHash === stableHash) {
+      const existingRaw = await fs.readFile(targetPath, "utf8");
+      if (this.computeStableHashFromRaw(existingRaw) === stableHash) {
         this.lastWrittenContentHash = stableHash;
-        return { path: manifestPath, skipped: true };
+        return { path: targetPath, skipped: true };
       }
     } catch {}
 
@@ -115,39 +136,43 @@ export class ManifestWriter {
     try {
       await fs.mkdir(this.outputDir, { recursive: true });
 
-      // Direct write is safer than rename on Windows
-      // If you want atomic, use tmp + unlink + rename
-      const tmpPath = `${manifestPath}.${process.pid}.${Date.now()}.tmp`;
+      const tmpPath = `${targetPath}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`;
       await fs.writeFile(tmpPath, content, "utf8");
+
       try {
-        await fs.rename(tmpPath, manifestPath);
+        await fs.rename(tmpPath, targetPath);
       } catch {
-        // Windows: target exists, unlink first
-        await fs.unlink(manifestPath).catch(() => {});
-        await fs.rename(tmpPath, manifestPath);
+        // Fallback for Windows lock scenarios: try unlinking first, or direct overwrite
+        try {
+          await fs.unlink(targetPath);
+          await fs.rename(tmpPath, targetPath);
+        } catch {
+          await fs.writeFile(targetPath, content, "utf8");
+          await fs.unlink(tmpPath).catch(() => {});
+        }
       }
 
       this.lastWrittenContentHash = stableHash;
-      return { path: manifestPath, skipped: false };
+      return { path: targetPath, skipped: false };
     } catch (error) {
       throw new Error(`Failed to write manifest: ${(error as Error).message}`);
     }
   }
 
   writeSync(data: ManifestData): { path: string; skipped: boolean } {
-    const manifestPath = path.join(this.outputDir, "manifest.json");
+    const targetPath = this.manifestPath;
     const stableHash = this.computeStableHash(data);
 
     if (stableHash === this.lastWrittenContentHash) {
-      return { path: manifestPath, skipped: true };
+      return { path: targetPath, skipped: true };
     }
 
     try {
-      if (existsSync(manifestPath)) {
-        const raw = readFileSync(manifestPath, "utf8");
+      if (existsSync(targetPath)) {
+        const raw = readFileSync(targetPath, "utf8");
         if (this.computeStableHashFromRaw(raw) === stableHash) {
           this.lastWrittenContentHash = stableHash;
-          return { path: manifestPath, skipped: true };
+          return { path: targetPath, skipped: true };
         }
       }
     } catch {}
@@ -159,20 +184,25 @@ export class ManifestWriter {
         mkdirSync(this.outputDir, { recursive: true });
       }
 
-      // Direct write avoids Windows EPERM on rename
-      const tmpPath = `${manifestPath}.${process.pid}.${Date.now()}.tmp`;
+      const tmpPath = `${targetPath}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`;
       writeFileSync(tmpPath, content, "utf8");
+
       try {
-        renameSync(tmpPath, manifestPath);
+        renameSync(tmpPath, targetPath);
       } catch {
         try {
-          unlinkSync(manifestPath);
-        } catch {}
-        renameSync(tmpPath, manifestPath);
+          unlinkSync(targetPath);
+          renameSync(tmpPath, targetPath);
+        } catch {
+          writeFileSync(targetPath, content, "utf8");
+          try {
+            unlinkSync(tmpPath);
+          } catch {}
+        }
       }
 
       this.lastWrittenContentHash = stableHash;
-      return { path: manifestPath, skipped: false };
+      return { path: targetPath, skipped: false };
     } catch (error) {
       throw new Error(
         `Failed to write manifest (sync): ${(error as Error).message}`,
@@ -181,9 +211,8 @@ export class ManifestWriter {
   }
 
   async read(): Promise<ManifestData | null> {
-    const manifestPath = path.join(this.outputDir, "manifest.json");
     try {
-      const raw = await fs.readFile(manifestPath, "utf8");
+      const raw = await fs.readFile(this.manifestPath, "utf8");
       this.lastWrittenContentHash = this.computeStableHashFromRaw(raw);
       return JSON.parse(raw) as ManifestData;
     } catch {
@@ -192,11 +221,11 @@ export class ManifestWriter {
   }
 
   readSync(): ManifestData | null {
-    const manifestPath = path.join(this.outputDir, "manifest.json");
-    if (!existsSync(manifestPath)) return null;
+    const targetPath = this.manifestPath;
+    if (!existsSync(targetPath)) return null;
 
     try {
-      const raw = readFileSync(manifestPath, "utf8");
+      const raw = readFileSync(targetPath, "utf8");
       this.lastWrittenContentHash = this.computeStableHashFromRaw(raw);
       return JSON.parse(raw) as ManifestData;
     } catch {
@@ -205,20 +234,21 @@ export class ManifestWriter {
   }
 
   async clean(): Promise<void> {
-    const manifestPath = path.join(this.outputDir, "manifest.json");
     try {
-      await fs.unlink(manifestPath);
+      await fs.unlink(this.manifestPath);
       this.lastWrittenContentHash = "";
     } catch {}
   }
 
   cleanSync(): void {
-    const manifestPath = path.join(this.outputDir, "manifest.json");
-    if (existsSync(manifestPath)) {
+    const targetPath = this.manifestPath;
+    if (existsSync(targetPath)) {
       try {
-        unlinkSync(manifestPath);
+        unlinkSync(targetPath);
         this.lastWrittenContentHash = "";
       } catch {}
     }
   }
 }
+
+export default ManifestWriter;

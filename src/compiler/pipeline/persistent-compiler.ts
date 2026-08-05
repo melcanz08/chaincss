@@ -1,7 +1,7 @@
 // src/compiler/pipeline/persistent-compiler.ts
 // Persistent compiler state — keeps IR alive between compiles
 
-import crypto from "crypto";
+import crypto from "node:crypto";
 import type { StyleIR, IRRule, IRNodeId } from "./ir/types.js";
 import { buildIRGraph, findAffectedNodes } from "./ir/graph-builder.js";
 import { cloneIR } from "./ir/immutable.js";
@@ -9,7 +9,6 @@ import type { PassMetadata } from "./ir/metadata.js";
 import {
   setIncrementalMeta,
   markDirty,
-  hasPassRun,
   getPassMetadata,
 } from "./ir/metadata.js";
 import type { PersistentCache } from "../cache/content-addressable-cache.js";
@@ -34,33 +33,73 @@ export interface CompilerState {
   lastCompiledAt: number;
 }
 
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/**
+ * Recursively count rules including nested rules.
+ */
+export function countTotalRules(rules: IRRule[], includeDead = true): number {
+  let count = 0;
+  for (const rule of rules) {
+    if (!includeDead && rule.isDead) continue;
+    count++;
+    if (rule.nestedRules) {
+      count += countTotalRules(rule.nestedRules, includeDead);
+    }
+  }
+  return count;
+}
+
+/**
+ * Initialize metadata for a rule and all its nested children.
+ */
+function initRuleMeta(rule: IRRule, metadata: Map<IRNodeId, PassMetadata>): void {
+  if (!metadata.has(rule.id)) {
+    metadata.set(rule.id, setIncrementalMeta({}, [], []));
+  }
+  for (const nested of rule.nestedRules || []) {
+    initRuleMeta(nested, metadata);
+  }
+}
+
+/**
+ * Sync metadata entries for new rules introduced during incremental updates.
+ */
+function syncRuleMetadata(
+  rules: IRRule[],
+  metadata: Map<IRNodeId, PassMetadata>,
+): void {
+  for (const rule of rules) {
+    initRuleMeta(rule, metadata);
+  }
+}
+
+// ============================================================================
+// State Management
+// ============================================================================
+
 /**
  * Create a new persistent compiler state.
  */
 export function createCompilerState(ir: StyleIR): CompilerState {
   const metadata = new Map<IRNodeId, PassMetadata>();
 
-  // Initialize metadata for all rules
-  function initRuleMeta(rule: IRRule) {
-    metadata.set(rule.id, setIncrementalMeta({}, [], []));
-    for (const nested of rule.nestedRules || []) {
-      initRuleMeta(nested);
-    }
-  }
   for (const rule of ir.rules) {
-    initRuleMeta(rule);
+    initRuleMeta(rule, metadata);
   }
 
   return {
     ir: cloneIR(ir),
     metadata,
-    compiledFiles: new Set(ir.meta.sourceFiles),
+    compiledFiles: new Set(ir.meta?.sourceFiles ?? []),
     stats: {
       totalCompiles: 1,
       incrementalCompiles: 0,
       fullCompiles: 1,
-      totalRulesEver: ir.rules.length,
-      currentLiveRules: ir.rules.filter((r) => !r.isDead).length,
+      totalRulesEver: countTotalRules(ir.rules, true),
+      currentLiveRules: countTotalRules(ir.rules, false),
       averageRecompilePercent: 100,
     },
     lastCompiledAt: Date.now(),
@@ -75,10 +114,9 @@ export function markChangedRules(
   state: CompilerState,
   changedRuleIds: IRNodeId[],
 ): void {
-  // Rebuild graph from current IR
-  const graph = state.ir.graph || buildIRGraph(state.ir);
+  // Rebuild/cache graph on state.ir
+  const graph = (state.ir.graph ??= buildIRGraph(state.ir));
 
-  // Find all affected nodes
   const allAffected = new Set<IRNodeId>();
   for (const id of changedRuleIds) {
     allAffected.add(id);
@@ -88,7 +126,6 @@ export function markChangedRules(
     }
   }
 
-  // Mark dirty in metadata
   for (const id of allAffected) {
     const meta = state.metadata.get(id);
     if (meta) {
@@ -141,23 +178,42 @@ export function updateState(
   newIR: StyleIR,
   changedFiles: string[],
 ): void {
+  const dirtyCount = getDirtyRules(state).length;
+
   state.ir = cloneIR(newIR);
 
   for (const file of changedFiles) {
     state.compiledFiles.add(file);
   }
 
-  // Mark all rules as clean
-  for (const [id] of state.metadata) {
-    markClean(state, id);
+  // Sync metadata for new rules
+  syncRuleMetadata(newIR.rules, state.metadata);
+
+  // Prune deleted rules from metadata Map
+  const activeIds = new Set<string>();
+  function collectActiveIds(rules: IRRule[]) {
+    for (const r of rules) {
+      activeIds.add(r.id);
+      if (r.nestedRules) collectActiveIds(r.nestedRules);
+    }
+  }
+  collectActiveIds(newIR.rules);
+
+  for (const id of state.metadata.keys()) {
+    if (!activeIds.has(id)) {
+      state.metadata.delete(id);
+    } else {
+      markClean(state, id);
+    }
   }
 
   // Update stats
   state.stats.totalCompiles++;
-  state.stats.currentLiveRules = newIR.rules.filter((r) => !r.isDead).length;
+  state.stats.currentLiveRules = countTotalRules(newIR.rules, false);
 
-  const dirtyCount = getDirtyRules(state).length;
-  const totalRules = newIR.rules.length;
+  const totalRules = countTotalRules(newIR.rules, true);
+  state.stats.totalRulesEver = Math.max(state.stats.totalRulesEver, totalRules);
+
   const recompilePercent =
     totalRules > 0 ? Math.round((dirtyCount / totalRules) * 100) : 100;
 
@@ -172,15 +228,14 @@ export function updateState(
 }
 
 /**
- * Check if a full recompilation is needed (e.g., config change, new file type).
+ * Check if a full recompilation is needed.
  */
 export function needsFullRecompile(
   state: CompilerState,
-  reason: string,
+  _reason: string,
 ): boolean {
-  // Full recompile if more than 50% of rules are dirty
   const dirtyCount = getDirtyRules(state).length;
-  const totalRules = state.ir.rules.length;
+  const totalRules = countTotalRules(state.ir.rules, false);
 
   if (totalRules === 0) return true;
   if (dirtyCount > totalRules * 0.5) return true;
@@ -193,7 +248,7 @@ export function needsFullRecompile(
  */
 export function getStateStats(state: CompilerState) {
   const dirtyCount = getDirtyRules(state).length;
-  const totalRules = state.ir.rules.length;
+  const totalRules = countTotalRules(state.ir.rules, true);
 
   return {
     ...state.stats,
@@ -217,8 +272,12 @@ export async function saveCompilerStateToDisk(
 ): Promise<void> {
   const key = `compiler-state-${projectHash}`;
   const hash = crypto.createHash("sha256").update(key).digest("hex");
+
+  const irToPersist = cloneIR(state.ir);
+  delete irToPersist.graph;
+
   const payload = {
-    ir: state.ir,
+    ir: irToPersist,
     metadata: Array.from(state.metadata.entries()),
     compiledFiles: Array.from(state.compiledFiles),
     stats: state.stats,

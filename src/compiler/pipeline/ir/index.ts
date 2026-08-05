@@ -9,31 +9,33 @@ export * from "./factory.js";
 export { parseIR } from "./parser.js";
 
 // CSS Printer
-export { generateCSS, compileIR } from "./css-printer.js";
+export { generateCSS, compileIR, type CSSPrinterOptions } from "./css-printer.js";
 
 // Utilities
-export { countNodes, findRule, cloneIR, debugIR } from "./utils.js";
+export {
+  countNodes,
+  findRule,
+  cloneIR,
+  debugIR,
+  recordHistory,
+  ensureRuleMeta,
+  ensureDeclMeta,
+  ensurePassMeta,
+  ensureMeta,
+} from "./utils.js";
 
 // Types
-export type {
-  IRNodeId,
-  SourceLocation,
-  IRDeclaration,
-  IRRule,
-  IRPseudoClass,
-  IRAtRule,
-  IRKeyframeFrame, // Added structural frame model type definition
-  IRCondition,
-  IRTransformRecord,
-  StyleIR,
-  IRDiagnostic,
-} from "./types.js";
+export type * from "./types.js";
+
+// Graph Builder
 export {
   buildIRGraph,
   traverseGraph,
   findAffectedNodes,
   getGraphStats,
 } from "./graph-builder.js";
+
+// CSS AST
 export {
   parseCSSValue,
   optimizeAST,
@@ -42,6 +44,8 @@ export {
   fromParsedValue,
   type CSSValueNode,
 } from "./css-ast.js";
+
+// Metadata
 export {
   type PassMetadata,
   initMetadata,

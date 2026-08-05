@@ -23,6 +23,14 @@ import type {
   ListOptions,
 } from "./shorthand-types.js";
 
+import type { 
+  ChainCSSConfig,
+  ChainCSSUserConfig,
+  MacroHandler as ConfigMacroHandler,
+} from "@shared/config/index.js";
+
+export type DynamicValueGetter = (...args: any[]) => any;
+
 export type MacroHandler = (
   value: any,
   catcher: Record<string, any>,
@@ -207,87 +215,12 @@ export type IntentMap = Record<string, IntentDefinition>;
 export type TokenRelationship =
   DerivedRelationship | ContrastRelationship | HarmonyRelationship;
 
-export interface ChainCSSConfig {
-  inputs?: string[];
-  output?: {
-    cssFile?: string;
-    minify?: boolean;
-    generateGlobalCSS?: boolean;
-    outputDir?: string;
-    targets?: string[];
-  };
-  tokens?: {
-    enabled?: boolean;
-    prefix?: string;
-    tokens?: Record<string, any>;
-    relationships?: TokenRelationship[];
-  };
-  atomic?: {
-    enabled?: boolean;
-    threshold?: number;
-    naming?: "hash" | "readable";
-    mode?: "standard" | "hybrid" | "atomic-only";
-    minify?: boolean;
-    verbose?: boolean;
-  };
-  prefixer?: {
-    enabled?: boolean;
-    mode?: "auto" | "full" | "lightweight";
-    browsers?: string[];
-    sourceMap?: boolean;
-    sourceMapInline?: boolean;
-    remove?: boolean;
-    add?: boolean;
-    flexbox?: boolean | "no-2009";
-    grid?: "autoplace" | "no-autoplace" | false;
-    verbose?: boolean;
-  };
-  a11y?: {
-    pairs?: Array<{
-      foreground: string;
-      background: string;
-      label?: string;
-    }>;
-  };
-  cache?: {
-    enabled?: boolean;
-    maxAgeDays?: number;
-    maxSizeMB?: number;
-    path?: string;
-  };
-  dev?: {
-    port?: number;
-    publicDir?: string;
-  };
-  breakpoints?: Record<string, string>;
-  framework?: "react" | "vue" | "svelte" | "solid" | "auto";
-  namespace?: string;
-  verbose?: boolean;
-  silent?: boolean;
-  debug?: boolean;
-  timeline?: boolean;
-  sourceComments?: boolean;
-  sourceMap?: boolean;
-  watch?: boolean;
-  hmr?: boolean;
-  include?: string[];
-  exclude?: string[];
-  shorthands?: Record<string, string>;
-  macros?: Record<string, MacroHandler>;
-  intents?: Record<string, IntentDefinition>;
-  allowOverride?: boolean;
-  plugins?: ChainCSSPlugin[];
-  [key: string]: any;
-  presets?: Array<
-    | ChainCSSUserConfig
-    | ((
-        base: ChainCSSUserConfig,
-      ) => ChainCSSUserConfig | Promise<ChainCSSUserConfig>)
-  >;
-}
+// Re-export config types (canonical source: @shared/config/index.ts)
+export type { ChainCSSConfig };
+export type { ChainCSSUserConfig };
 
-export type ChainCSSUserConfig = ChainCSSConfig;
-export type { ChainCSSConfig as Config };
+// Convenience alias
+export type Config = ChainCSSUserConfig;
 
 export interface ChainCSSPlugin {
   name: string;
@@ -604,13 +537,13 @@ export type OptionalKeys<T, K extends keyof T> = Omit<T, K> &
  * Primitive CSS value — what actually ends up in a CSS property.
  * Functions indicate dynamic values that need runtime resolution.
  */
-export type CSSPrimitiveValue = string | number;
+export type CSSPrimitiveValue = string | number | (string | number)[];
 
 /**
  * A collection of CSS property-value pairs (no nesting, no pseudos)
  */
 export interface CSSProperties {
-  [property: string]: CSSPrimitiveValue | ((...args: any[]) => string);
+  [property: string]: CSSPrimitiveValue | DynamicValueGetter;
 }
 
 /**
@@ -645,6 +578,7 @@ export interface StyleObject {
   /** Top-level CSS properties and structural mappings */
   [property: string]:
     | CSSPrimitiveValue
+    | DynamicValueGetter 
     | PseudoStyles
     | AtRule[]
     | NestedRule[]
@@ -713,10 +647,12 @@ export function isCompileResult(value: any): value is CompileResult {
 // Type Guards for strict style types
 // ============================================================================
 
-export function isCSSPrimitiveValue(
-  value: unknown,
-): value is CSSPrimitiveValue {
-  return typeof value === "string" || typeof value === "number";
+export function isCSSPrimitiveValue(value: unknown): value is CSSPrimitiveValue {
+  if (typeof value === "string" || typeof value === "number") return true;
+  if (Array.isArray(value)) {
+    return value.every((v) => typeof v === "string" || typeof v === "number");
+  }
+  return false;
 }
 
 export function isDynamicValue(
@@ -729,8 +665,8 @@ export function isPseudoStyles(value: unknown): value is PseudoStyles {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return false;
   }
-  return Object.values(value as Record<string, unknown>).every((v) =>
-    isCSSPrimitiveValue(v),
+  return Object.values(value as Record<string, unknown>).every(
+    (v) => isCSSPrimitiveValue(v) || isDynamicValue(v),
   );
 }
 
@@ -765,16 +701,17 @@ export function parseStyleObject(
 
   // 1. Process explicit keys
   // Sort keys to ensure deterministic processing order for CSS generation
-  const sortedKeys = Object.keys(obj).sort((a, b) => {
-    // Structural/Internal keys (_...) should always be processed first
+  const keys = Object.keys(obj);
+  // Sort: _-prefixed keys first, then alphabetical using < > comparison
+  keys.sort((a, b) => {
     const aInternal = a.startsWith("_");
     const bInternal = b.startsWith("_");
     if (aInternal && !bInternal) return -1;
     if (!aInternal && bInternal) return 1;
-    return a.localeCompare(b);
+    return a < b ? -1 : a > b ? 1 : 0;
   });
 
-  for (const key of sortedKeys) {
+  for (const key of keys) {
     const value = obj[key];
 
     // Handle Internal Architectural Keys
@@ -821,7 +758,7 @@ export function parseStyleObject(
 
     // Standard properties
     if (isCSSPrimitiveValue(value) || isDynamicValue(value)) {
-      regularProps[key] = value as CSSPrimitiveValue;
+      regularProps[key] = value as CSSPrimitiveValue | DynamicValueGetter;
     }
   }
 

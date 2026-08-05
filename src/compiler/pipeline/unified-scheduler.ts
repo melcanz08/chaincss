@@ -6,6 +6,15 @@ import type { PassDeclaration, ScheduleResult } from "./pass-scheduler.js";
 import { schedulePasses } from "./pass-scheduler.js";
 
 // ============================================================================
+// Extended PassDeclaration with Priority
+// ============================================================================
+
+export interface ExtendedPassDeclaration extends PassDeclaration {
+  /** Tiebreaker priority (lower numbers run earlier, default: 100) */
+  priority?: number;
+}
+
+// ============================================================================
 // Plugin → PassDeclaration conversion
 // ============================================================================
 
@@ -16,45 +25,50 @@ import { schedulePasses } from "./pass-scheduler.js";
 export function pluginToPassDeclaration(
   plugin: ChainCSSPlugin,
   phase: "normalize" | "validate" | "analyze" | "optimize" | "lower",
-): PassDeclaration | null {
-  // Only convert if the plugin has this phase
+): ExtendedPassDeclaration | null {
+  // Only convert if the plugin has a handler/hook for this phase
   if (!plugin[phase]) return null;
 
   const requires: string[] = [];
-  const produces: string[] = plugin.provides || [];
+  const produces: string[] = plugin.provides ? [...plugin.provides] : [];
   const invalidates: string[] = [];
 
-  // after → these must run before this plugin (they are requirements)
+  // Helper to safely add unique requirements
+  const addRequirement = (req: string) => {
+    if (!requires.includes(req)) {
+      requires.push(req);
+    }
+  };
+
+  // after → these passes must run before this plugin
   if (plugin.after) {
     for (const afterName of plugin.after) {
-      requires.push(afterName);
+      addRequirement(afterName);
     }
   }
 
-  // dependencies → must run before this plugin
+  // dependencies → hard dependencies that must run before this plugin
   if (plugin.dependencies) {
     for (const dep of plugin.dependencies) {
-      if (!requires.includes(dep)) {
-        requires.push(dep);
-      }
+      addRequirement(dep);
     }
   }
 
   // consumes → providers must run before this plugin
   if (plugin.consumes) {
     for (const consumed of plugin.consumes) {
-      // We'll resolve these at schedule time when all plugins are known
-      requires.push(`provider:${consumed}`);
+      addRequirement(`provider:${consumed}`);
     }
   }
 
   return {
     name: plugin.name,
-    phase: phase as any,
+    phase,
     requires,
     produces,
     invalidates,
-    cost: "cheap", // Plugins are assumed cheap; they can override
+    cost: "cheap",
+    priority: plugin.priority ?? 100,
   };
 }
 
@@ -74,65 +88,91 @@ export interface UnifiedScheduleResult extends ScheduleResult {
 }
 
 /**
- * Schedule both built-in passes and plugins together.
- *
- * 1. Convert plugins to PassDeclarations
- * 2. Resolve capability edges (consumes → finds providers)
- * 3. Merge with built-in passes
- * 4. Run unified topological sort
- * 5. Extract plugin ordering from the result
+ * Schedule both built-in passes and plugins together for a specific phase.
  */
 export function unifiedSchedule(
   builtInPasses: PassDeclaration[],
   plugins: ChainCSSPlugin[],
   phase: "normalize" | "validate" | "analyze" | "optimize" | "lower",
 ): UnifiedScheduleResult {
-  // Convert plugins to pass declarations
-  const pluginPasses: PassDeclaration[] = [];
+  // Deep clone built-in passes to prevent mutating shared definitions
+  const clonedBuiltIns: ExtendedPassDeclaration[] = builtInPasses.map((p) => ({
+    ...p,
+    requires: [...p.requires],
+    produces: [...p.produces],
+    invalidates: [...(p.invalidates || [])],
+  }));
+
+  // Convert plugins active in this phase to pass declarations
+  const pluginPasses: ExtendedPassDeclaration[] = [];
   const pluginMap = new Map<string, ChainCSSPlugin>();
 
   for (const plugin of plugins) {
     const pass = pluginToPassDeclaration(plugin, phase);
     if (pass) {
+      // Name collision detection
+      if (clonedBuiltIns.some((b) => b.name === pass.name)) {
+        throw new Error(
+          `Plugin name collision: "${pass.name}" conflicts with a built-in pass in phase "${phase}"`,
+        );
+      }
       pluginPasses.push(pass);
       pluginMap.set(plugin.name, plugin);
     }
   }
 
+  // Unified lookup map for all passes in the current phase
+  const currentPhasePassesMap = new Map<string, ExtendedPassDeclaration>();
+  for (const pass of [...clonedBuiltIns, ...pluginPasses]) {
+    currentPhasePassesMap.set(pass.name, pass);
+  }
+
   // Resolve capability edges
   const capabilityEdges: UnifiedScheduleResult["capabilityEdges"] = [];
-  const allProvides = new Map<string, string[]>(); // capability → [provider names]
+  const allProvides = new Map<string, string[]>(); // capability → provider pass names
 
-  for (const pass of [...builtInPasses, ...pluginPasses]) {
+  for (const pass of [...clonedBuiltIns, ...pluginPasses]) {
     for (const prod of pass.produces) {
       if (!allProvides.has(prod)) allProvides.set(prod, []);
       allProvides.get(prod)!.push(pass.name);
     }
   }
 
-  // Replace "provider:capability" placeholders with actual provider names
+  // Replace "provider:capability" placeholders with actual provider names in this phase
   for (const pass of pluginPasses) {
     const resolvedRequires: string[] = [];
     for (const req of pass.requires) {
       if (req.startsWith("provider:")) {
         const capability = req.slice(9);
         const providers = allProvides.get(capability) || [];
-        for (const provider of providers) {
-          resolvedRequires.push(provider);
-          capabilityEdges.push({ provider, consumer: pass.name, capability });
+        if (providers.length === 0) {
+          // If capability isn't provided in this phase, retain constraint as missing requirement
+          resolvedRequires.push(`missing-provider:${capability}`);
+        } else {
+          for (const provider of providers) {
+            resolvedRequires.push(provider);
+            capabilityEdges.push({ provider, consumer: pass.name, capability });
+          }
         }
       } else {
-        resolvedRequires.push(req);
+        // Only enforce pass requirements if the pass exists in the current phase
+        // (prevents cross-phase references from throwing false missing dependency errors)
+        const isCurrentPhaseTarget = currentPhasePassesMap.has(req);
+        const isCapability = allProvides.has(req);
+
+        if (isCurrentPhaseTarget || isCapability) {
+          resolvedRequires.push(req);
+        }
       }
     }
-    (pass as any).requires = resolvedRequires;
+    pass.requires = resolvedRequires;
   }
 
-  // Handle "before" constraints: if A declares "before: [B]", then B requires A
+  // Handle "before" constraints: if A declares "before: [B]", B requires A
   for (const plugin of plugins) {
     if (plugin.before) {
       for (const beforeName of plugin.before) {
-        const targetPass = pluginPasses.find((p) => p.name === beforeName);
+        const targetPass = currentPhasePassesMap.get(beforeName);
         if (targetPass) {
           if (!targetPass.requires.includes(plugin.name)) {
             targetPass.requires.push(plugin.name);
@@ -142,17 +182,19 @@ export function unifiedSchedule(
     }
   }
 
-  // Merge all passes
-  const allPasses = [...builtInPasses, ...pluginPasses];
+  // Combine all active passes for this phase
+  const allPasses = [...clonedBuiltIns, ...pluginPasses];
 
-  // Run unified topological sort
+  // Run topological sort
   const result = schedulePasses(allPasses);
 
   // Extract plugin ordering from the result
   const orderedPlugins: ChainCSSPlugin[] = [];
   for (const pass of result.ordered) {
     const plugin = pluginMap.get(pass.name);
-    if (plugin) orderedPlugins.push(plugin);
+    if (plugin && !orderedPlugins.includes(plugin)) {
+      orderedPlugins.push(plugin);
+    }
   }
 
   return {
@@ -163,7 +205,7 @@ export function unifiedSchedule(
 }
 
 // ============================================================================
-// Ordering Precedence (documented)
+// Ordering Precedence
 // ============================================================================
 
 /**
@@ -173,9 +215,6 @@ export function unifiedSchedule(
  * 2. provides/consumes — capability-based ordering
  * 3. before/after — explicit ordering hints
  * 4. priority — tiebreaker (lower = earlier, default 100)
- *
- * If a cycle is detected, the scheduler logs a warning and falls back
- * to priority-based ordering for the conflicting plugins.
  */
 export const ORDERING_PRECEDENCE = [
   "dependencies",

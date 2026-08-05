@@ -1,4 +1,4 @@
-// src/runtime/injector.ts
+// src/frameworks/core/injector.ts
 
 /**
  * ChainCSS Runtime Injector

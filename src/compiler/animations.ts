@@ -232,10 +232,19 @@ export const timingFunctions = {
   easeOut: "ease-out",
   easeInOut: "ease-in-out",
   bounce: "cubic-bezier(0.68, -0.55, 0.265, 1.55)",
-  elastic: "cubic-bezier(0.68, -0.55, 0.265, 1.55)",
+  elastic: "cubic-bezier(0.175, 0.885, 0.32, 1.275)",
   smooth: "cubic-bezier(0.25, 0.1, 0.25, 1)",
   sharp: "cubic-bezier(0.4, 0, 0.6, 1)",
 };
+
+// Internal utility: Safe property name to CSS kebab-case conversion
+function toKebabCase(prop: string): string {
+  if (prop.startsWith("--")) return prop; // preserve CSS custom variables
+  return prop
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/^([A-Z])/, (m) => m.toLowerCase())
+    .toLowerCase();
+}
 
 // ============================================================================
 // Compilation & Generation Helpers
@@ -243,7 +252,7 @@ export const timingFunctions = {
 
 /**
  * Builds CSS animation definitions.
- * Set singleShorthand=true to minimize output block footprint.
+ * Set singleShorthand=true to output only `animation: ...`, otherwise outputs pure longhand properties.
  */
 export function createAnimation(
   animationName: string,
@@ -260,15 +269,13 @@ export function createAnimation(
     playState = DEFAULT_ANIMATION_CONFIG.playState,
   } = config;
 
-  const shorthand =
-    `${animationName} ${duration} ${timing} ${delay} ${iteration} ${direction} ${fillMode} ${playState}`.trim();
-
   if (singleShorthand) {
+    const shorthand =
+      `${animationName} ${duration} ${timing} ${delay} ${iteration} ${direction} ${fillMode} ${playState}`.trim();
     return { animation: shorthand };
   }
 
   return {
-    animation: shorthand,
     animationName,
     animationDuration: duration,
     animationTimingFunction: timing,
@@ -281,8 +288,7 @@ export function createAnimation(
 }
 
 /**
- * Generates an un-prefixed keyframes string block.
- * Offloads prefixing duties to your target environment pass.
+ * Generates keyframes string block with safe vendor-prefix support.
  */
 export function createKeyframesCSS(
   name: string,
@@ -294,11 +300,7 @@ export function createKeyframesCSS(
     for (const [keyframe, styles] of Object.entries(steps)) {
       css += `  ${keyframe} {\n`;
       for (const [prop, value] of Object.entries(styles)) {
-        const kebabProp = prop
-          .replace(/([A-Z])/g, "-$1")
-          .toLowerCase()
-          .replace(/^--/, "-");
-        css += `    ${kebabProp}: ${value};\n`;
+        css += `    ${toKebabCase(prop)}: ${value};\n`;
       }
       css += `  }\n`;
     }
@@ -307,7 +309,6 @@ export function createKeyframesCSS(
   };
 
   if (vendorPrefix) {
-    // Adding the leading dash to correctly generate @-webkit-keyframes
     return renderBlock("-webkit-") + "\n" + renderBlock();
   }
   return renderBlock();
@@ -320,7 +321,7 @@ export function getAnimationPreset(
 }
 
 export function hasAnimationPreset(name: string): boolean {
-  return name in animationPresets;
+  return Object.prototype.hasOwnProperty.call(animationPresets, name);
 }
 
 export function getAnimationPresetNames(): string[] {
@@ -377,7 +378,8 @@ export function staggerChildren(
   const incMs = parseTimeToMs(increment);
 
   for (let i = 0; i < count; i++) {
-    delays[i] = msToTime(baseMs + i * incMs);
+    const roundedMs = Math.round((baseMs + i * incMs) * 100) / 100;
+    delays[i] = msToTime(roundedMs);
   }
 
   return delays;

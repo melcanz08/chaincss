@@ -8,9 +8,16 @@ import type {
   IRDeclaration,
   IRAtRule,
   IRKeyframeFrame,
+  IRCondition,
 } from "./types.js";
 
+// ============================================================================
+// Helpers & Caching
+// ============================================================================
+
 const kebabCache = new Map<string, string>();
+
+/** Convert camelCase property to kebab-case while preserving CSS custom variables */
 function kebab(prop: string): string {
   if (prop.startsWith("--")) return prop;
   const cached = kebabCache.get(prop);
@@ -25,36 +32,109 @@ function formatValue(value: string | number): string {
 }
 
 function hasValue(d: IRDeclaration): boolean {
-  return d.value !== undefined && d.value !== null;
+  return d.value !== undefined && d.value !== null && d.value !== "";
 }
 
-export function generateCSS(
-  ir: StyleIR,
-  options?: { minify?: boolean },
-): string {
-  const minify = options?.minify ?? false;
-  const nl = minify ? "" : "\n";
-  const indent = minify ? "" : "  ";
-  const space = minify ? "" : " ";
+/** Split comma-separated selector lists respecting quotes and parentheses */
+function splitSelectors(selector: string): string[] {
+  const result: string[] = [];
+  let current = "";
+  let depth = 0;
+  let inQuote: string | null = null;
 
+  for (let i = 0; i < selector.length; i++) {
+    const char = selector[i];
+    if (inQuote) {
+      current += char;
+      if (char === inQuote && selector[i - 1] !== "\\") inQuote = null;
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      inQuote = char;
+      current += char;
+      continue;
+    }
+    if (char === "(") depth++;
+    if (char === ")") depth--;
+
+    if (char === "," && depth === 0) {
+      if (current.trim()) result.push(current.trim());
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  if (current.trim()) result.push(current.trim());
+  return result;
+}
+
+/** Resolve pseudo selector across multi-selector groups */
+function resolvePseudoSelector(parentSelector: string, pseudoName: string): string {
+  const parents = splitSelectors(parentSelector);
+  const isAmpersand = pseudoName.includes("&");
+
+  return parents
+    .map((parent) => {
+      if (isAmpersand) {
+        return pseudoName.replace(/&/g, parent);
+      }
+      const needsColon = !pseudoName.startsWith(":") && !pseudoName.startsWith("[");
+      return `${parent}${needsColon ? ":" : ""}${pseudoName}`;
+    })
+    .join(", ");
+}
+
+// ============================================================================
+// Emission Context (Deduplication & Formatting state)
+// ============================================================================
+
+export interface CSSPrinterOptions {
+  minify?: boolean;
+}
+
+class EmissionContext {
+  emittedKeyframes = new Set<string>();
+  emittedFontFaces = new Set<string>();
+  indent: string;
+  nl: string;
+  space: string;
+  minify: boolean;
+
+  constructor(options?: CSSPrinterOptions) {
+    this.minify = options?.minify ?? false;
+    this.nl = this.minify ? "" : "\n";
+    this.indent = this.minify ? "" : "  ";
+    this.space = this.minify ? "" : " ";
+  }
+}
+
+// ============================================================================
+// Main Generator Entry Point
+// ============================================================================
+
+export function generateCSS(ir: StyleIR, options?: CSSPrinterOptions): string {
+  const ctx = new EmissionContext(options);
   const parts: string[] = [];
+
   for (let i = 0; i < ir.rules.length; i++) {
     const rule = ir.rules[i];
     if (rule.isDead) continue;
-    const ruleCSS = emitRule(rule, indent, nl, space, minify);
+    const ruleCSS = emitRule(rule, ctx);
     if (ruleCSS) parts.push(ruleCSS);
   }
 
-  return parts.join(minify ? "" : "\n\n");
+  return parts.join(ctx.minify ? "" : "\n\n");
 }
 
-function emitRule(
-  rule: IRRule,
-  indent: string,
-  nl: string,
-  space: string,
-  minify: boolean,
-): string {
+export function compileIR(ir: StyleIR, minify: boolean = false): string {
+  return generateCSS(ir, { minify });
+}
+
+// ============================================================================
+// Emitters
+// ============================================================================
+
+function emitRule(rule: IRRule, ctx: EmissionContext): string {
   const parts: string[] = [];
   const activeDecls: IRDeclaration[] = [];
 
@@ -64,7 +144,7 @@ function emitRule(
   }
 
   if (activeDecls.length > 0) {
-    parts.push(emitDeclBlock(rule.selector, activeDecls, indent, nl, space));
+    parts.push(emitDeclBlock(rule.selector, activeDecls, ctx));
   }
 
   for (let i = 0; i < rule.pseudoClasses.length; i++) {
@@ -76,78 +156,58 @@ function emitRule(
     }
     if (pcDecls.length === 0) continue;
 
-    const raw = pc.name;
-    const resolved = raw.includes("&")
-      ? raw.replace(/&/g, rule.selector)
-      : `${rule.selector}${raw.startsWith(":") || raw.startsWith("[") ? "" : ":"}${raw}`;
-    parts.push(emitDeclBlock(resolved, pcDecls, indent, nl, space));
+    const resolvedSelector = resolvePseudoSelector(rule.selector, pc.name);
+    parts.push(emitDeclBlock(resolvedSelector, pcDecls, ctx));
   }
 
   for (let i = 0; i < rule.atRules.length; i++) {
     const atRule = rule.atRules[i];
-    const atCSS = emitAtRule(rule.selector, atRule, indent, nl, space, minify);
+    const atCSS = emitAtRule(rule.selector, atRule, ctx);
     if (atCSS) parts.push(atCSS);
   }
 
   for (let i = 0; i < rule.nestedRules.length; i++) {
     const nested = rule.nestedRules[i];
     if (nested.isDead) continue;
-    const nestedCSS = emitRule(nested, indent, nl, space, minify);
+    const nestedCSS = emitRule(nested, ctx);
     if (nestedCSS) parts.push(nestedCSS);
   }
 
   if (rule.conditions.length > 0) {
-    const condCSS = emitConditions(
-      rule.selector,
-      rule.conditions,
-      indent,
-      nl,
-      space,
-      minify,
-    );
+    const condCSS = emitConditions(rule.selector, rule.conditions, ctx);
     if (condCSS) parts.push(condCSS);
   }
 
-  return parts.join(minify ? "" : "\n\n");
+  return parts.join(ctx.minify ? "" : "\n\n");
 }
 
 function emitDeclBlock(
   selector: string,
   declarations: IRDeclaration[],
-  indent: string,
-  nl: string,
-  space: string,
+  ctx: EmissionContext,
 ): string {
   const lines: string[] = new Array(declarations.length);
   for (let i = 0; i < declarations.length; i++) {
     const d = declarations[i];
-    lines[i] = `${indent}${kebab(d.property)}:${space}${formatValue(d.value)};`;
+    lines[i] = `${ctx.indent}${kebab(d.property)}:${ctx.space}${formatValue(d.value)};`;
   }
-  return `${selector}${space}{${nl}${lines.join(nl)}${nl}}`;
+  return `${selector}${ctx.space}{${ctx.nl}${lines.join(ctx.nl)}${ctx.nl}}`;
 }
 
-function emitIndented(
-  inner: string,
-  indent: string,
-  nl: string,
-  minify: boolean,
-): string {
-  if (minify || !nl) return inner;
+function emitIndented(inner: string, ctx: EmissionContext): string {
+  if (ctx.minify || !ctx.nl) return inner;
   const lines = inner.split("\n");
   const indented: string[] = new Array(lines.length);
   for (let i = 0; i < lines.length; i++) {
-    indented[i] = lines[i] ? indent + lines[i] : lines[i];
+    indented[i] = lines[i] ? ctx.indent + lines[i] : lines[i];
   }
-  return indented.join(nl);
+  return indented.join(ctx.nl);
 }
 
 function emitAtRule(
   parentSelector: string,
   atRule: IRAtRule,
-  indent: string,
-  nl: string,
-  space: string,
-  minify: boolean,
+  ctx: EmissionContext,
 ): string {
   const activeDecls: IRDeclaration[] = [];
   for (let i = 0; i < atRule.declarations.length; i++) {
@@ -157,93 +217,101 @@ function emitAtRule(
 
   switch (atRule.type) {
     case "media": {
-      if (activeDecls.length === 0 && atRule.nestedRules.length === 0)
+      if (activeDecls.length === 0 && (!atRule.nestedRules || atRule.nestedRules.length === 0)) {
         return "";
+      }
       let inner = "";
-      if (activeDecls.length > 0)
-        inner += emitDeclBlock(parentSelector, activeDecls, indent, nl, space);
-      for (let i = 0; i < atRule.nestedRules.length; i++) {
-        const nested = atRule.nestedRules[i];
-        if (nested.isDead) continue;
-        const nestedCSS = emitRule(nested, indent, nl, space, minify);
-        if (nestedCSS)
-          inner += (inner ? (minify ? "" : "\n\n") : "") + nestedCSS;
+      if (activeDecls.length > 0) {
+        inner += emitDeclBlock(parentSelector, activeDecls, ctx);
+      }
+      if (atRule.nestedRules) {
+        for (let i = 0; i < atRule.nestedRules.length; i++) {
+          const nested = atRule.nestedRules[i];
+          if (nested.isDead) continue;
+          const nestedCSS = emitRule(nested, ctx);
+          if (nestedCSS) {
+            inner += (inner ? (ctx.minify ? "" : "\n\n") : "") + nestedCSS;
+          }
+        }
       }
       if (!inner.trim()) return "";
-      return `@media ${atRule.query} {${nl}${emitIndented(inner, indent, nl, minify)}${nl}}`;
+      return `@media ${atRule.query} {${ctx.nl}${emitIndented(inner, ctx)}${ctx.nl}}`;
     }
+
     case "supports": {
       if (activeDecls.length === 0 && !atRule.nestedRules?.length) return "";
-      let inner = activeDecls.length
-        ? emitDeclBlock(parentSelector, activeDecls, indent, nl, space)
-        : "";
-      for (let i = 0; i < atRule.nestedRules.length; i++) {
-        const c = emitRule(atRule.nestedRules[i], indent, nl, space, minify);
-        if (c) inner += (inner ? (minify ? "" : "\n\n") : "") + c;
+      let inner = activeDecls.length ? emitDeclBlock(parentSelector, activeDecls, ctx) : "";
+      if (atRule.nestedRules) {
+        for (let i = 0; i < atRule.nestedRules.length; i++) {
+          const c = emitRule(atRule.nestedRules[i], ctx);
+          if (c) inner += (inner ? (ctx.minify ? "" : "\n\n") : "") + c;
+        }
       }
-      return `@supports ${atRule.query || ""} {${nl}${emitIndented(inner, indent, nl, minify)}${nl}}`;
+      return `@supports ${atRule.query || ""} {${ctx.nl}${emitIndented(inner, ctx)}${ctx.nl}}`;
     }
+
     case "container": {
       if (activeDecls.length === 0 && !atRule.nestedRules?.length) return "";
-      let inner = activeDecls.length
-        ? emitDeclBlock(parentSelector, activeDecls, indent, nl, space)
-        : "";
-      for (let i = 0; i < atRule.nestedRules.length; i++) {
-        const c = emitRule(atRule.nestedRules[i], indent, nl, space, minify);
-        if (c) inner += (inner ? (minify ? "" : "\n\n") : "") + c;
+      let inner = activeDecls.length ? emitDeclBlock(parentSelector, activeDecls, ctx) : "";
+      if (atRule.nestedRules) {
+        for (let i = 0; i < atRule.nestedRules.length; i++) {
+          const c = emitRule(atRule.nestedRules[i], ctx);
+          if (c) inner += (inner ? (ctx.minify ? "" : "\n\n") : "") + c;
+        }
       }
-      return `@container ${atRule.query || ""} {${nl}${emitIndented(inner, indent, nl, minify)}${nl}}`;
+      return `@container ${atRule.query || ""} {${ctx.nl}${emitIndented(inner, ctx)}${ctx.nl}}`;
     }
+
     case "layer": {
       const hasNested = atRule.nestedRules && atRule.nestedRules.length > 0;
-      if (!atRule.name && activeDecls.length === 0 && !hasNested) return "";
       if (activeDecls.length === 0 && !hasNested) return "";
 
-      let inner = activeDecls.length
-        ? emitDeclBlock(parentSelector, activeDecls, indent, nl, space)
-        : "";
-      for (let i = 0; i < atRule.nestedRules.length; i++) {
-        const c = emitRule(atRule.nestedRules[i], indent, nl, space, minify);
-        if (c) inner += (inner ? (minify ? "" : "\n\n") : "") + c;
+      let inner = activeDecls.length ? emitDeclBlock(parentSelector, activeDecls, ctx) : "";
+      if (atRule.nestedRules) {
+        for (let i = 0; i < atRule.nestedRules.length; i++) {
+          const c = emitRule(atRule.nestedRules[i], ctx);
+          if (c) inner += (inner ? (ctx.minify ? "" : "\n\n") : "") + c;
+        }
       }
-      return `@layer ${atRule.name || ""} {${nl}${emitIndented(inner, indent, nl, minify)}${nl}}`;
+      return `@layer ${atRule.name || ""} {${ctx.nl}${emitIndented(inner, ctx)}${ctx.nl}}`;
     }
+
     case "font-face": {
       if (activeDecls.length === 0) return "";
+      const signature = activeDecls.map((d) => `${d.property}:${d.value}`).join(";");
+      if (ctx.emittedFontFaces.has(signature)) return "";
+      ctx.emittedFontFaces.add(signature);
+
       const lines = new Array(activeDecls.length);
       for (let i = 0; i < activeDecls.length; i++) {
         const d = activeDecls[i];
-        lines[i] =
-          `${indent}${kebab(d.property)}:${space}${formatValue(d.value)};`;
+        lines[i] = `${ctx.indent}${kebab(d.property)}:${ctx.space}${formatValue(d.value)};`;
       }
-      return `@font-face {${nl}${lines.join(nl)}${nl}}`;
+      return `@font-face {${ctx.nl}${lines.join(ctx.nl)}${ctx.nl}}`;
     }
+
     case "keyframes": {
       if (!atRule.keyframes || atRule.keyframes.length === 0) return "";
-      return emitKeyframesStructural(
-        atRule.name || "unnamed",
-        atRule.keyframes,
-        indent,
-        nl,
-        space,
-        minify,
-      );
+      const name = atRule.name || "unnamed";
+      if (ctx.emittedKeyframes.has(name)) return "";
+      ctx.emittedKeyframes.add(name);
+
+      return emitKeyframesStructural(name, atRule.keyframes, ctx);
     }
+
     default: {
       const name = atRule.type || "unknown";
       const query = atRule.query || atRule.name || "";
-      let inner = activeDecls.length
-        ? emitDeclBlock(parentSelector, activeDecls, indent, nl, space)
-        : "";
-      for (let i = 0; i < atRule.nestedRules.length; i++) {
-        const c = emitRule(atRule.nestedRules[i], indent, nl, space, minify);
-        if (c) inner += (inner ? (minify ? "" : "\n\n") : "") + c;
+      let inner = activeDecls.length ? emitDeclBlock(parentSelector, activeDecls, ctx) : "";
+      if (atRule.nestedRules) {
+        for (let i = 0; i < atRule.nestedRules.length; i++) {
+          const c = emitRule(atRule.nestedRules[i], ctx);
+          if (c) inner += (inner ? (ctx.minify ? "" : "\n\n") : "") + c;
+        }
       }
       if (!inner && !query) return "";
-      const body = inner
-        ? `${nl}${emitIndented(inner, indent, nl, minify)}${nl}`
-        : "";
-      return `@${name} ${query}${space}{${body}}`;
+      const body = inner ? `${ctx.nl}${emitIndented(inner, ctx)}${ctx.nl}` : "";
+      return `@${name} ${query}${ctx.space}{${body}}`;
     }
   }
 }
@@ -251,12 +319,9 @@ function emitAtRule(
 function emitKeyframesStructural(
   name: string,
   frames: IRKeyframeFrame[],
-  indent: string,
-  nl: string,
-  space: string,
-  minify: boolean,
+  ctx: EmissionContext,
 ): string {
-  let css = `@keyframes ${name}${space}{${nl}`;
+  let css = `@keyframes ${name}${ctx.space}{${ctx.nl}`;
 
   for (let i = 0; i < frames.length; i++) {
     const frame = frames[i];
@@ -267,25 +332,22 @@ function emitKeyframesStructural(
     }
     if (activeDecls.length === 0) continue;
 
-    css += `${indent}${frame.keyText}${space}{${nl}`;
+    css += `${ctx.indent}${frame.keyText}${ctx.space}{${ctx.nl}`;
     for (let j = 0; j < activeDecls.length; j++) {
       const decl = activeDecls[j];
-      css += `${indent}${indent}${kebab(decl.property)}:${space}${formatValue(decl.value)};${nl}`;
+      css += `${ctx.indent}${ctx.indent}${kebab(decl.property)}:${ctx.space}${formatValue(decl.value)};${ctx.nl}`;
     }
-    css += `${indent}}${i === frames.length - 1 ? "" : nl}`;
+    css += `${ctx.indent}}${i === frames.length - 1 ? "" : ctx.nl}`;
   }
 
-  css += `${minify ? "" : nl}}`;
+  css += `${ctx.minify ? "" : ctx.nl}}`;
   return css;
 }
 
 function emitConditions(
   selector: string,
-  conditions: IRRule["conditions"],
-  indent: string,
-  nl: string,
-  space: string,
-  minify: boolean,
+  conditions: IRCondition[],
+  ctx: EmissionContext,
 ): string {
   const parts: string[] = [];
   for (let i = 0; i < conditions.length; i++) {
@@ -294,15 +356,11 @@ function emitConditions(
     if (entries.length === 0) continue;
 
     const clauses = entries
-      .map(([c, v]) => `style(${cond.variable}:${space}${c}):${space}${v}`)
+      .map(([c, v]) => `style(${cond.variable}:${ctx.space}${c}):${ctx.space}${v}`)
       .join("; else: ");
-    const result = `if(${clauses}; else:${space}${cond.defaultValue})`;
-    parts.push(`${indent}${kebab(cond.property)}:${space}${result};`);
+    const result = `if(${clauses}; else:${ctx.space}${cond.defaultValue})`;
+    parts.push(`${ctx.indent}${kebab(cond.property)}:${ctx.space}${result};`);
   }
   if (parts.length === 0) return "";
-  return `${selector}${space}{${nl}${parts.join(nl)}${nl}}`;
-}
-
-export function compileIR(ir: StyleIR, minify: boolean = false): string {
-  return generateCSS(ir, { minify });
+  return `${selector}${ctx.space}{${ctx.nl}${parts.join(ctx.nl)}${ctx.nl}}`;
 }

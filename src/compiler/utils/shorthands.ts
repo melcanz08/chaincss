@@ -828,7 +828,7 @@ export const macros: Record<string, MacroHandler> = {
   },
   clickScale: (_value: any, collector: any) => {
     collector.cursor = "pointer";
-    collector.transition = "transform 0.1s ease";
+    collector.transition ??= "transform 0.1s ease";
     nested(collector, {
       selector: "&:active",
       styles: { transform: "scale(0.95)" },
@@ -836,7 +836,7 @@ export const macros: Record<string, MacroHandler> = {
   },
   hoverLift: (v, c) => {
     const y = typeof v === "number" ? _px(v) : v || "4px";
-    c.transition = "transform 0.2s ease, box-shadow 0.2s ease";
+    c.transition ??= "transform 0.2s ease, box-shadow 0.2s ease";
     nested(c, {
       selector: "&:hover",
       styles: {
@@ -1032,8 +1032,10 @@ export const macros: Record<string, MacroHandler> = {
     const opacity = typeof v === "number" ? v : (v?.opacity ?? 0.6);
     const scale = v?.scale ?? 1;
     const blur = v?.blur;
-    if (!c.transition)
-      c.transition = "opacity.25s ease, transform.25s ease, filter.25s ease";
+    
+    // Fixed space formatting (opacity 0.25s) and switched to nullish assignment
+    c.transition ??= "opacity 0.25s ease, transform 0.25s ease, filter 0.25s ease";
+
     nested(c, {
       selector: ".group:has(> :hover) > &:not(:hover)",
       styles: {

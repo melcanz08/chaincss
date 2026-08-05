@@ -12,12 +12,13 @@ import {
   parseCSSValue,
   optimizeAST,
   printAST,
-  isConstant,
 } from "../ir/css-ast.js";
+import { recordHistory } from "../ir/utils.js";
 
-// Pre-compiled regex constants to prevent runtime re-compilation in loops
+// Pre-compiled regexes for fast-path exclusion
 const REGEX_KEYWORDS = /^[a-zA-Z-]+$/;
 const REGEX_NUMBERS = /^-?\d+(\.\d+)?$/;
+const REGEX_DIMENSIONS = /^-?\d+(\.\d+)?[a-zA-Z%]+$/;
 const REGEX_HEX_COLOR = /^#[0-9a-fA-F]{3,8}$/;
 
 /**
@@ -30,84 +31,25 @@ export const astOptimizer: OptimizationPass = {
   cost: "cheap",
   requiredFor: ["css", "atomic-css", "component", "sourcemap"],
 
-  optimize(ir: StyleIR, _context: any): OptimizationResult {
+  optimize(ir: StyleIR, _context?: any): OptimizationResult {
     let changes = 0;
     let bytesSaved = 0;
 
-    function optimizeRule(rule: IRRule) {
-      const decls = rule.declarations;
-      if (decls) {
-        for (let i = 0, len = decls.length; i < len; i++) {
-          const decl = decls[i];
-          if (!decl) continue;
-          const result = optimizeDeclaration(decl);
-          if (result.changed) {
-            changes++;
-            bytesSaved += result.bytesSaved;
-          }
-        }
+    const processDeclaration = (decl: IRDeclaration) => {
+      const result = optimizeDeclaration(decl);
+      if (result.changed) {
+        changes++;
+        bytesSaved += result.bytesSaved;
       }
-
-      const pseudoClasses = rule.pseudoClasses;
-      if (pseudoClasses) {
-        for (let i = 0, len = pseudoClasses.length; i < len; i++) {
-          const pc = pseudoClasses[i];
-          const pcDecls = pc?.declarations;
-          if (!pcDecls) continue;
-          for (let j = 0, jLen = pcDecls.length; j < jLen; j++) {
-            const decl = pcDecls[j];
-            if (!decl) continue;
-            const result = optimizeDeclaration(decl);
-            if (result.changed) {
-              changes++;
-              bytesSaved += result.bytesSaved;
-            }
-          }
-        }
-      }
-
-      const atRules = rule.atRules;
-      if (atRules) {
-        for (let i = 0, len = atRules.length; i < len; i++) {
-          const atRule = atRules[i];
-          if (!atRule) continue;
-          const atDecls = atRule.declarations;
-          if (atDecls) {
-            for (let j = 0, jLen = atDecls.length; j < jLen; j++) {
-              const decl = atDecls[j];
-              if (!decl) continue;
-              const result = optimizeDeclaration(decl);
-              if (result.changed) {
-                changes++;
-                bytesSaved += result.bytesSaved;
-              }
-            }
-          }
-          const nestedRules = atRule.nestedRules;
-          if (nestedRules) {
-            for (let j = 0, jLen = nestedRules.length; j < jLen; j++) {
-              const nested = nestedRules[j];
-              if (nested) optimizeRule(nested);
-            }
-          }
-        }
-      }
-
-      const nestedRules = rule.nestedRules;
-      if (nestedRules) {
-        for (let i = 0, len = nestedRules.length; i < len; i++) {
-          const nested = nestedRules[i];
-          if (nested) optimizeRule(nested);
-        }
-      }
-    }
+    };
 
     const rules = ir?.rules;
     if (rules) {
       for (let i = 0, len = rules.length; i < len; i++) {
         const rule = rules[i];
-        if (!rule || rule.isDead) continue;
-        optimizeRule(rule);
+        if (rule && !rule.isDead) {
+          visitRuleDeclarations(rule, processDeclaration);
+        }
       }
     }
 
@@ -123,15 +65,77 @@ export const astOptimizer: OptimizationPass = {
   },
 };
 
+/**
+ * Recursively visits all declarations within a rule, including pseudo-classes,
+ * at-rules, and nested rules.
+ */
+function visitRuleDeclarations(
+  rule: IRRule,
+  visitor: (decl: IRDeclaration) => void,
+): void {
+  if (!rule || rule.isDead) return;
+
+  // 1. Base Declarations
+  if (rule.declarations) {
+    for (let i = 0, len = rule.declarations.length; i < len; i++) {
+      const decl = rule.declarations[i];
+      if (decl) visitor(decl);
+    }
+  }
+
+  // 2. Pseudo Classes
+  if (rule.pseudoClasses) {
+    for (let i = 0, len = rule.pseudoClasses.length; i < len; i++) {
+      const pcDecls = rule.pseudoClasses[i]?.declarations;
+      if (pcDecls) {
+        for (let j = 0, jLen = pcDecls.length; j < jLen; j++) {
+          const decl = pcDecls[j];
+          if (decl) visitor(decl);
+        }
+      }
+    }
+  }
+
+  // 3. At-Rules
+  if (rule.atRules) {
+    for (let i = 0, len = rule.atRules.length; i < len; i++) {
+      const atRule = rule.atRules[i];
+      if (!atRule) continue;
+
+      if (atRule.declarations) {
+        for (let j = 0, jLen = atRule.declarations.length; j < jLen; j++) {
+          const decl = atRule.declarations[j];
+          if (decl) visitor(decl);
+        }
+      }
+
+      if (atRule.nestedRules) {
+        for (let j = 0, jLen = atRule.nestedRules.length; j < jLen; j++) {
+          const nested = atRule.nestedRules[j];
+          if (nested) visitRuleDeclarations(nested, visitor);
+        }
+      }
+    }
+  }
+
+  // 4. Nested Rules
+  if (rule.nestedRules) {
+    for (let i = 0, len = rule.nestedRules.length; i < len; i++) {
+      const nested = rule.nestedRules[i];
+      if (nested) visitRuleDeclarations(nested, visitor);
+    }
+  }
+}
+
 function optimizeDeclaration(decl: IRDeclaration): {
   changed: boolean;
   bytesSaved: number;
 } {
   const val = decl.value;
   if (val == null) return { changed: false, bytesSaved: 0 };
-  const originalValue = String(val);
+  const originalValue = String(val).trim();
 
-  // Skip if already optimized or not optimizable
+  // Fast-path guard to bypass unoptimizable static values
   if (!isOptimizable(originalValue)) {
     return { changed: false, bytesSaved: 0 };
   }
@@ -140,50 +144,50 @@ function optimizeDeclaration(decl: IRDeclaration): {
     // Build AST from string
     const ast = parseCSSValue(originalValue);
 
-    // Store AST in metadata for other passes if meta exists
-    if (decl.meta) {
-      (decl.meta as any).ast = ast;
-    }
-
-    // Run optimizer
+    // Run algebraic AST optimization
     const optimized = optimizeAST(ast);
 
-    // If AST is fully constant, we can simplify
-    if (isConstant(optimized)) {
-      const newValue = printAST(optimized);
-      if (newValue !== originalValue) {
-        const saved = originalValue.length - newValue.length;
-        decl.value = newValue;
-        if (!decl.history) {
-          decl.history = [];
-        }
-        decl.history.push({
-          pass: "ast-optimizer",
-          action: "optimized",
-          timestamp: Date.now(),
-          previous: originalValue,
-          reason: `Simplified: ${originalValue} → ${newValue}`,
-        });
-        return { changed: true, bytesSaved: Math.max(0, saved) };
-      }
+    // Store the OPTIMIZED AST in metadata for downstream passes
+    if (decl.meta) {
+      (decl.meta as any).ast = optimized;
+    }
+
+    // Convert optimized AST back to CSS value string
+    const newValue = printAST(optimized);
+
+    // Commit changes whenever the printed output is simplified/changed
+    if (newValue && newValue !== originalValue) {
+      const saved = originalValue.length - newValue.length;
+      decl.value = newValue;
+
+      recordHistory(
+        decl as any,
+        "ast-optimizer",
+        "optimized",
+        originalValue,
+        `Simplified expression: ${originalValue} → ${newValue}`,
+      );
+
+      return { changed: true, bytesSaved: Math.max(0, saved) };
     }
 
     return { changed: false, bytesSaved: 0 };
   } catch {
+    // Fail gracefully on non-parseable or malformed CSS values
     return { changed: false, bytesSaved: 0 };
   }
 }
 
 function isOptimizable(value: string): boolean {
-  // Skip simple values (keywords, single numbers, hex colors)
+  // Fast skip for simple literals (keywords, numbers, single dimension lengths, hex colors)
   if (REGEX_KEYWORDS.test(value)) return false;
   if (REGEX_NUMBERS.test(value)) return false;
+  if (REGEX_DIMENSIONS.test(value)) return false;
   if (REGEX_HEX_COLOR.test(value)) return false;
 
-  // Optimize: calc(), var(), function(), space-separated lists
+  // Must contain math functions, parens, CSS variables, or operators to be optimizable
   return (
-    value.includes("calc(") ||
-    value.includes("var(") ||
+    value.includes("(") ||
     value.includes("+") ||
     value.includes("-") ||
     value.includes("*") ||

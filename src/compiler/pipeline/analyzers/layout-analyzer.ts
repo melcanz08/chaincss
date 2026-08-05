@@ -152,7 +152,7 @@ const LAYOUT_PATTERNS: LayoutPattern[] = [
       overflow: "hidden",
       clip: "rect(0, 0, 0, 0)",
     },
-    minMatches: 4, // Correct structural floor constraint for complete safety
+    minMatches: 4,
   },
   {
     name: "container-responsive",
@@ -172,23 +172,85 @@ function toKebab(s: string) {
   return s.replace(/[A-Z]/g, (m) => "-" + m.toLowerCase()).toLowerCase();
 }
 
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/**
+ * Normalize a CSS value for comparison:
+ * - Lowercase
+ * - Collapse whitespace
+ * - Normalize zero values (0px → 0, 0rem → 0, etc.)
+ */
+function normalizeValue(val: string): string {
+  return val
+    .trim()
+    .toLowerCase()
+    .replace(/\b0(px|rem|em|%|vw|vh)\b/g, "0")
+    .replace(/\s+/g, " ");
+}
+
+/**
+ * Build a normalized property map from declarations.
+ * Expands common shorthands so that patterns using longhand properties
+ * still match when the author wrote shorthand.
+ * Fix 4: Stores all values for duplicate properties (arrays).
+ */
+function buildNormalizedPropMap(
+  declarations: IRRule["declarations"],
+): Map<string, string[]> {
+  const map = new Map<string, string[]>();
+
+  for (const d of declarations) {
+    const prop = toKebab(d.property).trim();
+    const val = normalizeValue(String(d.value));
+
+    const existing = map.get(prop) || [];
+    existing.push(val);
+    map.set(prop, existing);
+
+    // Fix 2: Expand shorthand properties to longhand equivalents
+    if (prop === "margin") {
+      const parts = val.split(/\s+/);
+      if (parts.length === 1 && parts[0] === "auto") {
+        map.set("margin-left", ["auto"]);
+        map.set("margin-right", ["auto"]);
+        map.set("margin-top", ["auto"]);
+        map.set("margin-bottom", ["auto"]);
+      } else if (parts.length === 2) {
+        map.set("margin-top", [parts[0]]);
+        map.set("margin-bottom", [parts[0]]);
+        map.set("margin-left", [parts[1]]);
+        map.set("margin-right", [parts[1]]);
+      }
+    } else if (prop === "place-items" && val === "center") {
+      if (!map.has("align-items")) map.set("align-items", ["center"]);
+      if (!map.has("justify-items")) map.set("justify-items", ["center"]);
+    }
+  }
+
+  return map;
+}
+
 function matchPattern(
   rule: IRRule,
   pattern: LayoutPattern,
 ): { confidence: number; matchedProperties: string[] } | null {
-  const propMap = new Map(
-    rule.declarations.map((d) => [toKebab(d.property), String(d.value)]),
-  );
+  const propMap = buildNormalizedPropMap(rule.declarations);
   const matchedProperties: string[] = [];
   let matched = 0;
   const totalRequired = Object.keys(pattern.required).length;
 
   for (const [prop, expected] of Object.entries(pattern.required)) {
-    const actualValue = propMap.get(prop);
-    const matches =
-      typeof expected === "function"
-        ? (expected as (val: string) => boolean)(actualValue || "")
-        : actualValue === String(expected);
+    const actualValues = propMap.get(prop);
+    if (!actualValues) continue;
+
+    const matches = actualValues.some((actualValue) => {
+      if (typeof expected === "function") {
+        return (expected as (val: string) => boolean)(actualValue);
+      }
+      return actualValue === normalizeValue(String(expected));
+    });
 
     if (matches) {
       matched++;
@@ -203,15 +265,15 @@ function matchPattern(
   }
 
   const minMatches = pattern.minMatches || totalRequired;
-
-  // Guard clause ensuring we hit the literal structural floor constraint first
   if (matched < minMatches) return null;
 
-  // Calculate confidence cleanly relative to total composition size
   const confidence = matched / totalRequired;
-
   return confidence >= 0.75 ? { confidence, matchedProperties } : null;
 }
+
+// ============================================================================
+// Analyzer
+// ============================================================================
 
 export const layoutAnalyzer: AnalysisPass = {
   name: "layout-analyzer",
@@ -223,33 +285,64 @@ export const layoutAnalyzer: AnalysisPass = {
       { ids: string[]; selectors: string[] }
     >();
 
-    for (const rule of ir.rules) {
-      if (rule.isDead) continue;
+    // Fix 5: Guard against undefined diagnostics
+    if (!ir.diagnostics) ir.diagnostics = [];
+
+    // Fix 1: Recursively analyze rules including nested ones
+    function analyzeRule(rule: IRRule): void {
+      if (rule.isDead) return;
+
+      // Fix 3: Track best match per rule to avoid duplicate annotations
+      let bestMatch: {
+        pattern: LayoutPattern;
+        result: NonNullable<ReturnType<typeof matchPattern>>;
+      } | null = null;
 
       for (const pattern of LAYOUT_PATTERNS) {
         const result = matchPattern(rule, pattern);
         if (result) {
-          annotations.push({
-            nodeId: rule.id,
-            type: "layout-pattern",
-            data: {
-              pattern: pattern.name,
-              macro: pattern.macro,
-              confidence: result.confidence,
-              matchedProperties: result.matchedProperties,
-            },
-            confidence: result.confidence,
-          });
-
-          const entry = patternCounts.get(pattern.name) || {
-            ids: [],
-            selectors: [],
-          };
-          entry.ids.push(rule.id);
-          entry.selectors.push(rule.selector);
-          patternCounts.set(pattern.name, entry);
+          if (
+            !bestMatch ||
+            Object.keys(pattern.required).length >
+              Object.keys(bestMatch.pattern.required).length
+          ) {
+            bestMatch = { pattern, result };
+          }
         }
       }
+
+      if (bestMatch) {
+        annotations.push({
+          nodeId: rule.id,
+          type: "layout-pattern",
+          data: {
+            pattern: bestMatch.pattern.name,
+            macro: bestMatch.pattern.macro,
+            confidence: bestMatch.result.confidence,
+            matchedProperties: bestMatch.result.matchedProperties,
+          },
+          confidence: bestMatch.result.confidence,
+        });
+
+        const entry = patternCounts.get(bestMatch.pattern.name) || {
+          ids: [],
+          selectors: [],
+        };
+        entry.ids.push(rule.id);
+        entry.selectors.push(rule.selector);
+        patternCounts.set(bestMatch.pattern.name, entry);
+      }
+
+      // Fix 1: Recurse into nested rules
+      if (rule.nestedRules) {
+        for (const nested of rule.nestedRules) {
+          analyzeRule(nested);
+        }
+      }
+    }
+
+    for (const rule of ir.rules) {
+      analyzeRule(rule);
     }
 
     // Process duplicate collection mappings

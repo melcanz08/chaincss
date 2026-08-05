@@ -25,9 +25,12 @@ import type {
 
 /**
  * Normalize a CSS property name to kebab-case.
+ * Preserves CSS custom properties (--varName) as they are case-sensitive.
  * Enforced at parse time so downstream passes don't handle duplicate cases.
  */
 function normalizeProperty(prop: string): string {
+  // Preserve CSS custom variables (--primaryColor, --bg-1)
+  if (prop.startsWith("--")) return prop;
   if (!/[A-Z]/.test(prop)) return prop;
 
   const needsLeadingDash = /^[A-Z]/.test(prop) || /^ms[A-Z]/.test(prop);
@@ -116,8 +119,7 @@ export function parseIR(
         ) {
           // create nested rule for later lowering
           const nestedSelector = prop.replace(/^&/, rule.selector); // ".btn .child"
-          const nestedRule = createRule(nestedSelector, rule.source);
-          (nestedRule as any).parentId = rule.id;
+          const nestedRule = createRule(nestedSelector, rule.source, rule.id);
           for (const [p, v] of Object.entries(value)) {
             if (typeof v === "string" || typeof v === "number") {
               nestedRule.declarations.push(
@@ -179,6 +181,8 @@ export function parseIR(
     if (allAtRules && Array.isArray(allAtRules)) {
       for (let i = 0; i < allAtRules.length; i++) {
         const atRule = allAtRules[i];
+        if (!atRule || typeof atRule !== "object") continue;
+
         const type = atRule.type || "media";
 
         const templateAtRule: IRAtRule = {
@@ -254,6 +258,7 @@ export function parseIR(
             keyframes: templateAtRule.keyframes
               ? templateAtRule.keyframes.map((f) => ({
                   ...f,
+                  id: nextId("frame"),
                   declarations: [...f.declarations],
                 }))
               : undefined,

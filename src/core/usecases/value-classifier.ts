@@ -19,16 +19,27 @@ export function classifyValue(value: unknown, propKey?: string): ValueClass {
     // Content property exception: `content: "'${icon}'"` is static CSS, not JS interpolation
     // Your original logic kept it static — preserve it
     if (propKey === "content") {
-      // If it contains ${ but is quoted CSS content, treat as static
-      // e.g. content: "'\\e001'" or content: "attr(data-${x})" should NOT be dynamic in CSS sense
-      // Keep your exception: content + ${ => static
-      if ((value as string).includes(DOLLAR_BRACE)) return "static";
+      const s = value as string;
+      // Only treat as static if ${ appears inside CSS quotes (escaped content)
+      // Pattern: ${ inside single or double quotes = static CSS content
+      // Pattern: bare ${ outside quotes = dynamic JS interpolation
+      const quotedDollarBrace = /(['"])(?:(?!\1).)*\$\{(?:(?!\1).)*\1/;
+      if (quotedDollarBrace.test(s)) {
+        // ${ inside CSS string quotes — e.g. content: "'\e${hex}'" or content: "attr(data-${x})"
+        return "static";
+      }
+      // If ${ appears outside quotes, it IS dynamic — e.g. content: `${icon}`
+      if (s.includes(DOLLAR_BRACE)) return "dynamic";
+      return "static";
     }
 
     // Fast prefix checks without startsWith alloc: charCode
     const s = value as string;
     if (s.length >= 6) {
-      // theme. = 5 chars + dot, props. = 6
+      // NOTE: "theme." and "props." string prefixes are classified as dynamic
+      // but string-based token references are NOT fully supported yet.
+      // Use $token.path syntax or function-based dynamic values instead.
+      // See: token-resolver.ts for supported token reference formats.
       if (s[0] === "t" && s.startsWith(THEME_PREFIX)) return "dynamic";
       if (s[0] === "p" && s.startsWith(PROPS_PREFIX)) return "dynamic";
     }
@@ -40,8 +51,16 @@ export function classifyValue(value: unknown, propKey?: string): ValueClass {
 
   if (t === "number") return "static";
 
-  // Booleans, null, etc are invalid for CSSPrimitiveValue but we treat boolean as invalid to filter out
-  // Keep your original fallback: anything else invalid
+  // Arrays: CSS fallback values like ["-webkit-flex", "flex"]
+  if (Array.isArray(value)) {
+    return (value as unknown[]).every(
+      (v) => typeof v === "string" || typeof v === "number",
+    )
+      ? "static"
+      : "invalid";
+  }
+
+  // Booleans, null, etc are invalid
   return "invalid";
 }
 

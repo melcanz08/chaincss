@@ -14,7 +14,11 @@ export type {
 
 // Config
 export { defineConfig } from "@shared/config/index.js";
-export type { ChainCSSUserConfig, MacroHandler } from "@shared/config/index.js";
+export type { 
+  ChainCSSUserConfig, 
+  ChainCSSConfig,
+  MacroHandler,
+} from "@shared/config/index.js";
 
 // Types
 export type {

@@ -34,7 +34,7 @@ export interface Emitter {
   readonly target: EmitterTarget;
   readonly fileName: string;
   readonly contentType: string;
-  emit(ir: StyleIR, options?: Record<string, any>): string;
+  emit(ir: StyleIR, options?: Record<string, unknown>): string;
 }
 
 // ============================================================================
@@ -46,9 +46,9 @@ export const cssEmitter: Emitter = {
   fileName: "styles.css",
   contentType: "text/css",
 
-  emit(ir: StyleIR, options?: Record<string, any>): string {
-    const minify = options?.minify ?? false;
-    const sourceMap = options?.sourceMap ?? false;
+  emit(ir: StyleIR, options?: Record<string, unknown>): string {
+    const minify = Boolean(options?.minify);
+    const sourceMap = Boolean(options?.sourceMap);
 
     let css = generateCSS(ir, { minify });
 
@@ -89,12 +89,13 @@ export const atomicCSSEmitter: Emitter = {
   fileName: "atomic.css",
   contentType: "text/css",
 
-  emit(ir: StyleIR, options?: Record<string, any>): string {
-    const minify = options?.minify ?? false;
+  emit(ir: StyleIR, options?: Record<string, unknown>): string {
+    const minify = Boolean(options?.minify);
     const atomicRules = ir.rules.filter(
       (r) =>
         !r.isDead &&
-        (r.passMeta?.optimization?.atomic?.isAtomic || r.meta?.atomic),
+        (r.passMeta?.optimization?.atomic?.isAtomic ||
+          (r.meta as { atomic?: boolean })?.atomic),
     );
 
     if (atomicRules.length === 0) {
@@ -121,8 +122,8 @@ export const tailwindEmitter: Emitter = {
   fileName: "tailwind.config.generated.js",
   contentType: "application/javascript",
 
-  emit(ir: StyleIR, _options?: Record<string, any>): string {
-    const tokens: Record<string, any> = {};
+  emit(ir: StyleIR, _options?: Record<string, unknown>): string {
+    const tokens: Record<string, Record<string, unknown>> = {};
 
     // Extract design tokens from the graph/symbols
     for (const rule of ir.rules) {
@@ -155,11 +156,11 @@ export const tailwindEmitter: Emitter = {
     const config = {
       theme: {
         extend: {
-          colors: tokens.colors || {},
+          colors: tokens.colors || tokens.color || {},
           spacing: tokens.spacing || tokens.space || {},
-          borderRadius: tokens.borderRadius || {},
-          boxShadow: tokens.shadows || tokens.boxShadow || {},
-          fontFamily: tokens.fontFamily || {},
+          borderRadius: tokens.borderRadius || tokens.radius || {},
+          boxShadow: tokens.boxShadow || tokens.shadows || tokens.shadow || {},
+          fontFamily: tokens.fontFamily || tokens.font || {},
           fontSize: tokens.fontSize || {},
         },
       },
@@ -178,8 +179,8 @@ export const designTokensEmitter: Emitter = {
   fileName: "design-tokens.json",
   contentType: "application/json",
 
-  emit(ir: StyleIR, _options?: Record<string, any>): string {
-    const tokens: Record<string, any> = {};
+  emit(ir: StyleIR, _options?: Record<string, unknown>): string {
+    const tokens: Record<string, unknown> = {};
 
     for (const rule of ir.rules) {
       if (rule.isDead) continue;
@@ -195,9 +196,14 @@ export const designTokensEmitter: Emitter = {
       const semantic = rule.passMeta?.analysis?.semantic;
       if (semantic?.tokens && semantic.tokens.length > 0) {
         if (!tokens._relationships) tokens._relationships = [];
+        const rels = tokens._relationships as Array<{
+          token: string;
+          ruleId: string;
+          selector: string;
+        }>;
         for (const token of semantic.tokens) {
-          tokens._relationships.push({
-            token: typeof token === "string" ? token : (token as any).name,
+          rels.push({
+            token: typeof token === "string" ? token : (token as { name: string }).name,
             ruleId: rule.id,
             selector: rule.selector,
           });
@@ -212,13 +218,21 @@ export const designTokensEmitter: Emitter = {
       );
       if (derivationEdges.length > 0) {
         if (!tokens._derivations) tokens._derivations = [];
+        const ders = tokens._derivations as Array<{
+          source: string;
+          target: string;
+          method?: string;
+        }>;
         for (const edge of derivationEdges) {
           const fromNode = ir.graph.nodes.get(edge.from);
           const toNode = ir.graph.nodes.get(edge.to);
-          tokens._derivations.push({
+          ders.push({
             source: fromNode?.selector || edge.from,
             target: toNode?.selector || edge.to,
-            method: edge.metadata?.method,
+            method:
+              typeof edge.metadata?.method === "string"
+                ? edge.metadata.method
+                : undefined,
           });
         }
       }
@@ -237,8 +251,8 @@ export const figmaEmitter: Emitter = {
   fileName: "figma-tokens.json",
   contentType: "application/json",
 
-  emit(ir: StyleIR, _options?: Record<string, any>): string {
-    const figmaTokens: Record<string, any> = {};
+  emit(ir: StyleIR, _options?: Record<string, unknown>): string {
+    const figmaTokens: Record<string, unknown> = {};
 
     for (const rule of ir.rules) {
       if (rule.isDead) continue;
@@ -248,15 +262,12 @@ export const figmaEmitter: Emitter = {
           const name = decl.property.replace(/^--/, "");
           const value = String(decl.value);
 
-          // Figma token format: {"colors": {"primary": {"500": {"value": "#6366f1", "type": "color"}}}}
+          const parts = name.split("-");
           if (value.startsWith("#") || value.startsWith("rgb")) {
-            const parts = name.split("-");
             buildFigmaToken(figmaTokens, parts, { value, type: "color" });
           } else if (/^\d+(\.\d+)?(px|rem|em|%|vw|vh)$/.test(value)) {
-            const parts = name.split("-");
             buildFigmaToken(figmaTokens, parts, { value, type: "dimension" });
           } else {
-            const parts = name.split("-");
             buildFigmaToken(figmaTokens, parts, { value, type: "string" });
           }
         }
@@ -276,7 +287,7 @@ export const graphJSONEmitter: Emitter = {
   fileName: "chaincss-graph.json",
   contentType: "application/json",
 
-  emit(ir: StyleIR, _options?: Record<string, any>): string {
+  emit(ir: StyleIR, _options?: Record<string, unknown>): string {
     if (!ir.graph) return "{}";
     const exportData = exportGraphAsJSON(ir.graph, ir);
     return JSON.stringify(exportData, null, 2);
@@ -304,26 +315,28 @@ export function getAvailableTargets(): EmitterTarget[] {
 export function emit(
   ir: StyleIR,
   target: EmitterTarget,
-  options?: Record<string, any>,
+  options?: Record<string, unknown>,
 ): EmitterResult | null {
   const emitter = emitterRegistry.get(target);
   if (!emitter) return null;
 
   const output = emitter.emit(ir, options);
+  const encoder = new TextEncoder();
+
   return {
     target,
     output,
     fileName: emitter.fileName,
     contentType: emitter.contentType,
     nodeCount: ir.rules.filter((r) => !r.isDead).length,
-    bytes: Buffer.byteLength(output, "utf8"),
+    bytes: encoder.encode(output).length,
   };
 }
 
 export function emitAll(
   ir: StyleIR,
   targets?: EmitterTarget[],
-  options?: Record<string, any>,
+  options?: Record<string, unknown>,
 ): EmitterResult[] {
   const targetsToUse = targets || getAvailableTargets();
   const results: EmitterResult[] = [];
@@ -349,28 +362,34 @@ registerEmitter(graphJSONEmitter);
 // ============================================================================
 
 function setNestedValue(
-  obj: Record<string, any>,
+  obj: Record<string, unknown>,
   path: string,
-  value: any,
+  value: unknown,
 ): void {
   const parts = path.split(".");
   let current = obj;
   for (let i = 0; i < parts.length - 1; i++) {
-    if (!current[parts[i]]) current[parts[i]] = {};
-    current = current[parts[i]];
+    const key = parts[i];
+    if (!current[key] || typeof current[key] !== "object") {
+      current[key] = {};
+    }
+    current = current[key] as Record<string, unknown>;
   }
   current[parts[parts.length - 1]] = value;
 }
 
 function buildFigmaToken(
-  obj: Record<string, any>,
+  obj: Record<string, unknown>,
   pathParts: string[],
   token: { value: string; type: string },
 ): void {
   let current = obj;
   for (let i = 0; i < pathParts.length - 1; i++) {
-    if (!current[pathParts[i]]) current[pathParts[i]] = {};
-    current = current[pathParts[i]];
+    const key = pathParts[i];
+    if (!current[key] || typeof current[key] !== "object") {
+      current[key] = {};
+    }
+    current = current[key] as Record<string, unknown>;
   }
   current[pathParts[pathParts.length - 1]] = token;
 }

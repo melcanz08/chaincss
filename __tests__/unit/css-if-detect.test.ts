@@ -102,7 +102,7 @@ describe('CSS if() Detection', () => {
         { property: 'color', variable: '--invert', conditions: { true: 'white' }, defaultValue: 'black' },
       ]);
 
-      expect(css).toContain('.header--invert-true');
+      expect(css).toContain('.header.invert-true');
       expect(css).toContain('color: white');
     });
 
@@ -140,7 +140,7 @@ describe('CSS if() Detection', () => {
       expect(css).toContain('if(style(--theme: true)');
       expect(css).toContain('@supports not (margin: if(style(--a: b): 0; else: 0))');
       expect(css).toContain('borderRadius: 8px');
-      expect(css).toContain('.card--theme-true');
+      expect(css).toContain('.card.theme-true');
     });
   });
 });

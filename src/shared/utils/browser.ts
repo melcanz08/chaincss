@@ -80,7 +80,42 @@ export function deepClone<T>(obj: T): T {
 }
 
 export function deepEqual(a: any, b: any): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
+  // Fast path: same reference
+  if (a === b) return true;
+  
+  // Null/undefined check
+  if (a == null || b == null) return a === b;
+  
+  // Type mismatch
+  if (typeof a !== typeof b) return false;
+  
+  // Primitives (already handled by ===, but catch NaN)
+  if (typeof a !== 'object') return a === b || (Number.isNaN(a) && Number.isNaN(b));
+  
+  // Arrays
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (!deepEqual(a[i], b[i])) return false;
+    }
+    return true;
+  }
+  
+  // One is array, other is not
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  
+  // Objects
+  const keysA = Object.keys(a).sort();
+  const keysB = Object.keys(b).sort();
+  
+  if (keysA.length !== keysB.length) return false;
+  
+  for (let i = 0; i < keysA.length; i++) {
+    if (keysA[i] !== keysB[i]) return false;
+    if (!deepEqual(a[keysA[i]], b[keysB[i]])) return false;
+  }
+  
+  return true;
 }
 
 export function pick<T extends Record<string, any>, K extends keyof T>(
@@ -180,10 +215,13 @@ export function debounce<T extends (...args: any[]) => any>(
   fn: T,
   delay: number,
 ): (...args: Parameters<T>) => void {
-  let timer: NodeJS.Timeout;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   return (...args: Parameters<T>) => {
-    clearTimeout(timer);
-    timer = setTimeout(() => fn(...args), delay);
+    if (timer !== undefined) clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = undefined;
+      fn(...args);
+    }, delay);
   };
 }
 
@@ -266,13 +304,13 @@ export const logError = (msg: string, ...args: any[]) => {
 };
 
 export function devWarn(message: string, ...args: any[]): void {
-  if (process.env.NODE_ENV === "development") {
+  if (getNodeEnv() === "development") {
     console.warn(`[ChainCSS Dev] ${message}`, ...args);
   }
 }
 
 export function devLog(message: string, ...args: any[]): void {
-  if (process.env.NODE_ENV === "development") {
+  if (getNodeEnv() === "development") {
     console.log(`[ChainCSS Dev] ${message}`, ...args);
   }
 }
@@ -305,8 +343,19 @@ export function generateStyleId(prefix: string = "chain"): string {
 }
 
 export const isBrowser = typeof window !== "undefined";
-export const isDevelopment = process.env.NODE_ENV === "development";
-export const isProduction = process.env.NODE_ENV === "production";
+
+// Safe process.env access — works in bundlers AND raw browser
+function getNodeEnv(): string | undefined {
+  try {
+    if (typeof process !== 'undefined' && process.env) {
+      return process.env.NODE_ENV;
+    }
+  } catch {}
+  return undefined;
+}
+
+export const isDevelopment = getNodeEnv() === "development";
+export const isProduction = getNodeEnv() === "production";
 
 export function cn(...classes: (string | undefined | null | false)[]): string {
   return classes.filter(Boolean).join(" ");

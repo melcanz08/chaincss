@@ -1,3 +1,5 @@
+// src/compiler/pipeline/normalizers/layout-macros.ts
+
 export interface LayoutMacro {
   name: string;
   description: string;
@@ -225,13 +227,17 @@ export function registerLayoutMacro(
   macro: LayoutMacro,
   allowOverride = false,
 ) {
-  if (!allowOverride && BUILTIN_LAYOUT_MACROS[name]) {
+  if (
+    !allowOverride &&
+    Object.prototype.hasOwnProperty.call(BUILTIN_LAYOUT_MACROS, name)
+  ) {
     console.warn(
       `[ChainCSS] layout macro '${name}' overrides builtin. Use allowOverride:true to silence.`,
     );
   }
   LAYOUT_MACROS[name] = { ...macro, name };
 }
+
 export function registerLayoutMacros(
   macros: Record<string, LayoutMacro>,
   allowOverride = false,
@@ -242,12 +248,16 @@ export function registerLayoutMacros(
     }
   }
 }
+
 export function resetLayoutMacros() {
   LAYOUT_MACROS = { ...BUILTIN_LAYOUT_MACROS };
 }
 
 export function resolveLayoutMacro(name: string): LayoutMacro | null {
-  return LAYOUT_MACROS[name] || null;
+  if (Object.prototype.hasOwnProperty.call(LAYOUT_MACROS, name)) {
+    return LAYOUT_MACROS[name];
+  }
+  return null;
 }
 
 export function expandLayoutMacro(name: string): Record<string, any> | null {
@@ -262,25 +272,36 @@ export function expandLayoutMacro(name: string): Record<string, any> | null {
     for (const query in mq) {
       if (!Object.prototype.hasOwnProperty.call(mq, query)) continue;
       const props = mq[query];
-      if (query.startsWith("@container")) {
-        result.atRules = result.atRules || [];
-        const cleanQuery = query.replace("@container", "").trim();
-        result.atRules.push({
-          type: "container",
-          query: cleanQuery,
-          styles: props,
-          nestedRules: [],
-        });
-      } else if (
+
+      if (
         query.charCodeAt(0) === 38 /* '&' */ ||
         query.charCodeAt(0) === 58 /* ':' */
       ) {
         result[query] = props;
+      } else if (query.startsWith("@")) {
+        result.atRules = result.atRules || [];
+        const spaceIdx = query.indexOf(" ");
+        const atType =
+          spaceIdx !== -1
+            ? query.slice(1, spaceIdx).toLowerCase()
+            : query.slice(1).toLowerCase();
+        const cleanQuery =
+          spaceIdx !== -1 ? query.slice(spaceIdx + 1).trim() : "";
+
+        result.atRules.push({
+          type: atType,
+          query: cleanQuery,
+          styles: props,
+          nestedRules: [],
+        });
       } else {
         result.atRules = result.atRules || [];
+        const cleanQuery = query.startsWith("@media")
+          ? query.replace("@media", "").trim()
+          : query;
         result.atRules.push({
           type: "media",
-          query,
+          query: cleanQuery,
           styles: props,
           nestedRules: [],
         });
@@ -293,11 +314,32 @@ export function expandLayoutMacro(name: string): Record<string, any> | null {
 export function getAvailableMacros(): string[] {
   return Object.keys(LAYOUT_MACROS);
 }
+
 export function getMacroDescription(name: string): string | null {
   return resolveLayoutMacro(name)?.description || null;
 }
 
 const contrastCache = new Map<string, string>();
+
+const NAMED_COLORS: Record<string, [number, number, number]> = {
+  black: [0, 0, 0],
+  white: [255, 255, 255],
+  red: [255, 0, 0],
+  green: [0, 128, 0],
+  blue: [0, 0, 255],
+  yellow: [255, 255, 0],
+  cyan: [0, 255, 255],
+  magenta: [255, 0, 255],
+  silver: [192, 192, 192],
+  gray: [128, 128, 128],
+  grey: [128, 128, 128],
+  maroon: [128, 0, 0],
+  navy: [0, 0, 128],
+  olive: [128, 128, 0],
+  purple: [128, 0, 128],
+  teal: [0, 128, 128],
+  transparent: [255, 255, 255],
+};
 
 export function autoContrast(bgColor: string): string {
   const input = (bgColor || "").trim().toLowerCase();
@@ -309,32 +351,37 @@ export function autoContrast(bgColor: string): string {
   let r = 128,
     g = 128,
     b = 128;
-  let hex = "";
-  if (input.charCodeAt(0) === 35 /* '#' */) hex = input.slice(1);
-  else if (/^[a-f0-9]{3,8}$/.test(input)) hex = input;
 
-  if (hex) {
-    if (hex.length === 3) {
-      r = parseInt(hex[0] + hex[0], 16);
-      g = parseInt(hex[1] + hex[1], 16);
-      b = parseInt(hex[2] + hex[2], 16);
-    } else if (hex.length >= 6) {
-      r = parseInt(hex.slice(0, 2), 16);
-      g = parseInt(hex.slice(2, 4), 16);
-      b = parseInt(hex.slice(4, 6), 16);
-    }
-  } else if (input.startsWith("rgb")) {
-    const m = input.match(/(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
-    if (m) {
-      r = parseInt(m[1], 10);
-      g = parseInt(m[2], 10);
-      b = parseInt(m[3], 10);
-    }
-  } else if (input.startsWith("hsl")) {
-    const m = input.match(/hsl\(\s*\d+,\s*[\d.]+%?\s*,\s*([\d.]+)%/);
-    if (m) {
-      const l = parseFloat(m[1]);
-      r = g = b = Math.round(l * 2.55);
+  if (Object.prototype.hasOwnProperty.call(NAMED_COLORS, input)) {
+    [r, g, b] = NAMED_COLORS[input];
+  } else {
+    let hex = "";
+    if (input.charCodeAt(0) === 35 /* '#' */) hex = input.slice(1);
+    else if (/^[a-f0-9]{3,8}$/.test(input)) hex = input;
+
+    if (hex) {
+      if (hex.length === 3 || hex.length === 4) {
+        r = parseInt(hex[0] + hex[0], 16);
+        g = parseInt(hex[1] + hex[1], 16);
+        b = parseInt(hex[2] + hex[2], 16);
+      } else if (hex.length >= 6) {
+        r = parseInt(hex.slice(0, 2), 16);
+        g = parseInt(hex.slice(2, 4), 16);
+        b = parseInt(hex.slice(4, 6), 16);
+      }
+    } else if (input.startsWith("rgb")) {
+      const m = input.match(/(\d+)[,\s]+\s*(\d+)[,\s]+\s*(\d+)/);
+      if (m) {
+        r = parseInt(m[1], 10);
+        g = parseInt(m[2], 10);
+        b = parseInt(m[3], 10);
+      }
+    } else if (input.startsWith("hsl")) {
+      const m = input.match(/hsl[a]?\(\s*\d+deg?[,\s]+\s*[\d.]+%?[,\s]+\s*([\d.]+)%/);
+      if (m) {
+        const l = parseFloat(m[1]);
+        r = g = b = Math.round(l * 2.55);
+      }
     }
   }
 

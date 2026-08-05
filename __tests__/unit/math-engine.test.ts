@@ -1,8 +1,8 @@
 // ============================================================================
-// FILE: __tests__/math-engine.test.ts (NEW)
+// FILE: __tests__/math-engine.test.ts
 // ============================================================================
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { math, add, subtract, multiply, divide, fluidType, convert, toPx, scale } from '../../src/compiler/math-engine.js';
 
 describe('Math Engine', () => {
@@ -27,9 +27,9 @@ describe('Math Engine', () => {
       expect(result).toEqual({ value: 100, unit: '%' });
     });
 
-    it('parses numbers as pixels', () => {
+    it('parses bare numbers as unitless', () => {
       const result = math.parse(42);
-      expect(result).toEqual({ value: 42, unit: 'px' });
+      expect(result).toEqual({ value: 42, unit: '' });
     });
 
     it('parses negative values', () => {
@@ -92,9 +92,10 @@ describe('Math Engine', () => {
       expect(result.expression).toContain('2vw');
     });
 
-    it('handles number input as px', () => {
+    it('handles number input without assuming px', () => {
       const result = add(10, 20);
-      expect(result.toString()).toBe('30px');
+      expect(result.value).toBe(30);
+      expect(result.unit).toBe('');
     });
 
     it('includes explanations', () => {
@@ -114,9 +115,11 @@ describe('Math Engine', () => {
       expect(result.toString()).toBe('-40px');
     });
 
-    it('resolves rem - px with context', () => {
+    it('resolves rem - px and keeps rem unit', () => {
       const result = subtract('2rem', '10px', { rootFontSize: 16 });
-      expect(result.toString()).toBe('22px');
+      // 2rem = 32px, 32px - 10px = 22px = 1.375rem
+      expect(result.unit).toBe('rem');
+      expect(result.value).toBeCloseTo(1.375);
     });
   });
 

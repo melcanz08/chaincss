@@ -19,10 +19,9 @@ import type {
   OptimizationContext,
   LoweringContext,
 } from "./pipeline-types.js";
-import type { StyleIR } from "./ir/types.js";
 
 // ============================================================================
-// Context-Aware Pass Interfaces (new)
+// Context-Aware Pass Interfaces
 // ============================================================================
 
 export interface ContextNormalizationPass {
@@ -81,17 +80,7 @@ export function adaptValidationPass(
   return {
     name: pass.name,
     validate(ctx: CompilerContext): ValidationResult {
-      const result = pass.validate(ctx.ir, valCtx);
-      // Auto-collect diagnostics into context
-      if (result.diagnostics) {
-        for (const d of result.diagnostics) {
-          ctx.addDiagnostic(d.severity, d.message, pass.name, {
-            suggestion: d.suggestion,
-            nodeId: d.nodeId,
-          });
-        }
-      }
-      return result;
+      return pass.validate(ctx.ir, valCtx);
     },
   };
 }
@@ -123,14 +112,10 @@ export function adaptOptimizationPass(
     cost: pass.cost,
     requiredFor: [...pass.requiredFor],
     optimize(ctx: CompilerContext): OptimizationResult {
-      // Use cached graph/symbols from context instead of rebuilding
       if (!optCtx.atomicUsageMap) {
         optCtx.atomicUsageMap = new Map();
       }
-      const result = pass.optimize(ctx.ir, optCtx);
-      // Store result for later passes
-      ctx.setPassResult(pass.name, result as any);
-      return result;
+      return pass.optimize(ctx.ir, optCtx);
     },
   };
 }
@@ -151,12 +136,36 @@ export function adaptLoweringPass(
 }
 
 // ============================================================================
+// Helpers
+// ============================================================================
+
+function collectDiagnostics(
+  ctx: CompilerContext,
+  passName: string,
+  diagnostics?: Array<{
+    severity: "error" | "warning" | "info" | "hint";
+    message: string;
+    suggestion?: string;
+    nodeId?: string;
+  }>,
+): void {
+  if (diagnostics) {
+    for (const d of diagnostics) {
+      ctx.addDiagnostic(d.severity, d.message, passName, {
+        suggestion: d.suggestion,
+        nodeId: d.nodeId,
+      });
+    }
+  }
+}
+
+// ============================================================================
 // Pipeline with Context
 // ============================================================================
 
 /**
  * Run all context-aware passes in sequence.
- * Updates the CompilerContext after each pass.
+ * Updates the CompilerContext after each pass with high-precision timing.
  */
 export function runContextPipeline(
   ctx: CompilerContext,
@@ -168,18 +177,22 @@ export function runContextPipeline(
     lowering?: ContextLoweringPass[];
   },
 ): CompilerContext {
-  const startTime = Date.now();
+  const pipelineStart = performance.now();
 
   // Normalization
   if (passes.normalization) {
     for (const pass of passes.normalization) {
+      const start = performance.now();
       const result = pass.normalize(ctx);
-      ctx.updateIR(result.ir);
+      const duration = performance.now() - start;
+
+      if (result.ir) ctx.updateIR(result.ir);
+      collectDiagnostics(ctx, pass.name, (result as any).diagnostics);
       ctx.setPassResult(pass.name, result as any);
       ctx.timeline.push({
         stage: "normalization",
         pass: pass.name,
-        duration: 0,
+        duration,
         result: result as any,
       });
     }
@@ -188,12 +201,16 @@ export function runContextPipeline(
   // Validation
   if (passes.validation) {
     for (const pass of passes.validation) {
+      const start = performance.now();
       const result = pass.validate(ctx);
+      const duration = performance.now() - start;
+
+      collectDiagnostics(ctx, pass.name, result.diagnostics);
       ctx.setPassResult(pass.name, result as any);
       ctx.timeline.push({
         stage: "validation",
         pass: pass.name,
-        duration: 0,
+        duration,
         result: result as any,
       });
     }
@@ -202,13 +219,17 @@ export function runContextPipeline(
   // Analysis
   if (passes.analysis) {
     for (const pass of passes.analysis) {
+      const start = performance.now();
       const result = pass.analyze(ctx);
-      ctx.updateIR(result.ir);
+      const duration = performance.now() - start;
+
+      if (result.ir) ctx.updateIR(result.ir);
+      collectDiagnostics(ctx, pass.name, (result as any).diagnostics);
       ctx.setPassResult(pass.name, result as any);
       ctx.timeline.push({
         stage: "analysis",
         pass: pass.name,
-        duration: 0,
+        duration,
         result: result as any,
       });
     }
@@ -217,13 +238,17 @@ export function runContextPipeline(
   // Optimization
   if (passes.optimization) {
     for (const pass of passes.optimization) {
+      const start = performance.now();
       const result = pass.optimize(ctx);
-      ctx.updateIR(result.ir);
+      const duration = performance.now() - start;
+
+      if (result.ir) ctx.updateIR(result.ir);
+      collectDiagnostics(ctx, pass.name, (result as any).diagnostics);
       ctx.setPassResult(pass.name, result as any);
       ctx.timeline.push({
         stage: "optimization",
         pass: pass.name,
-        duration: 0,
+        duration,
         result: result as any,
       });
     }
@@ -232,18 +257,22 @@ export function runContextPipeline(
   // Lowering
   if (passes.lowering) {
     for (const pass of passes.lowering) {
+      const start = performance.now();
       const result = pass.generate(ctx);
-      ctx.updateIR(result.ir);
+      const duration = performance.now() - start;
+
+      if (result.ir) ctx.updateIR(result.ir);
+      collectDiagnostics(ctx, pass.name, (result as any).diagnostics);
       ctx.setPassResult(pass.name, result as any);
       ctx.timeline.push({
         stage: "lowering",
         pass: pass.name,
-        duration: 0,
+        duration,
         result: result as any,
       });
     }
   }
 
-  ctx.recordCompile(Date.now() - startTime);
+  ctx.recordCompile(performance.now() - pipelineStart);
   return ctx;
 }

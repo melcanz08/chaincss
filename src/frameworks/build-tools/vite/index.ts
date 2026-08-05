@@ -52,6 +52,9 @@ function writeClassFileContent(
         if (k.startsWith("_")) continue;
         if (typeof v === "function") {
           lines.push(`    "${k}": ${v.toString()},`);
+        } else if (typeof v === "string" && v.trim().length > 0) {
+          // Support pre-stringified function expressions from build pipelines
+          lines.push(`    "${k}": ${v},`);
         }
       }
       lines.push(`  }`);
@@ -215,16 +218,27 @@ export default function chaincssPlugin(
     }
   }
   async function compileAllStyles() {
-    const srcDir = path.join(root, "src");
-    if (!fs.existsSync(srcDir)) return "";
+    if (!fs.existsSync(root)) return "";
     const cachePath = path.join(root, ".chaincss-cache");
     try {
       const stat = fs.statSync(cachePath);
       if (stat.isFile()) fs.unlinkSync(cachePath);
     } catch {}
+
     cssFileCache.clear();
     inspectorStore.clear();
     const chainFiles: string[] = [];
+
+    const IGNORED_DIRS = new Set([
+      "node_modules",
+      "dist",
+      ".git",
+      ".vite",
+      "build",
+      "coverage",
+      ".chaincss-cache",
+    ]);
+
     function walk(dir: string) {
       let entries: fs.Dirent[];
       try {
@@ -236,20 +250,22 @@ export default function chaincssPlugin(
         const fullPath = path.join(dir, entry.name);
         if (isTmpFile(fullPath) || isGeneratedOutput(fullPath)) continue;
         if (entry.isDirectory()) {
-          if (entry.name === "node_modules" || entry.name === "dist") continue;
+          if (IGNORED_DIRS.has(entry.name) || entry.name.startsWith(".")) continue;
           walk(fullPath);
         } else if (CHAIN_FILE_RE.test(entry.name)) {
           chainFiles.push(fullPath);
         }
       }
     }
-    walk(srcDir);
+
+    walk(root);
+
     if (!silent)
       summary(
         `Pre-compiling ${chainFiles.length} styling definition file(s)...`,
       );
     // Parallel compilation with concurrency limit
-    const concurrency = Math.min(cpus().length, chainFiles.length);
+    const concurrency = Math.min(cpus().length, chainFiles.length || 1);
     let successCount = 0;
     let index = 0;
 
@@ -404,54 +420,56 @@ export default function chaincssPlugin(
           }
         }
       });
-      devServer.middlewares.use("/__chaincss.css", (_req: any, res: any) => {
+      const cssRoute = path.posix.join(base, "__chaincss.css");
+      const clientRoute = path.posix.join(base, "@chaincss/client.js");
+      const irRoute = path.posix.join(base, "__chaincss-ir.json");
+
+      devServer.middlewares.use(cssRoute, (_req: any, res: any) => {
         res.setHeader("Content-Type", "text/css");
         res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
         res.end(getCSS() || "/* ChainCSS empty */");
       });
-      devServer.middlewares.use(
-        "/@chaincss/client.js",
-        (_req: any, res: any) => {
-          res.setHeader("Content-Type", "application/javascript");
-          res.setHeader("Cache-Control", "no-cache");
-          res.end(`
-          import { createHotContext } from "/@vite/client";
-          const STYLE_ID = 'chaincss-styles';
-          function ensureStyleEl() {
-            let el = document.getElementById(STYLE_ID);
-            if (!el) {
-              el = document.createElement('style');
-              el.id = STYLE_ID;
-              el.setAttribute('data-chaincss','');
-              document.head.appendChild(el);
-            }
-            return el;
+
+      devServer.middlewares.use(clientRoute, (_req: any, res: any) => {
+        res.setHeader("Content-Type", "application/javascript");
+        res.setHeader("Cache-Control", "no-cache");
+        res.end(`
+        import { createHotContext } from "/@vite/client";
+        const STYLE_ID = 'chaincss-styles';
+        const CSS_ENDPOINT = ${JSON.stringify(cssRoute)};
+        const HOT_ENDPOINT = ${JSON.stringify(clientRoute)};
+        function ensureStyleEl() {
+          let el = document.getElementById(STYLE_ID);
+          if (!el) {
+            el = document.createElement('style');
+            el.id = STYLE_ID;
+            el.setAttribute('data-chaincss','');
+            document.head.appendChild(el);
           }
-          function applyCSS(css) {
-            const el = ensureStyleEl();
-            el.textContent = css;
-          }
-          fetch('/__chaincss.css', { cache: 'no-store' }).then(r=>r.text()).then(applyCSS).catch(()=>{});
-          const hot = createHotContext('/@chaincss/client.js');
-          hot.on('chaincss-update', (data) => {
-            const url = '/__chaincss.css?v=' + (data?.timestamp || Date.now());
-            fetch(url, { cache: 'no-store' }).then(r=>r.text()).then((css)=>{
-              applyCSS(css);
-              console.log('[ChainCSS] HMR updated', css.length + 'B');
-            });
+          return el;
+        }
+        function applyCSS(css) {
+          const el = ensureStyleEl();
+          el.textContent = css;
+        }
+        fetch(CSS_ENDPOINT, { cache: 'no-store' }).then(r=>r.text()).then(applyCSS).catch(()=>{});
+        const hot = createHotContext(HOT_ENDPOINT);
+        hot.on('chaincss-update', (data) => {
+          const url = CSS_ENDPOINT + '?v=' + (data?.timestamp || Date.now());
+          fetch(url, { cache: 'no-store' }).then(r=>r.text()).then((css)=>{
+            applyCSS(css);
+            console.log('[ChainCSS] HMR updated', css.length + 'B');
           });
-          hot.accept();
-        `);
-        },
-      );
-      devServer.middlewares.use(
-        "/__chaincss-ir.json",
-        (_req: any, res: any) => {
-          res.setHeader("Content-Type", "application/json");
-          res.setHeader("Cache-Control", "no-cache");
-          res.end(JSON.stringify(exportIRData() || {}));
-        },
-      );
+        });
+        hot.accept();
+      `);
+      });
+
+      devServer.middlewares.use(irRoute, (_req: any, res: any) => {
+        res.setHeader("Content-Type", "application/json");
+        res.setHeader("Cache-Control", "no-cache");
+        res.end(JSON.stringify(exportIRData() || {}));
+      });
       const handleFileChange = async (fp: string) => {
         if (isGeneratedOutput(fp)) return;
         if (!CHAIN_FILE_RE.test(fp) || isTmpFile(fp)) return;
@@ -507,6 +525,27 @@ export default function chaincssPlugin(
           });
         }
       });
+      devServer.watcher.on("unlinkDir", (dirPath: string) => {
+        const absDir = path.resolve(dirPath);
+        let removedAny = false;
+
+        for (const cachedFile of cssFileCache.keys()) {
+          if (cachedFile.startsWith(absDir)) {
+            cssFileCache.delete(cachedFile);
+            inspectorStore.clearFileContext(cachedFile);
+            removedAny = true;
+          }
+        }
+
+        if (removedAny) {
+          rebuildCache();
+          devServer.ws.send({
+            type: "custom",
+            event: "chaincss-update",
+            data: { timestamp: Date.now() },
+          });
+        }
+      });
     },
     async handleHotUpdate(ctx: any) {
       const filePath = path.resolve(ctx.file);
@@ -545,22 +584,21 @@ export default function chaincssPlugin(
     async generateBundle() {
       const ir = exportIRData();
       if (ir) {
-        // 1. Emit the IR data JSON
         this.emitFile({
           type: "asset",
           fileName: "assets/chaincss-ir.json",
           source: JSON.stringify(ir),
         });
+      }
 
-        // 2. Emit the aggregated production CSS stylesheet using getCSS()
-        const cssContent = getCSS();
-        if (cssContent) {
-          this.emitFile({
-            type: "asset",
-            fileName: "assets/chaincss.css",
-            source: formatCSS(cssContent, false),
-          });
-        }
+      // CSS emission is independent of IR data — always emit if CSS exists
+      const cssContent = getCSS();
+      if (cssContent) {
+        this.emitFile({
+          type: "asset",
+          fileName: "assets/chaincss.css",
+          source: formatCSS(cssContent, false),
+        });
       }
     },
     async buildEnd() {
@@ -630,7 +668,7 @@ export default function chaincssPlugin(
         },
         {
           tag: "script",
-          attrs: { type: "module", src: "/@chaincss/client.js" },
+          attrs: { type: "module", src: path.posix.join(base, "@chaincss/client.js") },
           injectTo: "head",
         },
       ];

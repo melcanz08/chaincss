@@ -1,3 +1,5 @@
+// src/compiler/pipeline/compiler-bridge.ts
+
 import crypto from "node:crypto";
 import type { PersistentCache } from "../cache/content-addressable-cache.js";
 import type { StyleIR, IRGraph } from "./ir/types.js";
@@ -5,6 +7,7 @@ import { buildIRGraph } from "./ir/graph-builder.js";
 import {
   findDirtyRules,
   filterDirtyIR,
+  mergeRecompiledIR,
   type IncrementalChange,
 } from "./incremental-compiler.js";
 import type { Pipeline } from "./pipeline.js";
@@ -23,34 +26,38 @@ export async function compileWithGraphCache(
 ): Promise<PipelineResult> {
   const { cache, pipeline } = options;
 
-  // 1. Resolve the IR graph
-  const graph: IRGraph = previousIR.graph || buildIRGraph(previousIR);
+  if (!previousIR.graph) {
+    previousIR.graph = buildIRGraph(previousIR);
+  }
+  const graph: IRGraph = previousIR.graph;
 
-  // 2. Identify dirty rules using your graph-based dirty tracking
   const dirtyIds = findDirtyRules(graph, change);
 
-  // 3. Construct a Compound Hash using Node's crypto (Source content + active dirty IDs)
-  const rawKey = source + "::" + Array.from(dirtyIds).join(",");
+  const sortedDirtyIds = Array.from(dirtyIds).sort().join(",");
+  const rawKey = `${source}::${sortedDirtyIds}`;
   const compoundCacheKey = crypto
     .createHash("sha256")
     .update(rawKey)
     .digest("hex");
 
-  // 4. If no rules are directly dirty for this node, check the persistent cache first
-  const isDirectlyDirty = change.changedRuleIds.some((id) => dirtyIds.has(id));
-  if (!isDirectlyDirty) {
-    const cachedResult = await cache.getByHash(compoundCacheKey);
-    if (cachedResult) {
-      return cachedResult;
-    }
+  const cachedResult = await cache.getByHash(compoundCacheKey);
+  if (cachedResult) {
+    return cachedResult;
   }
 
-  // 5. Cache miss or dirty state: filter IR and execute pipeline
   const filteredIR = filterDirtyIR(previousIR, dirtyIds);
-  const pipelineResult = pipeline.execute(filteredIR);
+  const pipelineResult = await pipeline.process(filteredIR);
 
-  // 6. Store computed result back into the persistent cache
-  await cache.setByHash(compoundCacheKey, pipelineResult);
+  // Merge dirty results back into full IR before returning/caching
+  const fullIR = mergeRecompiledIR(previousIR, pipelineResult.ir, dirtyIds);
+  fullIR.graph = buildIRGraph(fullIR);
 
-  return pipelineResult;
+  const fullResult: PipelineResult = {
+    ...pipelineResult,
+    ir: fullIR,
+  };
+
+  await cache.setByHash(compoundCacheKey, fullResult);
+
+  return fullResult;
 }

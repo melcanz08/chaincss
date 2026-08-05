@@ -6,6 +6,7 @@
 import { styleInjector } from "@frameworks/index.js";
 import { partitionForBuild, compileToCSS } from "../usecases/style-compiler.js";
 import { getRuntimeAdapter } from "@frameworks/core/adapter/factory.js";
+import { devWarn } from "@shared/utils/index.js";
 
 interface StyleCollectorLike {
   set(prop: string, value: any): any;
@@ -136,13 +137,7 @@ const TERMINAL = new Map<string, Handler>([
   [
     "$el",
     (t, _p, ...a: string[]) => {
-      const styleObj = t.$el(...a);
-      // Runtime path (browser) - use adapter
-      if (isBrowserEnvironment()) {
-        return buildRuntimeResult(styleObj);
-      }
-      // SSR / build-time path — return raw object
-      return styleObj;
+      return t.$el(...a);
     },
   ],
   [
@@ -150,11 +145,7 @@ const TERMINAL = new Map<string, Handler>([
     (t, _p, ...a: any[]) => {
       if (a.length === 0) return t.build();
       const sel = a.length === 1 && Array.isArray(a[0]) ? a[0] : a;
-      const styleObj = t.build(sel);
-      if (isBrowserEnvironment() && t.isMixed()) {
-        return buildRuntimeResult(styleObj);
-      }
-      return styleObj;
+      return t.build(sel);
     },
   ],
   ["explain", (t) => t.explain()],
@@ -261,8 +252,15 @@ export function createStyleProxy(
   let proxy: any;
   proxy = new Proxy(collector, {
     get(target, prop: string | symbol) {
+      // Built-in inspection symbols — return safe defaults
+      if (prop === Symbol.toStringTag) return "StyleProxy";
+      if (prop === Symbol.toPrimitive) return undefined;
       if (typeof prop === "symbol") return (target as any)[prop];
-      if (prop === "then") return undefined;
+
+      // Prevent Promise-like resolution and JSON/console inspection traps
+      if (prop === "then" || prop === "toJSON" || prop === "valueOf" || prop === "inspect") {
+        return undefined;
+      }
       if (prop === "_mixed") return (target as any).isMixed?.();
 
       if (typeof prop === "string" && prop.startsWith("__")) {
@@ -294,36 +292,47 @@ export function createStyleProxy(
         const macroFn = macros[prop as string];
         fn = (...args: any[]) => {
           const val = args[0];
-          const ensure = (k: string) => {
-            if (!(target as any)[k]) (target as any)[k] = [];
-            return (target as any)[k];
-          };
-          const sink = new Proxy(target, {
-            get(t, p) {
-              if (p === "nestedRules" || p === "atRules")
-                return ensure(p as string);
-              return (t as any)[p];
+
+          // Use a plain object sink instead of a Proxy to avoid per-call allocations
+          const sink = {
+            get nestedRules() {
+              if (!(target as any)["nestedRules"]) (target as any)["nestedRules"] = [];
+              return (target as any)["nestedRules"];
             },
-            set(t, p, v) {
+            set nestedRules(v: any) {
+              (target as any)["nestedRules"] = v;
+            },
+            get atRules() {
+              if (!(target as any)["atRules"]) (target as any)["atRules"] = [];
+              return (target as any)["atRules"];
+            },
+            set atRules(v: any) {
+              (target as any)["atRules"] = v;
+            },
+            set _transforms(v: any) {
+              (target as any)["_transforms"] = v;
+            },
+          };
+
+          // Trap direct property sets on the sink
+          const sinkWithSet = new Proxy(sink, {
+            set(_t, p, v) {
               const k = p as string;
-              if (
-                k === "nestedRules" ||
-                k === "atRules" ||
-                k === "_transforms"
-              ) {
-                (t as any)[k] = v;
+              if (k === "nestedRules" || k === "atRules" || k === "_transforms") {
+                (target as any)[k] = v;
               } else {
-                t.set(k, v);
+                target.set(k, v);
               }
               return true;
             },
           }) as any;
 
-          const res = macroFn(val, sink);
+          const res = macroFn(val, sinkWithSet);
           if (
             res &&
             typeof res === "object" &&
             res !== sink &&
+            res !== sinkWithSet &&
             res !== target
           ) {
             for (const [k, v] of Object.entries(res)) {

@@ -392,7 +392,11 @@ export class DesignTokens {
       // { '0%': { opacity: 0 } } -> keep as whole object
       if (value && typeof value === "object" && !Array.isArray(value)) {
         const isKeyframe = Object.keys(value).some((k) => k.includes("%"));
-        if (isKeyframe) continue; // skip, don't flatten
+        if (isKeyframe) {
+          // Retain keyframe definitions as JSON string leaves
+          result[prefixed] = JSON.stringify(value);
+          continue;
+        }
         Object.assign(result, this.flattenTokens(value, prefixed));
       } else {
         result[prefixed] = String(value);
@@ -479,13 +483,17 @@ export class DesignTokens {
 
   toCSSVariables(prefix: string = "chain"): string {
     let css = ":root {\n";
-    const allTokens = { ...this.defaultFlattened, ...this.customFlattened };
+    const allKeys = new Set([
+      ...Object.keys(this.defaultFlattened),
+      ...Object.keys(this.customFlattened),
+    ]);
 
-    for (const [key, value] of Object.entries(allTokens)) {
-      // Avoid breaking if animations or unneeded keys are flattened
+    for (const key of allKeys) {
       if (key.startsWith("animations.")) continue;
       const varName = `--${prefix}-${key.replace(/\./g, "-")}`;
-      css += `  ${varName}: ${value};\n`;
+      // Resolve alias references ($colors.primary -> #667eea)
+      const resolvedValue = this.get(key);
+      css += `  ${varName}: ${resolvedValue};\n`;
     }
 
     css += "}\n";
@@ -586,12 +594,15 @@ export function createTokens(
 export function resolveTokenReferences(
   value: string,
   tokensInstance: DesignTokens,
-  prefix: string = "$",
+  prefix: string = "$"
 ): string {
   if (typeof value !== "string") return String(value);
 
-  // Captures alphanumeric character segments, hyphens, or periods following the prefix
-  const tokenRegex = new RegExp(`\\${prefix}([a-zA-Z0-9._-]+)`, "g");
+  // Strictly matches identifier paths (e.g. $colors.gray.100) without grabbing trailing punctuation
+  const tokenRegex = new RegExp(
+    `\\${prefix}([a-zA-Z0-9_-]+(?:\\.[a-zA-Z0-9_-]+)*)`,
+    "g"
+  );
 
   return value.replace(tokenRegex, (match, tokenPath) => {
     return tokensInstance.has(tokenPath)

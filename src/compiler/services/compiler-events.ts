@@ -2,26 +2,6 @@
 
 import { EventEmitter } from "events";
 
-export type CompilerEventType =
-  | "warning"
-  | "error"
-  | "info"
-  | "build:start"
-  | "build:complete"
-  | "css:written"
-  | "classFiles:written"
-  | "inspector:written"
-  | "watch:rebuild";
-
-export interface CompilerEvent {
-  type: CompilerEventType;
-  code: string;
-  message: string;
-  sourceFile?: string;
-  originalError?: Error;
-  timestamp: number;
-}
-
 export interface CompilerEventMap {
   "build:start": { fileCount: number };
   "build:complete": { files: number; duration: number; cssSize: number };
@@ -34,11 +14,22 @@ export interface CompilerEventMap {
   info: CompilerEvent;
 }
 
+export type CompilerEventType = keyof CompilerEventMap;
+
+export interface CompilerEvent {
+  type: Extract<CompilerEventType, "warning" | "error" | "info">;
+  code: string;
+  message: string;
+  sourceFile?: string;
+  originalError?: Error;
+  timestamp: number;
+}
+
 export type CompilerEventHandler<K extends keyof CompilerEventMap> = (
   payload: CompilerEventMap[K],
 ) => void;
 
-// Clean interface implementation layout for typed event handlers
+// Declaration merging to strongly type Node's built-in EventEmitter
 export interface CompilerEvents {
   on<K extends keyof CompilerEventMap>(
     event: K,
@@ -52,6 +43,14 @@ export interface CompilerEvents {
     event: K,
     listener: CompilerEventHandler<K>,
   ): this;
+  addListener<K extends keyof CompilerEventMap>(
+    event: K,
+    listener: CompilerEventHandler<K>,
+  ): this;
+  removeListener<K extends keyof CompilerEventMap>(
+    event: K,
+    listener: CompilerEventHandler<K>,
+  ): this;
   emit<K extends keyof CompilerEventMap>(
     event: K,
     payload: CompilerEventMap[K],
@@ -59,8 +58,11 @@ export interface CompilerEvents {
 }
 
 export class CompilerEvents extends EventEmitter {
-  constructor() {
+  constructor(options?: { maxListeners?: number }) {
     super();
+    if (options?.maxListeners !== undefined) {
+      this.setMaxListeners(options.maxListeners);
+    }
   }
 
   emitBuildStart(fileCount: number): void {
@@ -92,7 +94,7 @@ export class CompilerEvents extends EventEmitter {
   }
 
   emitError(error: Error, filePath?: string): void {
-    // CRITICAL: Prevent Node process crash if an error event has no listeners attached (e.g. during background watch)
+    // Prevent Node process crash if an error event has no listeners attached (e.g. background watch mode)
     if (this.listenerCount("error") === 0) {
       console.error(
         `[ChainCSS Error] ${filePath ? `(${filePath}): ` : ""}${error.stack || error.message}`,

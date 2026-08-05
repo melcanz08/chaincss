@@ -9,6 +9,16 @@ interface CacheNode<T> {
   next: CacheNode<T> | null;
 }
 
+export interface CacheStats {
+  size: number;
+  maxSize: number;
+  hits: number;
+  misses: number;
+  evictions: number;
+  invalidations: number;
+  hitRate: number;
+}
+
 export class CacheStore<T> {
   private lookup = new Map<string, CacheNode<T>>();
   private head: CacheNode<T> | null = null;
@@ -27,6 +37,10 @@ export class CacheStore<T> {
     this.ttl = Math.max(0, ttlMs);
   }
 
+  /**
+   * Retrieves an item from the cache.
+   * Checks both TTL expiry and optional file content hash validity.
+   */
   get(key: string, currentHash?: string): T | undefined {
     const node = this.lookup.get(key);
     if (!node) {
@@ -36,46 +50,47 @@ export class CacheStore<T> {
 
     // Check Time-To-Live Expiry
     if (this.ttl > 0 && Date.now() - node.createdAt > this.ttl) {
-      this.removeNode(node);
-      this.lookup.delete(key);
+      this.evictNode(node);
       this.invalidations++;
       this.misses++;
       return undefined;
     }
 
-    // Check File Contents Invalidation
+    // Check File Contents / Hash Invalidation
     if (currentHash !== undefined && node.hash !== currentHash) {
-      this.removeNode(node);
-      this.lookup.delete(key);
+      this.evictNode(node);
       this.invalidations++;
       this.misses++;
       return undefined;
     }
 
     this.hits++;
-
-    // True O(1) Touch: detach pointers and move to head (no garbage generated)
-    this.detach(node);
-    this.setHead(node);
+    this.moveToHead(node);
 
     return node.result;
   }
 
+  /**
+   * Inserts or updates an entry in the cache.
+   */
   set(key: string, result: T, hash: string): void {
     if (this.maxSize === 0) return;
     let node = this.lookup.get(key);
 
     if (node) {
-      // Update existing entry configuration
       node.result = result;
       node.hash = hash;
       node.createdAt = Date.now();
-      this.detach(node);
-      this.setHead(node);
+      this.moveToHead(node);
       return;
     }
 
-    // Create a new entry node
+    // Evict oldest node if at capacity
+    if (this.lookup.size >= this.maxSize && this.tail) {
+      this.evictNode(this.tail);
+      this.evictions++;
+    }
+
     node = {
       key,
       result,
@@ -85,34 +100,84 @@ export class CacheStore<T> {
       next: null,
     };
 
-    if (this.lookup.size >= this.maxSize && this.tail) {
-      // Evict oldest node (tail element)
-      const oldestKey = this.tail.key;
-      this.lookup.delete(oldestKey);
-      this.removeNode(this.tail);
-      this.evictions++;
-    }
-
     this.lookup.set(key, node);
     this.setHead(node);
   }
 
-  has(key: string): boolean {
-    const n = this.lookup.get(key);
-    if (!n) return false;
-    if (this.ttl > 0 && Date.now() - n.createdAt > this.ttl) {
-      this.delete(key);
+  /**
+   * Checks if a valid key exists without mutating LRU order.
+   */
+  has(key: string, currentHash?: string): boolean {
+    const node = this.lookup.get(key);
+    if (!node) return false;
+
+    if (this.ttl > 0 && Date.now() - node.createdAt > this.ttl) {
+      this.evictNode(node);
       this.invalidations++;
       return false;
     }
+
+    if (currentHash !== undefined && node.hash !== currentHash) {
+      this.evictNode(node);
+      this.invalidations++;
+      return false;
+    }
+
     return true;
   }
 
   delete(key: string): boolean {
     const node = this.lookup.get(key);
     if (!node) return false;
-    this.removeNode(node);
-    return this.lookup.delete(key);
+    this.evictNode(node);
+    return true;
+  }
+
+  /**
+   * Bulk invalidates entries matching a prefix (e.g., file directory paths).
+   */
+  invalidatePrefix(prefix: string): number {
+    let count = 0;
+    for (const key of Array.from(this.lookup.keys())) {
+      if (key.startsWith(prefix)) {
+        if (this.delete(key)) count++;
+      }
+    }
+    this.invalidations += count;
+    return count;
+  }
+
+  /**
+   * Invalidates entries matching a custom filter predicate.
+   */
+  invalidateWhere(predicate: (key: string, result: T) => boolean): number {
+    let count = 0;
+    for (const [key, node] of Array.from(this.lookup.entries())) {
+      if (predicate(key, node.result)) {
+        if (this.delete(key)) count++;
+      }
+    }
+    this.invalidations += count;
+    return count;
+  }
+
+  /**
+   * Sweeps expired TTL items from memory.
+   */
+  pruneExpired(): number {
+    if (this.ttl <= 0) return 0;
+    const now = Date.now();
+    let pruned = 0;
+
+    for (const [key, node] of Array.from(this.lookup.entries())) {
+      if (now - node.createdAt > this.ttl) {
+        this.evictNode(node);
+        pruned++;
+      }
+    }
+
+    this.invalidations += pruned;
+    return pruned;
   }
 
   clear(): void {
@@ -125,9 +190,28 @@ export class CacheStore<T> {
     this.invalidations = 0;
   }
 
+  getStats(): CacheStats {
+    const total = this.hits + this.misses;
+    return {
+      size: this.lookup.size,
+      maxSize: this.maxSize,
+      hits: this.hits,
+      misses: this.misses,
+      evictions: this.evictions,
+      invalidations: this.invalidations,
+      hitRate: total > 0 ? this.hits / total : 0,
+    };
+  }
+
   // ============================================================================
   // Pointer Mutation Engines
   // ============================================================================
+
+  private moveToHead(node: CacheNode<T>): void {
+    if (this.head === node) return; // Fast path: already MRU
+    this.detach(node);
+    this.setHead(node);
+  }
 
   private setHead(node: CacheNode<T>): void {
     node.next = this.head;
@@ -145,24 +229,12 @@ export class CacheStore<T> {
     else this.tail = node.prev;
   }
 
-  private removeNode(node: CacheNode<T>) {
+  private evictNode(node: CacheNode<T>): void {
     this.detach(node);
-    (node as any).result = null; // clear ref
+    this.lookup.delete(node.key);
+    (node as any).result = null; // Detach reference for GC
     node.prev = null;
     node.next = null;
-  }
-
-  getStats() {
-    const total = this.hits + this.misses;
-    return {
-      size: this.lookup.size,
-      maxSize: this.maxSize,
-      hits: this.hits,
-      misses: this.misses,
-      evictions: this.evictions,
-      invalidations: this.invalidations,
-      hitRate: total > 0 ? this.hits / total : 0,
-    };
   }
 }
 

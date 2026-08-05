@@ -5,8 +5,6 @@ import type { StyleIR, IRRule, IRNodeId, IRGraph } from "./ir/types.js";
 import {
   buildIRGraph,
   findAffectedNodes,
-  traverseGraph,
-  getGraphStats,
 } from "./ir/graph-builder.js";
 import type { PipelineResult } from "./pipeline-types.js";
 import type { Pipeline } from "./pipeline.js";
@@ -34,6 +32,42 @@ export interface IncrementalResult extends PipelineResult {
   };
 }
 
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/**
+ * Recursively count all rules including nested ones.
+ */
+function countTotalRules(rules: IRRule[]): number {
+  let count = 0;
+  for (const r of rules) {
+    count++;
+    if (r.nestedRules) {
+      count += countTotalRules(r.nestedRules);
+    }
+  }
+  return count;
+}
+
+/**
+ * Recursively check if a rule ID exists anywhere in the IR.
+ */
+function hasRule(ir: StyleIR, id: string): boolean {
+  function check(rules: IRRule[]): boolean {
+    for (const r of rules) {
+      if (r.id === id) return true;
+      if (r.nestedRules && check(r.nestedRules)) return true;
+    }
+    return false;
+  }
+  return check(ir.rules);
+}
+
+// ============================================================================
+// Public API
+// ============================================================================
+
 /**
  * Determine which rules need recompilation based on changed nodes.
  * Uses the dependency graph to find all affected nodes.
@@ -59,32 +93,48 @@ export function findDirtyRules(
 
 /**
  * Mark rules as dirty or clean based on the change set.
- * Dirty rules will be recompiled; clean rules are skipped.
+ * Fix 4: Recursively traverses all nesting levels.
  */
 export function markDirtyRules(ir: StyleIR, dirtyIds: Set<IRNodeId>): void {
-  for (const rule of ir.rules) {
-    if (dirtyIds.has(rule.id)) {
-      rule._dirty = true;
-    }
-    // Also mark nested rules
-    if (rule.nestedRules) {
-      for (const nested of rule.nestedRules) {
-        if (dirtyIds.has(nested.id)) {
-          nested._dirty = true;
-        }
+  function markRecursive(rules: IRRule[]): void {
+    for (const rule of rules) {
+      if (dirtyIds.has(rule.id)) {
+        rule._dirty = true;
+      }
+      if (rule.nestedRules && rule.nestedRules.length > 0) {
+        markRecursive(rule.nestedRules);
       }
     }
   }
+  markRecursive(ir.rules);
 }
 
 /**
  * Filter IR to only include dirty rules (plus their ancestors for context).
- * This reduces the IR size for the pipeline passes.
+ * Fix 1: Recursively filters so dirty nested rules are retained with their parent chain.
  */
 export function filterDirtyIR(ir: StyleIR, dirtyIds: Set<IRNodeId>): StyleIR {
-  const dirtyRules = ir.rules.filter(
-    (r) => dirtyIds.has(r.id) || r._dirty === true,
-  );
+  function filterRecursive(rule: IRRule): IRRule | null {
+    const isSelfDirty = dirtyIds.has(rule.id) || rule._dirty === true;
+
+    const filteredNested = (rule.nestedRules || [])
+      .map(filterRecursive)
+      .filter((r): r is IRRule => r !== null);
+
+    // Keep if self is dirty OR any nested child is dirty
+    if (isSelfDirty || filteredNested.length > 0) {
+      return {
+        ...rule,
+        nestedRules: filteredNested,
+      };
+    }
+    return null;
+  }
+
+  const dirtyRules = ir.rules
+    .map(filterRecursive)
+    .filter((r): r is IRRule => r !== null);
+
   const skippedCount = ir.rules.length - dirtyRules.length;
 
   return {
@@ -100,13 +150,57 @@ export function filterDirtyIR(ir: StyleIR, dirtyIds: Set<IRNodeId>): StyleIR {
 }
 
 /**
+ * Merge recompiled dirty rules back into the clean previous IR.
+ * Fix 2: Ensures the incremental result contains ALL rules, not just dirty ones.
+ */
+export function mergeRecompiledIR(
+  previousIR: StyleIR,
+  recompiledIR: StyleIR,
+  dirtyIds: Set<IRNodeId>,
+): StyleIR {
+  const recompiledMap = new Map<string, IRRule>();
+  function indexRules(rules: IRRule[]): void {
+    for (const r of rules) {
+      recompiledMap.set(r.id, r);
+      if (r.nestedRules) indexRules(r.nestedRules);
+    }
+  }
+  indexRules(recompiledIR.rules);
+
+  function mergeRule(rule: IRRule): IRRule {
+    if (recompiledMap.has(rule.id)) {
+      return recompiledMap.get(rule.id)!;
+    }
+    return {
+      ...rule,
+      _dirty: false,
+      nestedRules: (rule.nestedRules || []).map(mergeRule),
+    };
+  }
+
+  const mergedRules = previousIR.rules.map(mergeRule);
+
+  // ✅ Correct: Only append new top-level rules.
+  for (const rule of recompiledIR.rules) {
+    if (!hasRule(previousIR, rule.id)) {
+      mergedRules.push(rule);
+    }
+  }
+
+  return {
+    ...previousIR,
+    rules: mergedRules,
+  };
+}
+
+/**
  * Run incremental compilation:
  * 1. Build graph from current IR
  * 2. Find affected nodes from changes
  * 3. Mark dirty rules
  * 4. Filter IR to dirty rules only
  * 5. Run pipeline on reduced IR
- * 6. Merge results back
+ * 6. Merge results back into complete IR
  */
 export async function incrementalCompile(
   pipeline: Pipeline,
@@ -121,44 +215,51 @@ export async function incrementalCompile(
   // Find dirty rules
   const dirtyIds = findDirtyRules(graph, change);
 
-  // Mark dirty
+  // Mark dirty (recursive — Fix 4)
   markDirtyRules(previousIR, dirtyIds);
 
-  // Filter to dirty only
+  // Filter to dirty only (recursive — Fix 1)
   const filteredIR = filterDirtyIR(previousIR, dirtyIds);
 
-  // Run pipeline on reduced IR
+  // Run pipeline on reduced IR (Fix 3: await for async safety)
   const startTime = Date.now();
-  const pipelineResult = pipeline.execute(filteredIR);
+  const pipelineResult = await pipeline.process(filteredIR);
   const compileTime = Date.now() - startTime;
 
-  // Estimate time saved (rough: based on ratio of skipped rules)
-  const totalRules = previousIR.rules.length;
-  const recompiledCount = filteredIR.rules.length;
+  // Fix 2: Merge dirty results back into complete IR
+  const mergedIR = mergeRecompiledIR(previousIR, pipelineResult.ir, dirtyIds);
+  
+  // Fix 5: Use recursive count for accurate stats
+  const totalRules = countTotalRules(previousIR.rules);
+  const recompiledCount = countTotalRules(filteredIR.rules);
   const skippedCount = totalRules - recompiledCount;
   const estimatedFullTime =
     compileTime * (totalRules / Math.max(recompiledCount, 1));
   const timeSaved = Math.max(0, estimatedFullTime - compileTime);
 
   // Merge diagnostics from previous IR
+  const newDiagnostics = pipelineResult.ir.diagnostics || [];
   const mergedDiagnostics = [
     ...previousIR.diagnostics.filter(
-      (d) => !filteredIR.diagnostics.some((nd) => nd.id === d.id),
+      (d) => !newDiagnostics.some((nd) => nd.id === d.id),
     ),
-    ...filteredIR.diagnostics,
+    ...newDiagnostics,
   ];
+
+  const fullIRWithGraph: StyleIR = {
+    ...mergedIR,
+    diagnostics: mergedDiagnostics,
+    meta: {
+      ...mergedIR.meta,
+      passCount: mergedIR.meta.passCount + 1,
+      passes: [...mergedIR.meta.passes, "incremental"],
+    },
+  };
+  fullIRWithGraph.graph = buildIRGraph(fullIRWithGraph);
 
   return {
     ...pipelineResult,
-    ir: {
-      ...pipelineResult.ir,
-      diagnostics: mergedDiagnostics,
-      meta: {
-        ...pipelineResult.ir.meta,
-        passCount: pipelineResult.ir.meta.passCount + 1,
-        passes: [...pipelineResult.ir.meta.passes, "incremental"],
-      },
-    },
+    ir: fullIRWithGraph,
     totalDuration: Date.now() - fullStartTime,
     incremental: {
       dirtyCount: dirtyIds.size,
@@ -173,7 +274,6 @@ export async function incrementalCompile(
 
 /**
  * Get a summary of what would be recompiled without actually doing it.
- * Useful for build tools that want to show "3 files changed, 47 rules affected."
  */
 export function previewIncrementalImpact(
   previousIR: StyleIR,
@@ -194,12 +294,15 @@ export function previewIncrementalImpact(
     deepestImpact = Math.max(deepestImpact, affected.length);
   }
 
+  // Fix 5: Use recursive count
+  const totalRules = countTotalRules(previousIR.rules);
+
   return {
     changedFiles: change.changedFiles,
     affectedRules: dirtyIds.size,
-    totalRules: previousIR.rules.length,
+    totalRules,
     affectedPercent: Math.round(
-      (dirtyIds.size / Math.max(previousIR.rules.length, 1)) * 100,
+      (dirtyIds.size / Math.max(totalRules, 1)) * 100,
     ),
     deepestImpact,
   };

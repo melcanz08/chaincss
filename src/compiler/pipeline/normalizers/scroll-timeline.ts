@@ -133,6 +133,7 @@ function generateName(prefix: string): string {
 
 const kebabCache = new Map<string, string>();
 function toKebab(str: string): string {
+  if (str.startsWith("--")) return str;
   const cached = kebabCache.get(str);
   if (cached !== undefined) return cached;
   const kebab = str.replace(/([A-Z])/g, "-$1").toLowerCase();
@@ -168,11 +169,23 @@ export function compileScrollAnimation(
     chunks.push(
       `  scroll-timeline-name: ${timelineName};\n  scroll-timeline-axis: ${animation.timeline.axis || "block"};\n`,
     );
+    if (animation.timeline.scroller) {
+      chunks.push(
+        `  scroll-timeline-attachment: ${animation.timeline.scroller};\n`,
+      );
+    }
   }
 
+  const fill = animation.fill || "both";
+  const duration = animation.duration || "1s";
   chunks.push(
-    `  animation: ${animName} linear both;\n  animation-timeline: ${timelineName};\n`,
+    `  animation: ${animName} ${duration} linear ${fill};\n  animation-timeline: ${timelineName};\n`,
   );
+
+  if (animation.iterations !== undefined) {
+    chunks.push(`  animation-iteration-count: ${animation.iterations};\n`);
+  }
+
   if (animation.timeline.source === "view") {
     chunks.push(
       `  animation-range: ${animation.timeline.range || "entry 0% cover 50%"};\n`,
@@ -186,6 +199,9 @@ export function compileScrollAnimation(
   for (let i = 0; i < animation.keyframes.length; i++) {
     const step = animation.keyframes[i];
     chunks.push(`  ${step.offset} {\n`);
+    if (step.easing) {
+      chunks.push(`    animation-timing-function: ${step.easing};\n`);
+    }
     const props = step.properties;
     for (const prop in props) {
       if (!Object.prototype.hasOwnProperty.call(props, prop)) continue;
@@ -193,21 +209,25 @@ export function compileScrollAnimation(
     }
     chunks.push(`  }\n`);
   }
+
+  const fallback = `${target} { animation: none; }`;
   chunks.push(
-    `}\n\n@supports not (animation-timeline: scroll()) and not (animation-timeline: view()) {\n  ${target} { animation: none; }\n}\n`,
+    `}\n\n@supports not (animation-timeline: scroll()) and not (animation-timeline: view()) {\n  ${fallback}\n}\n`,
   );
 
   return {
     css: chunks.join(""),
     animationName: animName,
     timelineName,
-    fallback: "",
+    fallback: `@supports not (animation-timeline: scroll()) and not (animation-timeline: view()) {\n  ${fallback}\n}`,
     keyframesName: animName,
     needsFallback: true,
   };
 }
 
-export function compileScrollAnimations(animations: ScrollAnimation[]): string {
+export function compileScrollAnimations(
+  animations: ScrollAnimation[],
+): string {
   const chunks = [
     `/* ChainCSS Scroll-Driven Animations - Production Build */\n\n`,
   ];
@@ -288,6 +308,13 @@ export function createScrollTimeline(
     frames["100%"].transform =
       `${frames["100%"].transform || ""} scale(${to})`.trim();
   }
+  if (opts.rotate) {
+    const { from, to } = parseRange(opts.rotate);
+    frames["0%"].transform =
+      `${frames["0%"].transform || ""} rotate(${from})`.trim();
+    frames["100%"].transform =
+      `${frames["100%"].transform || ""} rotate(${to})`.trim();
+  }
   if (opts.opacity) {
     const { from, to } = parseRange(opts.opacity);
     frames["0%"].opacity = from;
@@ -301,8 +328,14 @@ export function createScrollTimeline(
     .map(([k, v]) => `${k}:${v};`)
     .join(" ");
   const kf = `@keyframes ${kfName} { 0% { ${kf0Entries} } 100% { ${kf100Entries} } }`;
-  const nativeCSS = `${kf}\n${selector}{animation:${kfName} linear both;animation-timeline:${timeline}(${axis});animation-range:${range};}\n@supports not (animation-timeline: view()){${selector}{animation:none;}}`;
-  return { css: nativeCSS, keyframesName: kfName, needsFallback: true };
+  const fallback = `${selector}{animation:none;}`;
+  const nativeCSS = `${kf}\n${selector}{animation:${kfName} linear both;animation-timeline:${timeline}(${axis});animation-range:${range};}\n@supports not (animation-timeline: scroll()) and not (animation-timeline: view()){${fallback}}`;
+  return {
+    css: nativeCSS,
+    keyframesName: kfName,
+    needsFallback: true,
+    fallback: `@supports not (animation-timeline: scroll()) and not (animation-timeline: view()){${fallback}}`,
+  };
 }
 
 export function scrollEntangleMacro(value: any, ctx: any) {

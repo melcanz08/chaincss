@@ -22,6 +22,8 @@ export type cssUnit =
 
 const toStr = (r: any): string => {
   if (typeof r === "string") return r;
+  if (typeof r === "number") return String(r);
+  if (r == null) return "";
   return r?.expression ?? r?.raw ?? `${r?.value ?? ""}${r?.unit ?? ""}`;
 };
 
@@ -29,7 +31,7 @@ const toStr = (r: any): string => {
 const asUnit = (u: string) => (v: any) => {
   const s = String(v).trim();
   if (/[a-z%]$/i.test(s)) return s;
-  if (typeof v === "number" || /^-?\d+(\.\d+)?$/.test(s)) return `${s}${u}`;
+  if (typeof v === "number" || /^-?\d*\.?\d+$/.test(s)) return `${s}${u}`;
   return s;
 };
 
@@ -57,14 +59,17 @@ export const helpers = {
   // number helpers
   round: (v: any, prec = 2) => {
     const p = (math as any).parse(v);
+    if (!p || p.value == null) return "";
     return `${Number(p.value).toFixed(prec)}${p.unit === "expression" ? "" : p.unit || ""}`;
   },
   ceil: (v: any) => {
     const p = (math as any).parse(v);
+    if (!p || p.value == null) return "";
     return `${Math.ceil(p.value)}${p.unit === "expression" ? "" : p.unit || ""}`;
   },
   floor: (v: any) => {
     const p = (math as any).parse(v);
+    if (!p || p.value == null) return "";
     return `${Math.floor(p.value)}${p.unit === "expression" ? "" : p.unit || ""}`;
   },
 
@@ -91,7 +96,7 @@ export const helpers = {
     `rgba(${r}, ${g}, ${b}, ${a})`,
   hsla: (h: number, s: number, l: number, a = 1) =>
     `hsla(${h}, ${s}%, ${l}%, ${a})`,
-  url: (path: string) => `url("${String(path).replace(/"/g, '\\"')}")`,
+  url: (path: string) => `url("${String(path ?? "").replace(/"/g, '\\"')}")`,
   format: (strings: TemplateStringsArray, ...values: any[]) =>
     strings.reduce(
       (acc, s, i) =>
@@ -99,10 +104,14 @@ export const helpers = {
       "",
     ),
 
+  cond: (c: boolean, t: any, f: any) => (c ? t : f),
   if: (c: boolean, t: any, f: any) => (c ? t : f),
-  camelToKebab: (str: string) => str.replace(/([A-Z])/g, "-$1").toLowerCase(),
+  camelToKebab: (str: string) =>
+    String(str)
+      .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+      .toLowerCase(),
   kebabToCamel: (str: string) =>
-    str.replace(/-([a-z])/g, (_, l) => l.toUpperCase()),
+    String(str).replace(/-([a-z])/g, (_, l) => l.toUpperCase()),
 } as any;
 
 export const toRem = helpers.toRem;

@@ -1,4 +1,4 @@
-// src/compiler/utils/entangle.ts — NATIVE v2.12
+// src/compiler/utils/entangle.ts
 // Wires chain().entangle('scroll' | 'peerDim' | 'group:...' | 'token:...') to native CSS
 // Zero runtime. All outputs are pure CSS.
 
@@ -33,6 +33,7 @@ export interface EntangleOptions {
   // group
   sync?: string[];
   group?: string;
+  span?: string | number;
   // token
   tokenPath?: string;
   // state & focus elements
@@ -73,19 +74,29 @@ export interface StyleContext {
   [key: string]: any;
 }
 
-// --- Security helpers ---
+// --- Module-scoped Security Regex Constants ---
+const SAFE_TOKEN_PATH_RE = /^[a-zA-Z0-9._-]+$/;
+const SAFE_STATE_NAME_RE = /[^a-zA-Z0-9_-]/g;
+const SAFE_SELECTOR_RE = /^[a-zA-Z0-9_.#:\s>+~*[\]="'\-()]+$/;
+const DISALLOWED_SELECTOR_CHARS_RE = /[{};]/;
+
+// --- Security Helpers ---
 function toSafeTokenPath(p: string): string {
-  if (!/^[a-zA-Z0-9._-]+$/.test(p)) throw new Error(`Invalid token: ${p}`);
-  return p;
+  const cleanPath = p.startsWith("$") ? p.slice(1) : p;
+  if (!SAFE_TOKEN_PATH_RE.test(cleanPath)) {
+    throw new Error(`Invalid token: ${p}`);
+  }
+  return cleanPath;
 }
+
 function toSafeStateName(s: string): string {
-  const clean = s.replace(/[^a-zA-Z0-9_-]/g, "");
+  const clean = s.replace(SAFE_STATE_NAME_RE, "");
   if (!clean) throw new Error(`Invalid state: ${s}`);
   return clean;
 }
+
 function toSafeSelector(sel: string, fallback: string): string {
-  // allow common selector chars, block } { ;
-  return /^[a-zA-Z0-9_.#:\s>+~*[\]=\"'\-()]+$/.test(sel) && !/[{};]/.test(sel)
+  return SAFE_SELECTOR_RE.test(sel) && !DISALLOWED_SELECTOR_CHARS_RE.test(sel)
     ? sel
     : fallback;
 }
@@ -99,7 +110,6 @@ export function entangle(
   opts: EntangleOptions = {},
   ctx: StyleContext,
 ): void {
-  // normalize: allow "group:pricing-row" syntax
   if (type.startsWith("group:")) {
     const groupName = type.slice(6);
     return entangleGroup(groupName, opts, ctx);
@@ -129,9 +139,7 @@ export function entangle(
     case "hasCount":
       return entangleHasCount(opts, ctx);
     default:
-      // unknown entangle type — store as meta for future plugins
-      if (!ctx._entangle) ctx._entangle = [];
-      ctx._entangle.push({ type, opts, native: false });
+      (ctx._entangle ??= []).push({ type, opts, native: false });
       return;
   }
 }
@@ -139,7 +147,6 @@ export function entangle(
 // --- Implementations ---
 
 function entangleScroll(opts: EntangleOptions, ctx: StyleContext): void {
-  // Fall back to a structural component scope root indicator if executed outside a nested context
   const selector = ctx._selector || ":root";
   const result = createScrollTimeline(selector, {
     range: opts.range,
@@ -151,29 +158,32 @@ function entangleScroll(opts: EntangleOptions, ctx: StyleContext): void {
     axis: opts.axis as any,
   });
 
-  if (!ctx._nativeCSS) ctx._nativeCSS = [];
-  ctx._nativeCSS.push(result.css);
+  (ctx._nativeCSS ??= []).push(result.css);
 
-  ctx.willChange = ctx.willChange
-    ? `${ctx.willChange}, transform, opacity`
-    : "transform, opacity";
-  if (!ctx.transform) ctx.transform = "translateZ(0)";
+  // Deduplicate willChange properties
+  const existingWillChange = ctx.willChange
+    ? ctx.willChange.split(",").map((s) => s.trim())
+    : [];
+  const propsToAdd = ["transform", "opacity"].filter(
+    (p) => !existingWillChange.includes(p),
+  );
+
+  if (propsToAdd.length > 0) {
+    ctx.willChange =
+      existingWillChange.length > 0
+        ? `${ctx.willChange}, ${propsToAdd.join(", ")}`
+        : propsToAdd.join(", ");
+  }
+
+  ctx.transform ||= "translateZ(0)";
 }
 
 function entanglePeerDim(opts: EntangleOptions, ctx: StyleContext): void {
-  // Use explicit undefined check to allow 0 opacity to be passed down correctly
-  const opacity =
-    opts.opacity !== undefined
-      ? opts.opacity
-      : opts.dimOpacity !== undefined
-        ? opts.dimOpacity
-        : 0.6;
+  const opacity = opts.opacity ?? opts.dimOpacity ?? 0.6;
   const scale = opts.scale ?? 1;
   const baseGroup = toSafeSelector(opts.selector || ".group", ".group");
 
-  if (!ctx.nestedRules) ctx.nestedRules = [];
-
-  ctx.nestedRules.push({
+  (ctx.nestedRules ??= []).push({
     selector: `${baseGroup}:has(> :hover) > &:not(:hover)`,
     styles: {
       opacity,
@@ -183,9 +193,7 @@ function entanglePeerDim(opts: EntangleOptions, ctx: StyleContext): void {
     },
   });
 
-  ctx.transition =
-    ctx.transition ||
-    "transform .2s ease, opacity .2s ease, box-shadow .2s ease";
+  ctx.transition ??= "transform .2s ease, opacity .2s ease, box-shadow .2s ease";
 }
 
 function entangleGroup(
@@ -194,9 +202,8 @@ function entangleGroup(
   ctx: StyleContext,
 ): void {
   if (opts.sync?.includes("height") || !opts.sync) {
-    // Dynamically look up span constraint config from options parameter
     const rowSpan = opts.span ? `span ${opts.span}` : "span 3";
-    ctx.gridRow = ctx.gridRow || rowSpan;
+    ctx.gridRow ||= rowSpan;
     ctx._entangleMeta = {
       type: "group",
       groupName,
@@ -204,8 +211,7 @@ function entangleGroup(
     };
   }
 
-  if (!ctx._entangle) ctx._entangle = [];
-  ctx._entangle.push({ type: "group", groupName, opts, native: true });
+  (ctx._entangle ??= []).push({ type: "group", groupName, opts, native: true });
 }
 
 function entangleToken(
@@ -213,10 +219,16 @@ function entangleToken(
   opts: EntangleOptions,
   ctx: StyleContext,
 ): void {
-  const cssVar = `--${toSafeTokenPath(tokenPath).replace(/\./g, "-")}`;
+  const safePath = toSafeTokenPath(tokenPath);
+  const cssVar = `--${safePath.replace(/\./g, "-")}`;
 
-  if (!ctx._entangle) ctx._entangle = [];
-  ctx._entangle.push({ type: "token", tokenPath, cssVar, opts, native: true });
+  (ctx._entangle ??= []).push({
+    type: "token",
+    tokenPath: safePath,
+    cssVar,
+    opts,
+    native: true,
+  });
 
   ctx._needsContrastCheck = true;
 }
@@ -227,10 +239,8 @@ function entangleState(
   ctx: StyleContext,
 ): void {
   const stateName = toSafeStateName(rawStateName);
-
   const targetStyles = opts.styles || {};
 
-  // Scoped to avoid collision with standard layout hooks or external data schemas
   (ctx.nestedRules ??= []).push({
     selector: `[data-chain-${stateName}] &, [data-chain-state="${stateName}"] &`,
     styles: targetStyles,
@@ -242,41 +252,46 @@ function entangleContrast(ctx: StyleContext): void {
 }
 
 function entangleFocus(opts: EntangleOptions, ctx: StyleContext): void {
-  if (!ctx.nestedRules) ctx.nestedRules = [];
-
   const target = toSafeSelector(opts.targetSelector || "label", "label");
   const targetStyles = opts.styles || {
     transform: "translateY(-1.2rem) scale(0.85)",
     opacity: 1,
   };
 
-  ctx.nestedRules.push({
+  (ctx.nestedRules ??= []).push({
     selector: `&:focus-within ${target}, &:has(input:not(:placeholder-shown)) ${target}`,
     styles: targetStyles,
   });
 }
 
-function entangleHasCount(opts: EntangleOptions, ctx: StyleContext) {
+function entangleHasCount(opts: EntangleOptions, ctx: StyleContext): void {
   const count = Math.max(1, Math.floor(Number(opts.count) || 3));
   const styles = opts.styles ?? {};
-  if (!ctx.nestedRules) ctx.nestedRules = [];
 
-  ctx.nestedRules.push({
+  (ctx.nestedRules ??= []).push({
     selector: `&:has(> :nth-child(${count}))`,
     styles,
   });
 }
 
 // --- Macro Transpiler Evaluator ---
-export const entangleMacro = (v: any, c: StyleContext): void => {
+export const entangleMacro = (v: unknown, c: StyleContext): void => {
   if (typeof v === "string") {
     return entangle(v, {}, c);
   }
   if (Array.isArray(v)) {
     const [type, opts] = v;
-    return entangle(type, opts || {}, c);
+    if (typeof type === "string") {
+      return entangle(type, opts || {}, c);
+    }
   }
-  if (typeof v === "object" && v !== null && v.type) {
-    return entangle(v.type, v, c);
+  if (
+    v &&
+    typeof v === "object" &&
+    "type" in v &&
+    typeof (v as { type: unknown }).type === "string"
+  ) {
+    const item = v as { type: string; [key: string]: any };
+    return entangle(item.type, item, c);
   }
 };

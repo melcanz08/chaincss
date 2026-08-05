@@ -1,4 +1,6 @@
-// src/runtime/react.tsx — Zero-leak, concurrent-safe React runtime
+// src/frameworks/react/index.tsx 
+
+// — Zero-leak, concurrent-safe React runtime
 // Uses CSS custom properties instead of DOM injection for dynamic styles.
 // No textContent mutation, no memory leaks, React concurrent-mode safe.
 

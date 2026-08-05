@@ -3,11 +3,15 @@
 // ============================================================================
 
 import type { StyleIR } from "../ir/types.js";
-import type { LoweringPass, LoweringResult } from "../pipeline-types.js";
+import type {
+  LoweringPass,
+  LoweringResult,
+  LoweringContext,
+} from "../pipeline-types.js";
 import { createDeclaration } from "../ir/index.js";
 import { recordHistory } from "../ir/utils.js";
 
-interface Constraint {
+export interface Constraint {
   property: string;
   operator: string;
   expression: string;
@@ -60,10 +64,7 @@ function resolveConstraint(constraint: Constraint): {
       if (leftIsDim || rightIsDim) {
         const rawFactor = parseFloat(leftIsDim ? parts[1] : parts[0]);
 
-        if (!isNaN(rawFactor)) {
-          // Determine structural aspect-ratio (width / height)
-          // height = width * factor -> width/height = 1 / factor
-          // width = height * factor -> width/height = factor / 1
+        if (!isNaN(rawFactor) && rawFactor !== 0) {
           let widthRatio = 1;
           let heightRatio = 1;
 
@@ -81,8 +82,6 @@ function resolveConstraint(constraint: Constraint): {
             heightRatio = 1;
           }
 
-          // Format aspect-ratio cleanly without running floating-point GCD loops
-          // Using raw floats or structural fractions is fully valid in modern CSS engines
           const cssValue =
             widthRatio === 1 && heightRatio !== 0
               ? String(Number((1 / heightRatio).toFixed(4)))
@@ -97,7 +96,7 @@ function resolveConstraint(constraint: Constraint): {
       }
     }
 
-    // Safe mathematical calc fallback if expression parsing yields structural variables
+    // Mathematical calc fallback if expression parsing yields structural variables
     const cleanLeft = resolveReference(parts[0]);
     const cleanRight = parts[1] ? resolveReference(parts[1]) : "1";
     return {
@@ -128,7 +127,7 @@ function resolveConstraint(constraint: Constraint): {
 export const constraintResolver: LoweringPass = {
   name: "constraint-resolver",
 
-  generate(ir: StyleIR): LoweringResult {
+  generate(ir: StyleIR, _context?: LoweringContext): LoweringResult {
     let generatedNodes = 0;
 
     if (!ir || !ir.rules) {
@@ -137,7 +136,7 @@ export const constraintResolver: LoweringPass = {
 
     for (const rule of ir.rules) {
       const constraints = (rule.passMeta?.analysis?.semantic?.constraints ??
-        rule.meta?._constraints ??
+        (rule.meta as any)?._constraints ??
         []) as Constraint[];
       if (constraints.length === 0) continue;
 
@@ -147,7 +146,14 @@ export const constraintResolver: LoweringPass = {
 
       for (const constraint of constraints) {
         const resolved = resolveConstraint(constraint);
-        const decl = createDeclaration(resolved.cssProperty, resolved.cssValue);
+        const decl = createDeclaration(
+          resolved.cssProperty,
+          resolved.cssValue,
+          rule.source,
+          {
+            category: "resolved-constraint",
+          },
+        );
 
         rule.declarations.push(decl);
         recordHistory(

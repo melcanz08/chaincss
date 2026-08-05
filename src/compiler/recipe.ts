@@ -16,7 +16,9 @@ export interface RecipeOptions<
   variants?: TVariants;
   defaultVariants?: Partial<{ [K in keyof TVariants]: keyof TVariants[K] }>;
   compoundVariants?: Array<{
-    variants: Partial<{ [K in keyof TVariants]: keyof TVariants[K] }>;
+    variants: Partial<{
+      [K in keyof TVariants]: keyof TVariants[K] | Array<keyof TVariants[K]>;
+    }>;
     style: StyleDefinition | (() => StyleDefinition);
   }>;
   namespace?: string;
@@ -43,6 +45,7 @@ function deepMergeStyles(
   target: Record<string, any>,
   source: Record<string, any>,
 ): Record<string, any> {
+  if (!source || typeof source !== "object") return target || {};
   const output = { ...target };
 
   for (const [key, value] of Object.entries(source)) {
@@ -51,7 +54,9 @@ function deepMergeStyles(
         ? output.selectors
         : [];
       const sourceSelectors = Array.isArray(value) ? value : [value];
-      output.selectors = [...new Set([...targetSelectors, ...sourceSelectors])];
+      output.selectors = [
+        ...new Set([...targetSelectors, ...sourceSelectors]),
+      ];
     } else if (value && typeof value === "object" && !Array.isArray(value)) {
       output[key] = deepMergeStyles(output[key] || {}, value);
     } else {
@@ -105,18 +110,31 @@ export function recipe<
       string,
       any
     >;
+
     let merged: StyleDefinition = {
       selectors: [],
     } as unknown as StyleDefinition;
 
+    let baseExplicitSelectors: string[] = [];
     if (baseStyle) {
+      if (Array.isArray(baseStyle.selectors) && baseStyle.selectors.length > 0) {
+        baseExplicitSelectors = [...baseStyle.selectors];
+      }
       merged = deepMergeStyles(merged, baseStyle) as StyleDefinition;
     }
+
+    let variantExplicitSelectors: string[] = [];
 
     // Blend matching active variant layouts
     for (const [variantName, variantValue] of Object.entries(selected)) {
       const variantStyle = variantStyles[variantName]?.[variantValue];
       if (variantStyle) {
+        if (
+          Array.isArray(variantStyle.selectors) &&
+          variantStyle.selectors.length > 0
+        ) {
+          variantExplicitSelectors.push(...variantStyle.selectors);
+        }
         merged = deepMergeStyles(merged, variantStyle) as StyleDefinition;
       }
     }
@@ -126,25 +144,49 @@ export function recipe<
       const conditions = Object.entries(cv.condition);
       if (
         conditions.length > 0 &&
-        conditions.every(
-          ([key, value]) => value !== undefined && selected[key] === value,
-        )
+        conditions.every(([key, expectedValue]) => {
+          if (expectedValue === undefined) return false;
+          const actualValue = selected[key];
+          if (Array.isArray(expectedValue)) {
+            return expectedValue.includes(actualValue);
+          }
+          return actualValue === expectedValue;
+        })
       ) {
+        if (
+          Array.isArray(cv.style?.selectors) &&
+          cv.style.selectors.length > 0
+        ) {
+          variantExplicitSelectors.push(...cv.style.selectors);
+        }
         merged = deepMergeStyles(merged, cv.style) as StyleDefinition;
       }
     }
 
-    // Safe, immutable selector prefix processing
-    if (merged.selectors && merged.selectors.length > 0) {
-      merged.selectors = merged.selectors.map((s) => {
-        // Updated regex to prevent tagging standard HTML elements (e.g. "button", "div")
-        // if you want to support raw component-name classes as-is.
-        if (/^[.#\[:*]/.test(s) || s === "*") {
-          return s;
-        }
-        return "." + classPrefix + s;
-      });
+    // Construct key for variant combination
+    const activeEntries = Object.entries(selected).filter(
+      ([_, val]) => val !== undefined && val !== null && val !== "",
+    );
+    const variantKey = activeEntries.map(([k, v]) => `${k}-${v}`).join("_");
+
+    // Determine target selector list
+    if (variantExplicitSelectors.length > 0) {
+      merged.selectors = [...new Set(variantExplicitSelectors)];
+    } else if (baseExplicitSelectors.length > 0) {
+      merged.selectors = variantKey
+        ? baseExplicitSelectors.map((s) => `${s}_${variantKey}`)
+        : [...baseExplicitSelectors];
+    } else {
+      merged.selectors = [variantKey || "base"];
     }
+
+    // Safe, immutable selector prefix processing
+    merged.selectors = merged.selectors.map((s) => {
+      if (/^[.#\[:*]/.test(s) || s === "*") {
+        return s;
+      }
+      return "." + classPrefix + s;
+    });
 
     return merged;
   };
@@ -176,7 +218,7 @@ export function recipe<
             "Recipe variant cross-product limit exceeded (1000 combinations max).",
           );
         }
-        result.push(current as any); // Safely pushing the discrete cloned object
+        result.push(current as any);
         return;
       }
 
@@ -184,7 +226,6 @@ export function recipe<
       const optionsMap = variants[key];
 
       for (const option of Object.keys(optionsMap)) {
-        // FIX: Create a shallow clone on each branching path to prevent mutation references
         generate({ ...current, [key]: option }, index + 1);
       }
     }
@@ -197,9 +238,10 @@ export function recipe<
   const getVariantClassNames = (): Record<string, string> => {
     const classNames: Record<string, string> = {};
     for (const variant of getAllVariants()) {
-      const key = Object.entries(variant)
-        .map(([k, v]) => `${k}-${v}`)
-        .join("_");
+      const activeEntries = Object.entries(variant).filter(
+        ([_, v]) => v !== undefined && v !== null && v !== "",
+      );
+      const key = activeEntries.map(([k, v]) => `${k}-${v}`).join("_") || "base";
       const def = pick(variant);
       if (def.selectors?.[0]) {
         classNames[key] = def.selectors[0].replace(/^\./, "");
@@ -210,17 +252,7 @@ export function recipe<
 
   const compileAll = (): string => {
     const all = getAllVariants();
-    const styles: StyleDefinition[] = [];
-
-    // Clean up base styling compilation logic to avoid duplicate payload blocks
-    if (baseStyle && all.length === 0) {
-      styles.push(pick({}));
-    }
-
-    for (const v of all) {
-      styles.push(pick(v));
-    }
-
+    const styles: StyleDefinition[] = all.map((v) => pick(v));
     return run(...styles);
   };
 

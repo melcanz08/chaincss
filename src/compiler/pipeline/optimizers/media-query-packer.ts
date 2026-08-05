@@ -1,151 +1,289 @@
 // ============================================================================
 // FILE: src/compiler/pipeline/optimizers/media-query-packer.ts
 // ============================================================================
-// Graph-based media query packer. Deduplicates + sorts queries via AST comparison.
+// Graph-based media query packer. Deduplicates, merges, and sorts queries via AST comparison.
 
-import type { StyleIR, IRRule, IRAtRule } from "../ir/types.js";
+import type { StyleIR, IRRule, IRAtRule, IRDeclaration } from "../ir/types.js";
 import type {
   OptimizationPass,
   OptimizationResult,
 } from "../pipeline-types.js";
 import type { CSSValueNode } from "../ir/css-ast.js";
 import { astEqual } from "../ir/css-ast.js";
+import { recordHistory } from "../ir/utils.js";
 
 // ============================================================================
-// Query Sorting
+// Query Parsing & Sorting
 // ============================================================================
 
-function sortQueries(queries: string[]): string[] {
-  return queries.sort((a, b) => {
-    const aMin = extractPx(a, "min-width");
-    const bMin = extractPx(b, "min-width");
-    if (aMin !== null && bMin !== null) return aMin - bMin;
-    if (aMin !== null) return -1;
-    if (bMin !== null) return 1;
-    const aMax = extractPx(a, "max-width");
-    const bMax = extractPx(b, "max-width");
-    if (aMax !== null && bMax !== null) return bMax - aMax;
-    return a.localeCompare(b);
-  });
+interface QueryMetrics {
+  minWidth: number | null;
+  maxWidth: number | null;
+  hasHover: boolean;
+  raw: string;
 }
-
-function extractPx(query: string, prop: string): number | null {
-  const match = query.match(
-    new RegExp(`\\(${prop}:\\s*(\\d+(?:\\.\\d+)?)(px|em|rem)\\)`),
-  );
-  if (!match) return null;
-  const val = parseFloat(match[1]);
-  const unit = match[2];
-  if (unit === "px") return val;
-  if (unit === "rem") return val * 16;
-  return val * 16;
-}
-
-// ============================================================================
-// AST-Based Deduplication
-// ============================================================================
 
 /**
- * Compare two at-rules for semantic equality using AST comparison.
- * Two media queries are identical if:
- * - Same type and query string
- * - Same number of declarations
- * - All declarations match by property AND AST-equal values
+ * Extracts numeric pixel equivalents for min-width and max-width conditions,
+ * supporting standard syntax and Media Queries Level 4 range syntax.
  */
-function atRulesEqual(a: IRAtRule, b: IRAtRule): boolean {
-  if (a.type !== b.type) return false;
-  if (a.query !== b.query) return false;
+function extractPx(query: string, prop: "min-width" | "max-width"): number | null {
+  const normalized = query.toLowerCase();
 
-  const declsA = a.declarations || [];
-  const declsB = b.declarations || [];
-  if (declsA.length !== declsB.length) return false;
-
-  // Sort both by property for order-independent comparison
-  const sortedA = [...declsA].sort((x, y) =>
-    x.property.localeCompare(y.property),
+  // Standard syntax: (min-width: 768px)
+  const standardRegex = new RegExp(
+    `\\(${prop}\\s*:\\s*(\\d+(?:\\.\\d+)?)(px|em|rem|vw|vh|dvh|cqw)\\)`
   );
-  const sortedB = [...declsB].sort((x, y) =>
-    x.property.localeCompare(y.property),
-  );
+  const match = normalized.match(standardRegex);
+  if (match) {
+    return parseValueToPx(parseFloat(match[1]), match[2]);
+  }
 
-  for (let i = 0; i < sortedA.length; i++) {
-    if (sortedA[i].property !== sortedB[i].property) return false;
-
-    // Prefer AST comparison when available, fall back to string
-    const astA = (sortedA[i].meta as any)?.ast as CSSValueNode | undefined;
-    const astB = (sortedB[i].meta as any)?.ast as CSSValueNode | undefined;
-
-    if (astA && astB) {
-      if (!astEqual(astA, astB)) return false;
-    } else if (String(sortedA[i].value) !== String(sortedB[i].value)) {
-      return false;
+  // Range syntax: (width >= 768px) or (768px <= width)
+  if (prop === "min-width") {
+    const minRangeRegex = /(?:width\s*>=\s*|(\d+(?:\.\d+)?)(px|em|rem)\s*<=\s*width)(\d+(?:\.\d+)?)(px|em|rem)?/;
+    const rangeMatch = normalized.match(minRangeRegex);
+    if (rangeMatch) {
+      const val = parseFloat(rangeMatch[3] || rangeMatch[1]);
+      const unit = rangeMatch[4] || rangeMatch[2] || "px";
+      return parseValueToPx(val, unit);
     }
   }
 
-  return true;
+  if (prop === "max-width") {
+    const maxRangeRegex = /(?:width\s*<=\s*|(\d+(?:\.\d+)?)(px|em|rem)\s*>=\s*width)(\d+(?:\.\d+)?)(px|em|rem)?/;
+    const rangeMatch = normalized.match(maxRangeRegex);
+    if (rangeMatch) {
+      const val = parseFloat(rangeMatch[3] || rangeMatch[1]);
+      const unit = rangeMatch[4] || rangeMatch[2] || "px";
+      return parseValueToPx(val, unit);
+    }
+  }
+
+  return null;
 }
 
-function deduplicateAtRules(rules: IRRule[]): number {
-  let merged = 0;
+function parseValueToPx(value: number, unit: string): number {
+  switch (unit) {
+    case "px":
+      return value;
+    case "rem":
+    case "em":
+      return value * 16;
+    case "vw":
+    case "cqw":
+      return value * 10; // Normalized approximation for sorting
+    default:
+      return value;
+  }
+}
 
-  for (const rule of rules) {
-    if (rule.isDead || !rule.atRules) continue;
+/**
+ * Stable sort for media query at-rules. Preserves relative ordering when
+ * query metrics are equivalent to uphold CSS cascade semantics.
+ */
+function sortMediaAtRules(atRules: IRAtRule[]): { sorted: IRAtRule[]; changed: boolean } {
+  if (atRules.length < 2) return { sorted: atRules, changed: false };
 
-    const uniqueAtRules: IRAtRule[] = [];
+  const indexed = atRules.map((rule, index) => {
+    const q = rule.query || "";
+    return {
+      rule,
+      originalIndex: index,
+      metrics: {
+        minWidth: extractPx(q, "min-width"),
+        maxWidth: extractPx(q, "max-width"),
+        raw: q,
+      },
+    };
+  });
 
-    for (const atRule of rule.atRules || []) {
-      if (atRule.type !== "media") {
-        uniqueAtRules.push(atRule);
+  indexed.sort((a, b) => {
+    // 1. Mobile-first: Sort ascending by min-width
+    if (a.metrics.minWidth !== null && b.metrics.minWidth !== null) {
+      if (a.metrics.minWidth !== b.metrics.minWidth) {
+        return a.metrics.minWidth - b.metrics.minWidth;
+      }
+    } else if (a.metrics.minWidth !== null) {
+      return -1;
+    } else if (b.metrics.minWidth !== null) {
+      return 1;
+    }
+
+    // 2. Desktop-first fallback: Sort descending by max-width
+    if (a.metrics.maxWidth !== null && b.metrics.maxWidth !== null) {
+      if (a.metrics.maxWidth !== b.metrics.maxWidth) {
+        return b.metrics.maxWidth - a.metrics.maxWidth;
+      }
+    }
+
+    // 3. Preserve original DOM / source order to maintain cascade safety
+    return a.originalIndex - b.originalIndex;
+  });
+
+  let changed = false;
+  const sorted = indexed.map((item, newIndex) => {
+    if (item.originalIndex !== newIndex) changed = true;
+    return item.rule;
+  });
+
+  return { sorted, changed };
+}
+
+// ============================================================================
+// Declaration & At-Rule Merging
+// ============================================================================
+
+function declarationEquals(a: IRDeclaration, b: IRDeclaration): boolean {
+  if (a.property.toLowerCase().trim() !== b.property.toLowerCase().trim()) {
+    return false;
+  }
+
+  const astA = (a.meta as any)?.ast as CSSValueNode | undefined;
+  const astB = (b.meta as any)?.ast as CSSValueNode | undefined;
+
+  if (astA && astB) {
+    return astEqual(astA, astB);
+  }
+
+  return String(a.value).trim() === String(b.value).trim();
+}
+
+/**
+ * Merges declaration lists, eliminating exact duplicates while preserving
+ * declaration order for fallbacks and cascade overrides.
+ */
+function mergeDeclarations(
+  target: IRDeclaration[],
+  source: IRDeclaration[]
+): { merged: IRDeclaration[]; bytesSaved: number } {
+  let bytesSaved = 0;
+  const result = [...target];
+
+  for (const srcDecl of source) {
+    const existingIdx = result.findIndex(
+      (d) => d.property.toLowerCase().trim() === srcDecl.property.toLowerCase().trim()
+    );
+
+    if (existingIdx !== -1) {
+      const existingDecl = result[existingIdx];
+      if (declarationEquals(existingDecl, srcDecl)) {
+        // Exact duplicate declaration in identical media query scope
+        bytesSaved += String(srcDecl.property).length + String(srcDecl.value).length + 4;
         continue;
       }
+      // Override existing declaration value while updating position
+      result.splice(existingIdx, 1);
+    }
 
-      // Use AST comparison to detect duplicates
-      const isDuplicate = uniqueAtRules.some(
-        (existing) =>
-          existing.type === "media" && atRulesEqual(existing, atRule),
+    result.push(srcDecl);
+  }
+
+  return { merged: result, bytesSaved };
+}
+
+/**
+ * Merges duplicate media queries within a single rule context.
+ */
+function consolidateAtRules(
+  atRules: IRAtRule[],
+  passName: string
+): { consolidated: IRAtRule[]; mergedCount: number; bytesSaved: number } {
+  let mergedCount = 0;
+  let bytesSaved = 0;
+  const consolidated: IRAtRule[] = [];
+  const queryIndexMap = new Map<string, number>();
+
+  for (const current of atRules) {
+    if (current.type !== "media" || !current.query) {
+      consolidated.push(current);
+      continue;
+    }
+
+    const normalizedQuery = current.query.toLowerCase().trim();
+    const existingIdx = queryIndexMap.get(normalizedQuery);
+
+    if (existingIdx !== undefined) {
+      const targetAtRule = consolidated[existingIdx];
+      const targetDecls = targetAtRule.declarations || [];
+      const sourceDecls = current.declarations || [];
+
+      const { merged, bytesSaved: saved } = mergeDeclarations(targetDecls, sourceDecls);
+      
+      // Account for removed media query wrapper bytes
+      bytesSaved += saved + normalizedQuery.length + 9; // "@media ()"
+      targetAtRule.declarations = merged;
+      mergedCount++;
+
+      recordHistory(
+        targetAtRule as any,
+        passName,
+        "merged-media-query",
+        undefined,
+        `Consolidated media query "${current.query}"`
       );
-
-      if (isDuplicate) {
-        merged++;
-        continue;
-      }
-
-      uniqueAtRules.push(atRule);
-    }
-
-    if (uniqueAtRules.length < rule.atRules.length) {
-      rule.atRules = uniqueAtRules;
+    } else {
+      consolidated.push(current);
+      queryIndexMap.set(normalizedQuery, consolidated.length - 1);
     }
   }
 
-  return merged;
+  return { consolidated, mergedCount, bytesSaved };
 }
 
 // ============================================================================
-// At-Rule Sorting
+// Recursive IR Traversal
 // ============================================================================
 
-function sortAtRules(rules: IRRule[]): number {
+function processRule(
+  rule: IRRule,
+  passName: string
+): { merged: number; sorted: number; bytesSaved: number } {
+  let merged = 0;
   let sorted = 0;
+  let bytesSaved = 0;
 
-  for (const rule of rules) {
-    if (rule.isDead || !rule.atRules) continue;
+  if (rule.atRules && rule.atRules.length > 0) {
+    // 1. Consolidate and merge identical media queries
+    const consolidation = consolidateAtRules(rule.atRules, passName);
+    rule.atRules = consolidation.consolidated;
+    merged += consolidation.mergedCount;
+    bytesSaved += consolidation.bytesSaved;
 
-    const mediaAtRules = rule.atRules.filter(
-      (a) => a.type === "media" && a.query,
-    );
-    if (mediaAtRules.length < 2) continue;
+    // 2. Partition and sort media queries safely
+    const mediaRules: IRAtRule[] = [];
+    const nonMediaRules: IRAtRule[] = [];
 
-    const nonMedia = rule.atRules.filter((a) => a.type !== "media" || !a.query);
-    const sortedMedia = sortQueries(mediaAtRules.map((a) => a.query!)).map(
-      (q) => mediaAtRules.find((a) => a.query === q)!,
-    );
+    for (const at of rule.atRules) {
+      if (at.type === "media" && at.query) {
+        mediaRules.push(at);
+      } else {
+        nonMediaRules.push(at);
+      }
+    }
 
-    rule.atRules = [...nonMedia, ...sortedMedia];
-    sorted++;
+    if (mediaRules.length > 1) {
+      const sortResult = sortMediaAtRules(mediaRules);
+      if (sortResult.changed) {
+        rule.atRules = [...nonMediaRules, ...sortResult.sorted];
+        sorted++;
+      }
+    }
   }
 
-  return sorted;
+  // Traverse nested rules
+  if (rule.nestedRules) {
+    for (const nested of rule.nestedRules) {
+      if (nested && !nested.isDead) {
+        const res = processRule(nested, passName);
+        merged += res.merged;
+        sorted += res.sorted;
+        bytesSaved += res.bytesSaved;
+      }
+    }
+  }
+
+  return { merged, sorted, bytesSaved };
 }
 
 // ============================================================================
@@ -158,7 +296,8 @@ export const mediaQueryPacker: OptimizationPass = {
   requiredFor: ["css", "atomic-css"],
 
   optimize(ir: StyleIR): OptimizationResult {
-    if (!ir?.rules) {
+    const rules = ir?.rules;
+    if (!rules || rules.length === 0) {
       return {
         ir,
         savings: {
@@ -170,16 +309,30 @@ export const mediaQueryPacker: OptimizationPass = {
       };
     }
 
-    const merged = deduplicateAtRules(ir.rules);
-    const sorted = sortAtRules(ir.rules);
-    const bytesSaved = merged * 120;
+    if (!ir.diagnostics) {
+      ir.diagnostics = [];
+    }
 
-    if (merged + sorted > 0) {
+    let totalMerged = 0;
+    let totalSorted = 0;
+    let totalBytesSaved = 0;
+
+    for (let i = 0, len = rules.length; i < len; i++) {
+      const rule = rules[i];
+      if (!rule || rule.isDead) continue;
+
+      const res = processRule(rule, "media-query-packer");
+      totalMerged += res.merged;
+      totalSorted += res.sorted;
+      totalBytesSaved += res.bytesSaved;
+    }
+
+    if (totalMerged + totalSorted > 0) {
       ir.diagnostics.push({
-        id: `mqp-${ir.id}`,
-        nodeId: ir.id,
+        id: `mqp-${ir.id || "root"}-${Date.now()}`,
+        nodeId: ir.id || "root",
         severity: "info",
-        message: `Media query packer: merged ${merged} duplicates via AST comparison, sorted ${sorted} groups.`,
+        message: `Media query packer: consolidated ${totalMerged} duplicate queries, sorted ${totalSorted} query groups (~${totalBytesSaved} bytes saved).`,
         pass: "media-query-packer",
       });
     }
@@ -188,10 +341,10 @@ export const mediaQueryPacker: OptimizationPass = {
       ir,
       savings: {
         rulesEliminated: 0,
-        declarationsEliminated: merged,
-        bytesSaved,
+        declarationsEliminated: totalMerged,
+        bytesSaved: totalBytesSaved,
       },
-      changes: merged + sorted,
+      changes: totalMerged + totalSorted,
     };
   },
 };

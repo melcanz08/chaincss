@@ -24,10 +24,11 @@ export const cssEmitter: LoweringPass = {
       generatedNodes = ir.rules
         .filter((r) => !r.isDead)
         .reduce((sum, r) => {
-          const atRuleCount = (r as any).atRules?.length || 0;
+          const atRuleCount =
+            (r as { atRules?: unknown[] }).atRules?.length || 0;
           const pseudoCount = r.pseudoClasses
             ? r.pseudoClasses.filter(
-                (p: any) => p.declarations && p.declarations.length > 0,
+                (p) => p.declarations && p.declarations.length > 0,
               ).length
             : 0;
           return sum + 1 + atRuleCount + pseudoCount;

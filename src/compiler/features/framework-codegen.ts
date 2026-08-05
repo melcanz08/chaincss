@@ -1,90 +1,109 @@
 // src/compiler/features/framework-codegen.ts
 // Auto-generates React/Vue/Svelte/Solid components from style definitions
 
+import fs from "fs";
 import { createRequire } from "module";
+import path from "path";
 
 interface ComponentInfo {
   name: string;
   selector: string;
-  styles: Record<string, any>;
+  styles?: Record<string, any>;
   propsDefinition?: Record<string, any>;
   framework: "react" | "vue" | "svelte" | "solid" | "auto";
+  cwd?: string;
 }
 
-const getMetaUrl = () => {
+const getMetaUrl = (): string => {
   try {
-    return typeof import.meta !== "undefined" && import.meta.url
-      ? import.meta.url
-      : __filename;
-  } catch {
-    return "";
+    if (typeof import.meta !== "undefined" && import.meta.url) {
+      return import.meta.url;
+    }
+  } catch {}
+  
+  if (typeof __filename !== "undefined" && __filename) {
+    return `file://${__filename}`;
   }
+  
+  return "";
 };
 
 /**
- * Safely sniff out package presence across dynamic CJS and ESM toolchains
+ * Safely sniffs framework presence from target project dependencies or module resolution.
  */
-export function detectFramework(): "react" | "vue" | "svelte" | "solid" {
-  let lookup: (path: string) => string;
-
+export function detectFramework(cwd: string = process.cwd()): "react" | "vue" | "svelte" | "solid" {
+  // 1. Inspect target project's package.json first for accurate project-level detection
   try {
-    // ESM safe resolution check
-    lookup =
-      typeof require !== "undefined" && typeof require.resolve === "function"
-        ? require.resolve
-        : createRequire(getMetaUrl()).resolve;
+    const pkgPath = path.join(cwd, "package.json");
+    if (fs.existsSync(pkgPath)) {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+      const deps = { ...pkg.dependencies, ...pkg.devDependencies, ...pkg.peerDependencies };
+
+      if (deps["solid-js"]) return "solid";
+      if (deps["svelte"]) return "svelte";
+      if (deps["vue"]) return "vue";
+      if (deps["react"]) return "react";
+    }
+  } catch {}
+
+  // 2. Fall back to module lookup resolution anchored to target cwd
+  let lookup: (path: string) => string;
+  try {
+    const metaUrl = getMetaUrl();
+    const req = metaUrl ? createRequire(metaUrl) : (typeof require !== "undefined" ? require : null);
+    
+    if (req) {
+      lookup = (mod: string) => req.resolve(mod, { paths: [cwd] });
+    } else {
+      return "react";
+    }
   } catch {
     return "react";
   }
 
-  try {
-    lookup("react");
-    return "react";
-  } catch {}
-  try {
-    lookup("vue");
-    return "vue";
-  } catch {}
-  try {
-    lookup("svelte");
-    return "svelte";
-  } catch {}
-  try {
-    lookup("solid-js");
-    return "solid";
-  } catch {}
+  try { lookup("solid-js"); return "solid"; } catch {}
+  try { lookup("svelte"); return "svelte"; } catch {}
+  try { lookup("vue"); return "vue"; } catch {}
+  try { lookup("react"); return "react"; } catch {}
 
   return "react";
 }
+
+const JS_RESERVED_WORDS = new Set([
+  "break", "case", "catch", "class", "const", "continue", "debugger",
+  "default", "delete", "do", "else", "enum", "export", "extends",
+  "false", "finally", "for", "function", "if", "import", "in",
+  "instanceof", "new", "null", "return", "super", "switch", "this",
+  "throw", "true", "try", "typeof", "var", "void", "while", "with",
+  "yield", "let", "static", "await", "package", "private", "protected",
+  "public", "interface", "type", "object", "string", "number", "boolean",
+  "component", "element"
+]);
 
 function toSafeComponentName(input: string): string {
   const cleaned = input
     .replace(/[^a-zA-Z0-9_-]/g, "")
     .replace(/^[^a-zA-Z]+/, "");
+    
   if (!cleaned) throw new Error("Invalid component name: " + input);
+
   // my-button / my_button -> MyButton
   const pascal = cleaned
     .split(/[-_]+/)
+    .filter(Boolean)
     .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
     .join("");
-  // guard reserved words
-  const reserved = new Set([
-    "class",
-    "default",
-    "export",
-    "import",
-    "function",
-  ]);
-  return reserved.has(pascal.toLowerCase()) ? `${pascal}Component` : pascal;
+
+  if (!pascal) throw new Error("Invalid component name: " + input);
+
+  return JS_RESERVED_WORDS.has(pascal.toLowerCase()) ? `${pascal}Component` : pascal;
 }
 
 export function generateComponentCode(info: ComponentInfo): string {
   const framework =
-    info.framework === "auto" ? detectFramework() : info.framework;
+    info.framework === "auto" ? detectFramework(info.cwd) : info.framework;
 
   const safeName = toSafeComponentName(info.name);
-  if (!safeName) throw new Error("Invalid component name: " + info.name);
-
   const cleanSelector = info.selector.replace(/^\./, "");
   const key = JSON.stringify(cleanSelector);
 
@@ -94,20 +113,19 @@ export function generateComponentCode(info: ComponentInfo): string {
         ? Object.entries(info.propsDefinition)
             .filter(([k]) => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(k))
             .map(([k, t]) => {
-              const safeType = [
-                "string",
-                "number",
-                "boolean",
-                "any",
-                "ReactNode",
-                "JSX.Element",
-              ].includes(t)
-                ? t
-                : "any";
+              let safeType = "any";
+              if (t === "ReactNode") {
+                safeType = "React.ReactNode";
+              } else if (
+                ["string", "number", "boolean", "any", "React.ReactNode", "JSX.Element"].includes(t)
+              ) {
+                safeType = t;
+              }
               return `  ${k}?: ${safeType};`;
             })
             .join("\n")
         : "  [key: string]: any;";
+
       return `// Auto-generated by ChainCSS
 import React from 'react';
 import styles from './${safeName}.class.js';
@@ -128,6 +146,7 @@ ${safeName}.displayName = 'ChainCSS${safeName}';
 export default ${safeName};
 `;
     }
+
     case "vue":
       return `<!-- Auto-generated by ChainCSS -->
 <template>
@@ -142,6 +161,7 @@ export default {
   computed: { combinedClass() { return [styles[${key}], this.className].filter(Boolean).join(' '); } }
 };
 </script>`;
+
     case "svelte":
       return `<!-- Auto-generated by ChainCSS -->
 <script>
@@ -152,6 +172,7 @@ export default {
   $: combinedClass = [styles[${key}], className].filter(Boolean).join(' ');
 </script>
 <svelte:element this={tag} class={combinedClass}><slot /></svelte:element>`;
+
     case "solid":
       return `// Auto-generated by ChainCSS
 import { Dynamic } from 'solid-js/web';
@@ -159,17 +180,19 @@ import styles from './${safeName}.class.js';
 import './${safeName}.css';
 
 export function ${safeName}(props: any) {
-  // Backward compatible properties extraction supporting Solid versions < 1.4
   const tag = () => props.tag || 'div';
-  const cn = () => [styles[${key}], props.class].filter(Boolean).join(' ');
+  const cn = () => [styles[${key}], props.class || props.className].filter(Boolean).join(' ');
   
   const restProps = () => {
-    const { tag, class, children, ...rest } = props;
+    const { tag, class: _c, className: _cn, children, ...rest } = props;
     return rest;
   };
 
   return <Dynamic component={tag()} class={cn()} {...restProps()}>{props.children}</Dynamic>;
-}`;
+}
+export default ${safeName};
+`;
+
     default:
       return generateComponentCode({ ...info, framework: "react" });
   }

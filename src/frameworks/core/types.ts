@@ -1,5 +1,6 @@
 // @ts-nocheck — optional peer dependency
-// src/runtime/types.ts
+
+// src/franeworks/core/types.ts
 
 import type { StyleObject } from "@core/usecases/style-compiler.js";
 

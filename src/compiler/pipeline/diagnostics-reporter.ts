@@ -1,7 +1,7 @@
 // src/compiler/pipeline/diagnostics-reporter.ts
 // Aggregates diagnostics, timing, and suggestions from pipeline runs
 
-import type { StyleIR, IRDiagnostic } from "./ir/types.js";
+import type { StyleIR, IRDiagnostic, IRRule } from "./ir/types.js";
 import type {
   PipelineStageResult,
   Diagnostic,
@@ -64,6 +64,32 @@ export interface DiagnosticsReport {
   };
 }
 
+/** Helper to recursively collect all declarations from rules, pseudo-classes, and nested rules */
+function collectAllDeclarations(rules: IRRule[]): Array<{ property: string; value: unknown }> {
+  const decls: Array<{ property: string; value: unknown }> = [];
+  
+  function traverse(ruleList: IRRule[]) {
+    for (const rule of ruleList) {
+      if (rule.declarations) {
+        for (const d of rule.declarations) decls.push(d);
+      }
+      if (rule.pseudoClasses) {
+        for (const pc of rule.pseudoClasses) {
+          if (pc.declarations) {
+            for (const d of pc.declarations) decls.push(d);
+          }
+        }
+      }
+      if (rule.nestedRules && rule.nestedRules.length > 0) {
+        traverse(rule.nestedRules);
+      }
+    }
+  }
+
+  traverse(rules);
+  return decls;
+}
+
 export function generateDiagnosticsReport(
   timeline: PipelineStageResult[],
   ir: StyleIR,
@@ -77,60 +103,74 @@ export function generateDiagnosticsReport(
     changes: (stage.result as any)?.changes,
   }));
 
-  // Collect all diagnostics
-  const allDiagnostics: Array<{
-    severity: string;
-    category?: string;
-    message: string;
-    suggestion?: string;
-    pass: string;
-    autoFixable?: boolean;
-  }> = [];
+  // Map to prevent duplicate diagnostic recording
+  const uniqueDiagnosticsMap = new Map<
+    string,
+    {
+      severity: string;
+      category?: string;
+      message: string;
+      suggestion?: string;
+      pass: string;
+      autoFixable?: boolean;
+    }
+  >();
 
+  function addDiagnostic(
+    d: {
+      id?: string;
+      severity: string;
+      category?: string;
+      message: string;
+      suggestion?: string;
+      pass?: string;
+      autoFixable?: boolean;
+    },
+    defaultPass: string,
+  ) {
+    const passName = d.pass || defaultPass || "unknown";
+    const key = d.id || `${passName}:${d.severity}:${d.message}:${d.suggestion || ""}`;
+
+    if (!uniqueDiagnosticsMap.has(key)) {
+      uniqueDiagnosticsMap.set(key, {
+        severity: d.severity,
+        category: d.category,
+        message: d.message,
+        suggestion: d.suggestion,
+        pass: passName,
+        autoFixable: d.autoFixable,
+      });
+    }
+  }
+
+  // 1. Collect from ValidationPass results
   for (const stage of timeline) {
     const result = stage.result as any;
 
-    // From ValidationPass results
     if (result?.diagnostics) {
       for (const d of result.diagnostics as Diagnostic[]) {
-        allDiagnostics.push({
-          severity: d.severity,
-          category: d.category,
-          message: d.message,
-          suggestion: d.suggestion,
-          pass: stage.pass,
-          autoFixable: d.autoFixable,
-        });
+        addDiagnostic(d, stage.pass);
       }
     }
 
-    // From IR diagnostics
     if (result?.ir?.diagnostics) {
       for (const d of result.ir.diagnostics as IRDiagnostic[]) {
-        allDiagnostics.push({
-          severity: d.severity,
-          message: d.message,
-          suggestion: d.suggestion,
-          pass: d.pass,
-        });
+        addDiagnostic(d, stage.pass);
       }
     }
   }
 
-  // Also collect from the final IR
-  for (const d of ir.diagnostics) {
-    allDiagnostics.push({
-      severity: d.severity,
-      message: d.message,
-      suggestion: d.suggestion,
-      pass: d.pass,
-    });
+  // 2. Collect from final IR (catches any added outside pass results)
+  if (ir?.diagnostics) {
+    for (const d of ir.diagnostics) {
+      addDiagnostic(d, d.pass || "pipeline");
+    }
   }
 
+  const allDiagnostics = Array.from(uniqueDiagnosticsMap.values());
+
   const errors = allDiagnostics.filter((d) => d.severity === "error").length;
-  const warnings = allDiagnostics.filter(
-    (d) => d.severity === "warning",
-  ).length;
+  const warnings = allDiagnostics.filter((d) => d.severity === "warning").length;
   const info = allDiagnostics.filter((d) => d.severity === "info").length;
   const hints = allDiagnostics.filter((d) => d.severity === "hint").length;
 
@@ -151,19 +191,11 @@ export function generateDiagnosticsReport(
     }
   }
 
-  // IR statistics
-  const allRules = ir.rules;
+  // IR statistics (Null-safe)
+  const allRules = ir?.rules ?? [];
   const deadRules = allRules.filter((r) => r.isDead).length;
-  const allDeclarations = allRules.reduce(
-    (sum, r) =>
-      sum +
-      r.declarations.length +
-      r.pseudoClasses.reduce((s, pc) => s + pc.declarations.length, 0),
-    0,
-  );
-  const uniqueProperties = new Set(
-    allRules.flatMap((r) => r.declarations.map((d) => d.property)),
-  ).size;
+  const allDecls = collectAllDeclarations(allRules);
+  const uniqueProperties = new Set(allDecls.map((d) => d.property)).size;
 
   // Performance
   const sortedPasses = [...passTimings].sort((a, b) => b.duration - a.duration);
@@ -184,10 +216,10 @@ export function generateDiagnosticsReport(
     irStats: {
       totalRules: allRules.length,
       deadRules,
-      totalDeclarations: allDeclarations,
+      totalDeclarations: allDecls.length,
       uniqueProperties,
       passesRun: timeline.length,
-      filesProcessed: ir.meta.sourceFiles.length,
+      filesProcessed: ir?.meta?.sourceFiles?.length ?? 0,
     },
     performance: {
       slowestPass: slowestPass?.pass || "unknown",
@@ -262,8 +294,12 @@ export function formatDiagnosticsReport(report: DiagnosticsReport): string {
   }
 
   lines.push("  Pass Timings:");
+  const maxDuration = report.performance.slowestPassDuration || 1;
+  const MAX_BAR_WIDTH = 20;
+
   for (const pt of report.passTimings) {
-    const bar = "█".repeat(Math.round(pt.duration / 5));
+    const barLength = Math.round((pt.duration / maxDuration) * MAX_BAR_WIDTH);
+    const bar = "█".repeat(Math.max(0, barLength));
     lines.push(
       `    ${pt.pass.padEnd(30)} ${pt.duration.toFixed(2).padStart(6)}ms ${bar}`,
     );

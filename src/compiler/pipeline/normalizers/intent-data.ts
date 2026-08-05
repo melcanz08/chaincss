@@ -1,6 +1,4 @@
-// ============================================================================
-// FILE: src/compiler/pipeline/normalizers/intent-data.ts
-// ============================================================================
+// src/compiler/pipeline/normalizers/intent-dat.ts
 
 import type { CorrectionResult, IntentContext } from "@shared/types/index.js";
 
@@ -10,14 +8,23 @@ export interface ValueCorrection {
   confidence: number;
 }
 
-const BUILTIN_SEMANTIC_INTENTS: Array<{
+export interface SemanticIntent {
   pattern: RegExp;
-  handler: Function;
+  handler: (value: string, ctx: IntentContext) => CorrectionResult | null;
   description: string;
-}> = [
+}
+
+function toKebabCase(prop: string): string {
+  return prop
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
+    .toLowerCase();
+}
+
+const BUILTIN_SEMANTIC_INTENTS: SemanticIntent[] = [
   {
     pattern: /^flexbox$/i,
-    handler: (v: string, ctx: any) => ({
+    handler: (v: string, ctx: IntentContext): CorrectionResult => ({
       original: v,
       property: ctx.property || "display",
       corrected: "flex",
@@ -34,7 +41,7 @@ const BUILTIN_SEMANTIC_INTENTS: Array<{
   },
   {
     pattern: /^(absolutely|abs)$/i,
-    handler: (v: string, ctx: any) => ({
+    handler: (v: string, ctx: IntentContext): CorrectionResult => ({
       original: v,
       property: ctx.property || "position",
       corrected: "absolute",
@@ -47,7 +54,7 @@ const BUILTIN_SEMANTIC_INTENTS: Array<{
   },
   {
     pattern: /^(rel|relatively)$/i,
-    handler: (v: string, ctx: any) => ({
+    handler: (v: string, ctx: IntentContext): CorrectionResult => ({
       original: v,
       property: ctx.property || "position",
       corrected: "relative",
@@ -60,9 +67,23 @@ const BUILTIN_SEMANTIC_INTENTS: Array<{
   },
   {
     pattern: /^(hidden|invisible)$/i,
-    handler: (v: string, ctx: any) => {
-      if (ctx.property === "overflow") return null;
+    handler: (v: string, ctx: IntentContext): CorrectionResult | null => {
+      const prop = (ctx.property || "").toLowerCase();
+      if (prop.startsWith("overflow")) return null;
+
       const low = v.toLowerCase();
+      if (prop === "display") {
+        return {
+          original: v,
+          property: "display",
+          corrected: "none",
+          defaults: { display: "none" },
+          confidence: 0.95,
+          intent: "display-none",
+          explanation: '"' + v + '" on display -> display: none',
+        };
+      }
+
       return {
         original: v,
         property: ctx.property || "visibility",
@@ -73,24 +94,36 @@ const BUILTIN_SEMANTIC_INTENTS: Array<{
         explanation: '"' + v + '" -> visibility: hidden',
       };
     },
-    description: "invisible -> hidden",
+    description: "invisible/hidden -> visibility: hidden or display: none",
   },
   {
     pattern: /^(full|fullscreen|full-screen)$/i,
-    handler: (v: string, ctx: any) => ({
-      original: v,
-      property: ctx.property || "size",
-      corrected: "100%",
-      defaults: { width: "100%", height: "100%" },
-      confidence: 0.85,
-      intent: "full-size",
-      explanation: '"full/fullscreen" -> width/height: 100%',
-    }),
+    handler: (v: string, ctx: IntentContext): CorrectionResult => {
+      const prop = (ctx.property || "").toLowerCase();
+      const isWidthOnly = prop === "width" || prop === "min-width" || prop === "max-width";
+      const isHeightOnly = prop === "height" || prop === "min-height" || prop === "max-height";
+
+      const defaults: Record<string, string> = isWidthOnly
+        ? { width: "100%" }
+        : isHeightOnly
+        ? { height: "100%" }
+        : { width: "100%", height: "100%" };
+
+      return {
+        original: v,
+        property: ctx.property || "size",
+        corrected: "100%",
+        defaults,
+        confidence: 0.85,
+        intent: "full-size",
+        explanation: '"full/fullscreen" -> 100%',
+      };
+    },
     description: "full -> 100%",
   },
   {
     pattern: /^(rounded|round)$/i,
-    handler: (v: string, ctx: any) => ({
+    handler: (v: string, ctx: IntentContext): CorrectionResult => ({
       original: v,
       property: ctx.property || "border-radius",
       corrected: "9999px",
@@ -103,28 +136,38 @@ const BUILTIN_SEMANTIC_INTENTS: Array<{
   },
 ];
 
-export let SEMANTIC_INTENTS: Array<{
-  pattern: RegExp;
-  handler: Function;
-  description: string;
-}> = [...BUILTIN_SEMANTIC_INTENTS];
+export const SEMANTIC_INTENTS: SemanticIntent[] = [...BUILTIN_SEMANTIC_INTENTS];
 
 export function registerSemanticIntent(
-  intent: { pattern: RegExp; handler: Function; description: string },
+  intent: SemanticIntent,
   allowOverride = false,
 ) {
+  if (allowOverride) {
+    const idx = SEMANTIC_INTENTS.findIndex(
+      (i) =>
+        i.description === intent.description ||
+        i.pattern.source === intent.pattern.source,
+    );
+    if (idx !== -1) {
+      SEMANTIC_INTENTS[idx] = intent;
+      return;
+    }
+  }
   SEMANTIC_INTENTS.push(intent);
 }
+
 export function registerSemanticIntents(
-  intents: Array<{ pattern: RegExp; handler: Function; description: string }>,
+  intents: SemanticIntent[],
   allowOverride = false,
 ) {
   for (let i = 0, len = intents.length; i < len; i++) {
     registerSemanticIntent(intents[i], allowOverride);
   }
 }
+
 export function resetSemanticIntents() {
-  SEMANTIC_INTENTS = [...BUILTIN_SEMANTIC_INTENTS];
+  SEMANTIC_INTENTS.length = 0;
+  SEMANTIC_INTENTS.push(...BUILTIN_SEMANTIC_INTENTS);
 }
 
 const BUILTIN_VALUE_CORRECTIONS: Record<string, ValueCorrection[]> = {
@@ -145,20 +188,26 @@ const BUILTIN_VALUE_CORRECTIONS: Record<string, ValueCorrection[]> = {
   "user-select": [{ wrong: "unselectable", correct: "none", confidence: 0.85 }],
 };
 
-export let VALUE_CORRECTIONS: Record<string, ValueCorrection[]> = {
+export const VALUE_CORRECTIONS: Record<string, ValueCorrection[]> = {
   ...BUILTIN_VALUE_CORRECTIONS,
 };
+
 export function registerValueCorrections(
   prop: string,
   corrections: ValueCorrection[],
 ) {
-  VALUE_CORRECTIONS[prop] = [
-    ...(VALUE_CORRECTIONS[prop] || []),
+  const kebab = toKebabCase(prop);
+  VALUE_CORRECTIONS[kebab] = [
+    ...(VALUE_CORRECTIONS[kebab] || []),
     ...corrections,
   ];
 }
+
 export function resetValueCorrections() {
-  VALUE_CORRECTIONS = { ...BUILTIN_VALUE_CORRECTIONS };
+  for (const k of Object.keys(VALUE_CORRECTIONS)) {
+    delete VALUE_CORRECTIONS[k];
+  }
+  Object.assign(VALUE_CORRECTIONS, BUILTIN_VALUE_CORRECTIONS);
 }
 
 const BUILTIN_KNOWN = [
@@ -299,37 +348,22 @@ const BUILTIN_KNOWN = [
 export const KNOWN_PROPERTIES: string[] = [...BUILTIN_KNOWN];
 const knownSet = new Set<string>(BUILTIN_KNOWN.map((p) => p.toLowerCase()));
 const customKnown = new Set<string>();
+const customKnownProperties = new Set<string>();
+const propertyCache = new Map<string, string | null>();
 
-export function registerCustomKnownProperties(props: string[]) {
-  propertyCache.clear();
-  for (let i = 0, len = props.length; i < len; i++) {
-    const lp = props[i].toLowerCase();
-    if (!knownSet.has(lp)) {
-      knownSet.add(lp);
-      customKnown.add(lp);
-      KNOWN_PROPERTIES.push(props[i]);
-    }
+export function registerCustomKnownProperties(props: string[]): void {
+  for (const prop of props) {
+    const kebab = toKebabCase(prop);
+    customKnown.add(kebab);
+    customKnownProperties.add(prop);
   }
 }
 
-const REGEX_UPPER_CASE = /[A-Z]/g;
-
 export function isKnownProperty(prop: string): boolean {
-  const propLower = prop.toLowerCase();
-  const kebab =
-    propLower === prop
-      ? prop
-      : prop.replace(
-          REGEX_UPPER_CASE,
-          (m, offset) => (offset > 0 ? "-" : "") + m.toLowerCase(),
-        );
-
-  return (
-    knownSet.has(kebab) ||
-    customKnown.has(kebab) ||
-    knownSet.has(propLower) ||
-    customKnown.has(propLower)
-  );
+  if (!prop) return false;
+  if (prop.startsWith("--")) return true;
+  const kebab = toKebabCase(prop);
+  return knownSet.has(kebab) || customKnown.has(kebab);
 }
 
 export function resetKnownProperties() {
@@ -340,59 +374,71 @@ export function resetKnownProperties() {
     knownSet.add(BUILTIN_KNOWN[i].toLowerCase());
   }
   customKnown.clear();
+  customKnownProperties.clear();
   propertyCache.clear();
 }
 
+let prevRow = new Int32Array(128);
+let curRow = new Int32Array(128);
+
 export function levenshtein(a: string, b: string, maxDist = 4): number {
   if (Math.abs(a.length - b.length) > maxDist) return maxDist + 1;
-  const al = a.length,
-    bl = b.length;
+  const al = a.length, bl = b.length;
   if (al === 0) return bl;
   if (bl === 0) return al;
 
-  let prev = new Array(bl + 1),
-    cur = new Array(bl + 1);
-  for (let j = 0; j <= bl; j++) prev[j] = j;
+  if (bl + 1 > prevRow.length) {
+    prevRow = new Int32Array(bl + 64);
+    curRow = new Int32Array(bl + 64);
+  }
+
+  for (let j = 0; j <= bl; j++) prevRow[j] = j;
+
   for (let i = 1; i <= al; i++) {
-    cur[0] = i;
-    let minInRow = cur[0];
+    curRow[0] = i;
+    let minInRow = curRow[0];
     const ca = a.charCodeAt(i - 1);
+
     for (let j = 1; j <= bl; j++) {
       const cost = ca === b.charCodeAt(j - 1) ? 0 : 1;
-      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
-      if (cur[j] < minInRow) minInRow = cur[j];
+      curRow[j] = Math.min(prevRow[j] + 1, curRow[j - 1] + 1, prevRow[j - 1] + cost);
+      if (curRow[j] < minInRow) minInRow = curRow[j];
     }
+
     if (minInRow > maxDist) return maxDist + 1;
-    const tmp = prev;
-    prev = cur;
-    cur = tmp;
+    for (let j = 0; j <= bl; j++) prevRow[j] = curRow[j];
   }
-  return prev[bl];
+
+  return prevRow[bl];
 }
 
-const propertyCache = new Map<string, string | null>();
+export function findClosestProperty(input: string): string | null {
+  // Merge static built-in properties with dynamically registered custom properties
+  const allProperties = [
+    ...BUILTIN_KNOWN,
+    ...customKnownProperties,
+  ];
 
-export function findClosestProperty(prop: string): string | null {
-  const lp = prop.toLowerCase();
-  if (isKnownProperty(lp)) return lp;
-  const cached = propertyCache.get(lp);
-  if (cached !== undefined) return cached;
+  let bestMatch: string | null = null;
+  let minDistance = Infinity;
 
-  let best: string | null = null;
-  let bestDist = 3;
+  // Max distance threshold (typically 2 for typos)
+  const maxAllowedDistance = Math.min(3, Math.floor(input.length / 2) + 1);
 
-  for (let i = 0, len = KNOWN_PROPERTIES.length; i < len; i++) {
-    const k = KNOWN_PROPERTIES[i];
-    if (Math.abs(k.length - lp.length) > 3) continue;
-    const d = levenshtein(lp, k.toLowerCase(), bestDist);
-    if (d < bestDist) {
-      bestDist = d;
-      best = k;
-      if (d === 1) break;
+  for (const candidate of allProperties) {
+    // Early length check optimization
+    if (Math.abs(candidate.length - input.length) > maxAllowedDistance) {
+      continue;
+    }
+
+    const dist = levenshtein(input, candidate, maxAllowedDistance);
+    if (dist < minDistance && dist <= maxAllowedDistance) {
+      minDistance = dist;
+      bestMatch = candidate;
     }
   }
-  propertyCache.set(lp, best);
-  return best;
+
+  return bestMatch;
 }
 
 export function clearPropertyCache() {

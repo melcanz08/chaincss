@@ -57,8 +57,8 @@ export class PersistentCache {
     this.metadata = { entries: {}, totalSize: 0, lastCleanup: 0 };
 
     if (this.options.enabled) {
-      this.ensureDir();
-      this.loadMetadata();
+      this.ensureDirSync();
+      this.loadMetadataSync();
     }
   }
 
@@ -70,10 +70,6 @@ export class PersistentCache {
     return crypto.createHash("sha256").update(content).digest("hex");
   }
 
-  /**
-   * Resolve a dependency hash from a file path or raw string.
-   * Uses async fs for large project support.
-   */
   private async resolveDependencyHash(dep: string): Promise<string> {
     try {
       await fs.promises.access(dep);
@@ -88,6 +84,15 @@ export class PersistentCache {
     return this.hash(dep);
   }
 
+  private resolveDependencyHashSync(dep: string): string {
+    try {
+      if (fs.existsSync(dep) && fs.statSync(dep).isFile()) {
+        return this.hash(fs.readFileSync(dep));
+      }
+    } catch {}
+    return this.hash(dep);
+  }
+
   // ==========================================================================
   // Memory Cache (LRU)
   // ==========================================================================
@@ -95,7 +100,6 @@ export class PersistentCache {
   private touchMemoryCache(hash: string): PersistentCacheEntry | undefined {
     const entry = this.memoryCache.get(hash);
     if (entry) {
-      // Re-insert to push to the back (most recently used)
       this.memoryCache.delete(hash);
       this.memoryCache.set(hash, entry);
     }
@@ -106,7 +110,6 @@ export class PersistentCache {
     if (this.memoryCache.has(hash)) {
       this.memoryCache.delete(hash);
     } else if (this.memoryCache.size >= MAX_MEMORY_ENTRIES) {
-      // Evict least recently used (first key)
       const lruKey = this.memoryCache.keys().next().value;
       if (lruKey) this.memoryCache.delete(lruKey);
     }
@@ -123,17 +126,22 @@ export class PersistentCache {
   }
 
   async getByFile(filePath: string): Promise<any | null> {
-    if (!this.options.enabled || !fs.existsSync(filePath)) return null;
-    return this.getByContent(fs.readFileSync(filePath, "utf8"));
+    if (!this.options.enabled) return null;
+    try {
+      await fs.promises.access(filePath);
+      const content = await fs.promises.readFile(filePath, "utf8");
+      return this.getByContent(content);
+    } catch {
+      return null;
+    }
   }
 
   async getByHash(hash: string): Promise<any | null> {
     if (!this.options.enabled) return null;
 
-    // Check memory cache first
     const entry = this.touchMemoryCache(hash);
     if (entry) {
-      if (!this.isExpired(entry)) {
+      if (!this.isExpired(entry) && (await this.checkDependenciesValid(entry))) {
         if (this.options.verbose)
           console.log(`[persistent-cache] Memory HIT: ${hash.slice(0, 8)}`);
         return entry.result;
@@ -141,21 +149,19 @@ export class PersistentCache {
       this.memoryCache.delete(hash);
     }
 
-    // Check disk cache
     const cachePath = path.join(this.cacheDir, `${hash}.json`);
     try {
       await fs.promises.access(cachePath);
       const raw = await fs.promises.readFile(cachePath, "utf8");
       const diskEntry: PersistentCacheEntry = JSON.parse(raw);
 
-      if (!this.isExpired(diskEntry)) {
+      if (!this.isExpired(diskEntry) && (await this.checkDependenciesValid(diskEntry))) {
         this.writeMemoryLRU(hash, diskEntry);
         if (this.options.verbose)
           console.log(`[persistent-cache] Disk HIT: ${hash.slice(0, 8)}`);
         return diskEntry.result;
       }
 
-      // Expired — clean up
       await fs.promises.unlink(cachePath).catch(() => {});
     } catch {
       // Cache miss
@@ -178,12 +184,14 @@ export class PersistentCache {
     result: any,
     dependencies: string[] = [],
   ): Promise<string> {
-    if (!this.options.enabled || !fs.existsSync(filePath)) return "";
-    return this.setByContent(
-      fs.readFileSync(filePath, "utf8"),
-      result,
-      dependencies,
-    );
+    if (!this.options.enabled) return "";
+    try {
+      await fs.promises.access(filePath);
+      const content = await fs.promises.readFile(filePath, "utf8");
+      return this.setByContent(content, result, dependencies);
+    } catch {
+      return "";
+    }
   }
 
   async setByHash(
@@ -192,23 +200,23 @@ export class PersistentCache {
     dependencies: string[] = [],
   ): Promise<string> {
     if (!this.options.enabled) return hash;
-    this.ensureDir();
-    // Deduplication: skip if already on disk
+    await this.ensureDirAsync();
+
     const cachePath = path.join(this.cacheDir, `${hash}.json`);
     if (this.metadata.entries[hash]) {
       try {
         await fs.promises.access(cachePath);
         return hash;
       } catch {
-        // File missing — re-create it
+        // File missing — re-create
       }
     }
 
-    // Resolve dependency hashes asynchronously
-    const depHashes: Record<string, string> = {};
-    for (const dep of dependencies) {
-      depHashes[dep] = await this.resolveDependencyHash(dep);
-    }
+    // Parallel dependency hash resolution
+    const depHashEntries = await Promise.all(
+      dependencies.map(async (dep) => [dep, await this.resolveDependencyHash(dep)] as const)
+    );
+    const depHashes = Object.fromEntries(depHashEntries);
 
     const entry: PersistentCacheEntry = {
       hash,
@@ -219,14 +227,12 @@ export class PersistentCache {
       compilerVersion: COMPILER_VERSION,
     };
 
-    // Write to memory cache
     this.writeMemoryLRU(hash, entry);
 
-    // Write to disk atomically using unique temp paths to prevent worker collisions
     const stringified = JSON.stringify(entry, null, 2);
     const entrySize = Buffer.byteLength(stringified, "utf8");
 
-    const tmpPath = `${cachePath}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`;
+    const tmpPath = `${cachePath}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`;
     await fs.promises.writeFile(tmpPath, stringified, "utf8");
     await fs.promises.rename(tmpPath, cachePath);
 
@@ -245,7 +251,9 @@ export class PersistentCache {
 
     const entry = this.touchMemoryCache(hash);
     if (entry) {
-      if (!this.isExpired(entry)) return entry.result;
+      if (!this.isExpired(entry) && this.checkDependenciesValidSync(entry)) {
+        return entry.result;
+      }
       this.memoryCache.delete(hash);
     }
 
@@ -255,7 +263,7 @@ export class PersistentCache {
         const diskEntry: PersistentCacheEntry = JSON.parse(
           fs.readFileSync(cachePath, "utf8"),
         );
-        if (!this.isExpired(diskEntry)) {
+        if (!this.isExpired(diskEntry) && this.checkDependenciesValidSync(diskEntry)) {
           this.writeMemoryLRU(hash, diskEntry);
           return diskEntry.result;
         }
@@ -271,10 +279,10 @@ export class PersistentCache {
   setByHashSync(
     hash: string,
     result: any,
-    source: any,
     dependencies: string[] = [],
   ): void {
     if (!this.options.enabled) return;
+    this.ensureDirSync();
 
     const cachePath = path.join(this.cacheDir, `${hash}.json`);
     if (this.metadata.entries[hash] && fs.existsSync(cachePath)) {
@@ -283,7 +291,7 @@ export class PersistentCache {
 
     const depHashes: Record<string, string> = {};
     for (const dep of dependencies) {
-      depHashes[dep] = this.hash(dep); // Sync fallback — no file reads
+      depHashes[dep] = this.resolveDependencyHashSync(dep);
     }
 
     const entry: PersistentCacheEntry = {
@@ -300,8 +308,7 @@ export class PersistentCache {
     const stringified = JSON.stringify(entry, null, 2);
     const entrySize = Buffer.byteLength(stringified, "utf8");
 
-    // Atomic write with unique temp path
-    const tmpPath = `${cachePath}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`;
+    const tmpPath = `${cachePath}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`;
     fs.writeFileSync(tmpPath, stringified, "utf8");
     fs.renameSync(tmpPath, cachePath);
 
@@ -313,11 +320,13 @@ export class PersistentCache {
     this.memoryCache.delete(hash);
     const cachePath = path.join(this.cacheDir, `${hash}.json`);
     if (fs.existsSync(cachePath)) {
-      fs.unlinkSync(cachePath);
+      try {
+        fs.unlinkSync(cachePath);
+      } catch {}
     }
     if (this.metadata.entries[hash]) {
-      this.metadata.totalSize -= this.metadata.entries[hash].size;
       delete this.metadata.entries[hash];
+      this.recalculateTotalSize();
     }
     this.saveMetadataSync();
   }
@@ -328,18 +337,18 @@ export class PersistentCache {
 
   async clear(): Promise<void> {
     try {
-      const files = fs.readdirSync(this.cacheDir);
-      for (const file of files) {
-        if (file.endsWith(".json")) {
-          fs.unlinkSync(path.join(this.cacheDir, file));
-        }
-      }
+      const files = await fs.promises.readdir(this.cacheDir);
+      await Promise.all(
+        files
+          .filter((f) => f.endsWith(".json"))
+          .map((f) => fs.promises.unlink(path.join(this.cacheDir, f)).catch(() => {}))
+      );
     } catch {
-      // Ignore missing paths
+      // Ignore missing directory
     }
     this.memoryCache.clear();
-    this.metadata = { entries: {}, totalSize: 0, lastCleanup: 0 };
-    this.saveMetadataSync();
+    this.metadata = { entries: {}, totalSize: 0, lastCleanup: Date.now() };
+    await this.saveMetadataAsync();
   }
 
   async getStats() {
@@ -370,7 +379,7 @@ export class PersistentCache {
   }
 
   // ==========================================================================
-  // Internal: Metadata
+  // Internal: Metadata & Validation
   // ==========================================================================
 
   private isExpired(entry: PersistentCacheEntry): boolean {
@@ -380,14 +389,39 @@ export class PersistentCache {
     );
   }
 
-  private loadMetadata(): void {
+  private async checkDependenciesValid(entry: PersistentCacheEntry): Promise<boolean> {
+    if (!entry.dependencies || Object.keys(entry.dependencies).length === 0) {
+      return true;
+    }
+
+    const checks = await Promise.all(
+      Object.entries(entry.dependencies).map(async ([depPath, expectedHash]) => {
+        const currentHash = await this.resolveDependencyHash(depPath);
+        return currentHash === expectedHash;
+      })
+    );
+
+    return checks.every(Boolean);
+  }
+
+  private checkDependenciesValidSync(entry: PersistentCacheEntry): boolean {
+    if (!entry.dependencies || Object.keys(entry.dependencies).length === 0) {
+      return true;
+    }
+    for (const [depPath, expectedHash] of Object.entries(entry.dependencies)) {
+      const currentHash = this.resolveDependencyHashSync(depPath);
+      if (currentHash !== expectedHash) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private loadMetadataSync(): void {
     if (fs.existsSync(this.metadataPath)) {
       try {
         const diskMeta = JSON.parse(fs.readFileSync(this.metadataPath, "utf8"));
-        this.metadata.entries = {
-          ...diskMeta.entries,
-          ...this.metadata.entries,
-        };
+        this.metadata.entries = diskMeta.entries || {};
         this.recalculateTotalSize();
       } catch {
         this.metadata = { entries: {}, totalSize: 0, lastCleanup: 0 };
@@ -407,14 +441,9 @@ export class PersistentCache {
     timestamp: number,
     size: number,
   ): Promise<void> {
-    if (this.metadata.entries[hash]) {
-      this.metadata.totalSize -= this.metadata.entries[hash].size;
-    }
-
     this.metadata.entries[hash] = { hash, size, timestamp };
-    this.metadata.totalSize += size;
     this.metadata.lastCleanup = Date.now();
-
+    this.recalculateTotalSize();
     await this.saveMetadataAsync();
   }
 
@@ -423,57 +452,61 @@ export class PersistentCache {
     timestamp: number,
     size: number,
   ): void {
-    if (this.metadata.entries[hash]) {
-      this.metadata.totalSize -= this.metadata.entries[hash].size;
-    }
-
     this.metadata.entries[hash] = { hash, size, timestamp };
-    this.metadata.totalSize += size;
     this.metadata.lastCleanup = Date.now();
-
+    this.recalculateTotalSize();
     this.saveMetadataSync();
   }
 
   private async saveMetadataAsync(): Promise<void> {
-    this.ensureDir();
+    await this.ensureDirAsync();
 
-    // Read-Merge-Write: protect against multi-worker state clobbering
+    // Read disk state, overlay local entries, but exclude keys deleted in memory
     if (fs.existsSync(this.metadataPath)) {
       try {
         const diskMeta = JSON.parse(
           await fs.promises.readFile(this.metadataPath, "utf8"),
         );
-        this.metadata.entries = {
-          ...diskMeta.entries,
-          ...this.metadata.entries,
-        };
+        const mergedEntries = { ...diskMeta.entries, ...this.metadata.entries };
+
+        // Clean up keys deleted from memory metadata
+        for (const key of Object.keys(diskMeta.entries || {})) {
+          if (!this.metadata.entries[key]) {
+            delete mergedEntries[key];
+          }
+        }
+        this.metadata.entries = mergedEntries;
         this.recalculateTotalSize();
       } catch {}
     }
 
     const data = JSON.stringify(this.metadata, null, 2);
-    const tmpPath = `${this.metadataPath}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`;
+    const tmpPath = `${this.metadataPath}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`;
 
     await fs.promises.writeFile(tmpPath, data, "utf8");
     await fs.promises.rename(tmpPath, this.metadataPath);
   }
 
   private saveMetadataSync(): void {
-    this.ensureDir();
+    this.ensureDirSync();
 
     if (fs.existsSync(this.metadataPath)) {
       try {
         const diskMeta = JSON.parse(fs.readFileSync(this.metadataPath, "utf8"));
-        this.metadata.entries = {
-          ...diskMeta.entries,
-          ...this.metadata.entries,
-        };
+        const mergedEntries = { ...diskMeta.entries, ...this.metadata.entries };
+
+        for (const key of Object.keys(diskMeta.entries || {})) {
+          if (!this.metadata.entries[key]) {
+            delete mergedEntries[key];
+          }
+        }
+        this.metadata.entries = mergedEntries;
         this.recalculateTotalSize();
       } catch {}
     }
 
     const data = JSON.stringify(this.metadata, null, 2);
-    const tmpPath = `${this.metadataPath}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`;
+    const tmpPath = `${this.metadataPath}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`;
 
     fs.writeFileSync(tmpPath, data, "utf8");
     fs.renameSync(tmpPath, this.metadataPath);
@@ -498,21 +531,22 @@ export class PersistentCache {
     const sorted = Object.values(this.metadata.entries).sort(
       (a, b) => a.timestamp - b.timestamp,
     );
-    let freed = 0;
 
     for (const entry of sorted) {
-      if (this.metadata.totalSize - freed <= limitBytes) break;
+      if (this.metadata.totalSize <= limitBytes) break;
 
       const cachePath = path.join(this.cacheDir, `${entry.hash}.json`);
       if (fs.existsSync(cachePath)) {
-        freed += entry.size;
-        fs.unlinkSync(cachePath);
-        delete this.metadata.entries[entry.hash];
-        this.memoryCache.delete(entry.hash);
+        try {
+          fs.unlinkSync(cachePath);
+        } catch {}
       }
+
+      delete this.metadata.entries[entry.hash];
+      this.memoryCache.delete(entry.hash);
+      this.recalculateTotalSize();
     }
 
-    this.metadata.totalSize -= freed;
     this.saveMetadataSync();
   }
 
@@ -520,9 +554,17 @@ export class PersistentCache {
   // Internal: Helpers
   // ==========================================================================
 
-  private ensureDir(): void {
+  private ensureDirSync(): void {
     if (!fs.existsSync(this.cacheDir)) {
       fs.mkdirSync(this.cacheDir, { recursive: true });
+    }
+  }
+
+  private async ensureDirAsync(): Promise<void> {
+    try {
+      await fs.promises.access(this.cacheDir);
+    } catch {
+      await fs.promises.mkdir(this.cacheDir, { recursive: true });
     }
   }
 
@@ -546,11 +588,17 @@ export class PersistentCache {
   }
 
   async get(key: string): Promise<PersistentCacheEntry | null> {
-    if (this.memoryCache.has(key)) return this.memoryCache.get(key)!;
+    const memoryEntry = this.touchMemoryCache(key);
+    if (memoryEntry) return memoryEntry;
+
     const cachePath = path.join(this.cacheDir, `${key}.json`);
     try {
       await fs.promises.access(cachePath);
-      return JSON.parse(await fs.promises.readFile(cachePath, "utf8"));
+      const entry: PersistentCacheEntry = JSON.parse(
+        await fs.promises.readFile(cachePath, "utf8"),
+      );
+      this.writeMemoryLRU(key, entry);
+      return entry;
     } catch {}
     return null;
   }
@@ -566,7 +614,7 @@ export class PersistentCache {
 
   async validate(key: string): Promise<boolean> {
     const entry = await this.get(key);
-    return entry ? !this.isExpired(entry) : false;
+    return entry ? !this.isExpired(entry) && (await this.checkDependenciesValid(entry)) : false;
   }
 }
 

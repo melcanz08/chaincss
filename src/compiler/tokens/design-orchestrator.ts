@@ -30,22 +30,36 @@ export interface TokenContext {
   tokens: Record<string, any>;
 }
 
-const parseCache = new Map<
-  string,
-  { r: number; g: number; b: number; a: number } | null
->();
+interface RGBA {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+}
+
+const parseCache = new Map<string, RGBA | null>();
 const MAX_CACHE = 1000;
-function setCache(
-  key: string,
-  val: { r: number; g: number; b: number; a: number } | null,
-) {
+
+function setCache(key: string, val: RGBA | null) {
   if (parseCache.size >= MAX_CACHE) {
     const first = parseCache.keys().next().value;
-    if (first) parseCache.delete(first);
+    if (first !== undefined) parseCache.delete(first);
   }
   parseCache.set(key, val);
 }
+
 let ctxCounter = 0;
+
+/**
+ * Unwrap W3C DTCG ({ $value: ... }) or Style Dictionary ({ value: ... }) token objects
+ */
+function unwrapTokenValue(val: any): any {
+  if (val !== null && typeof val === "object" && !Array.isArray(val)) {
+    if ("$value" in val) return val.$value;
+    if ("value" in val) return val.value;
+  }
+  return val;
+}
 
 function oklchToRgb(
   l: number,
@@ -65,10 +79,7 @@ function oklchToRgb(
   const m_cube = m__ * m__ * m__;
   const s_cube = s__ * s__ * s__;
 
-  // W3C CSS Color 4 Spec - OKLCH to sRGB
-  // Source: https://www.w3.org/TR/css-color-4/#color-conversion-code
-  // Based on Björn Ottosson's OKLab: https://bottosson.github.io/posts/oklab/
-  // Matrix: LMS -> linear sRGB
+  // W3C CSS Color 4 Spec - OKLCH to sRGB (Björn Ottosson's OKLab)
   const rL =
     +4.0767416621 * l_cube - 3.3077115913 * m_cube + 0.2309699292 * s_cube;
   const gL =
@@ -86,13 +97,19 @@ function oklchToRgb(
   };
 }
 
-export function parseColor(
-  color: string,
-): { r: number; g: number; b: number; a: number } | null {
-  const trimmed = color.trim().toLowerCase();
-  if (parseCache.has(trimmed)) return parseCache.get(trimmed)!;
+export function parseColor(color: string): RGBA | null {
+  if (typeof color !== "string") return null;
 
-  let out: { r: number; g: number; b: number; a: number } | null = null;
+  const trimmed = color.trim().toLowerCase();
+  if (parseCache.has(trimmed)) {
+    const cached = parseCache.get(trimmed)!;
+    // LRU refresh: move to end
+    parseCache.delete(trimmed);
+    parseCache.set(trimmed, cached);
+    return cached;
+  }
+
+  let out: RGBA | null = null;
 
   if (
     trimmed.startsWith("var(") ||
@@ -109,7 +126,7 @@ export function parseColor(
     return null;
   }
 
-  // 1. Hex parsing - require # to avoid matching bare numbers like '12345678'
+  // 1. Hex parsing (#rgb, #rgba, #rrggbb, #rrggbbaa)
   const hexMatch = trimmed.match(
     /^#([a-f0-9]{3}|[a-f0-9]{4}|[a-f0-9]{6}|[a-f0-9]{8})$/,
   );
@@ -138,7 +155,7 @@ export function parseColor(
     }
   }
 
-  // 2. RGB/RGBA
+  // 2. RGB/RGBA (Legacy comma and CSS Level 4 space-separated syntax)
   if (!out && trimmed.startsWith("rgb")) {
     const rgbMatch = trimmed.match(
       /rgba?\(\s*([\d.]+)(%?)\s*[\s,]\s*([\d.]+)(%?)\s*[\s,]\s*([\d.]+)(%?)(?:\s*[\s,\/]\s*([\d.]+)(%?))?\s*\)/,
@@ -155,14 +172,19 @@ export function parseColor(
           ? parseFloat(rgbMatch[7]) / 100
           : parseFloat(rgbMatch[7]);
       }
-      out = { r: Math.round(r), g: Math.round(g), b: Math.round(b), a };
+      out = {
+        r: Math.max(0, Math.min(255, Math.round(r))),
+        g: Math.max(0, Math.min(255, Math.round(g))),
+        b: Math.max(0, Math.min(255, Math.round(b))),
+        a: Math.max(0, Math.min(1, a)),
+      };
     }
   }
 
   // 3. HSL/HSLA
   if (!out && trimmed.startsWith("hsl")) {
     const hslMatch = trimmed.match(
-      /hsla?\(\s*([\d.]+)(deg|rad|turn)?\s*[\s,]\s*([\d.]+)%\s*[\s,]\s*([\d.]+)%(?:\s*[\s,\/]\s*([\d.]+)(%?))?\s*\)/,
+      /hsla?\(\s*(-?[\d.]+)(deg|rad|turn)?\s*[\s,]\s*([\d.]+)%\s*[\s,]\s*([\d.]+)%(?:\s*[\s,\/]\s*([\d.]+)(%?))?\s*\)/,
     );
     if (hslMatch) {
       let h = parseFloat(hslMatch[1]);
@@ -177,6 +199,7 @@ export function parseColor(
         a = hslMatch[6]
           ? parseFloat(hslMatch[5]) / 100
           : parseFloat(hslMatch[5]);
+
       const hue2rgb = (p: number, q: number, t: number) => {
         if (t < 0) t += 1;
         if (t > 1) t -= 1;
@@ -185,9 +208,11 @@ export function parseColor(
         if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
         return p;
       };
-      let r, g, b;
-      if (s === 0) r = g = b = l;
-      else {
+
+      let r: number, g: number, b: number;
+      if (s === 0) {
+        r = g = b = l;
+      } else {
         const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
         const p = 2 * l - q;
         r = hue2rgb(p, q, h + 1 / 3);
@@ -198,7 +223,7 @@ export function parseColor(
         r: Math.round(r * 255),
         g: Math.round(g * 255),
         b: Math.round(b * 255),
-        a,
+        a: Math.max(0, Math.min(1, a)),
       };
     }
   }
@@ -206,7 +231,7 @@ export function parseColor(
   // 4. OKLCH
   if (!out && trimmed.startsWith("oklch")) {
     const oklchMatch = trimmed.match(
-      /oklch\(\s*([\d.]+)(%?)\s+([\d.]+)\s+([\d.]+)(deg|rad|turn)?(?:\s*[\s\/]\s*([\d.]+)(%?))?\s*\)/,
+      /oklch\(\s*([\d.]+)(%?)\s+([\d.]+)\s+(-?[\d.]+)(deg|rad|turn)?(?:\s*[\s\/]\s*([\d.]+)(%?))?\s*\)/,
     );
     if (oklchMatch) {
       let l = parseFloat(oklchMatch[1]);
@@ -222,11 +247,11 @@ export function parseColor(
         a = oklchMatch[7]
           ? parseFloat(oklchMatch[6]) / 100
           : parseFloat(oklchMatch[6]);
-      out = { ...oklchToRgb(l, c, h), a };
+      out = { ...oklchToRgb(l, c, h), a: Math.max(0, Math.min(1, a)) };
     }
   }
 
-  // 5. Named colors
+  // 5. Named CSS colors
   if (!out) {
     const named: Record<string, [number, number, number]> = {
       white: [255, 255, 255],
@@ -273,6 +298,20 @@ export function parseColor(
   return out;
 }
 
+/**
+ * Blend a semi-transparent foreground over a background color
+ */
+function blendAlpha(fg: RGBA, bg: RGBA = { r: 255, g: 255, b: 255, a: 1 }): { r: number; g: number; b: number } {
+  if (fg.a >= 1) return { r: fg.r, g: fg.g, b: fg.b };
+  const a = fg.a + bg.a * (1 - fg.a);
+  if (a === 0) return { r: bg.r, g: bg.g, b: bg.b };
+  return {
+    r: Math.round((fg.r * fg.a + bg.r * bg.a * (1 - fg.a)) / a),
+    g: Math.round((fg.g * fg.a + bg.g * bg.a * (1 - fg.a)) / a),
+    b: Math.round((fg.b * fg.a + bg.b * bg.a * (1 - fg.a)) / a),
+  };
+}
+
 function relativeLuminance(r: number, g: number, b: number): number {
   const toLin = (c: number) => {
     const s = c / 255;
@@ -282,9 +321,15 @@ function relativeLuminance(r: number, g: number, b: number): number {
 }
 
 export function contrastRatio(foreground: string, background: string): number {
-  const fg = parseColor(foreground),
-    bg = parseColor(background);
-  if (!fg || !bg) return -1;
+  const rawFg = parseColor(foreground);
+  const rawBg = parseColor(background);
+  if (!rawFg || !rawBg) return -1;
+
+  // Composite semi-transparent background against white assumption
+  const bg = blendAlpha(rawBg, { r: 255, g: 255, b: 255, a: 1 });
+  // Composite semi-transparent foreground against computed background
+  const fg = blendAlpha(rawFg, { ...bg, a: 1 });
+
   const l1 = relativeLuminance(fg.r, fg.g, fg.b) + 0.05;
   const l2 = relativeLuminance(bg.r, bg.g, bg.b) + 0.05;
   return Math.max(l1, l2) / Math.min(l1, l2);
@@ -294,10 +339,9 @@ export function checkContrast(
   foreground: string,
   background: string,
 ): ContrastResult | null {
-  const fg = parseColor(foreground),
-    bg = parseColor(background);
-  if (!fg || !bg) return null;
   const ratio = contrastRatio(foreground, background);
+  if (ratio < 0) return null;
+
   const roundedRatio = Math.round(ratio * 100) / 100;
   return {
     foreground,
@@ -311,7 +355,7 @@ export function checkContrast(
     },
     suggestion:
       ratio < 4.5
-        ? `Contrast ${roundedRatio.toFixed(2)} fails AA. Darken/lighten by ~${Math.round((4.5 - ratio) * 10)}%`
+        ? `Contrast ${roundedRatio.toFixed(2)} fails AA. Adjust color lightness by ~${Math.round((4.5 - ratio) * 10)}%`
         : undefined,
   };
 }
@@ -351,9 +395,9 @@ export function createContextualToken(
 
 function segmentMatches(targetSeg: string, ctxSeg: string): boolean {
   if (targetSeg === ctxSeg) return true;
-  //.btn.primary:hover should match context.btn and.btn:hover but NOT.btn-primary
-  const tParts = targetSeg.split(/(?=[.:])/);
-  const cParts = ctxSeg.split(/(?=[.:])/);
+  // Splits by class (.), ID (#), attribute ([), or pseudo-class (:)
+  const tParts = targetSeg.split(/(?=[.:#\[])/);
+  const cParts = ctxSeg.split(/(?=[.:#\[])/);
   return cParts.every((p) => tParts.includes(p));
 }
 
@@ -367,14 +411,17 @@ export function resolveContextual(
     .split(/[\s>+~]+/)
     .map((s) => s.trim())
     .filter(Boolean);
+
   for (const [ctx, val] of Object.entries(token.contexts)) {
     const ctxSegments = ctx
       .trim()
       .split(/[\s>+~]+/)
       .map((s) => s.trim())
       .filter(Boolean);
+
     let targetIdx = 0,
       matchCount = 0;
+
     for (const ctxSeg of ctxSegments) {
       while (targetIdx < targetSegments.length) {
         if (segmentMatches(targetSegments[targetIdx], ctxSeg)) {
@@ -385,6 +432,7 @@ export function resolveContextual(
         targetIdx++;
       }
     }
+
     if (matchCount === ctxSegments.length) {
       const score = ctxSegments.length;
       if (score > highestSpecificity) {
@@ -411,7 +459,6 @@ export function generateContextualCSS(
   return css;
 }
 
-// Renamed to avoid collision with token-resolver.ts - this one works on raw object
 function resolveNestedTokenPath(
   tokens: Record<string, any>,
   path: string,
@@ -422,6 +469,9 @@ function resolveNestedTokenPath(
     if (cur == null) return null;
     cur = cur[p];
   }
+
+  cur = unwrapTokenValue(cur);
+
   return typeof cur === "string" || typeof cur === "number"
     ? String(cur)
     : null;
@@ -447,22 +497,23 @@ export function validateTokenRelationships(
 
 export function importFigmaTokens(figmaJson: any): Record<string, any> {
   const out: Record<string, any> = {};
+
   function walk(node: any, target: any) {
     if (!node || typeof node !== "object") return;
     for (const [k, v] of Object.entries(node)) {
+      const unwrapped = unwrapTokenValue(v);
       if (
-        v &&
-        typeof v === "object" &&
-        "value" in (v as any) &&
-        typeof (v as any).value === "string"
+        unwrapped !== undefined &&
+        (typeof unwrapped === "string" || typeof unwrapped === "number")
       ) {
-        target[k] = (v as any).value;
+        target[k] = unwrapped;
       } else if (v && typeof v === "object") {
         target[k] = {};
         walk(v, target[k]);
       }
     }
   }
+
   walk(figmaJson, out);
   return out;
 }

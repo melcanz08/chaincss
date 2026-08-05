@@ -22,6 +22,8 @@ function convertToPx(value: string): number {
   const match = value.trim().match(/^([+-]?\d+(\.\d+)?)\s*([a-zA-Z%]+)?$/);
   if (!match) return Infinity;
   const num = parseFloat(match[1]);
+  if (num === 0) return 0; // Prevent unitless zero returning Infinity
+
   const unit = match[3]?.toLowerCase();
   switch (unit) {
     case "px":
@@ -29,6 +31,8 @@ function convertToPx(value: string): number {
     case "rem":
     case "em":
       return num * WCAG.DEFAULT_REM_BASE;
+    case "pt":
+      return num * (4 / 3);
     default:
       return Infinity;
   }
@@ -39,24 +43,28 @@ function detectContrastIssues(
   globalContext: Map<string, string>,
 ): Diagnostic[] {
   const issues: Diagnostic[] = [];
-  let colorDecl = rule.declarations.find(
+  const colorDecl = rule.declarations.find(
     (d) => d.property === "color" && typeof d.value === "string",
   );
-  let bgDecl = rule.declarations.find(
+  const bgDecl = rule.declarations.find(
     (d) =>
-      (d.property === "backgroundColor" ||
-        d.property === "background-color" ||
-        d.property === "background") &&
+      ["backgroundColor", "background-color", "background"].includes(
+        d.property,
+      ) &&
       typeof d.value === "string" &&
       !d.value.includes("url(") &&
       !d.value.includes("gradient"),
   );
+
+  // Skip if rule defines neither text color nor background (prevents global fallback duplication)
+  if (!colorDecl && !bgDecl) return issues;
+
   const colorVal = colorDecl
     ? String(colorDecl.value)
     : globalContext.get("color");
   const bgVal = bgDecl ? String(bgDecl.value) : globalContext.get("background");
+
   if (colorVal && bgVal) {
-    // skip CSS variables - can't compute at build time
     if (
       colorVal.includes("var(") ||
       bgVal.includes("var(") ||
@@ -80,7 +88,7 @@ function detectContrastIssues(
         });
       }
     } catch {
-      // complex token, skip
+      // Complex CSS color expression or unparseable token
     }
   }
   return issues;
@@ -89,18 +97,29 @@ function detectContrastIssues(
 function detectFontSizeIssues(rule: IRRule): Diagnostic[] {
   const issues: Diagnostic[] = [];
   for (const decl of rule.declarations || []) {
-    const isFontProp =
-      decl.property === "fontSize" || decl.property === "font-size";
-    if (isFontProp && typeof decl.value === "string") {
-      const pxValue = convertToPx(decl.value);
+    if (typeof decl.value !== "string") continue;
+    
+    let fontValue: string | null = null;
+    if (["fontSize", "font-size"].includes(decl.property)) {
+      fontValue = decl.value;
+    } else if (decl.property === "font") {
+      // Handle shorthand font syntax (e.g. "10px/1.5 sans-serif")
+      const sizeMatch = decl.value
+        .split(/\s+/)
+        .find((p) => /^([+-]?\d+(\.\d+)?)(px|rem|em|pt)/i.test(p));
+      if (sizeMatch) fontValue = sizeMatch.split("/")[0];
+    }
+
+    if (fontValue) {
+      const pxValue = convertToPx(fontValue);
       if (pxValue < WCAG.MIN_FONT_SIZE) {
         issues.push({
           id: `a11y-fontsize-${rule.id}`,
           nodeId: rule.id,
           severity: "warning",
           category: "font-size",
-          message: `font-size: ${decl.value} is below the readable WCAG recommendation of ${WCAG.MIN_FONT_SIZE}px`,
-          suggestion: `Set font-size: max(${WCAG.MIN_FONT_SIZE}px, ${decl.value}) or convert to scalable units (rem)`,
+          message: `font-size: ${fontValue} is below the readable WCAG recommendation of ${WCAG.MIN_FONT_SIZE}px`,
+          suggestion: `Set font-size: max(${WCAG.MIN_FONT_SIZE}px, ${fontValue}) or convert to scalable units (rem)`,
           wcagCriterion: "1.4.4 Resize Text — AA",
           autoFixable: true,
         });
@@ -117,7 +136,10 @@ function detectTouchTargetIssues(rule: IRRule): Diagnostic[] {
     (d) => d.property === "cursor" && d.value === "pointer",
   );
   const isSemanticClickable =
-    /button|btn|a\b|input|select|textarea|card-link|clickable/i.test(selector);
+    /\b(button|btn|input|select|textarea|card-link|clickable)\b|(\ba\b|\[href\])/i.test(
+      selector,
+    );
+
   if (!isInteractive && !isSemanticClickable) return issues;
 
   let declaredWidth = 0;
@@ -131,6 +153,7 @@ function detectTouchTargetIssues(rule: IRRule): Diagnostic[] {
     if (typeof d.value !== "string") continue;
     const px = convertToPx(d.value);
     if (px === Infinity) continue;
+
     if (d.property === "width") {
       declaredWidth = Math.max(declaredWidth, px);
       hasWidth = true;
@@ -179,20 +202,29 @@ function detectFocusIssues(rule: IRRule): Diagnostic[] {
   const hasPointer = rule.declarations.some(
     (d) => d.property === "cursor" && d.value === "pointer",
   );
-  const isSemanticInput = /button|input|select|textarea|a\b/i.test(
+  const isSemanticInput = /\b(button|input|select|textarea)\b|(\ba\b|\[href\])/i.test(
     rule.selector || "",
   );
   if (!hasPointer && !isSemanticInput) return issues;
-  const outline = rule.declarations.find((d) => d.property === "outline");
+
+  const outline = rule.declarations.find((d) =>
+    ["outline", "outline-style", "outline-width"].includes(d.property),
+  );
+
   const hasNoneOutline =
-    (outline && String(outline.value).toLowerCase().includes("none")) ||
-    (outline && String(outline.value).trim() === "0");
+    outline &&
+    (String(outline.value).toLowerCase().includes("none") ||
+      String(outline.value).trim() === "0" ||
+      (outline.property === "outline-width" &&
+        convertToPx(String(outline.value)) === 0));
+
   const pseudoClasses = (rule as any).pseudoClasses || [];
   const hasFocusStyle = pseudoClasses.some(
     (pc: any) =>
       ["focus", "focus-visible", "focus-within"].includes(pc.name) &&
       pc.declarations?.length > 0,
   );
+
   if (hasNoneOutline && !hasFocusStyle) {
     issues.push({
       id: `a11y-focus-${rule.id}`,

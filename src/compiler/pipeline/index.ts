@@ -24,11 +24,18 @@ export { serializeForInspector } from "./inspector/serializer.js";
 // Shared Runtime Configurations
 export type { PipelinePreset } from "./pipeline.js";
 
-// Public Pipeline Schema Types
+// Public Pipeline Schema Types & Stage Contexts
 export type {
   PipelineConfig,
   PipelineResult,
   PipelineStageResult,
+  // Stage Contexts
+  NormalizationContext,
+  ValidationContext,
+  AnalysisContext,
+  OptimizationContext,
+  LoweringContext,
+  // Passes & Results
   NormalizationPass,
   NormalizationResult,
   ValidationPass,
@@ -39,16 +46,29 @@ export type {
   OptimizationResult,
   LoweringPass,
   LoweringResult,
+  // Unified v3 Pass Model
+  CompilerPass,
+  PassContext,
+  PassResult,
+  PassPhase,
+  // Diagnostics & Corrections
+  Diagnostic,
   PipelineDiagnostic,
   Correction,
+  AnalysisAnnotation,
+  OptimizationSavings,
+  GenerationTarget,
 } from "./pipeline-types.js";
 
+// Inspector Schema Types
 export type {
   InspectorRule,
   InspectorExport,
   InspectorSnapshot,
   InspectorStats,
 } from "./inspector/types.js";
+
+// Symbol Table Engine
 export {
   buildSymbolTable,
   resolveSymbol,
@@ -58,6 +78,8 @@ export {
   isUnused,
   findUnusedSymbols,
 } from "./symbol-table.js";
+
+// Persistent Incremental State
 export {
   createCompilerState,
   updateState,

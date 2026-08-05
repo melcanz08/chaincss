@@ -25,27 +25,55 @@ interface PatternCluster {
   suggestedName: string;
 }
 
+// ============================================================================
+// Helpers
+// ============================================================================
+
 /**
  * Fast non-crypto hash for style fingerprints.
  * djb2 — simple, fast, collision-resistant enough for CSS property sets.
- * Guaranteed to return an unsigned integer base-36 string representation.
  */
 function hashString(str: string): string {
   let hash = 5381;
   for (let i = 0; i < str.length; i++) {
     hash = (hash << 5) + hash + str.charCodeAt(i);
   }
-  // Coerce cleanly to an unsigned 32-bit integer to eradicate sign bit issues
   return (hash >>> 0).toString(36);
+}
+
+/**
+ * Convert camelCase to kebab-case correctly.
+ * "justifyContent" → "justify-content" (NOT "-justify-content")
+ */
+function toKebabCase(prop: string): string {
+  return prop
+    .replace(/^([A-Z])/, (m) => m.toLowerCase())
+    .replace(/([A-Z])/g, "-$1")
+    .toLowerCase();
+}
+
+/**
+ * Normalize a CSS value for consistent hashing.
+ * Lowercase, trim, collapse whitespace.
+ */
+function normalizeValue(val: string | number): string {
+  return String(val).trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 function fingerprintDeclarations(
   declarations: Array<{ property: string; value: string | number }>,
   atRuleContext?: string,
 ): StyleFingerprint {
-  const sorted = [...declarations].sort((a, b) =>
+  // Fix 2: Normalize property names and values before hashing
+  const normalized = declarations.map((d) => ({
+    property: toKebabCase(d.property),
+    value: normalizeValue(d.value),
+  }));
+
+  const sorted = [...normalized].sort((a, b) =>
     a.property.localeCompare(b.property),
   );
+
   const properties: Record<string, string | number> = {};
   const propertyList: string[] = [];
 
@@ -69,11 +97,8 @@ function generatePatternName(
   properties: Record<string, string | number>,
 ): string {
   const keys = Object.keys(properties);
-  const normalizedKeys = keys.map((k) =>
-    k.replace(/([A-Z])/g, "-$1").toLowerCase(),
-  );
 
-  const has = (k: string) => keys.includes(k) || normalizedKeys.includes(k);
+  const has = (k: string) => keys.includes(k);
 
   if (has("display") && has("justify-content") && has("align-items")) {
     return "flexCenter";
@@ -82,16 +107,15 @@ function generatePatternName(
   if (has("overflow") && has("text-overflow")) return "truncate";
 
   const rawPosition = properties["position"];
-  if (has("position") && String(rawPosition).trim() === "sticky") {
+  if (has("position") && String(rawPosition).trim().toLowerCase() === "sticky") {
     return "stickyElement";
   }
 
   const rawDisplay = properties["display"];
-  if (has("display") && String(rawDisplay).trim() === "grid" && has("gap")) {
+  if (has("display") && String(rawDisplay).trim().toLowerCase() === "grid" && has("gap")) {
     return "gridLayout";
   }
 
-  // Clean fallback slug using alpha-only strings to protect generated variable declarations
   const cleanSlugs = keys
     .slice(0, 3)
     .map((k) => k.replace(/[^a-zA-Z]/g, ""))
@@ -99,6 +123,29 @@ function generatePatternName(
 
   return "pattern-" + (cleanSlugs.length > 0 ? cleanSlugs.join("-") : "custom");
 }
+
+/**
+ * Recursively collect all non-dead rules with sufficient declarations.
+ * Fix 1: Includes nested rules inside @media, @supports, and nested selectors.
+ */
+function collectRulesRecursive(
+  rules: IRRule[],
+  minProperties: number,
+  callback: (rule: IRRule) => void,
+): void {
+  for (const rule of rules) {
+    if (!rule.isDead && rule.declarations && rule.declarations.length >= minProperties) {
+      callback(rule);
+    }
+    if (rule.nestedRules && rule.nestedRules.length > 0) {
+      collectRulesRecursive(rule.nestedRules, minProperties, callback);
+    }
+  }
+}
+
+// ============================================================================
+// Analyzer
+// ============================================================================
 
 export const patternDetector: AnalysisPass = {
   name: "pattern-detector",
@@ -118,18 +165,16 @@ export const patternDetector: AnalysisPass = {
     const minProperties = 2;
     const minFrequency = 2;
 
-    for (const rule of ir.rules) {
-      if (
-        rule.isDead ||
-        !rule.declarations ||
-        rule.declarations.length < minProperties
-      )
-        continue;
+    // Fix 5: Guard against undefined diagnostics
+    if (!ir.diagnostics) ir.diagnostics = [];
 
-      // Lexicographically sort conditions to guarantee identity convergence across files
+    // Fix 1: Use recursive collector instead of flat iteration
+    collectRulesRecursive(ir.rules, minProperties, (rule) => {
+      // Fix 4: Filter out undefined/missing queries
       const mediaScope = rule.atRules
         ? [...rule.atRules]
-            .map((a) => a.query)
+            .map((a) => a.query || a.name || "")
+            .filter(Boolean)
             .sort()
             .join(" && ")
         : "";
@@ -151,7 +196,7 @@ export const patternDetector: AnalysisPass = {
           files: new Set(rule.source?.file ? [rule.source.file] : []),
         });
       }
-    }
+    });
 
     const clusters: PatternCluster[] = [];
     for (const [, group] of groups) {
@@ -169,14 +214,24 @@ export const patternDetector: AnalysisPass = {
     clusters.sort((a, b) => b.score - a.score);
 
     for (const cluster of clusters) {
-      annotations.push({
-        nodeId: ir.id || "root",
-        type: "pattern-cluster",
-        data: cluster,
-        confidence: Math.min(1, cluster.frequency / 5),
-      });
+      const group = groups.get(cluster.fingerprint.hash);
+      if (!group) continue;
 
-      const firstRuleId = groups.get(cluster.fingerprint.hash)?.ids[0];
+      // Fix 3: Emit per-rule annotations for IDE tooling
+      for (const ruleId of group.ids) {
+        annotations.push({
+          nodeId: ruleId,
+          type: "pattern-member",
+          data: {
+            clusterHash: cluster.fingerprint.hash,
+            patternName: cluster.suggestedName,
+            selectors: cluster.selectors,
+          },
+          confidence: Math.min(1, cluster.frequency / 5),
+        });
+      }
+
+      const firstRuleId = group.ids[0];
       ir.diagnostics.push({
         id: `pattern-${cluster.fingerprint.hash}`,
         nodeId: firstRuleId || ir.id || "root",

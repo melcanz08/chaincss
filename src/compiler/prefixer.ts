@@ -8,10 +8,12 @@ async function safeImport(name: string): Promise<any> {
     return null;
   }
 }
+
 let postcss: any = null;
 let autoprefixer: any = null;
 let postcssLoaded = false;
 let autoprefixerLoaded = false;
+
 async function loadPostcss() {
   if (postcssLoaded) return postcss;
   try {
@@ -21,6 +23,7 @@ async function loadPostcss() {
   postcssLoaded = true;
   return postcss;
 }
+
 async function loadAutoprefixer() {
   if (autoprefixerLoaded) return autoprefixer;
   try {
@@ -30,6 +33,7 @@ async function loadAutoprefixer() {
   autoprefixerLoaded = true;
   return autoprefixer;
 }
+
 export interface PrefixerConfig {
   browsers?: string[];
   enabled?: boolean;
@@ -42,16 +46,19 @@ export interface PrefixerConfig {
   flexbox?: boolean | "no-2009";
   grid?: boolean | "autoplace" | "no-autoplace";
 }
+
 export interface PrefixerResult {
   css: string;
   map: string | null;
   warnings?: string[];
 }
+
 export interface ProcessOptionsWithPaths {
   from?: string;
   to?: string;
   map?: boolean | object;
 }
+
 const LIGHTWEIGHT_PREFIX_MAP: Record<string, Record<string, string[]>> = {
   "backdrop-filter": { webkit: ["-webkit-backdrop-filter"] },
   "user-select": { webkit: ["-webkit-user-select"] },
@@ -64,15 +71,22 @@ const LIGHTWEIGHT_PREFIX_MAP: Record<string, Record<string, string[]>> = {
   "text-fill-color": { webkit: ["-webkit-text-fill-color"] },
   "text-stroke": { webkit: ["-webkit-text-stroke"] },
 };
+
 const LIGHTWEIGHT_VALUE_PREFIXES: Record<string, Record<string, string[]>> = {
   position: { sticky: ["-webkit-sticky"] },
 };
+
 const DECL_REGEX = /\b([a-zA-Z-][a-zA-Z0-9-]*)\s*:\s*([^;{}]+)(;?)/g;
 const COMMENT_REGEX = /\/\*[\s\S]*?\*\//g;
+
+function escapeRegExp(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 export class ChainCSSPrefixer {
   config: Required<PrefixerConfig>;
   private warnings: string[] = [];
+
   constructor(config: PrefixerConfig = {}) {
     this.config = {
       browsers: config.browsers || ["> 0.5%", "last 2 versions", "not dead"],
@@ -87,38 +101,45 @@ export class ChainCSSPrefixer {
       grid: config.grid || "autoplace",
     };
   }
+
   async determineMode(): Promise<"full" | "lightweight"> {
     if (this.config.mode === "full") {
       const has = !!(await loadAutoprefixer()) && !!(await loadPostcss());
-      if (!has && this.config.verbose)
+      if (!has && this.config.verbose) {
         console.warn(
           "[ChainCSS] Full mode needs postcss + autoprefixer. Run: npm i -D postcss autoprefixer — falling back to lightweight",
         );
+      }
       return has ? "full" : "lightweight";
     }
-    if (this.config.mode === "auto" && this.config.verbose)
+    if (this.config.mode === "auto" && this.config.verbose) {
       console.log(
         "[ChainCSS] mode:auto is deprecated, using lightweight. Set mode:lightweight or mode:full",
       );
+    }
     return "lightweight";
   }
+
   async process(
     cssString: string,
     options: ProcessOptionsWithPaths = {},
   ): Promise<PrefixerResult> {
     this.warnings = [];
-    if (!this.config.enabled)
+    if (!this.config.enabled) {
       return { css: cssString, map: null, warnings: [] };
+    }
     try {
       const mode = await this.determineMode();
-      if (mode === "full")
+      if (mode === "full") {
         return await this.processWithAutoprefixer(cssString, options);
+      }
       return this.processWithBuiltIn(cssString);
     } catch (e) {
       this.warnings.push(`Prefixer error: ${(e as Error).message}`);
       return { css: cssString, map: null, warnings: this.warnings };
     }
   }
+
   private async processWithAutoprefixer(
     cssString: string,
     options: ProcessOptionsWithPaths,
@@ -126,6 +147,7 @@ export class ChainCSSPrefixer {
     const ap = await loadAutoprefixer();
     const pc = await loadPostcss();
     if (!ap || !pc) return this.processWithBuiltIn(cssString);
+
     const result = await pc([
       ap({
         overrideBrowserslist: this.config.browsers,
@@ -141,12 +163,14 @@ export class ChainCSSPrefixer {
         ? { inline: this.config.sourceMapInline, annotation: false }
         : false,
     });
+
     return {
       css: result.css,
       map: result.map ? result.map.toString() : null,
       warnings: this.warnings,
     };
   }
+
   private processWithBuiltIn(cssString: string): PrefixerResult {
     return {
       css: this.lightweightPrefix(cssString),
@@ -154,65 +178,70 @@ export class ChainCSSPrefixer {
       warnings: this.warnings,
     };
   }
+
   private lightweightPrefix(cssString: string): string {
     const comments: string[] = [];
     let cleanCss = cssString.replace(COMMENT_REGEX, (match) => {
       comments.push(match);
       return `/*__COMMENT_PLACEHOLDER_${comments.length - 1}__*/`;
     });
+
     cleanCss = this.duplicateKeyframes(cleanCss);
-    let result = "";
-    let depth = 0;
+
+    const stack: string[] = [""];
     let inString: string | null = null;
-    let currentBlock = "";
-    let selectorOrAtRule = "";
+
     for (let i = 0; i < cleanCss.length; i++) {
       const char = cleanCss[i];
+
       if ((char === '"' || char === "'") && cleanCss[i - 1] !== "\\") {
         if (inString === char) inString = null;
         else if (!inString) inString = char;
       }
+
       if (inString) {
-        if (depth > 0) currentBlock += char;
-        else selectorOrAtRule += char;
+        stack[stack.length - 1] += char;
         continue;
       }
+
       if (char === "{") {
-        depth++;
-        if (depth === 1) {
-          result += selectorOrAtRule + "{";
-          selectorOrAtRule = "";
-          currentBlock = "";
-          continue;
-        }
+        stack[stack.length - 1] += "{";
+        stack.push("");
       } else if (char === "}") {
-        depth--;
-        if (depth === 0) {
-          result += this.prefixDeclarationBlock(currentBlock) + "}";
-          currentBlock = "";
-          continue;
+        if (stack.length > 1) {
+          const blockContent = stack.pop()!;
+          const processedBlock = this.prefixDeclarationBlock(blockContent);
+          stack[stack.length - 1] += processedBlock + "}";
+        } else {
+          stack[0] += "}";
         }
+      } else {
+        stack[stack.length - 1] += char;
       }
-      if (depth > 0) currentBlock += char;
-      else selectorOrAtRule += char;
     }
-    result += selectorOrAtRule;
+
+    const result = stack.join("");
+
     return result.replace(
       /\/\*__COMMENT_PLACEHOLDER_(\d+)__\*\//g,
       (_, id) => comments[parseInt(id, 10)] || "",
     );
   }
+
   private duplicateKeyframes(css: string): string {
     let index = 0;
     const keyword = "@keyframes";
+
     while (true) {
       const startIdx = css.indexOf(keyword, index);
       if (startIdx === -1) break;
+
       const openBraceIdx = css.indexOf("{", startIdx);
       if (openBraceIdx === -1) {
         index = startIdx + keyword.length;
         continue;
       }
+
       let braceCount = 1;
       let scanIdx = openBraceIdx + 1;
       while (scanIdx < css.length && braceCount > 0) {
@@ -221,18 +250,22 @@ export class ChainCSSPrefixer {
         else if (ch === "}") braceCount--;
         scanIdx++;
       }
+
       if (braceCount === 0) {
         const fullBlock = css.slice(startIdx, scanIdx);
         const blockBodyAndName = css.slice(startIdx + keyword.length, scanIdx);
         const webkitBlock = `@-webkit-keyframes${blockBodyAndName}`;
         const namePart = blockBodyAndName.split("{")[0].trim();
-        if (
-          css.includes(`@-webkit-keyframes${namePart}`) ||
-          css.includes(`@-webkit-keyframes ${namePart}`)
-        ) {
+
+        const webkitKeyframeRegex = new RegExp(
+          `@-webkit-keyframes\\s+${escapeRegExp(namePart)}\\b`,
+        );
+
+        if (webkitKeyframeRegex.test(css)) {
           index = startIdx + keyword.length;
           continue;
         }
+
         const replacement = `${webkitBlock}\n${fullBlock}`;
         css = css.slice(0, startIdx) + replacement + css.slice(scanIdx);
         index = startIdx + replacement.length;
@@ -240,16 +273,21 @@ export class ChainCSSPrefixer {
         index = startIdx + keyword.length;
       }
     }
+
     return css;
   }
+
   private prefixDeclarationBlock(block: string): string {
     return block.replace(DECL_REGEX, (full, prop, value, semi) => {
       const trimmedProp = prop.trim();
       const trimmedVal = value.trim();
       const map = LIGHTWEIGHT_PREFIX_MAP[trimmedProp];
       const vMap = LIGHTWEIGHT_VALUE_PREFIXES[trimmedProp];
+
       if (!map && (!vMap || !vMap[trimmedVal])) return full;
+
       let prefix = "";
+
       if (map && this.config.add) {
         for (const arr of Object.values(map)) {
           for (const pr of arr) {
@@ -258,18 +296,22 @@ export class ChainCSSPrefixer {
           }
         }
       }
+
       if (vMap && vMap[trimmedVal] && this.config.add) {
         for (const pr of vMap[trimmedVal]) {
           if (block.includes(`${trimmedProp}: ${pr}`)) continue;
           prefix += `${trimmedProp}: ${pr};\n`;
         }
       }
+
       const ending = semi ? ";" : "";
       return `${prefix}${trimmedProp}: ${trimmedVal}${ending}`;
     });
   }
+
   reset() {
     this.warnings = [];
   }
 }
+
 export default ChainCSSPrefixer;

@@ -7,68 +7,37 @@ import type {
   IRDeclaration,
   IRPseudoClass,
   IRAtRule,
-  IRCondition,
   IRTransformRecord,
 } from "./types.js";
 
+// ============================================================================
+// Safe Cloning Utilities
+// ============================================================================
+
 /**
- * Deep clone a StyleIR. Returns a new object with no shared references.
+ * Recursively clone a passMeta object, preserving Map, Set, and nested objects.
+ * Does NOT use JSON serialization — safe for circular references, Maps, and Sets.
  */
-export function cloneIR(ir: StyleIR): StyleIR {
-  return {
-    id: ir.id,
-    rules: ir.rules.map(cloneRule),
-    diagnostics: ir.diagnostics.map((d) => ({ ...d })),
-    meta: {
-      ...ir.meta,
-      sourceFiles: [...ir.meta.sourceFiles],
-      passes: [...ir.meta.passes],
-    },
-    graph: ir.graph ? cloneGraph(ir.graph) : undefined,
-  };
+function clonePassMeta(meta: any): any {
+  if (meta === null || typeof meta !== "object") return meta;
+  if (meta instanceof Set) return new Set(Array.from(meta).map(clonePassMeta));
+  if (meta instanceof Map) {
+    const copy = new Map();
+    meta.forEach((v, k) => copy.set(k, clonePassMeta(v)));
+    return copy;
+  }
+  if (Array.isArray(meta)) return meta.map(clonePassMeta);
+
+  const copy: Record<string, any> = {};
+  for (const key of Object.keys(meta)) {
+    copy[key] = clonePassMeta(meta[key]);
+  }
+  return copy;
 }
 
-function cloneGraph(graph: any): any {
-  return {
-    nodes:
-      graph.nodes instanceof Map
-        ? new Map(graph.nodes)
-        : Array.isArray(graph.nodes)
-          ? new Map(graph.nodes)
-          : new Map(Object.entries(graph.nodes || {})),
-    edges: Array.isArray(graph.edges)
-      ? graph.edges.map((e: any) => ({
-          ...e,
-          metadata: e.metadata ? { ...e.metadata } : undefined,
-        }))
-      : [],
-    rootNodes: graph.rootNodes ? [...graph.rootNodes] : [],
-    leafNodes: graph.leafNodes ? [...graph.leafNodes] : [],
-  };
-}
-
-function cloneRule(rule: IRRule): IRRule {
-  return {
-    id: rule.id,
-    parentId: rule.parentId,
-    selector: rule.selector,
-    declarations: rule.declarations.map(cloneDeclaration),
-    pseudoClasses: rule.pseudoClasses.map(clonePseudoClass),
-    atRules: rule.atRules.map(cloneAtRule),
-    nestedRules: rule.nestedRules.map(cloneRule),
-    conditions: rule.conditions.map((c) => ({ ...c })),
-    _dirty: rule._dirty,
-    meta: { ...rule.meta },
-    passMeta: rule.passMeta
-      ? JSON.parse(JSON.stringify(rule.passMeta))
-      : undefined,
-    isDead: rule.isDead,
-    specificity: rule.specificity,
-    hash: rule.hash,
-    source: { ...rule.source },
-    history: rule.history.map((h) => ({ ...h })),
-  };
-}
+// ============================================================================
+// Node Cloners
+// ============================================================================
 
 function cloneDeclaration(decl: IRDeclaration): IRDeclaration {
   return {
@@ -77,8 +46,8 @@ function cloneDeclaration(decl: IRDeclaration): IRDeclaration {
     value: decl.value,
     important: decl.important,
     source: decl.source ? { ...decl.source } : undefined,
-    history: decl.history.map((h) => ({ ...h })),
-    meta: { ...decl.meta },
+    history: (decl.history || []).map((h) => ({ ...h })),
+    meta: decl.meta ? clonePassMeta(decl.meta) : undefined,
   };
 }
 
@@ -87,9 +56,9 @@ function clonePseudoClass(pc: IRPseudoClass): IRPseudoClass {
     id: pc.id,
     parentId: pc.parentId,
     name: pc.name,
-    declarations: pc.declarations.map(cloneDeclaration),
-    source: { ...pc.source },
-    history: pc.history.map((h) => ({ ...h })),
+    declarations: (pc.declarations || []).map(cloneDeclaration),
+    source: pc.source ? { ...pc.source } : { file: "", line: 0, column: 0 },
+    history: (pc.history || []).map((h) => ({ ...h })),
   };
 }
 
@@ -100,39 +69,150 @@ function cloneAtRule(atRule: IRAtRule): IRAtRule {
     type: atRule.type,
     query: atRule.query,
     name: atRule.name,
-    declarations: atRule.declarations.map(cloneDeclaration),
-    nestedRules: atRule.nestedRules.map(cloneRule),
+    declarations: (atRule.declarations || []).map(cloneDeclaration),
+    nestedRules: (atRule.nestedRules || []).map(cloneRule),
     keyframes: atRule.keyframes?.map((kf) => ({
       id: kf.id,
       keyText: kf.keyText,
-      declarations: kf.declarations.map(cloneDeclaration),
-      source: { ...kf.source },
+      declarations: (kf.declarations || []).map(cloneDeclaration),
+      source: kf.source ? { ...kf.source } : { file: "", line: 0, column: 0 },
     })),
-    source: { ...atRule.source },
-    history: atRule.history.map((h) => ({ ...h })),
+    source: atRule.source
+      ? { ...atRule.source }
+      : { file: "", line: 0, column: 0 },
+    history: (atRule.history || []).map((h) => ({ ...h })),
   };
 }
 
+function cloneRule(rule: IRRule): IRRule {
+  return {
+    id: rule.id,
+    parentId: rule.parentId,
+    selector: rule.selector,
+    declarations: (rule.declarations || []).map(cloneDeclaration),
+    pseudoClasses: (rule.pseudoClasses || []).map(clonePseudoClass),
+    atRules: (rule.atRules || []).map(cloneAtRule),
+    nestedRules: (rule.nestedRules || []).map(cloneRule),
+    conditions: (rule.conditions || []).map((c) => ({ ...c })),
+    _dirty: rule._dirty,
+    meta: {
+      ...rule.meta,
+      dependencies: rule.meta?.dependencies ? [...rule.meta.dependencies] : [],
+      dependents: rule.meta?.dependents ? [...rule.meta.dependents] : [],
+    },
+    passMeta: rule.passMeta ? clonePassMeta(rule.passMeta) : undefined,
+    isDead: rule.isDead,
+    specificity: rule.specificity,
+    hash: rule.hash,
+    source: rule.source
+      ? { ...rule.source }
+      : { file: "", line: 0, column: 0 },
+    history: (rule.history || []).map((h) => ({ ...h })),
+  };
+}
+
+// ============================================================================
+// Graph Cloning
+// ============================================================================
+
 /**
- * Immutable update helpers — return a new object with the specified changes.
- * Much faster than full deep clone for small changes.
+ * Rebuild a cloned graph using newly cloned rules, preserving synthetic token
+ * nodes and virtual at-rule nodes.
  */
+function rebuildClonedGraph(graph: any, clonedRules: IRRule[]): any {
+  const nodeMap = new Map<string, IRRule>();
+
+  // Helper to index rule trees, including rules nested inside at-rules
+  function indexRules(rules: IRRule[]): void {
+    for (const rule of rules) {
+      if (!rule) continue;
+      nodeMap.set(rule.id, rule);
+      if (rule.nestedRules) indexRules(rule.nestedRules);
+      if (rule.atRules) {
+        for (const atRule of rule.atRules) {
+          if (atRule.nestedRules) indexRules(atRule.nestedRules);
+        }
+      }
+    }
+  }
+
+  indexRules(clonedRules);
+
+  // Preserve synthetic token nodes and virtual at-rule nodes from original graph
+  if (graph?.nodes) {
+    const entries: Array<[string, any]> =
+      graph.nodes instanceof Map
+        ? Array.from(graph.nodes.entries())
+        : Object.entries(graph.nodes);
+
+    for (const [id, originalNode] of entries) {
+      if (!nodeMap.has(id) && originalNode) {
+        nodeMap.set(id, cloneRule(originalNode as IRRule));
+      }
+    }
+  }
+
+  return {
+    nodes: nodeMap,
+    edges: (graph.edges || []).map((e: any) => ({
+      ...e,
+      metadata: e.metadata ? { ...e.metadata } : undefined,
+    })),
+    rootNodes: graph.rootNodes ? [...graph.rootNodes] : [],
+    leafNodes: graph.leafNodes ? [...graph.leafNodes] : [],
+  };
+}
+
+// ============================================================================
+// IR Cloning
+// ============================================================================
+
+/**
+ * Deep clone a StyleIR. Returns a new object with no shared references.
+ */
+export function cloneIR(ir: StyleIR): StyleIR {
+  const clonedRules = (ir.rules || []).map(cloneRule);
+
+  const clonedIR: StyleIR = {
+    id: ir.id,
+    rules: clonedRules,
+    diagnostics: (ir.diagnostics || []).map((d) => ({ ...d })),
+    meta: {
+      ...ir.meta,
+      sourceFiles: [...(ir.meta?.sourceFiles || [])],
+      passes: [...(ir.meta?.passes || [])],
+    },
+    graph: undefined,
+  };
+
+  if (ir.graph) {
+    clonedIR.graph = rebuildClonedGraph(ir.graph, clonedRules);
+  }
+
+  return clonedIR;
+}
+
+// ============================================================================
+// Immutable Update Helpers
+// ============================================================================
 
 export function updateRule(rule: IRRule, changes: Partial<IRRule>): IRRule {
-  return { ...rule, ...changes };
+  return { ...rule, ...changes, _dirty: true };
 }
 
 export function addDeclaration(rule: IRRule, decl: IRDeclaration): IRRule {
   return {
     ...rule,
-    declarations: [...rule.declarations, decl],
+    _dirty: true,
+    declarations: [...(rule.declarations || []), decl],
   };
 }
 
 export function removeDeclaration(rule: IRRule, declId: string): IRRule {
   return {
     ...rule,
-    declarations: rule.declarations.filter((d) => d.id !== declId),
+    _dirty: true,
+    declarations: (rule.declarations || []).filter((d) => d.id !== declId),
   };
 }
 
@@ -143,14 +223,15 @@ export function updateDeclaration(
 ): IRRule {
   return {
     ...rule,
-    declarations: rule.declarations.map((d) =>
+    _dirty: true,
+    declarations: (rule.declarations || []).map((d) =>
       d.id === declId ? { ...d, ...changes } : d,
     ),
   };
 }
 
 export function markDead(rule: IRRule): IRRule {
-  return { ...rule, isDead: true };
+  return { ...rule, isDead: true, _dirty: true };
 }
 
 export function addDiagnostic(
@@ -159,32 +240,62 @@ export function addDiagnostic(
 ): StyleIR {
   return {
     ...ir,
-    diagnostics: [...ir.diagnostics, diag],
+    diagnostics: [...(ir.diagnostics || []), diag],
   };
 }
 
 export function addHistory(rule: IRRule, record: IRTransformRecord): IRRule {
   return {
     ...rule,
-    history: [...rule.history, record],
+    _dirty: true,
+    history: [...(rule.history || []), record],
   };
 }
 
-/**
- * Freeze an IR object deeply (for debugging — catches accidental mutations).
- */
+// ============================================================================
+// Deep Freeze (for debugging — catches accidental mutations)
+// ============================================================================
+
 export function freezeIR(ir: StyleIR): StyleIR {
   return deepFreeze(ir) as StyleIR;
 }
 
 function deepFreeze(obj: any): any {
   if (obj === null || typeof obj !== "object") return obj;
-  if (Array.isArray(obj)) return obj.map(deepFreeze);
+
+  if (Array.isArray(obj)) {
+    return Object.freeze(obj.map(deepFreeze));
+  }
+
   if (obj instanceof Map) {
     const frozen = new Map();
     obj.forEach((v, k) => frozen.set(k, deepFreeze(v)));
+    frozen.set = () => {
+      throw new Error("Cannot mutate frozen Map");
+    };
+    frozen.delete = () => {
+      throw new Error("Cannot mutate frozen Map");
+    };
+    frozen.clear = () => {
+      throw new Error("Cannot mutate frozen Map");
+    };
     return frozen;
   }
+
+  if (obj instanceof Set) {
+    const frozen = new Set(Array.from(obj).map(deepFreeze));
+    frozen.add = () => {
+      throw new Error("Cannot mutate frozen Set");
+    };
+    frozen.delete = () => {
+      throw new Error("Cannot mutate frozen Set");
+    };
+    frozen.clear = () => {
+      throw new Error("Cannot mutate frozen Set");
+    };
+    return frozen;
+  }
+
   const frozen: any = {};
   for (const key of Object.keys(obj)) {
     frozen[key] = deepFreeze(obj[key]);

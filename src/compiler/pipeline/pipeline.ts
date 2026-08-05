@@ -4,8 +4,7 @@
 // ============================================================================
 
 import { clearKeyframeCache } from "../utils/shorthands.js";
-import type { StyleIR } from "./ir/types.js";
-// Metrics will be loaded dynamically
+import type { StyleIR, IRRule } from "./ir/types.js";
 import { intentNormalizer } from "./normalizers/intent-normalizer.js";
 import { unitNormalizer } from "./normalizers/unit-normalizer.js";
 import { cssCompressor } from "./optimizers/css-compressor.js";
@@ -31,7 +30,6 @@ import { schedulePasses, type PassDeclaration } from "./pass-scheduler.js";
 import { buildIRGraph } from "./ir/graph-builder.js";
 import { buildSymbolTable } from "./symbol-table.js";
 import type {
-  // Metrics will be loaded dynamically
   PipelineConfig,
   PipelineResult,
   PipelineStageResult,
@@ -46,6 +44,7 @@ import type {
   AnalysisResult,
   LoweringResult,
 } from "./pipeline-types.js";
+import { ensureRuleMeta } from "./ir/utils.js";
 
 // ============================================================================
 // Metrics & Observability
@@ -243,6 +242,7 @@ const PASS_DECLARATIONS: PassDeclaration[] = [
     cost: "cheap",
   },
 ];
+
 const validationResult = schedulePasses(PASS_DECLARATIONS);
 if (validationResult.errors.length > 0) {
   for (const err of validationResult.errors) {
@@ -260,74 +260,111 @@ const tokenNormalizationAdapter: NormalizationPass = {
     return { ir: res.ir, corrections: [] };
   },
 };
+
+/** Helper to check if a rule or any sub-decls reference an animation name */
+function ruleReferencesAnimation(rule: IRRule, animName: string): boolean {
+  const allDecls = [
+    ...(rule.declarations || []),
+    ...(rule.pseudoClasses?.flatMap((pc) => pc.declarations || []) || []),
+  ];
+  for (const decl of allDecls) {
+    if (
+      (decl.property === "animation" || decl.property === "animation-name") &&
+      String(decl.value).includes(animName)
+    ) {
+      return true;
+    }
+  }
+  if (rule.nestedRules) {
+    return rule.nestedRules.some((nested) => ruleReferencesAnimation(nested, animName));
+  }
+  return false;
+}
+
 const dynamicAnimationResolver: OptimizationPass = {
   name: "dynamic-animation-resolver",
   cost: "cheap",
   requiredFor: [],
-  optimize(
-    ir: StyleIR,
-    _context: Record<string, any> = {},
-  ): OptimizationResult {
-    if (!ir || !ir.rules)
+  optimize(ir: StyleIR, _context: Record<string, any> = {}): OptimizationResult {
+    if (!ir || !ir.rules) {
       return {
         ir,
-        savings: {
-          bytesSaved: 0,
-          rulesEliminated: 0,
-          declarationsEliminated: 0,
-        },
+        savings: { bytesSaved: 0, rulesEliminated: 0, declarationsEliminated: 0 },
         changes: 0,
       };
+    }
+
     const activeAnimationNames = new Set<string>();
     const registry = AnimationRegistry as any;
-    for (const rule of ir.rules) {
-      const allDecls = [
-        ...(rule.declarations || []),
-        ...(rule.pseudoClasses?.flatMap((pc) => pc.declarations || []) || []),
-      ];
-      if (allDecls.length === 0) continue;
-      for (const decl of allDecls) {
-        if (
-          (decl.property === "animation" ||
-            decl.property === "animation-name") &&
-          decl.value
-        ) {
-          const raw = String(decl.value).split(",");
-          for (const part of raw) {
-            const name = part.trim().split(" ")[0]!;
-            if (
-              name &&
-              !["none", "inherit", "initial", "unset"].includes(name)
-            ) {
-              activeAnimationNames.add(name);
+
+    // Helper to traverse rules recursively
+    function collectAnimationNames(rules: IRRule[]) {
+      for (const rule of rules) {
+        if (rule.isDead) continue;
+        const allDecls = [
+          ...(rule.declarations || []),
+          ...(rule.pseudoClasses?.flatMap((pc) => pc.declarations || []) || []),
+        ];
+        for (const decl of allDecls) {
+          if (
+            (decl.property === "animation" || decl.property === "animation-name") &&
+            decl.value
+          ) {
+            const raw = String(decl.value).split(",");
+            for (const part of raw) {
+              const name = part.trim().split(" ")[0]!;
+              if (name && !["none", "inherit", "initial", "unset"].includes(name)) {
+                activeAnimationNames.add(name);
+              }
             }
           }
         }
+        if (rule.nestedRules && rule.nestedRules.length > 0) {
+          collectAnimationNames(rule.nestedRules);
+        }
       }
     }
+
+    collectAnimationNames(ir.rules);
+
+    const keyframeNodesToAppend: any[] = [];
     for (const animName of activeAnimationNames) {
       if (registry.has(animName)) {
-        const keyframeNode = registry.getCompiledKeyframeNode(animName);
-        if (keyframeNode) {
-          ir.rules.push(keyframeNode as any);
-          for (const rule of ir.rules) {
-            const hasAnimation = rule.declarations?.some(
-              (d) =>
-                (d.property === "animation" ||
-                  d.property === "animation-name") &&
-                String(d.value).includes(animName),
-            );
-            if (hasAnimation) {
-              rule.meta.dependencies = rule.meta.dependencies || [];
-              rule.meta.dependencies.push(keyframeNode.id);
-              keyframeNode.meta = keyframeNode.meta || {};
-              keyframeNode.meta.dependents = keyframeNode.meta.dependents || [];
-              keyframeNode.meta.dependents.push(rule.id);
+        const rawNode = registry.getCompiledKeyframeNode(animName);
+        if (rawNode) {
+          // Clone to prevent mutating registry's cached object
+          const keyframeNode = JSON.parse(JSON.stringify(rawNode));
+          keyframeNodesToAppend.push(keyframeNode);
+          keyframeNode.meta = keyframeNode.meta || {};
+          keyframeNode.meta.dependents = keyframeNode.meta.dependents || [];
+
+          function linkDependencies(rules: IRRule[]) {
+            for (const rule of rules) {
+              if (ruleReferencesAnimation(rule, animName)) {
+                const ruleMeta = ensureRuleMeta(rule);
+                ruleMeta.dependencies ??= [];
+                if (!ruleMeta.dependencies.includes(keyframeNode.id)) {
+                  ruleMeta.dependencies.push(keyframeNode.id);
+                }
+                if (!keyframeNode.meta.dependents.includes(rule.id)) {
+                  keyframeNode.meta.dependents.push(rule.id);
+                }
+              }
+              if (rule.nestedRules && rule.nestedRules.length > 0) {
+                linkDependencies(rule.nestedRules);
+              }
             }
           }
+
+          linkDependencies(ir.rules);
         }
       }
     }
+
+    if (keyframeNodesToAppend.length > 0) {
+      ir.rules.push(...keyframeNodesToAppend);
+    }
+
     return {
       ir,
       savings: { bytesSaved: 0, rulesEliminated: 0, declarationsEliminated: 0 },
@@ -335,6 +372,7 @@ const dynamicAnimationResolver: OptimizationPass = {
     };
   },
 };
+
 const BASE_NORMALIZATION = [
   intentNormalizer,
   unitNormalizer,
@@ -346,8 +384,14 @@ const BASE_OPTIMIZATION = [
   cssCompressor,
 ];
 const BASE_LOWERING = [intentResolver, cssEmitter];
+
 export type PipelinePreset =
-  "default" | "production" | "ci" | "lint" | "atomic";
+  | "default"
+  | "production"
+  | "ci"
+  | "lint"
+  | "atomic";
+
 const PRESETS: Record<PipelinePreset, Partial<PipelineConfig>> = {
   default: {
     normalization: BASE_NORMALIZATION,
@@ -409,6 +453,33 @@ const PRESETS: Record<PipelinePreset, Partial<PipelineConfig>> = {
   },
 };
 
+// Helper to recursively stamp passMeta on rules and nested rules
+function stampPassMeta(rules: IRRule[], metaStamp: Record<string, any>) {
+  for (const rule of rules) {
+    rule.passMeta = { ...rule.passMeta, ...metaStamp };
+    if (rule.nestedRules && rule.nestedRules.length > 0) {
+      stampPassMeta(rule.nestedRules, metaStamp);
+    }
+  }
+}
+
+// Helper to update symbol table and graph
+function refreshIRMetadata(ir: StyleIR, metricsEnabled: boolean) {
+  if (metricsEnabled) defaultMetrics.start("graph_build");
+  ir.graph = buildIRGraph(ir);
+  if (metricsEnabled) {
+    defaultMetrics.stop("graph_build");
+    defaultMetrics.increment("pipeline_passes_run");
+  }
+
+  if (metricsEnabled) defaultMetrics.start("symbol_table_build");
+  (ir as any)._symbolTable = buildSymbolTable(ir);
+  if (metricsEnabled) {
+    defaultMetrics.stop("symbol_table_build");
+    defaultMetrics.increment("pipeline_passes_run");
+  }
+}
+
 // ============================================================================
 // Core Pipeline Execution Engine
 // ============================================================================
@@ -416,16 +487,25 @@ export class Pipeline {
   private config: PipelineConfig;
   private passDeclarations: PassDeclaration[] = PASS_DECLARATIONS;
   private lastResult: PipelineResult | null = null;
-  private immutableMode: boolean = true;
   private metricsEnabled: boolean = true;
   private diagnostics: DiagnosticReporter;
   private tracer: typeof defaultTracer;
+  private immutableMode: boolean = true;
+
   constructor(config: PipelineConfig) {
     this.config = config;
     this.diagnostics = new DiagnosticReporter();
     this.tracer = defaultTracer;
-    this.metricsEnabled = process.env.CHAINCSS_METRICS !== "false";
+    this.metricsEnabled = (() => {
+      try {
+        if (typeof process !== "undefined" && process.env) {
+          return process.env.CHAINCSS_METRICS !== "false";
+        }
+      } catch {}
+      return true;
+    })();
   }
+
   public setPassDeclarations(declarations: PassDeclaration[]): void {
     this.passDeclarations = declarations;
   }
@@ -446,6 +526,7 @@ export class Pipeline {
       valid: validationResult.errors.length === 0,
     };
   }
+
   public report(timeline: PipelineStageResult[]): string {
     const lines = [
       "═══════════════════════════════════════════",
@@ -466,12 +547,7 @@ export class Pipeline {
     lines.push("", "═══════════════════════════════════════════");
     return lines.join("\n");
   }
-  public setImmutableMode(enabled: boolean): void {
-    this.immutableMode = enabled;
-  }
-  public isImmutableMode(): boolean {
-    return this.immutableMode;
-  }
+
   public getDiagnostics(): DiagnosticReporter {
     return this.diagnostics;
   }
@@ -481,41 +557,37 @@ export class Pipeline {
   public getTracer() {
     return this.tracer;
   }
+
   public execute(ir: StyleIR, filePath?: string): PipelineResult {
     const startTime = performance.now();
     const timeline: PipelineStageResult[] = [];
     let currentIR = ir;
-    // Start root span
+
     const rootSpan = this.tracer.startSpan("pipeline-execute", undefined);
     this.tracer.setAttribute(rootSpan.id, "filePath", filePath || "unknown");
     this.tracer.setAttribute(rootSpan.id, "ruleCount", ir.rules?.length || 0);
-    // Start total compile timer
+
     if (this.metricsEnabled) {
       defaultMetrics.start("total_compile", { filePath });
       defaultMetrics.increment("files_processed");
     }
-    // Ensure diagnostics array exists on IR
+
     currentIR.diagnostics = currentIR.diagnostics || [];
-    // Build graph and symbol table
-    if (this.metricsEnabled) defaultMetrics.start("graph_build");
-    currentIR.graph = buildIRGraph(currentIR);
-    if (this.metricsEnabled) {
-      defaultMetrics.stop("graph_build");
-      defaultMetrics.increment("pipeline_passes_run");
-    }
-    if (this.metricsEnabled) defaultMetrics.start("symbol_table_build");
-    (currentIR as any)._symbolTable = buildSymbolTable(currentIR);
-    if (this.metricsEnabled) {
-      defaultMetrics.stop("symbol_table_build");
-      defaultMetrics.increment("pipeline_passes_run");
-    }
+
+    // Initial Symbol Table & Graph construction
+    refreshIRMetadata(currentIR, this.metricsEnabled);
+
     const pipelineContext = {
       filePath,
       ...(this.config.contexts || {}),
     };
+
+    let activeStage: string | null = null;
+
     try {
       // 1. Normalization Stage
       if (this.config.normalization) {
+        activeStage = "normalize";
         if (this.metricsEnabled) defaultMetrics.start("normalize");
         for (const pass of this.config.normalization as NormalizationPass[]) {
           const passStart = performance.now();
@@ -523,10 +595,11 @@ export class Pipeline {
             `normalize-${pass.name}`,
             rootSpan.id,
           );
-          const res = pass.normalize(
-            currentIR,
-            (pipelineContext.normalization as any) || pipelineContext,
-          );
+          const stageContext = {
+            ...pipelineContext,
+            ...(pipelineContext.normalization || {}),
+          };
+          const res = pass.normalize(currentIR, stageContext as any);
           currentIR = res.ir;
           this.tracer.endSpan(span.id, "ok");
           const passName = pass.name || "normalization";
@@ -540,9 +613,12 @@ export class Pipeline {
             defaultMetrics.increment("pipeline_passes_run");
         }
         if (this.metricsEnabled) defaultMetrics.stop("normalize");
+        activeStage = null;
       }
+
       // 2. Validation Stage
       if (this.config.validation && this.config.validation.length > 0) {
+        activeStage = "validate";
         if (this.metricsEnabled) defaultMetrics.start("validate");
         for (const pass of this.config.validation as ValidationPass[]) {
           const passStart = performance.now();
@@ -556,10 +632,11 @@ export class Pipeline {
             stats: { errors: 0, warnings: 0, info: 0, hints: 0 },
           };
           if (typeof pass.validate === "function") {
-            const passRes = pass.validate(
-              currentIR,
-              (pipelineContext.validation as any) || pipelineContext,
-            );
+            const stageContext = {
+              ...pipelineContext,
+              ...(pipelineContext.validation || {}),
+            };
+            const passRes = pass.validate(currentIR, stageContext as any);
             if (passRes) {
               res = passRes;
               if (res.diagnostics && Array.isArray(res.diagnostics)) {
@@ -599,9 +676,12 @@ export class Pipeline {
             defaultMetrics.increment("pipeline_passes_run");
         }
         if (this.metricsEnabled) defaultMetrics.stop("validate");
+        activeStage = null;
       }
+
       // 3. Analysis Stage
       if (this.config.analysis && this.config.analysis.length > 0) {
+        activeStage = "analyze";
         if (this.metricsEnabled) defaultMetrics.start("analyze");
         for (const pass of this.config.analysis as AnalysisPass[]) {
           const passStart = performance.now();
@@ -612,10 +692,11 @@ export class Pipeline {
 
           let res: AnalysisResult = { ir: currentIR, annotations: [] };
           if (typeof pass.analyze === "function") {
-            const passRes = pass.analyze(
-              currentIR,
-              (pipelineContext.analysis as any) || pipelineContext,
-            );
+            const stageContext = {
+              ...pipelineContext,
+              ...(pipelineContext.analysis || {}),
+            };
+            const passRes = pass.analyze(currentIR, stageContext as any);
             if (passRes) res = passRes;
           }
           this.tracer.endSpan(span.id, "ok");
@@ -630,9 +711,12 @@ export class Pipeline {
             defaultMetrics.increment("pipeline_passes_run");
         }
         if (this.metricsEnabled) defaultMetrics.stop("analyze");
+        activeStage = null;
       }
+
       // 4. Optimization Stage
       if (this.config.optimization) {
+        activeStage = "optimize";
         if (this.metricsEnabled) defaultMetrics.start("optimize");
         for (const pass of this.config.optimization as OptimizationPass[]) {
           const passStart = performance.now();
@@ -640,10 +724,11 @@ export class Pipeline {
             `optimize-${pass.name}`,
             rootSpan.id,
           );
-          const res = pass.optimize(
-            currentIR,
-            (pipelineContext.optimization as any) || pipelineContext,
-          );
+          const stageContext = {
+            ...pipelineContext,
+            ...(pipelineContext.optimization || {}),
+          };
+          const res = pass.optimize(currentIR, stageContext as any);
           currentIR = res.ir;
           this.tracer.endSpan(span.id, "ok");
           const passName = pass.name || "optimization";
@@ -657,19 +742,26 @@ export class Pipeline {
             defaultMetrics.increment("pipeline_passes_run");
         }
         if (this.metricsEnabled) defaultMetrics.stop("optimize");
+        activeStage = null;
+
+        // Rebuild Symbol Table & IR Graph after AST modifications
+        refreshIRMetadata(currentIR, this.metricsEnabled);
       }
+
       // 5. Lowering Stage
       let finalCSS = "";
       if (this.config.lowering) {
+        activeStage = "lower";
         if (this.metricsEnabled) defaultMetrics.start("lower");
         for (const pass of this.config.lowering as LoweringPass[]) {
           const passStart = performance.now();
           const span = this.tracer.startSpan(`lower-${pass.name}`, rootSpan.id);
           let res: LoweringResult = { ir: currentIR, generatedNodes: 0 };
-          const passRes = pass.generate(
-            currentIR,
-            (pipelineContext.lowering as any) || pipelineContext,
-          );
+          const stageContext = {
+            ...pipelineContext,
+            ...(pipelineContext.lowering || {}),
+          };
+          const passRes = pass.generate(currentIR, stageContext as any);
           if (passRes) {
             res = passRes;
             if (passRes.generatedOutput) {
@@ -688,21 +780,18 @@ export class Pipeline {
             defaultMetrics.increment("pipeline_passes_run");
         }
         if (this.metricsEnabled) defaultMetrics.stop("lower");
+        activeStage = null;
       }
-      // Stamp passMeta on rules
-      for (const rule of currentIR.rules) {
-        if (!rule.passMeta) {
-          rule.passMeta = {};
-        }
-        for (const entry of timeline) {
-          (rule.passMeta as any)[entry.pass] = {
-            _ran: true,
-            _ranAt: Date.now(),
-            _stage: entry.stage,
-          };
-        }
-      }
-      // Update metrics
+
+      // Stamp passMeta recursively on all rules and nested rules
+      const metaStamp = Object.fromEntries(
+        timeline.map((entry) => [
+          entry.pass,
+          { _ran: true, _stage: entry.stage },
+        ]),
+      );
+      stampPassMeta(currentIR.rules, metaStamp);
+
       if (this.metricsEnabled) {
         defaultMetrics.increment("rules_compiled", currentIR.rules.length);
         const atomicRules = currentIR.rules.filter(
@@ -727,11 +816,14 @@ export class Pipeline {
         },
       };
       this.lastResult = result;
-      // Record metrics history
       defaultMetrics.recordHistory();
       return result;
     } catch (error) {
+      // Safely close active stage timer if pipeline crashed mid-stage
       if (this.metricsEnabled) {
+        if (activeStage) {
+          try { defaultMetrics.stop(activeStage as any); } catch {}
+        }
         defaultMetrics.increment("errors_encountered");
         defaultMetrics.stop("total_compile");
       }
@@ -740,6 +832,15 @@ export class Pipeline {
         message: (error as Error).message,
         stack: (error as Error).stack,
       });
+
+      currentIR.diagnostics.push({
+        id: `pipeline-error-${Date.now()}`,
+        nodeId: currentIR.id,
+        severity: "error",
+        message: (error as Error).message || "Unhandled compilation pipeline exception",
+        pass: "pipeline-core",
+      });
+
       const result: PipelineResult = {
         ir: currentIR,
         timeline,
@@ -755,16 +856,14 @@ export class Pipeline {
       return result;
     }
   }
-  // Alias `process` to `execute` for maximum compatibility
+
   public async process(
     ir: StyleIR,
     filePath?: string,
   ): Promise<PipelineResult> {
     return this.execute(ir, filePath);
   }
-  // ==========================================================================
-  // Metrics Helpers
-  // ==========================================================================
+
   public generateMetricsReport(): string {
     return defaultMetrics.generateReport();
   }
@@ -774,8 +873,15 @@ export class Pipeline {
   public getTraceTree(): any {
     return this.tracer.getTraceTree();
   }
+
+  public setImmutableMode(enabled: boolean): void {
+    this.immutableMode = enabled;
+  }
+  public isImmutableMode(): boolean {
+    return this.immutableMode;
+  }
 }
-// Backwards-compatibility alias
+
 export class UnifiedPipeline extends Pipeline {}
 
 // ============================================================================
@@ -799,14 +905,13 @@ function deepMerge<T extends Record<string, any>>(
       bv !== null
     ) {
       result[key] = deepMerge(bv as any, ov as any);
-    } else if (Array.isArray(ov)) {
-      result[key] = [...ov] as any;
-    } else {
-      result[key] = ov as any;
+    } else if (ov !== undefined) {
+      result[key] = Array.isArray(ov) ? ([...ov] as any) : ov;
     }
   }
   return result;
 }
+
 function deepCloneConfig(config: Partial<PipelineConfig>): PipelineConfig {
   const clone: any = { ...config };
   if (clone.normalization) clone.normalization = [...clone.normalization];
@@ -822,6 +927,7 @@ function deepCloneConfig(config: Partial<PipelineConfig>): PipelineConfig {
   clone.contexts.lowering = { ...(clone.contexts.lowering || {}) };
   return clone as PipelineConfig;
 }
+
 export function createPipeline(
   preset: PipelinePreset = "default",
   overrides?: Partial<PipelineConfig>,
@@ -835,6 +941,7 @@ export function createPipeline(
   const merged: any = overrides
     ? deepMerge(cloned as any, overrides as any)
     : cloned;
+
   if (preset === "atomic") {
     merged.contexts = merged.contexts || {};
     merged.contexts.optimization = merged.contexts.optimization || {};
@@ -852,28 +959,35 @@ export function createPipeline(
   pipeline.setPassDeclarations(PASS_DECLARATIONS);
   return pipeline;
 }
+
 export function createDefaultPipeline(
   overrides?: Partial<PipelineConfig>,
 ): Pipeline {
   return createPipeline("default", overrides);
 }
+
 export function createFullPipeline(
   overrides?: Partial<PipelineConfig>,
 ): Pipeline {
   return createPipeline("ci", overrides);
 }
+
 export function isValidPreset(v: string): v is PipelinePreset {
   return Object.prototype.hasOwnProperty.call(PRESETS, v);
 }
+
 export function getPassDeclarations(): PassDeclaration[] {
   return PASS_DECLARATIONS;
 }
+
 export function validatePassSchedule(passes: PassDeclaration[]) {
   return schedulePasses(passes);
 }
+
 export type {
   PipelineResult,
   PipelineConfig,
   PipelineStageResult,
 } from "./pipeline-types.js";
+
 export default Pipeline;

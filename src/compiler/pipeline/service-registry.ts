@@ -2,11 +2,10 @@
 // Central service registry — connects cache, graph, tokens, diagnostics, emitter, watcher, logger
 
 import type { CompilerContext } from "./compiler-context.js";
-import type { StyleIR } from "./ir/types.js";
-import type { IRGraph } from "./ir/types.js";
+import type { StyleIR, IRGraph } from "./ir/types.js";
 import type { SymbolTable } from "./symbol-table.js";
 import type { DiagnosticsReport } from "./diagnostics-reporter.js";
-import type { PassResult } from "./pipeline-types.js";
+import { emit as executeEmit } from "./lowering/emitter-registry.js";
 
 // ============================================================================
 // Service Interfaces
@@ -18,7 +17,7 @@ export interface CacheService {
   has(key: string): boolean;
   delete(key: string): void;
   clear(): void;
-  size: number;
+  readonly size: number;
 }
 
 export interface GraphService {
@@ -42,7 +41,7 @@ export interface SymbolService {
 
 export interface DiagnosticsService {
   add(
-    severity: string,
+    severity: "error" | "warning" | "info" | "hint",
     message: string,
     pass: string,
     opts?: { suggestion?: string; nodeId?: string },
@@ -74,17 +73,35 @@ export interface WatcherService {
     event: "change" | "add" | "unlink",
     callback: (filePath: string) => void,
   ): void;
-  off(event: string, callback: Function): void;
+  off(event: string, callback: (...args: unknown[]) => void): void;
   watch(patterns: string[]): void;
   unwatch(): void;
 }
+
+export type LogLevel = "debug" | "info" | "warn" | "error";
 
 export interface LoggerService {
   info(msg: string, ...args: unknown[]): void;
   warn(msg: string, ...args: unknown[]): void;
   error(msg: string, ...args: unknown[]): void;
   debug(msg: string, ...args: unknown[]): void;
-  setLevel(level: "debug" | "info" | "warn" | "error"): void;
+  setLevel(level: LogLevel): void;
+}
+
+// Map of core built-in services for type inference
+export interface KnownServices {
+  cache: CacheService;
+  graph: GraphService;
+  symbols: SymbolService;
+  diagnostics: DiagnosticsService;
+  emitter: EmitterService;
+  watcher: WatcherService;
+  logger: LoggerService;
+}
+
+export interface ServiceRegistryOptions {
+  watcher?: WatcherService;
+  emitter?: EmitterService;
 }
 
 // ============================================================================
@@ -95,13 +112,28 @@ export class ServiceRegistry {
   private services = new Map<string, unknown>();
 
   /** Register a service by name */
-  register<T>(name: string, service: T): void {
+  register<K extends keyof KnownServices>(name: K, service: KnownServices[K]): void;
+  register<T>(name: string, service: T): void;
+  register(name: string, service: unknown): void {
     this.services.set(name, service);
   }
 
   /** Get a service by name */
+  get<K extends keyof KnownServices>(name: K): KnownServices[K] | undefined;
+  get<T>(name: string): T | undefined;
   get<T>(name: string): T | undefined {
     return this.services.get(name) as T | undefined;
+  }
+
+  /** Get a service by name or throw if unregistered */
+  getRequired<K extends keyof KnownServices>(name: K): KnownServices[K];
+  getRequired<T>(name: string): T;
+  getRequired<T>(name: string): T {
+    const service = this.services.get(name);
+    if (!service) {
+      throw new Error(`Required service "${name}" is not registered in ServiceRegistry.`);
+    }
+    return service as T;
   }
 
   /** Check if a service is registered */
@@ -124,38 +156,47 @@ export class ServiceRegistry {
 // Built-in Service Factory
 // ============================================================================
 
+const LOG_LEVEL_WEIGHTS: Record<LogLevel, number> = {
+  debug: 0,
+  info: 1,
+  warn: 2,
+  error: 3,
+};
+
 /**
  * Create a fully populated service registry from a CompilerContext.
- * Wraps each subsystem as a service.
  */
-export function createServiceRegistry(ctx: CompilerContext): ServiceRegistry {
+export function createServiceRegistry(
+  ctx: CompilerContext,
+  options: ServiceRegistryOptions = {}
+): ServiceRegistry {
   const registry = new ServiceRegistry();
 
-  // Cache service
-  registry.register<CacheService>("cache", {
+  // 1. Cache service
+  registry.register("cache", {
     get: <T>(key: string) => ctx.getCached<T>(key),
     set: (key, value) => ctx.setCached(key, value),
-    has: (key) => ctx.getCached(key) !== undefined,
-    delete: (key) => ctx.setCached(key, undefined),
+    has: (key) => ctx.cache.has(key),
+    delete: (key) => ctx.cache.delete(key),
     clear: () => ctx.clearCache(),
     get size() {
       return ctx.cache.size;
     },
   });
 
-  // Graph service
-  registry.register<GraphService>("graph", {
+  // 2. Graph service
+  registry.register("graph", {
     getAffectedRules: (ruleId) => ctx.getAffectedRules(ruleId),
     getStats: () => ctx.getGraphStats(),
     dependsOn: (ruleId, depId) => ctx.dependsOn(ruleId, depId),
-    exportGraph: () => ctx.exportGraph(), // ADD
+    exportGraph: () => ctx.exportGraph(),
     get graph() {
       return ctx.graph;
     },
   });
 
-  // Symbol service
-  registry.register<SymbolService>("symbols", {
+  // 3. Symbol service
+  registry.register("symbols", {
     resolve: (name) => ctx.resolveSymbol(name),
     getDependents: (name) => ctx.getSymbolDependents(name),
     getUnused: () => ctx.getUnusedSymbols(),
@@ -164,10 +205,10 @@ export function createServiceRegistry(ctx: CompilerContext): ServiceRegistry {
     },
   });
 
-  // Diagnostics service
-  registry.register<DiagnosticsService>("diagnostics", {
+  // 4. Diagnostics service
+  registry.register("diagnostics", {
     add: (severity, message, pass, opts) =>
-      ctx.addDiagnostic(severity as any, message, pass, opts),
+      ctx.addDiagnostic(severity, message, pass, opts),
     summary: () => ctx.getDiagnosticsSummary(),
     generateReport: (totalDuration) => ctx.generateReport(totalDuration),
     get items() {
@@ -175,16 +216,57 @@ export function createServiceRegistry(ctx: CompilerContext): ServiceRegistry {
     },
   });
 
-  // Logger service (simple console-based)
-  registry.register<LoggerService>("logger", {
-    info: (msg, ...args) => console.log(`[ChainCSS] ${msg}`, ...args),
-    warn: (msg, ...args) => console.warn(`[ChainCSS] ${msg}`, ...args),
-    error: (msg, ...args) => console.error(`[ChainCSS] ${msg}`, ...args),
-    debug: (msg, ...args) => {
-      if (ctx.config.verbose) console.debug(`[ChainCSS] ${msg}`, ...args);
+  // 5. Emitter service
+  registry.register("emitter", options.emitter ?? {
+    emit: (ir) => {
+      const result = executeEmit(ir, "css", {
+        minify: ctx.config.minify,
+        sourceMap: ctx.config.sourceMap,
+      });
+      return result?.output ?? "";
     },
-    setLevel: (_level) => {
-      /* no-op for now */
+    emitAtomic: (ir) => {
+      const result = executeEmit(ir, "atomic-css", {
+        minify: ctx.config.minify,
+      });
+      return result?.output ?? "";
+    },
+  });
+
+  // 6. Watcher service
+  registry.register("watcher", options.watcher ?? {
+    on: () => {},
+    off: () => {},
+    watch: () => {},
+    unwatch: () => {},
+  });
+
+  // 7. Logger service (configurable level filtering)
+  let currentLogLevel: LogLevel = ctx.config.verbose ? "debug" : "info";
+
+  registry.register("logger", {
+    debug: (msg, ...args) => {
+      if (LOG_LEVEL_WEIGHTS[currentLogLevel] <= LOG_LEVEL_WEIGHTS.debug) {
+        console.debug(`[ChainCSS] ${msg}`, ...args);
+      }
+    },
+    info: (msg, ...args) => {
+      if (LOG_LEVEL_WEIGHTS[currentLogLevel] <= LOG_LEVEL_WEIGHTS.info) {
+        console.log(`[ChainCSS] ${msg}`, ...args);
+      }
+    },
+    warn: (msg, ...args) => {
+      if (LOG_LEVEL_WEIGHTS[currentLogLevel] <= LOG_LEVEL_WEIGHTS.warn) {
+        console.warn(`[ChainCSS] ${msg}`, ...args);
+      }
+    },
+    error: (msg, ...args) => {
+      if (LOG_LEVEL_WEIGHTS[currentLogLevel] <= LOG_LEVEL_WEIGHTS.error) {
+        console.error(`[ChainCSS] ${msg}`, ...args);
+      }
+    },
+    setLevel: (level: LogLevel) => {
+      currentLogLevel = level;
     },
   });
 

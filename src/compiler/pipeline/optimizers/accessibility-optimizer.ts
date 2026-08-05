@@ -1,5 +1,5 @@
 // ============================================================================
-// FILE: src/compiler/pipeline/optimizers/accessibility-optimizer.ts (OPTIMIZED)
+// FILE: src/compiler/pipeline/optimizers/accessibility-optimizer.ts
 // ============================================================================
 
 import { recordHistory } from "../ir/utils.js";
@@ -15,11 +15,93 @@ const WCAG = {
   MIN_TOUCH_TARGET: 44,
 };
 
-// Fast-path guard prevents running RegExp on non-pixel values (colors, percentages, keywords)
-function extractPx(value: string | number | undefined): number {
-  if (typeof value !== "string" || !value.endsWith("px")) return Infinity;
-  const match = value.match(/^(\d+(\.\d+)?)px$/);
-  return match ? parseFloat(match[1]) : Infinity;
+/**
+ * Standardize property names to kebab-case for consistent IR inspection.
+ */
+function normalizeProp(prop: string): string {
+  return prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+}
+
+/**
+ * Parses pixel values or unitless 0. Returns numeric value or null if relative/non-pixel.
+ */
+function parsePxValue(value: string | number | undefined): number | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value === "number") return value;
+
+  const str = String(value).trim().toLowerCase();
+  if (str === "0") return 0;
+
+  const match = str.match(/^(\d+(?:\.\d+)?)px$/);
+  return match ? parseFloat(match[1]) : null;
+}
+
+/**
+ * Detects if a rule represents a screen-reader-only or visually hidden utility.
+ */
+function isVisuallyHiddenRule(rule: IRRule, declMap: Map<string, string>): boolean {
+  if (rule.selector) {
+    const sel = rule.selector.toLowerCase();
+    if (sel.includes("sr-only") || sel.includes("visually-hidden")) return true;
+  }
+
+  const width = declMap.get("width");
+  const height = declMap.get("height");
+  const clip = declMap.get("clip") || declMap.get("clip-path");
+  const overflow = declMap.get("overflow");
+
+  const isTiny =
+    (width === "1px" || width === "0" || width === "0px") &&
+    (height === "1px" || height === "0" || height === "0px");
+
+  return Boolean(isTiny && (clip || overflow === "hidden"));
+}
+
+/**
+ * Evaluates whether an outline declaration explicitly strips focus indicators.
+ */
+function isOutlineStripped(valStr: string): boolean {
+  const clean = valStr.replace(/!important/g, "").trim().toLowerCase();
+  return (
+    clean === "none" ||
+    clean === "0" ||
+    clean === "0px" ||
+    clean === "transparent" ||
+    clean.startsWith("0 ") ||
+    clean.startsWith("none ")
+  );
+}
+
+function isSmallElementFast(rule: IRRule, declMap: Map<string, string>): boolean {
+  if (!rule.selector) return false;
+  const selector = rule.selector.toLowerCase();
+  const smallPatterns = [
+    "icon",
+    "close",
+    "x-btn",
+    "badge",
+    "tag",
+    "chip",
+    "breadcrumb",
+    "crumb",
+    "arrow",
+    "dot",
+    "indicator",
+    "avatar-xs",
+    "avatar-sm",
+  ];
+
+  if (smallPatterns.some((p) => selector.includes(p))) return true;
+
+  const w = parsePxValue(declMap.get("width"));
+  const h = parsePxValue(declMap.get("height"));
+  const f = parsePxValue(declMap.get("font-size"));
+
+  if (w !== null && w > 0 && w < 30) return true;
+  if (h !== null && h > 0 && h < 30) return true;
+  if (f !== null && f > 0 && f < 14) return true;
+
+  return false;
 }
 
 export const accessibilityOptimizer: OptimizationPass = {
@@ -33,11 +115,7 @@ export const accessibilityOptimizer: OptimizationPass = {
     if (!ir || !ir.rules) {
       return {
         ir,
-        savings: {
-          rulesEliminated: 0,
-          declarationsEliminated: 0,
-          bytesSaved: 0,
-        },
+        savings: { rulesEliminated: 0, declarationsEliminated: 0, bytesSaved: 0 },
         changes: 0,
       };
     }
@@ -49,28 +127,34 @@ export const accessibilityOptimizer: OptimizationPass = {
         rule.pseudoClasses = [];
       }
 
-      const declarations = rule.declarations;
-      let hasCursorPointer = false;
-      let explicitlyStripsOutline = false;
-      let minWidthFound = false;
-      let minHeightFound = false;
+      // Pre-map normalized kebab-case declarations
+      const declMap = new Map<string, string>();
+      for (const d of rule.declarations) {
+        if (d?.property && d.value !== undefined && d.value !== null) {
+          declMap.set(normalizeProp(d.property), String(d.value).trim());
+        }
+      }
 
-      // Single-pass inspection of declarations to avoid looping 4+ times
-      for (const decl of declarations) {
-        const prop = decl.property;
+      // Skip accessibility mutations on screen reader utilities
+      if (isVisuallyHiddenRule(rule, declMap)) continue;
+
+      const hasCursorPointer = declMap.get("cursor") === "pointer";
+      let explicitlyStripsOutline = false;
+
+      // 1. Font size and outline stripping checks
+      for (const decl of rule.declarations) {
+        if (!decl?.property) continue;
+        const prop = normalizeProp(decl.property);
         const valStr = String(decl.value);
 
-        // 1. Font size check & auto-fix
-        if (
-          (prop === "fontSize" || prop === "font-size") &&
-          typeof decl.value === "string"
-        ) {
-          const px = extractPx(decl.value);
-          if (px !== Infinity && px < WCAG.MIN_FONT_SIZE) {
+        if (prop === "font-size") {
+          const px = parsePxValue(decl.value);
+          // Only adjust visible, positive font-sizes below WCAG threshold
+          if (px !== null && px > 0 && px < WCAG.MIN_FONT_SIZE) {
             const originalValue = decl.value;
             decl.value = `max(${WCAG.MIN_FONT_SIZE}px, ${originalValue})`;
             recordHistory(
-              decl as any,
+              decl,
               "accessibility-optimizer",
               "auto-fix-min-font",
               undefined,
@@ -80,45 +164,43 @@ export const accessibilityOptimizer: OptimizationPass = {
           }
         }
 
-        // 2. Interactive & Touch Target flags
-        if (prop === "cursor" && decl.value === "pointer") {
-          hasCursorPointer = true;
-        }
-        if (prop === "min-width" || prop === "minWidth" || prop === "width") {
-          if (extractPx(decl.value) >= WCAG.MIN_TOUCH_TARGET)
-            minWidthFound = true;
-        }
         if (
-          prop === "min-height" ||
-          prop === "minHeight" ||
-          prop === "height"
-        ) {
-          if (extractPx(decl.value) >= WCAG.MIN_TOUCH_TARGET)
-            minHeightFound = true;
-        }
-
-        // 3. Outline stripping checks
-        if (
-          (prop === "outline" &&
-            ["none", "0", "transparent"].includes(valStr.trim())) ||
-          (prop === "outline-style" && valStr.trim() === "none")
+          (prop === "outline" && isOutlineStripped(valStr)) ||
+          (prop === "outline-style" && valStr.trim().toLowerCase() === "none")
         ) {
           explicitlyStripsOutline = true;
         }
       }
 
-      // Touch target adjustments
+      // 2. Touch Target Evaluation
       const isButton =
         rule.selector &&
-        /(\bbutton\b|\[role=["']button["']\]|btn)/i.test(rule.selector);
+        /(\bbutton\b|\[role=["']button["']\]|\bbtn\b)/i.test(rule.selector);
+
       if (hasCursorPointer || isButton) {
-        const small = isSmallElementFast(rule, declarations);
-        if (small) {
-          if (!minWidthFound || !minHeightFound) {
+        const minWidthPx = parsePxValue(declMap.get("min-width") || declMap.get("width"));
+        const minHeightPx = parsePxValue(declMap.get("min-height") || declMap.get("height"));
+
+        const widthSufficient =
+          minWidthPx !== null
+            ? minWidthPx >= WCAG.MIN_TOUCH_TARGET
+            : declMap.has("width") || declMap.has("min-width");
+
+        const heightSufficient =
+          minHeightPx !== null
+            ? minHeightPx >= WCAG.MIN_TOUCH_TARGET
+            : declMap.has("height") || declMap.has("min-height");
+
+        const isSmall = isSmallElementFast(rule, declMap);
+
+        if (isSmall) {
+          if (!widthSufficient || !heightSufficient) {
             const existingAfter = rule.pseudoClasses.find(
               (pc) =>
                 pc.name === "after" &&
-                pc.declarations?.some((d) => d.meta?.a11yTouchTarget),
+                pc.declarations?.some(
+                  (d) => (d.meta as { a11yTouchTarget?: boolean })?.a11yTouchTarget,
+                ),
             );
 
             if (!existingAfter) {
@@ -136,13 +218,13 @@ export const accessibilityOptimizer: OptimizationPass = {
                   a11yTouchTarget: true,
                 }),
                 createDeclaration(
-                  "minWidth",
+                  "min-width",
                   `${WCAG.MIN_TOUCH_TARGET}px`,
                   rule.source,
                   { a11yTouchTarget: true },
                 ),
                 createDeclaration(
-                  "minHeight",
+                  "min-height",
                   `${WCAG.MIN_TOUCH_TARGET}px`,
                   rule.source,
                   { a11yTouchTarget: true },
@@ -171,15 +253,11 @@ export const accessibilityOptimizer: OptimizationPass = {
                 ],
               });
 
-              const hasPosition = declarations.some(
-                (d) =>
-                  d.property === "position" &&
-                  ["relative", "absolute", "fixed", "sticky"].includes(
-                    String(d.value),
-                  ),
-              );
+              const pos = declMap.get("position");
+              const hasPosition =
+                pos && ["relative", "absolute", "fixed", "sticky"].includes(pos);
               if (!hasPosition) {
-                declarations.push(
+                rule.declarations.push(
                   createDeclaration("position", "relative", rule.source, {
                     a11yTouchTarget: true,
                   }),
@@ -190,8 +268,8 @@ export const accessibilityOptimizer: OptimizationPass = {
             }
           }
         } else {
-          if (!minWidthFound) {
-            declarations.push(
+          if (!declMap.has("min-width") && minWidthPx === null) {
+            rule.declarations.push(
               createDeclaration(
                 "min-width",
                 `${WCAG.MIN_TOUCH_TARGET}px`,
@@ -201,8 +279,8 @@ export const accessibilityOptimizer: OptimizationPass = {
             );
             changes++;
           }
-          if (!minHeightFound) {
-            declarations.push(
+          if (!declMap.has("min-height") && minHeightPx === null) {
+            rule.declarations.push(
               createDeclaration(
                 "min-height",
                 `${WCAG.MIN_TOUCH_TARGET}px`,
@@ -215,7 +293,7 @@ export const accessibilityOptimizer: OptimizationPass = {
         }
       }
 
-      // Missing focus ring check
+      // 3. Missing Focus Ring Check
       const hasFocusStyle = rule.pseudoClasses.some(
         (pc) =>
           (pc.name === "focus" || pc.name === "focus-visible") &&
@@ -234,7 +312,7 @@ export const accessibilityOptimizer: OptimizationPass = {
               "2px dashed currentColor",
               rule.source,
             ),
-            createDeclaration("outlineOffset", "2px", rule.source),
+            createDeclaration("outline-offset", "2px", rule.source),
           ],
           source: rule.source,
           history: [
@@ -258,39 +336,3 @@ export const accessibilityOptimizer: OptimizationPass = {
     };
   },
 };
-
-function isSmallElementFast(rule: IRRule, declarations: any[]): boolean {
-  if (!rule.selector) return false;
-  const selector = rule.selector.toLowerCase();
-  const smallPatterns = [
-    "icon",
-    "close",
-    "x-btn",
-    "badge",
-    "tag",
-    "chip",
-    "breadcrumb",
-    "crumb",
-    "arrow",
-    "dot",
-    "indicator",
-    "avatar-xs",
-    "avatar-sm",
-  ];
-
-  if (smallPatterns.some((p) => selector.includes(p))) return true;
-
-  for (const decl of declarations) {
-    const prop = decl.property;
-    if (
-      prop === "width" ||
-      prop === "height" ||
-      prop === "fontSize" ||
-      prop === "font-size"
-    ) {
-      const px = extractPx(decl.value);
-      if (px > 0 && px < (prop.includes("font") ? 14 : 30)) return true;
-    }
-  }
-  return false;
-}

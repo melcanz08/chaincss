@@ -5,6 +5,7 @@
 import { recordHistory } from "../ir/utils.js";
 import { createDeclaration } from "../ir/index.js";
 import { intent } from "./intent-detector.js";
+import * as shorthandsModule from "../../utils/shorthands.js";
 
 import type { StyleIR, IRRule } from "../ir/types.js";
 import type {
@@ -17,21 +18,12 @@ let _customShorthands: Set<string> | null = null;
 let _customMacros: Set<string> | null = null;
 
 function getCustomSets() {
-  if (_customShorthands)
-    return { shorthands: _customShorthands, macros: _customMacros! };
-  try {
-    const sh =
-      typeof require !== "undefined"
-        ? require("../../utils/shorthands.js")
-        : { shorthandMap: {}, macros: {} };
-
+  if (!_customShorthands || !_customMacros) {
+    const sh = shorthandsModule || {};
     _customShorthands = new Set(Object.keys(sh.shorthandMap || {}));
     _customMacros = new Set(Object.keys(sh.macros || {}));
-  } catch {
-    _customShorthands = new Set();
-    _customMacros = new Set();
   }
-  return { shorthands: _customShorthands!, macros: _customMacros! };
+  return { shorthands: _customShorthands, macros: _customMacros };
 }
 
 export function invalidateIntentNormalizerCache() {
@@ -75,10 +67,16 @@ export const intentNormalizer: NormalizationPass = {
         const result = intent.correct(decl.property, rawValue);
 
         if (result) {
+          const originalProperty = decl.property;
+          const originalValue = rawValue;
+
+          // Sync target property if specified by the intent result
+          if (result.property && result.property !== decl.property) {
+            if (shorthands.has(result.property)) continue;
+            decl.property = result.property;
+          }
+
           if (result.intent === "property-correction") {
-            const originalProperty = decl.property;
-            if (shorthands.has(result.corrected)) continue;
-            decl.property = result.corrected;
             corrections.push({
               nodeId: decl.id,
               property: originalProperty,
@@ -103,7 +101,6 @@ export const intentNormalizer: NormalizationPass = {
               pass: "normalization:intent-normalizer",
             });
           } else {
-            const originalValue = rawValue;
             decl.value = result.corrected;
             corrections.push({
               nodeId: decl.id,
@@ -122,30 +119,32 @@ export const intentNormalizer: NormalizationPass = {
             if (result.defaults) {
               const reason = result.explanation;
               for (const [prop, val] of Object.entries(result.defaults)) {
-                if (prop !== decl.property)
+                if (prop !== decl.property) {
                   pendingDefaults.push({
                     property: prop,
-                    value: val as any,
+                    value: val,
                     reason,
                   });
+                }
               }
             }
           }
-        }
-
-        const validation = intent.validate(decl.property, rawValue);
-        if (!validation.valid && validation.suggestion) {
-          if (shorthands.has(decl.property) || macros.has(decl.property))
-            continue;
-          if (!ir.diagnostics) ir.diagnostics = [];
-          ir.diagnostics.push({
-            id: `intent-suggest-${decl.id}`,
-            nodeId: decl.id,
-            severity: "info",
-            message: `Unknown property "${decl.property}". Did you mean "${validation.suggestion}"?`,
-            suggestion: `Rename "${decl.property}" to "${validation.suggestion}"`,
-            pass: "normalization:intent-normalizer",
-          });
+        } else {
+          // Only validate declarations that did not match a known intent correction
+          const validation = intent.validate(decl.property, rawValue);
+          if (!validation.valid && validation.suggestion) {
+            if (shorthands.has(decl.property) || macros.has(decl.property))
+              continue;
+            if (!ir.diagnostics) ir.diagnostics = [];
+            ir.diagnostics.push({
+              id: `intent-suggest-${decl.id}`,
+              nodeId: decl.id,
+              severity: "info",
+              message: `Unknown property "${decl.property}". Did you mean "${validation.suggestion}"?`,
+              suggestion: `Rename "${decl.property}" to "${validation.suggestion}"`,
+              pass: "normalization:intent-normalizer",
+            });
+          }
         }
       }
 

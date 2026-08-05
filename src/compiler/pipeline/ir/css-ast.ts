@@ -1,5 +1,7 @@
-// src/compiler/pipeline/ir/css-ast.ts
+// ============================================================================
+// FILE: src/compiler/pipeline/ir/css-ast.ts
 // CSS Value AST — tree representation for algebraic optimization
+// ============================================================================
 
 // ============================================================================
 // AST Node Types
@@ -90,17 +92,19 @@ export interface ListExpression {
 // Parser: CSS value string → AST
 // ============================================================================
 
+const DIMENSION_REGEX =
+  /^(-?\d+(?:\.\d+)?)(px|em|rem|vh|vw|%|ms|s|deg|rad|ch|ex|cm|mm|in|pt|pc|dpi|dpcm|dppx)$/i;
+
 /**
  * Parse a CSS value string into an AST.
  * Handles dimensions, percentages, colors, functions, calc(), and variables.
  */
 export function parseCSSValue(input: string): CSSValueNode {
   const trimmed = input.trim();
+  if (!trimmed) return { kind: "keyword", value: "" };
 
-  // Try numeric values
-  const dimensionMatch = trimmed.match(
-    /^(-?\d+(?:\.\d+)?)(px|em|rem|vh|vw|%|ms|s|deg|rad|ch|ex|cm|mm|in|pt|pc|dpi|dpcm|dppx)$/i,
-  );
+  // Try dimension or percentage
+  const dimensionMatch = trimmed.match(DIMENSION_REGEX);
   if (dimensionMatch) {
     const value = parseFloat(dimensionMatch[1]);
     const unit = dimensionMatch[2].toLowerCase();
@@ -108,19 +112,19 @@ export function parseCSSValue(input: string): CSSValueNode {
     return { kind: "dimension", value, unit };
   }
 
+  // Pure numbers
   const numberMatch = trimmed.match(/^(-?\d+(?:\.\d+)?)$/);
   if (numberMatch) {
     return { kind: "number", value: parseFloat(numberMatch[1]) };
   }
 
-  // Colors
-  const hexMatch = trimmed.match(/^#([0-9a-fA-F]{3,8})$/);
-  if (hexMatch) {
+  // Hex Colors
+  if (/^#([0-9a-fA-F]{3,8})$/.test(trimmed)) {
     return { kind: "color", hex: trimmed };
   }
 
   // Functions: calc(), var(), rgb(), etc.
-  const funcMatch = trimmed.match(/^([a-zA-Z-]+)\((.+)\)$/s);
+  const funcMatch = trimmed.match(/^([a-zA-Z0-9_-]+)\((.*)\)$/s);
   if (funcMatch) {
     const name = funcMatch[1].toLowerCase();
     const argsStr = funcMatch[2];
@@ -133,27 +137,31 @@ export function parseCSSValue(input: string): CSSValueNode {
       return parseVariable(argsStr);
     }
 
-    // Generic function
+    // Generic function (min, max, clamp, rgba, etc.)
     const args = splitArgs(argsStr).map(parseCSSValue);
     return { kind: "function", name, args };
   }
 
-  // List values (space or comma separated)
+  // Strings
   if (
-    trimmed.includes(" ") &&
-    !trimmed.startsWith('"') &&
-    !trimmed.startsWith("'")
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
   ) {
-    const items = trimmed.split(/\s+/).map(parseCSSValue);
+    return { kind: "string", value: trimmed.slice(1, -1) };
+  }
+
+  // List values (space or comma separated)
+  if (trimmed.includes(",")) {
+    const items = splitArgs(trimmed).map((s) => parseCSSValue(s.trim()));
     if (items.length > 1) {
-      return { kind: "list", items, separator: " " };
+      return { kind: "list", items, separator: "," };
     }
   }
 
-  if (trimmed.includes(",")) {
-    const items = trimmed.split(",").map((s) => parseCSSValue(s.trim()));
+  if (trimmed.includes(" ")) {
+    const items = trimmed.split(/\s+/).map(parseCSSValue);
     if (items.length > 1) {
-      return { kind: "list", items, separator: "," };
+      return { kind: "list", items, separator: " " };
     }
   }
 
@@ -162,11 +170,16 @@ export function parseCSSValue(input: string): CSSValueNode {
 }
 
 function parseCalcExpression(input: string): CSSValueNode {
-  return parseExpression(input);
+  const expr = parseExpression(input);
+  // If the parsed result is a raw binary expression, wrap in calc() function node
+  if (expr.kind === "binary") {
+    return { kind: "function", name: "calc", args: [expr] };
+  }
+  return expr;
 }
 
 function parseVariable(input: string): VariableNode {
-  const parts = input.split(",");
+  const parts = splitArgs(input);
   const name = parts[0].trim();
   const fallback =
     parts.length > 1
@@ -176,40 +189,55 @@ function parseVariable(input: string): VariableNode {
 }
 
 function parseExpression(input: string): CSSValueNode {
-  // Remove outer parentheses
   let expr = input.trim();
-  if (expr.startsWith("(") && expr.endsWith(")")) {
-    expr = expr.slice(1, -1).trim();
+
+  // Strip matching outer parentheses
+  while (expr.startsWith("(") && expr.endsWith(")")) {
+    let depth = 0;
+    let validEnclosure = true;
+    for (let i = 0; i < expr.length - 1; i++) {
+      if (expr[i] === "(") depth++;
+      if (expr[i] === ")") depth--;
+      if (depth === 0) {
+        validEnclosure = false;
+        break;
+      }
+    }
+    if (validEnclosure) {
+      expr = expr.slice(1, -1).trim();
+    } else {
+      break;
+    }
   }
 
-  // Find the lowest-precedence operator (+ or -) not inside parens
+  // Find lowest-precedence operator (+ or -) outside parentheses
+  // Note: CSS spec requires whitespace around + and - in calc()
   let depth = 0;
-  let opIndex = -1;
-  let op: BinaryOperator | null = null;
-
   for (let i = expr.length - 1; i >= 0; i--) {
     const ch = expr[i];
     if (ch === ")") depth++;
     if (ch === "(") depth--;
     if (depth === 0) {
       if (ch === "+" || ch === "-") {
-        // Check it's not a sign prefix
-        if (i > 0 && expr[i - 1] !== "(" && expr[i - 1] !== " ") {
-          opIndex = i;
-          op = ch as BinaryOperator;
-          break;
+        const isSpaced =
+          i > 0 &&
+          i < expr.length - 1 &&
+          (expr[i - 1] === " " || expr[i + 1] === " ");
+        if (isSpaced) {
+          const left = parseExpression(expr.slice(0, i).trim());
+          const right = parseExpression(expr.slice(i + 1).trim());
+          return {
+            kind: "binary",
+            operator: ch as BinaryOperator,
+            left,
+            right,
+          };
         }
       }
     }
   }
 
-  if (op && opIndex > 0) {
-    const left = parseExpression(expr.slice(0, opIndex).trim());
-    const right = parseExpression(expr.slice(opIndex + 1).trim());
-    return { kind: "binary", operator: op, left, right };
-  }
-
-  // Try multiplication/division (higher precedence)
+  // Multiplication and division (higher precedence, whitespace optional)
   depth = 0;
   for (let i = expr.length - 1; i >= 0; i--) {
     const ch = expr[i];
@@ -222,7 +250,7 @@ function parseExpression(input: string): CSSValueNode {
     }
   }
 
-  // Base case: single value
+  // Base case
   return parseCSSValue(expr);
 }
 
@@ -257,15 +285,28 @@ function splitArgs(input: string): string[] {
  */
 export function optimizeAST(node: CSSValueNode): CSSValueNode {
   switch (node.kind) {
+    case "unary": {
+      const arg = optimizeAST(node.argument);
+      if (node.operator === "-" && arg.kind === "number") {
+        return { kind: "number", value: -arg.value };
+      }
+      if (node.operator === "-" && arg.kind === "dimension") {
+        return { kind: "dimension", value: -arg.value, unit: arg.unit };
+      }
+      if (node.operator === "+") return arg;
+      return { ...node, argument: arg };
+    }
+
     case "binary": {
       const left = optimizeAST(node.left);
       const right = optimizeAST(node.right);
 
-      // Constant folding: both sides are dimensions with same unit
+      // 1. Same-unit dimension arithmetic (addition / subtraction)
       if (
         left.kind === "dimension" &&
         right.kind === "dimension" &&
-        left.unit === right.unit
+        left.unit === right.unit &&
+        (node.operator === "+" || node.operator === "-")
       ) {
         const result = evaluateBinary(left.value, right.value, node.operator);
         if (result !== null) {
@@ -273,7 +314,30 @@ export function optimizeAST(node: CSSValueNode): CSSValueNode {
         }
       }
 
-      // Constant folding: both sides are numbers
+      // 2. Dimension scaling (dimension * number, dimension / number, number * dimension)
+      if (
+        left.kind === "dimension" &&
+        right.kind === "number" &&
+        (node.operator === "*" || node.operator === "/")
+      ) {
+        const result = evaluateBinary(left.value, right.value, node.operator);
+        if (result !== null) {
+          return { kind: "dimension", value: result, unit: left.unit };
+        }
+      }
+      if (
+        left.kind === "number" &&
+        right.kind === "dimension" &&
+        node.operator === "*"
+      ) {
+        return {
+          kind: "dimension",
+          value: left.value * right.value,
+          unit: right.unit,
+        };
+      }
+
+      // 3. Constant numbers folding
       if (left.kind === "number" && right.kind === "number") {
         const result = evaluateBinary(left.value, right.value, node.operator);
         if (result !== null) {
@@ -281,17 +345,21 @@ export function optimizeAST(node: CSSValueNode): CSSValueNode {
         }
       }
 
-      // Constant folding: percentage + percentage
-      if (left.kind === "percentage" && right.kind === "percentage") {
+      // 4. Percentage folding
+      if (
+        left.kind === "percentage" &&
+        right.kind === "percentage" &&
+        (node.operator === "+" || node.operator === "-")
+      ) {
         const result = evaluateBinary(left.value, right.value, node.operator);
         if (result !== null) {
           return { kind: "percentage", value: result };
         }
       }
 
-      // Identity operations: x + 0 = x, x - 0 = x, x * 1 = x, x / 1 = x
+      // 5. Identity operations: x + 0 = x, x - 0 = x, x * 1 = x, x / 1 = x
       if (
-        right.kind === "number" &&
+        (right.kind === "number" || right.kind === "dimension") &&
         right.value === 0 &&
         (node.operator === "+" || node.operator === "-")
       ) {
@@ -300,22 +368,26 @@ export function optimizeAST(node: CSSValueNode): CSSValueNode {
       if (
         right.kind === "number" &&
         right.value === 1 &&
-        node.operator === "*"
+        (node.operator === "*" || node.operator === "/")
       ) {
         return left;
       }
       if (
-        right.kind === "number" &&
-        right.value === 1 &&
-        node.operator === "/"
+        left.kind === "number" &&
+        left.value === 0 &&
+        node.operator === "+"
       ) {
-        return left;
+        return right;
       }
-      if (left.kind === "number" && left.value === 0 && node.operator === "+") {
+      if (
+        left.kind === "number" &&
+        left.value === 1 &&
+        node.operator === "*"
+      ) {
         return right;
       }
 
-      // Zero operations: 0 * x = 0, 0 / x = 0
+      // 6. Zero multiplication/division
       if (
         left.kind === "number" &&
         left.value === 0 &&
@@ -328,7 +400,21 @@ export function optimizeAST(node: CSSValueNode): CSSValueNode {
     }
 
     case "function": {
-      return { ...node, args: node.args.map(optimizeAST) };
+      const optimizedArgs = node.args.map(optimizeAST);
+
+      // Unwrap redundant calc() containing a single scalar constant
+      if (node.name === "calc" && optimizedArgs.length === 1) {
+        const single = optimizedArgs[0];
+        if (
+          single.kind === "dimension" ||
+          single.kind === "number" ||
+          single.kind === "percentage"
+        ) {
+          return single;
+        }
+      }
+
+      return { ...node, args: optimizedArgs };
     }
 
     case "list": {
@@ -381,7 +467,7 @@ export function printAST(node: CSSValueNode): string {
     case "function":
       return `${node.name}(${node.args.map(printAST).join(", ")})`;
     case "binary":
-      return `(${printAST(node.left)} ${node.operator} ${printAST(node.right)})`;
+      return `${printAST(node.left)} ${node.operator} ${printAST(node.right)}`;
     case "unary":
       return `${node.operator}${printAST(node.argument)}`;
     case "variable":
@@ -389,7 +475,9 @@ export function printAST(node: CSSValueNode): string {
         ? `var(${node.name}, ${printAST(node.fallback)})`
         : `var(${node.name})`;
     case "list":
-      return node.items.map(printAST).join(node.separator === " " ? " " : ", ");
+      return node.items
+        .map(printAST)
+        .join(node.separator === " " ? " " : ", ");
   }
 }
 
@@ -398,14 +486,14 @@ export function printAST(node: CSSValueNode): string {
 // ============================================================================
 
 /**
- * Check if two AST nodes are equal.
+ * Check if two AST nodes are structural equivalents.
  */
 export function astEqual(a: CSSValueNode, b: CSSValueNode): boolean {
   return printAST(a) === printAST(b);
 }
 
 /**
- * Get the computed value if the AST is fully constant (no variables).
+ * Check if the node is fully constant (no dynamic var() parameters).
  */
 export function isConstant(node: CSSValueNode): boolean {
   switch (node.kind) {
@@ -413,6 +501,8 @@ export function isConstant(node: CSSValueNode): boolean {
       return false;
     case "binary":
       return isConstant(node.left) && isConstant(node.right);
+    case "unary":
+      return isConstant(node.argument);
     case "function":
       return node.args.every(isConstant);
     case "list":
@@ -423,36 +513,49 @@ export function isConstant(node: CSSValueNode): boolean {
 }
 
 /**
- * Convert a ParsedValue (from existing IR) to the new AST format.
+ * Convert legacy ParsedValue objects to the AST node format.
  */
-export function fromParsedValue(parsed: any): CSSValueNode {
-  if (!parsed || !parsed.kind)
-    return { kind: "keyword", value: String(parsed) };
+export function fromParsedValue(parsed: unknown): CSSValueNode {
+  if (!parsed || typeof parsed !== "object") {
+    return { kind: "keyword", value: String(parsed ?? "") };
+  }
 
-  switch (parsed.kind) {
+  const record = parsed as Record<string, unknown>;
+
+  switch (record.kind) {
     case "dimension":
-      return { kind: "dimension", value: parsed.value, unit: parsed.unit };
+      return {
+        kind: "dimension",
+        value: Number(record.value) || 0,
+        unit: String(record.unit || "px"),
+      };
     case "number":
-      return { kind: "number", value: parsed.value };
+      return { kind: "number", value: Number(record.value) || 0 };
+    case "percentage":
+      return { kind: "percentage", value: Number(record.value) || 0 };
     case "keyword":
-      return { kind: "keyword", value: parsed.value };
+      return { kind: "keyword", value: String(record.value || "") };
     case "color":
-      return { kind: "color", hex: parsed.hex };
+      return { kind: "color", hex: String(record.hex || "") };
     case "function":
       return {
         kind: "function",
-        name: parsed.name,
-        args: (parsed.args || []).map(fromParsedValue),
+        name: String(record.name || ""),
+        args: Array.isArray(record.args)
+          ? record.args.map(fromParsedValue)
+          : [],
       };
     case "list":
       return {
         kind: "list",
-        items: (parsed.items || []).map(fromParsedValue),
+        items: Array.isArray(record.items)
+          ? record.items.map(fromParsedValue)
+          : [],
         separator: " ",
       };
     case "raw":
-      return parseCSSValue(parsed.value);
+      return parseCSSValue(String(record.value || ""));
     default:
-      return { kind: "keyword", value: String(parsed) };
+      return { kind: "keyword", value: String(record.value || "") };
   }
 }

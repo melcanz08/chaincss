@@ -13,6 +13,8 @@ import type {
   IRAtRule,
 } from "./types.js";
 
+import { ensureRuleMeta } from "./utils.js";
+
 // Helper to safely coerce arrays or record objects into arrays
 function ensureArray<T>(item: T[] | Record<string, T> | undefined | null): T[] {
   if (!item) return [];
@@ -46,6 +48,52 @@ function getNodeValues(graph: IRGraph): IRRule[] {
   return Object.values(graph.nodes as Record<string, IRRule>);
 }
 
+/**
+ * Clean token names by removing leading $ if present
+ */
+function normalizeTokenName(name: string): string {
+  return (name || "").trim().replace(/^\$/, "");
+}
+
+/**
+ * Get or create a synthetic token node for star-topology token graphs.
+ * These nodes don't produce CSS — they exist only for dependency tracking.
+ */
+function getOrCreateTokenNode(
+  nodes: Map<IRNodeId, IRRule>,
+  rawTokenName: string,
+): IRRule {
+  const tokenName = normalizeTokenName(rawTokenName);
+  const tokenId = `token-${tokenName}`;
+  let tokenNode = nodes.get(tokenId);
+
+  if (!tokenNode) {
+    tokenNode = {
+      id: tokenId,
+      selector: `$${tokenName}`,
+      declarations: [],
+      pseudoClasses: [],
+      atRules: [],
+      nestedRules: [],
+      conditions: [],
+      meta: {
+        dependencies: [],
+        dependents: [],
+        _isSyntheticToken: true,
+        _tokenName: tokenName,
+      },
+      isDead: false,
+      specificity: 0,
+      hash: "",
+      source: { file: "", line: 0, column: 0 },
+      history: [],
+    };
+    nodes.set(tokenId, tokenNode);
+  }
+
+  return tokenNode;
+}
+
 // ============================================================================
 // Main Graph Builder
 // ============================================================================
@@ -57,8 +105,6 @@ export function buildIRGraph(ir: StyleIR): IRGraph {
   // ==========================================================================
   // Phase 1: Collect all nodes
   // ==========================================================================
-  const allNodes: IRRule[] = [];
-
   function collectRules(
     rulesInput: IRRule[] | Record<string, IRRule> | undefined | null,
     parentId?: IRNodeId,
@@ -68,38 +114,27 @@ export function buildIRGraph(ir: StyleIR): IRGraph {
     for (const rule of rules) {
       if (!rule || typeof rule !== "object") continue;
       if (rule.isDead) continue;
-      allNodes.push(rule);
       nodes.set(rule.id, rule);
 
       // Parent relationship (extends)
       if (parentId) {
-        edges.push({ from: parentId, to: rule.id, type: "extends" });
-        rule.meta.dependencies = rule.meta.dependencies || [];
-        if (!rule.meta.dependencies.includes(parentId)) {
-          rule.meta.dependencies.push(parentId);
-        }
         const parentNode = nodes.get(parentId);
         if (parentNode) {
-          parentNode.meta.dependents = parentNode.meta.dependents || [];
-          if (!parentNode.meta.dependents.includes(rule.id)) {
-            parentNode.meta.dependents.push(rule.id);
-          }
+          addEdge(edges, nodes, parentNode, rule, "extends");
         }
       }
 
       // Media/container/supports/layer containment edges
       if (containerAtRule) {
         const containerId = `atrule-${containerAtRule.id}`;
-        edges.push({
-          from: containerId,
-          to: rule.id,
-          type: "contains",
-          metadata: {
+        const containerNode = nodes.get(containerId);
+        if (containerNode) {
+          addEdge(edges, nodes, containerNode, rule, "contains", {
             atRuleType: containerAtRule.type,
             query: containerAtRule.query,
             name: containerAtRule.name,
-          },
-        });
+          });
+        }
       }
 
       // Nested rules
@@ -111,7 +146,7 @@ export function buildIRGraph(ir: StyleIR): IRGraph {
       // At-rule nested rules → add containment edges
       const atRules = ensureArray(rule.atRules);
       if (atRules.length > 0) {
-        for (const atRule of atRules || []) {
+        for (const atRule of atRules) {
           if (!atRule || typeof atRule !== "object") continue;
           const atRuleId = `atrule-${atRule.id}`;
           const virtualRule: IRRule = {
@@ -126,6 +161,9 @@ export function buildIRGraph(ir: StyleIR): IRGraph {
             meta: {
               dependencies: [rule.id],
               dependents: [],
+              _atRuleType: atRule.type,
+              _atRuleName: atRule.name,
+              _atRuleQuery: atRule.query,
             },
             isDead: false,
             specificity: 0,
@@ -136,22 +174,11 @@ export function buildIRGraph(ir: StyleIR): IRGraph {
           nodes.set(atRuleId, virtualRule);
 
           // Rule → at-rule containment edge
-          edges.push({
-            from: rule.id,
-            to: atRuleId,
-            type: "contains",
-            metadata: {
-              atRuleType: atRule.type,
-              query: atRule.query,
-              name: atRule.name,
-            },
+          addEdge(edges, nodes, rule, virtualRule, "contains", {
+            atRuleType: atRule.type,
+            query: atRule.query,
+            name: atRule.name,
           });
-
-          // Update dependency tracking
-          rule.meta.dependents = rule.meta.dependents || [];
-          if (!rule.meta.dependents.includes(atRuleId)) {
-            rule.meta.dependents.push(atRuleId);
-          }
 
           // Collect nested rules inside the at-rule
           const atNested = ensureArray(atRule.nestedRules);
@@ -162,9 +189,11 @@ export function buildIRGraph(ir: StyleIR): IRGraph {
           // Keyframe frames → parent keyframes at-rule edge
           const keyframes = ensureArray(atRule.keyframes);
           if (atRule.type === "keyframes" && keyframes.length > 0) {
-            for (const frame of keyframes) {
+            for (let idx = 0; idx < keyframes.length; idx++) {
+              const frame = keyframes[idx];
               if (!frame || typeof frame !== "object") continue;
-              const frameId = frame.id;
+              const frameId =
+                frame.id || `${atRuleId}-frame-${frame.keyText || idx}`;
               const frameRule: IRRule = {
                 id: frameId,
                 selector: frame.keyText,
@@ -185,11 +214,9 @@ export function buildIRGraph(ir: StyleIR): IRGraph {
               };
               nodes.set(frameId, frameRule);
 
-              edges.push({
-                from: atRuleId,
-                to: frameId,
-                type: "contains",
-                metadata: { atRuleType: "keyframes", frameKey: frame.keyText },
+              addEdge(edges, nodes, virtualRule, frameRule, "contains", {
+                atRuleType: "keyframes",
+                frameKey: frame.keyText,
               });
             }
           }
@@ -203,20 +230,20 @@ export function buildIRGraph(ir: StyleIR): IRGraph {
   // ==========================================================================
   // Phase 2: Build edges between nodes (Optimized via Inverted Indexing)
   // ==========================================================================
-  const nodeArray = Array.from(nodes.values());
 
-  // Pre-extract selector parts and token references once per node
-  const nodeData = nodeArray.map((rule) => {
-    const selectorParts = new Set(
-      (rule.selector || "").split(/[\s>+~,]+/).filter(Boolean),
-    );
-    const tokenRefs = extractTokenReferences(rule);
-    return { rule, selectorParts, tokenRefs };
+  // Filter regular rules for selector overlap (exclude virtual at-rules and tokens)
+  const regularRules = Array.from(nodes.values()).filter(
+    (r) => !r.id.startsWith("atrule-") && !r.id.startsWith("token-"),
+  );
+
+  const regularNodeData = regularRules.map((rule) => {
+    const selectorParts = extractSelectorTokens(rule.selector);
+    return { rule, selectorParts };
   });
 
-  // 1. Build Inverted Index for Selector Overlaps (with hot-spot filtering)
+  // 1. Build Inverted Index for Selector Overlaps
   const selectorIndex = new Map<string, IRRule[]>();
-  for (const data of nodeData) {
+  for (const data of regularNodeData) {
     for (const part of data.selectorParts) {
       let list = selectorIndex.get(part);
       if (!list) {
@@ -227,11 +254,10 @@ export function buildIRGraph(ir: StyleIR): IRGraph {
     }
   }
 
-  const MAX_BUCKET_SIZE = 100; // Ignore overly generic selector parts / hot spots
-
-  // Check overlap only across candidate nodes sharing at least one token part
+  const MAX_BUCKET_SIZE = 100; // Ignore overly generic selector parts
   const checkedPairs = new Set<string>();
-  for (const dataA of nodeData) {
+
+  for (const dataA of regularNodeData) {
     const candidates = new Set<IRRule>();
     for (const part of dataA.selectorParts) {
       const matches = selectorIndex.get(part);
@@ -261,43 +287,46 @@ export function buildIRGraph(ir: StyleIR): IRGraph {
     }
   }
 
-  // 2. Build Inverted Index for Token References (with hot-spot capping)
+  // 2. Token Reference Detection — O(K) Star Topology
+  const allCurrentNodes = Array.from(nodes.values());
   const tokenIndex = new Map<string, IRRule[]>();
-  for (const data of nodeData) {
-    for (const token of data.tokenRefs) {
+
+  for (const rule of allCurrentNodes) {
+    const tokenRefs = extractTokenReferences(rule);
+    for (const token of tokenRefs) {
       let list = tokenIndex.get(token);
       if (!list) {
         list = [];
         tokenIndex.set(token, list);
       }
-      list.push(data.rule);
+      list.push(rule);
     }
   }
 
-  for (const [, rulesSharingToken] of tokenIndex) {
-    if (rulesSharingToken.length < 2 || rulesSharingToken.length > 75) continue; // Skip global tokens referenced everywhere to prevent combinatorial blowup
-    for (let i = 0; i < rulesSharingToken.length; i++) {
-      for (let j = i + 1; j < rulesSharingToken.length; j++) {
-        const ra = rulesSharingToken[i];
-        const rb = rulesSharingToken[j];
-        addEdge(edges, nodes, rb, ra, "references");
-        addEdge(edges, nodes, ra, rb, "references");
-      }
+  for (const [tokenName, consumerRules] of tokenIndex) {
+    const tokenNode = getOrCreateTokenNode(nodes, tokenName);
+    for (const consumerRule of consumerRules) {
+      // Directed edge: [Synthetic Token Node] → [Consumer Rule]
+      addEdge(edges, nodes, tokenNode, consumerRule, "references");
     }
   }
 
   // Phase 2b: Animation → keyframe edges
-  for (let i = 0; i < nodeArray.length; i++) {
-    const animNames = extractAnimationNames(nodeArray[i]);
+  const fullNodeArray = Array.from(nodes.values());
+  for (let i = 0; i < fullNodeArray.length; i++) {
+    const animNames = extractAnimationNames(fullNodeArray[i]);
     if (animNames.size > 0) {
-      for (const other of nodeArray) {
-        if (other.id === nodeArray[i].id) continue;
+      for (const other of fullNodeArray) {
+        if (other.id === fullNodeArray[i].id) continue;
         if (other.id.startsWith("atrule-")) {
-          const atRule = findAtRuleById(ir, other.id.replace("atrule-", ""));
-          if (atRule && atRule.type === "keyframes" && atRule.name) {
-            if (animNames.has(atRule.name)) {
-              addEdge(edges, nodes, nodeArray[i], other, "animates");
-            }
+          const atRuleType = (other.meta as any)?._atRuleType;
+          const atRuleName = (other.meta as any)?._atRuleName;
+          if (
+            atRuleType === "keyframes" &&
+            atRuleName &&
+            animNames.has(atRuleName)
+          ) {
+            addEdge(edges, nodes, other, fullNodeArray[i], "animates");
           }
         }
       }
@@ -310,12 +339,14 @@ export function buildIRGraph(ir: StyleIR): IRGraph {
   // ==========================================================================
   // Phase 3: Identify root and leaf nodes
   // ==========================================================================
-  const rootNodes = nodeArray
-    .filter((n) => !n.meta.dependencies || n.meta.dependencies.length === 0)
+  const finalNodes = Array.from(nodes.values());
+
+  const rootNodes = finalNodes
+    .filter((n) => !n.meta?.dependencies || n.meta.dependencies.length === 0)
     .map((n) => n.id);
 
-  const leafNodes = nodeArray
-    .filter((n) => !n.meta.dependents || n.meta.dependents.length === 0)
+  const leafNodes = finalNodes
+    .filter((n) => !n.meta?.dependents || n.meta.dependents.length === 0)
     .map((n) => n.id);
 
   return { nodes, edges, rootNodes, leafNodes };
@@ -340,14 +371,16 @@ function addEdge(
 
   edges.push({ from: from.id, to: to.id, type, metadata });
 
-  from.meta.dependents = from.meta.dependents || [];
-  if (!from.meta.dependents.includes(to.id)) {
-    from.meta.dependents.push(to.id);
+  const fromMeta = ensureRuleMeta(from);
+  fromMeta.dependents ??= [];
+  if (!fromMeta.dependents.includes(to.id)) {
+    fromMeta.dependents.push(to.id);
   }
 
-  to.meta.dependencies = to.meta.dependencies || [];
-  if (!to.meta.dependencies.includes(from.id)) {
-    to.meta.dependencies.push(from.id);
+  const toMeta = ensureRuleMeta(to);
+  toMeta.dependencies ??= [];
+  if (!toMeta.dependencies.includes(from.id)) {
+    toMeta.dependencies.push(from.id);
   }
 }
 
@@ -355,15 +388,25 @@ function addEdge(
 // Selector Overlap Detection
 // ============================================================================
 
-function selectorsOverlap(a: string, b: string): boolean {
-  const partsA = (a || "").split(/[\s>+~,]+/).filter(Boolean);
-  const partsB = (b || "").split(/[\s>+~,]+/).filter(Boolean);
-
-  for (const pa of partsA) {
-    for (const pb of partsB) {
-      if (pa === pb) return true;
-      if (pa.startsWith(".") && pb.startsWith(".") && pa === pb) return true;
+function extractSelectorTokens(selector: string): Set<string> {
+  const tokens = new Set<string>();
+  const compounds = (selector || "").split(/[\s>+~,]+/).filter(Boolean);
+  for (const compound of compounds) {
+    const matches = compound.match(/([.#:]?[a-zA-Z_][a-zA-Z0-9_-]*)/g) || [];
+    for (const m of matches) {
+      if (m.startsWith(":")) continue; // Exclude pseudo-classes from overlap index
+      tokens.add(m);
     }
+  }
+  return tokens;
+}
+
+function selectorsOverlap(a: string, b: string): boolean {
+  const tokensA = extractSelectorTokens(a);
+  const tokensB = extractSelectorTokens(b);
+
+  for (const ta of tokensA) {
+    if (tokensB.has(ta)) return true;
   }
   return false;
 }
@@ -377,7 +420,10 @@ function extractTokenReferences(rule: IRRule): Set<string> {
 
   function scanDeclarations(
     declsInput:
-      IRDeclaration[] | Record<string, IRDeclaration> | undefined | null,
+      | IRDeclaration[]
+      | Record<string, IRDeclaration>
+      | undefined
+      | null,
   ) {
     const decls = ensureArray(declsInput);
     for (const decl of decls) {
@@ -385,7 +431,8 @@ function extractTokenReferences(rule: IRRule): Set<string> {
       const val = String(decl.value ?? "");
       const matches = val.matchAll(/\$([a-zA-Z0-9_.-]+)/g);
       for (const match of matches) {
-        tokens.add(match[1]);
+        const cleanToken = normalizeTokenName(match[1]);
+        if (cleanToken) tokens.add(cleanToken);
       }
     }
   }
@@ -405,23 +452,62 @@ function extractTokenReferences(rule: IRRule): Set<string> {
 // Animation → Keyframe Edge Detection
 // ============================================================================
 
+const ANIMATION_KEYWORDS = new Set([
+  "none",
+  "inherit",
+  "initial",
+  "unset",
+  "revert",
+  "infinite",
+  "linear",
+  "ease",
+  "ease-in",
+  "ease-out",
+  "ease-in-out",
+  "step-start",
+  "step-end",
+  "normal",
+  "reverse",
+  "alternate",
+  "alternate-reverse",
+  "forwards",
+  "backwards",
+  "both",
+  "running",
+  "paused",
+]);
+
+function isTimingOrNumericToken(part: string): boolean {
+  return (
+    /^\d+(\.\d+)?(s|ms)?$/i.test(part) ||
+    /^(cubic-bezier|steps)\(.*\)$/i.test(part)
+  );
+}
+
 function extractAnimationNames(rule: IRRule): Set<string> {
   const names = new Set<string>();
 
   function scanDeclarations(
     declsInput:
-      IRDeclaration[] | Record<string, IRDeclaration> | undefined | null,
+      | IRDeclaration[]
+      | Record<string, IRDeclaration>
+      | undefined
+      | null,
   ) {
     const decls = ensureArray(declsInput);
     for (const decl of decls) {
       if (!decl) continue;
       if (decl.property === "animation" || decl.property === "animation-name") {
         const val = String(decl.value ?? "");
-        const parts = val.split(",");
-        for (const part of parts) {
-          const name = part.trim().split(/\s+/)[0];
-          if (name && !["none", "inherit", "initial", "unset"].includes(name)) {
-            names.add(name);
+        const commaParts = val.split(",");
+        for (const commaPart of commaParts) {
+          const parts = commaPart.trim().split(/\s+/);
+          for (const token of parts) {
+            const cleanToken = token.trim();
+            if (!cleanToken) continue;
+            if (ANIMATION_KEYWORDS.has(cleanToken.toLowerCase())) continue;
+            if (isTimingOrNumericToken(cleanToken)) continue;
+            names.add(cleanToken);
           }
         }
       }
@@ -436,36 +522,6 @@ function extractAnimationNames(rule: IRRule): Set<string> {
   return names;
 }
 
-function findAtRuleById(ir: StyleIR, id: string): IRAtRule | null {
-  function search(
-    rulesInput: IRRule[] | Record<string, IRRule> | undefined | null,
-  ): IRAtRule | null {
-    const rules = ensureArray(rulesInput);
-    for (const rule of rules) {
-      if (!rule || typeof rule !== "object") continue;
-      const atRules = ensureArray(rule.atRules);
-      if (atRules.length > 0) {
-        for (const atRule of atRules || []) {
-          if (!atRule) continue;
-          if (atRule.id === id) return atRule;
-          const nested = ensureArray(atRule.nestedRules);
-          if (nested.length > 0) {
-            const found = search(nested);
-            if (found) return found;
-          }
-        }
-      }
-      const nestedRules = ensureArray(rule.nestedRules);
-      if (nestedRules.length > 0) {
-        const found = search(nestedRules);
-        if (found) return found;
-      }
-    }
-    return null;
-  }
-  return search(ir?.rules);
-}
-
 // ============================================================================
 // Token Derivation Edge Detection
 // ============================================================================
@@ -478,27 +534,31 @@ function detectTokenDerivationEdges(
   const tokenDefs = new Map<string, IRNodeId>();
   const rules = ensureArray(ir?.rules);
 
+  // 1. Identify rules defining tokens and link: [Defining Rule] → [Synthetic Token Node]
   for (const rule of rules) {
     if (!rule || typeof rule !== "object" || rule.isDead) continue;
+
     const semantic = rule.passMeta?.analysis?.semantic;
-    if (semantic?.tokens) {
-      const tokens = ensureArray(semantic.tokens as any);
-      for (const token of tokens) {
-        if (typeof token === "string") {
-          tokenDefs.set(token, rule.id);
-        }
-      }
-    }
-    const oldTokens = rule.meta?._semantic as string[] | undefined;
-    if (oldTokens) {
-      for (const token of ensureArray(oldTokens)) {
-        if (typeof token === "string" && !tokenDefs.has(token)) {
-          tokenDefs.set(token, rule.id);
-        }
+    const tokens = [
+      ...ensureArray(semantic?.tokens as any),
+      ...ensureArray((rule.meta as any)?._semantic as any),
+    ];
+
+    for (const token of tokens) {
+      if (typeof token === "string") {
+        const cleanToken = normalizeTokenName(token);
+        if (!cleanToken) continue;
+
+        tokenDefs.set(cleanToken, rule.id);
+        const tokenNode = getOrCreateTokenNode(nodes, cleanToken);
+
+        // Defining rule produces this synthetic token
+        addEdge(edges, nodes, rule, tokenNode, "defines");
       }
     }
   }
 
+  // 2. Handle token-to-token derivations: [Source Token] → [Target Token]
   const irMeta = ir?.meta as any;
   const tokenRelationships = ensureArray(
     irMeta?._tokenRelationships || irMeta?.tokenRelationships,
@@ -511,20 +571,20 @@ function detectTokenDerivationEdges(
       target?: string;
       method?: string;
     };
-    if (rel && rel.type === "derived" && rel.source && rel.target) {
-      const sourceRuleId = tokenDefs.get(rel.source);
-      const targetRuleId = tokenDefs.get(rel.target);
 
-      if (sourceRuleId && targetRuleId) {
-        const sourceRule = nodes.get(sourceRuleId);
-        const targetRule = nodes.get(targetRuleId);
-        if (sourceRule && targetRule) {
-          addEdge(edges, nodes, sourceRule, targetRule, "derives", {
-            method: rel.method,
-            source: rel.source,
-            target: rel.target,
-          });
-        }
+    if (rel && rel.type === "derived" && rel.source && rel.target) {
+      const cleanSource = normalizeTokenName(rel.source);
+      const cleanTarget = normalizeTokenName(rel.target);
+
+      if (cleanSource && cleanTarget) {
+        const sourceTokenNode = getOrCreateTokenNode(nodes, cleanSource);
+        const targetTokenNode = getOrCreateTokenNode(nodes, cleanTarget);
+
+        addEdge(edges, nodes, sourceTokenNode, targetTokenNode, "derives", {
+          method: rel.method,
+          source: cleanSource,
+          target: cleanTarget,
+        });
       }
     }
   }
@@ -562,25 +622,62 @@ export function traverseGraph(
   }
 }
 
+// ============================================================================
+// Invalidation & Dynamic Token Traversal
+// ============================================================================
+
+export interface InvalidationOptions {
+  includeTokenNodes?: boolean;
+  maxDepth?: number;
+}
+
+function resolveNodeId(graph: IRGraph, target: string): IRNodeId | undefined {
+  if (getNode(graph, target)) return target;
+
+  const cleanToken = normalizeTokenName(target);
+  const tokenId = `token-${cleanToken}`;
+  if (getNode(graph, tokenId)) return tokenId;
+
+  return undefined;
+}
+
 export function findAffectedNodes(
   graph: IRGraph,
-  changedNodeId: IRNodeId,
+  startIdOrToken: IRNodeId | string,
+  options: InvalidationOptions = {},
 ): IRNodeId[] {
+  const { includeTokenNodes = false, maxDepth = Infinity } = options;
+  const startId = resolveNodeId(graph, startIdOrToken);
+
+  if (!startId) return [];
+
   const affected: IRNodeId[] = [];
   const visited = new Set<IRNodeId>();
-  const queue = [changedNodeId];
+  const queue: Array<{ id: IRNodeId; depth: number }> = [
+    { id: startId, depth: 0 },
+  ];
 
   while (queue.length > 0) {
-    const id = queue.shift()!;
+    const { id, depth } = queue.shift()!;
     if (visited.has(id)) continue;
     visited.add(id);
 
     const node = getNode(graph, id);
-    if (node) {
+    if (!node) continue;
+
+    const isTokenNode =
+      id.startsWith("token-") || Boolean((node.meta as any)?._isSyntheticToken);
+
+    if (!isTokenNode || includeTokenNodes) {
       affected.push(id);
-      const dependents = ensureArray(node.meta?.dependents);
-      for (const depId of dependents) {
-        if (!visited.has(depId)) queue.push(depId);
+    }
+
+    if (depth >= maxDepth) continue;
+
+    const dependents = ensureArray(node.meta?.dependents);
+    for (const depId of dependents) {
+      if (!visited.has(depId)) {
+        queue.push({ id: depId, depth: depth + 1 });
       }
     }
   }
@@ -626,21 +723,37 @@ export function getGraphStats(graph: IRGraph) {
 function findMaxDepth(graph: IRGraph): number {
   let maxDepth = 0;
   const depths = new Map<IRNodeId, number>();
+  const visiting = new Set<IRNodeId>();
 
-  const getTargetNode = (id: IRNodeId) => getNode(graph, id);
+  function getDepth(id: IRNodeId): { depth: number; cyclic: boolean } {
+    if (depths.has(id)) return { depth: depths.get(id)!, cyclic: false };
+    if (visiting.has(id)) return { depth: 0, cyclic: true };
 
-  function getDepth(id: IRNodeId): number {
-    if (depths.has(id)) return depths.get(id)!;
-    const node = getTargetNode(id);
+    visiting.add(id);
+
+    const node = getNode(graph, id);
     const deps = ensureArray(node?.meta?.dependencies);
-    if (deps.length === 0) {
-      depths.set(id, 0);
-      return 0;
+    let maxChildDepth = 0;
+    let hitCycle = false;
+
+    for (const dep of deps) {
+      const res = getDepth(dep as IRNodeId);
+      if (res.depth > maxChildDepth) {
+        maxChildDepth = res.depth;
+      }
+      if (res.cyclic) {
+        hitCycle = true;
+      }
     }
-    const max = Math.max(...deps.map((d) => getDepth(d as IRNodeId)));
-    const depth = max + 1;
-    depths.set(id, depth);
-    return depth;
+
+    visiting.delete(id);
+    const depth = deps.length > 0 ? maxChildDepth + 1 : 0;
+
+    if (!hitCycle) {
+      depths.set(id, depth);
+    }
+
+    return { depth, cyclic: hitCycle };
   }
 
   if (graph?.nodes) {
@@ -650,7 +763,7 @@ function findMaxDepth(graph: IRGraph): number {
         : Object.keys(graph.nodes);
 
     for (const id of nodeKeys) {
-      maxDepth = Math.max(maxDepth, getDepth(id));
+      maxDepth = Math.max(maxDepth, getDepth(id).depth);
     }
   }
   return maxDepth;
@@ -663,13 +776,14 @@ function findMaxDepth(graph: IRGraph): number {
 export interface GraphExportNode {
   id: string;
   selector: string;
-  type: "rule" | "atrule" | "keyframe";
+  type: "rule" | "atrule" | "keyframe" | "token";
   isDead: boolean;
   specificity: number;
   dependencyCount: number;
   dependentCount: number;
   atRuleType?: string;
   atRuleQuery?: string;
+  tokenName?: string;
 }
 
 export interface GraphExportEdge {
@@ -689,7 +803,10 @@ export interface GraphExport {
   leafNodes: string[];
 }
 
-export function exportGraphAsJSON(graph: IRGraph, ir: StyleIR): GraphExport {
+export function exportGraphAsJSON(
+  graph: IRGraph,
+  _ir?: StyleIR,
+): GraphExport {
   const nodes: GraphExportNode[] = [];
   const edges: GraphExportEdge[] = [];
 
@@ -697,22 +814,20 @@ export function exportGraphAsJSON(graph: IRGraph, ir: StyleIR): GraphExport {
     for (const [id, rule] of getNodeEntries(graph)) {
       if (!rule) continue;
       const isAtRule = id.startsWith("atrule-");
+      const isToken = id.startsWith("token-");
+      const ruleMeta = rule.meta as Record<string, any> | undefined;
+
       nodes.push({
         id,
         selector: rule.selector,
-        type: isAtRule ? "atrule" : "rule",
-        isDead: rule.isDead,
-        specificity: rule.specificity,
+        type: isToken ? "token" : isAtRule ? "atrule" : "rule",
+        isDead: Boolean(rule.isDead),
+        specificity: rule.specificity ?? 0,
         dependencyCount: ensureArray(rule.meta?.dependencies).length,
         dependentCount: ensureArray(rule.meta?.dependents).length,
-        atRuleType: isAtRule
-          ? (ensureArray(graph.edges).find((e) => e.to === id)?.metadata
-              ?.atRuleType as string)
-          : undefined,
-        atRuleQuery: isAtRule
-          ? (ensureArray(graph.edges).find((e) => e.to === id)?.metadata
-              ?.query as string)
-          : undefined,
+        atRuleType: isAtRule ? ruleMeta?._atRuleType : undefined,
+        atRuleQuery: isAtRule ? ruleMeta?._atRuleQuery : undefined,
+        tokenName: isToken ? ruleMeta?._tokenName : undefined,
       });
     }
   }

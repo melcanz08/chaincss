@@ -1,5 +1,7 @@
 // src/frameworks/index.ts — ChainCSS Runtime
 
+import { devWarn } from "@shared/utils/index.js";
+
 // Core runtime
 export {
   compileRuntime as compile,
@@ -30,151 +32,151 @@ export {
 } from "./react/index.js";
 
 // ==========================================================================
-// Vue — Lazy-loaded via dynamic import (ESM-safe)
+// Lazy Framework Loader — shared helper for Vue, Svelte, Solid
 // ==========================================================================
 
-let _vueModule: any = null;
-let _vueLoadPromise: Promise<any> | null = null;
+function createLazyFrameworkLoader(moduleName: string) {
+  let _module: any = null;
+  let _loadPromise: Promise<any> | null = null;
 
-function getVueModule(): Promise<any> {
-  if (_vueModule) return Promise.resolve(_vueModule);
-  if (!_vueLoadPromise) {
-    _vueLoadPromise = import("./vue/index.js")
-      .then((mod) => {
-        _vueModule = mod;
-        return mod;
-      })
-      .catch(() => {
-        _vueModule = {};
-        return _vueModule;
-      });
+  // Static lookup map so esbuild doesn't see a glob pattern
+  const moduleLoaders: Record<string, () => Promise<any>> = {
+    vue: () => import("./vue/index.js"),
+    svelte: () => import("./svelte/index.js"),
+    solid: () => import("./solid/index.js"),
+  };
+
+  async function loadModule(): Promise<any> {
+    if (_module) return _module;
+    if (!_loadPromise) {
+      const loader = moduleLoaders[moduleName];
+      if (!loader) {
+        devWarn(
+          `ChainCSS: Unknown framework "${moduleName}". Available: vue, svelte, solid.`,
+        );
+        _module = {};
+        return _module;
+      }
+      _loadPromise = loader()
+        .then((mod) => {
+          _module = mod;
+          return mod;
+        })
+        .catch((err) => {
+          devWarn(
+            `ChainCSS: Failed to load ${moduleName} adapter: ${err.message}`,
+          );
+          _module = {};
+          return _module;
+        });
+    }
+    return _loadPromise;
   }
-  return _vueLoadPromise;
+
+  async function callExport(name: string, ...args: any[]): Promise<any> {
+    const mod = await loadModule();
+    const fn = mod[name];
+    return typeof fn === "function" ? fn(...args) : undefined;
+  }
+
+  return { loadModule, callExport };
 }
 
-async function callVueExport(name: string, ...args: any[]): Promise<any> {
-  const mod = await getVueModule();
-  const fn = mod[name];
-  return typeof fn === "function" ? fn(...args) : undefined;
-}
+// ==========================================================================
+// Vue 
+// ==========================================================================
 
-// New: useChainStyles for Vue
+const vueLoader = createLazyFrameworkLoader("vue");
+
 export const useChainStylesVue = (...args: any[]) =>
-  callVueExport("useChainStyles", ...args);
-
-// Legacy
+  vueLoader.callExport("useChainStyles", ...args);
 export const useAtomicClassesVue = (...args: any[]) =>
-  callVueExport("useAtomicClasses", ...args);
+  vueLoader.callExport("useAtomicClasses", ...args);
 export const useComputedStylesVue = (...args: any[]) =>
-  callVueExport("useComputedStyles", ...args);
+  vueLoader.callExport("useComputedStyles", ...args);
 export const provideStyleContext = (...args: any[]) =>
-  callVueExport("provideStyleContext", ...args);
+  vueLoader.callExport("provideStyleContext", ...args);
 export const injectStyleContext = (...args: any[]) =>
-  callVueExport("injectStyleContext", ...args);
+  vueLoader.callExport("injectStyleContext", ...args);
 
 // Sync stubs
-export const ChainCSSGlobalVue = (..._args: any[]) => null;
-export const createStyledVueComponent =
-  (..._args: any[]) =>
-  () =>
-    null;
-export const createStyledVueComponents = (..._args: any[]) => ({});
+export const ChainCSSGlobalVue = (..._args: any[]): null => {
+  devWarn(
+    "ChainCSSGlobalVue is a placeholder. The Vue adapter loads asynchronously. " +
+    "Use the returned value from `await callVueExport('ChainCSSGlobal', ...args)` instead."
+  );
+  return null;
+};
+export const createStyledVueComponent = (..._args: any[]) => {
+  devWarn(
+    "createStyledVueComponent is a placeholder. The Vue adapter loads asynchronously. " +
+    "Use `await callVueExport('createStyledComponent', ...args)` instead."
+  );
+  return () => null;
+};
+export const createStyledVueComponents = (..._args: any[]) => {
+  devWarn(
+    "createStyledVueComponents is a placeholder. The Vue adapter loads asynchronously."
+  );
+  return {};
+};
 
 // ==========================================================================
-// Svelte — Lazy-loaded via dynamic import (ESM-safe)
+// Svelte
 // ==========================================================================
 
-let _svelteModule: any = null;
-let _svelteLoadPromise: Promise<any> | null = null;
+const svelteLoader = createLazyFrameworkLoader("svelte");
 
-function getSvelteModule(): Promise<any> {
-  if (_svelteModule) return Promise.resolve(_svelteModule);
-  if (!_svelteLoadPromise) {
-    _svelteLoadPromise = import("./svelte/index.js")
-      .then((mod) => {
-        _svelteModule = mod;
-        return mod;
-      })
-      .catch(() => {
-        _svelteModule = {};
-        return _svelteModule;
-      });
-  }
-  return _svelteLoadPromise;
-}
-
-async function callSvelteExport(name: string, ...args: any[]): Promise<any> {
-  const mod = await getSvelteModule();
-  const fn = mod[name];
-  return typeof fn === "function" ? fn(...args) : undefined;
-}
-
-// New: useChainStyles for Svelte
 export const useChainStylesSvelte = (...args: any[]) =>
-  callSvelteExport("useChainStyles", ...args);
-
-// Legacy
+  svelteLoader.callExport("useChainStyles", ...args);
 export const useAtomicClassesSvelte = (...args: any[]) =>
-  callSvelteExport("useAtomicClasses", ...args);
-export const cxSvelte = (...args: any[]) => callSvelteExport("cx", ...args);
+  svelteLoader.callExport("useAtomicClasses", ...args);
+export const cxSvelte = (...args: any[]) =>
+  svelteLoader.callExport("cx", ...args);
 export const useComputedStylesSvelte = (...args: any[]) =>
-  callSvelteExport("useComputedStyles", ...args);
+  svelteLoader.callExport("useComputedStyles", ...args);
 export const provideStyleContextSvelte = (...args: any[]) =>
-  callSvelteExport("provideStyleContext", ...args);
+  svelteLoader.callExport("provideStyleContext", ...args);
 export const injectStyleContextSvelte = (...args: any[]) =>
-  callSvelteExport("injectStyleContext", ...args);
+  svelteLoader.callExport("injectStyleContext", ...args);
 export const chainStyles = (...args: any[]) =>
-  callSvelteExport("chainStyles", ...args);
+  svelteLoader.callExport("chainStyles", ...args);
 
-// Sync stubs
-export const ChainCSSGlobalSvelte = (..._args: any[]) => null;
-export const createStyledSvelteComponent =
-  (..._args: any[]) =>
-  () =>
-    null;
-export const createStyledSvelteComponents = (..._args: any[]) => ({});
+export const ChainCSSGlobalSvelte = (..._args: any[]): null => {
+  devWarn(
+    "ChainCSSGlobalSvelte is a placeholder. The Svelte adapter loads asynchronously.",
+  );
+  return null;
+};
+export const createStyledSvelteComponent = (..._args: any[]) => {
+  devWarn(
+    "createStyledSvelteComponent is a placeholder. The Svelte adapter loads asynchronously.",
+  );
+  return () => null;
+};
+export const createStyledSvelteComponents = (..._args: any[]) => {
+  devWarn(
+    "createStyledSvelteComponents is a placeholder. The Svelte adapter loads asynchronously.",
+  );
+  return {};
+};
 
 // ==========================================================================
-// SolidJS — Lazy-loaded via dynamic import (ESM-safe)
+// SolidJS
 // ==========================================================================
 
-let _solidModule: any = null;
-let _solidLoadPromise: Promise<any> | null = null;
+const solidLoader = createLazyFrameworkLoader("solid");
 
-function getSolidModule(): Promise<any> {
-  if (_solidModule) return Promise.resolve(_solidModule);
-  if (!_solidLoadPromise) {
-    _solidLoadPromise = import("./solid/index.js")
-      .then((mod) => {
-        _solidModule = mod;
-        return mod;
-      })
-      .catch(() => {
-        _solidModule = {};
-        return _solidModule;
-      });
-  }
-  return _solidLoadPromise;
-}
-
-async function callSolidExport(name: string, ...args: any[]): Promise<any> {
-  const mod = await getSolidModule();
-  const fn = mod[name];
-  return typeof fn === "function" ? fn(...args) : undefined;
-}
-
-// New: useChainStyles for Solid (direct, no async needed)
 export const useChainStylesSolid = (...args: any[]) =>
-  callSolidExport("useChainStyles", ...args);
-
-// Legacy
+  solidLoader.callExport("useChainStyles", ...args);
 export const useComputedStylesSolid = (...args: any[]) =>
-  callSolidExport("useComputedStyles", ...args);
+  solidLoader.callExport("useComputedStyles", ...args);
 export const createStyledComponentSolid = (...args: any[]) =>
-  callSolidExport("createStyledComponent", ...args);
-export const cxSolid = (...args: any[]) => callSolidExport("cx", ...args);
+  solidLoader.callExport("createStyledComponent", ...args);
+export const cxSolid = (...args: any[]) =>
+  solidLoader.callExport("cx", ...args);
 export const createStyleContext = (...args: any[]) =>
-  callSolidExport("createStyleContext", ...args);
+  solidLoader.callExport("createStyleContext", ...args);
 
 // ==========================================================================
 // Utilities
@@ -251,4 +253,10 @@ export {
 export type { RuntimeAdapter } from "./core/adapter/types.js";
 export { BrowserAdapter } from "./core/adapter/browser-adapter.js";
 export { SSRAdapter } from "./core/adapter/ssr-adapter.js";
+
+/**
+ * compileToCSS is re-exported from here AND from compiler-entry.ts.
+ * If the source path changes, update BOTH files.
+ * Source: @core/usecases/style-compiler.js
+ */
 export { compileToCSS } from "@core/usecases/style-compiler.js";

@@ -14,7 +14,7 @@ export type { CSSUnit, CSSMathValue, MathContext, MathResult, FluidTypeConfig };
 export type MathOp = "add" | "subtract" | "multiply" | "divide";
 
 // Internal extended type to handle unitless and expression at runtime
-type InternalMathValue = CSSMathValue & {
+export type InternalMathValue = Omit<CSSMathValue, "unit"> & {
   expression?: string;
   unit: CSSUnit | "" | "expression" | string;
   isUnitless?: boolean;
@@ -34,6 +34,7 @@ const UNIT_CATEGORIES: Record<string, CSSUnit[]> = {
   absolute: ["px", "cm", "mm", "in", "pt", "pc"],
   relative: ["rem", "em", "ch", "ex"],
   viewport: ["vw", "vh", "vmin", "vmax"],
+  percentage: ["%"],
   angle: ["deg", "rad", "turn", "grad"],
   time: ["s", "ms"],
   resolution: ["dpi", "dpcm", "dppx"],
@@ -49,13 +50,13 @@ const CALC_PREFIX_REGEX = /^calc\(/i;
 
 // Helpers to work around strict CSSUnit type
 function isUnitless(v: InternalMathValue): boolean {
-  return !!v.isUnitless;
+  return !!v.isUnitless || (!v.unit && !v.expression);
 }
 function isExpressionUnit(v: InternalMathValue): boolean {
-  return (v.unit as string) === "expression" || !!(v as any).expression;
+  return (v.unit as string) === "expression" || !!v.expression;
 }
 function getExpression(v: InternalMathValue): string {
-  return (v as any).expression || "";
+  return v.expression || "";
 }
 function asCSSUnit(u: string): CSSUnit {
   return u as unknown as CSSUnit;
@@ -65,9 +66,9 @@ function parseCSSValue(input: string | number): InternalMathValue {
   if (typeof input === "number") {
     return {
       value: input,
-      unit: "px" as any,
+      unit: "",
       isUnitless: true,
-    } as InternalMathValue;
+    };
   }
   const trimmed = input.trim();
   const match = trimmed.match(SIMPLE_NUMERIC_REGEX);
@@ -75,15 +76,15 @@ function parseCSSValue(input: string | number): InternalMathValue {
     const unitStr = match[2].toLowerCase();
     return {
       value: parseFloat(match[1]),
-      unit: (unitStr || "px") as any,
+      unit: unitStr,
       isUnitless: !unitStr,
-    } as InternalMathValue;
+    };
   }
   return {
     value: 0,
-    unit: "expression" as any,
+    unit: "expression",
     expression: trimmed,
-  } as InternalMathValue;
+  };
 }
 
 function getUnitCategory(unit: string): string {
@@ -93,6 +94,7 @@ function getUnitCategory(unit: string): string {
 
 function formatValue(value: InternalMathValue): string {
   if (isExpressionUnit(value)) return getExpression(value);
+  if (isUnitless(value)) return `${value.value}`;
   return `${value.value}${value.unit}`;
 }
 
@@ -189,6 +191,7 @@ function convertFromInternalBase(
   context: Required<MathContext>,
 ): number {
   const target = targetUnit as string;
+  if (!target) return v;
   if (fromBase === "px") {
     switch (target) {
       case "px":
@@ -251,28 +254,58 @@ function convertFromInternalBase(
 function canResolve(
   a: InternalMathValue,
   b: InternalMathValue,
+  op: MathOp,
   context: Required<MathContext>,
 ): boolean {
   if (isExpressionUnit(a) || isExpressionUnit(b)) return false;
 
-  // Statically resolve absolute/relative values (even if one is unitless and defaults to px)
-  const catA = getUnitCategory(a.unit as string);
-  const catB = getUnitCategory(b.unit as string);
+  const unitA = a.unit as string;
+  const unitB = b.unit as string;
+  const catA = getUnitCategory(unitA);
+  const catB = getUnitCategory(unitB);
   if (catA === "unknown" || catB === "unknown") return false;
 
-  // Viewport units are dynamic and must compile to runtime expressions unless both sides share the exact same unit
-  const isDynamicA = catA === "viewport" || (a.unit as string) === "%";
-  const isDynamicB = catB === "viewport" || (b.unit as string) === "%";
-  if (isDynamicA || isDynamicB)
-    return (a.unit as string) === (b.unit as string);
-
-  if (
-    (catA === "absolute" || catA === "relative" || isUnitless(a)) &&
-    (catB === "absolute" || catB === "relative" || isUnitless(b))
-  ) {
-    return true;
+  // Viewport/percentage units require exact unit matching
+  const isDynamicA = catA === "viewport" || catA === "percentage";
+  const isDynamicB = catB === "viewport" || catB === "percentage";
+  if (isDynamicA || isDynamicB) {
+    if (unitA !== unitB) return false;
   }
-  return catA === catB;
+
+  const isAUnitless = isUnitless(a);
+  const isBUnitless = isUnitless(b);
+
+  if (op === "add" || op === "subtract") {
+    if (isAUnitless && isBUnitless) return true;
+    if (isAUnitless || isBUnitless) return false; // Cannot add/subtract scalar and dimension
+    if (
+      (catA === "absolute" || catA === "relative") &&
+      (catB === "absolute" || catB === "relative")
+    ) {
+      return true;
+    }
+    return catA === catB;
+  }
+
+  if (op === "multiply") {
+    // CSS multiplication requires at least one operand to be a unitless scalar
+    return isAUnitless || isBUnitless;
+  }
+
+  if (op === "divide") {
+    if (b.value === 0) return false;
+    if (isBUnitless) return true; // Dimension or scalar divided by scalar
+    if (isAUnitless) return false; // Scalar divided by dimension is invalid in standard CSS
+    if (
+      (catA === "absolute" || catA === "relative") &&
+      (catB === "absolute" || catB === "relative")
+    ) {
+      return true; // Dimension / Dimension yields a unitless scalar
+    }
+    return catA === catB;
+  }
+
+  return false;
 }
 
 function createResult(
@@ -340,13 +373,16 @@ function operate(
   const isExprA = isExpressionUnit(valA);
   const isExprB = isExpressionUnit(valB);
 
-  // Direct computation if identical units and both are not unitless
+  if (op === "divide" && !isExprB && valB.value === 0) {
+    explanations.push("Division by zero — generated safe runtime expression");
+    return createDynamicFallback(valA, op, valB, explanations);
+  }
+
+  // Direct computation if identical units
   if (
     (valA.unit as string) === (valB.unit as string) &&
     !isExprA &&
-    !isExprB &&
-    !isUnitless(valA) &&
-    !isUnitless(valB)
+    !isExprB
   ) {
     let result: number;
     let resultUnit = valA.unit as string;
@@ -358,14 +394,18 @@ function operate(
         result = valA.value - valB.value;
         break;
       case "multiply":
+        if (!isUnitless(valA) && !isUnitless(valB)) {
+          explanations.push(
+            `Warning: Direct multiplication of dimensions (${valA.unit}) results in physical area units. Forcing dynamic calc.`,
+          );
+          return createDynamicFallback(valA, op, valB, explanations);
+        }
         result = valA.value * valB.value;
-        explanations.push(
-          `Warning: Direct multiplication of dimensions (${valA.unit}) results in physical area units. Forcing dynamic calc.`,
-        );
-        return createDynamicFallback(valA, op, valB, explanations);
+        resultUnit = isUnitless(valA) ? valB.unit : valA.unit;
+        break;
       case "divide":
         result = valA.value / valB.value;
-        resultUnit = "";
+        resultUnit = isUnitless(valA) && isUnitless(valB) ? "" : isUnitless(valB) ? valA.unit : "";
         break;
     }
     const rounded = Math.round(result! * 1000) / 1000;
@@ -379,6 +419,7 @@ function operate(
     );
   }
 
+  // Scalar Operations (dimension * scalar, scalar * dimension, dimension / scalar)
   const unitAEmpty = isUnitless(valA);
   const unitBEmpty = isUnitless(valB);
   const isScalarMult =
@@ -395,7 +436,7 @@ function operate(
         : valA.value / valB.value;
     const rounded = Math.round(resultVal * 1000) / 1000;
     explanations.push(
-      `Scalar ${op}: ${dimension.value}${dimension.unit} with multiplier ${scalar.value}`,
+      `Scalar ${op}: ${formatValue(dimension)} with multiplier ${formatValue(scalar)}`,
     );
     return createResult(
       rounded,
@@ -406,32 +447,32 @@ function operate(
     );
   }
 
-  if (canResolve(valA, valB, ctx)) {
+  if (canResolve(valA, valB, op, ctx)) {
     const resA = resolveToInternalBase(valA, ctx);
     const resB = resolveToInternalBase(valB, ctx);
     let resultVal: number;
+    let targetUnit = "";
+
     switch (op) {
       case "add":
         resultVal = resA.value + resB.value;
+        targetUnit =
+          (valA.unit as string) || (valB.unit as string) || "px";
         break;
       case "subtract":
         resultVal = resA.value - resB.value;
+        targetUnit =
+          (valA.unit as string) || (valB.unit as string) || "px";
         break;
       case "multiply":
         resultVal = resA.value * resB.value;
+        targetUnit = (valA.unit as string) || (valB.unit as string);
         break;
       case "divide":
         resultVal = resA.value / resB.value;
+        targetUnit = ""; // Dimension / Dimension produces a scalar ratio
         break;
     }
-
-    const targetUnit =
-      (valA.unit as string) === "px" ||
-      (valB.unit as string) === "px" ||
-      isUnitless(valA) ||
-      isUnitless(valB)
-        ? "px"
-        : (valA.unit as string) || (valB.unit as string);
 
     const converted = convertFromInternalBase(
       resultVal,
@@ -441,7 +482,7 @@ function operate(
     );
     const rounded = Math.round(converted * 1000) / 1000;
     explanations.push(
-      `Statically resolved ${valA.value}${valA.unit} ${op} ${valB.value}${valB.unit} to target unit ${targetUnit}`,
+      `Statically resolved ${formatValue(valA)} ${op} ${formatValue(valB)} to ${targetUnit || "unitless scalar"}`,
     );
     return createResult(
       rounded,
@@ -485,12 +526,26 @@ export const math = {
     return operate(a, "divide", b, context);
   },
 
-  sum(...values: (string | number)[]): MathResult {
-    if (values.length === 0)
+  sum(...args: (string | number | MathContext)[]): MathResult {
+    if (args.length === 0)
       return createResult(0, "px", "0px", {
         value: 0,
         unit: "px" as any,
       } as any);
+
+    let ctx = DEFAULT_CONTEXT;
+    let values: (string | number)[] = args as (string | number)[];
+
+    const last = args[args.length - 1];
+    if (
+      typeof last === "object" &&
+      last !== null &&
+      !("value" in last)
+    ) {
+      ctx = { ...DEFAULT_CONTEXT, ...(args.pop() as MathContext) };
+      values = args as (string | number)[];
+    }
+
     if (values.length === 1) {
       const parsed = parseCSSValue(values[0]);
       return createResult(
@@ -504,7 +559,6 @@ export const math = {
     let hasStatic = false;
     const bucketTotals: Record<string, number> = {};
     const complexParts: string[] = [];
-    const ctx = DEFAULT_CONTEXT;
 
     for (const val of values) {
       const parsed = parseCSSValue(val);
@@ -513,7 +567,7 @@ export const math = {
         continue;
       }
       const cat = getUnitCategory(parsed.unit as string);
-      if (cat === "absolute" || cat === "relative" || cat === "viewport") {
+      if (cat === "absolute" || cat === "relative") {
         const resolved = resolveToInternalBase(parsed, ctx);
         staticPxTotal += resolved.value;
         hasStatic = true;
@@ -534,7 +588,9 @@ export const math = {
     }
     for (const [unit, total] of Object.entries(bucketTotals)) {
       const rounded = Math.round(total * 1000) / 1000;
-      if (rounded !== 0) parts.push(`${rounded}${unit}`);
+      if (rounded !== 0) {
+        parts.push(unit === "unitless" ? `${rounded}` : `${rounded}${unit}`);
+      }
     }
     parts.push(...complexParts);
 
@@ -601,7 +657,7 @@ export const math = {
       toUnit,
       `${rounded}${toUnit}`,
       { value: rounded, unit: toUnit } as any,
-      [`${parsed.value}${parsed.unit} → ${rounded}${toUnit}`],
+      [`${formatValue(parsed)} → ${rounded}${toUnit}`],
     );
   },
 
@@ -625,9 +681,14 @@ export const math = {
       unit === "rem" ? `${minSize / rootFontSize}rem` : `${minSize}${unit}`;
     const maxStr =
       unit === "rem" ? `${maxSize / rootFontSize}rem` : `${maxSize}${unit}`;
-    const sign = interceptRounded >= 0 ? "+" : "-";
-    const absIntercept = Math.abs(interceptRounded);
-    const prefStr = `${slopeVw}vw ${sign} ${absIntercept}${unitStr}`;
+
+    let prefStr = `${slopeVw}vw`;
+    if (interceptRounded !== 0) {
+      const sign = interceptRounded > 0 ? "+" : "-";
+      const absIntercept = Math.abs(interceptRounded);
+      prefStr = `${slopeVw}vw ${sign} ${absIntercept}${unitStr}`;
+    }
+
     const expression = `clamp(${minStr}, ${prefStr}, ${maxStr})`;
     return createResult(0, "calc", expression, null, [
       `Fluid range: ${minSize}${unit} to ${maxSize}${unit}`,
@@ -649,9 +710,9 @@ export const math = {
     return createResult(
       scaled,
       parsed.unit as string,
-      `${scaled}${parsed.unit}`,
+      formatValue({ value: scaled, unit: parsed.unit, isUnitless: parsed.isUnitless }),
       { value: scaled, unit: parsed.unit as any } as any,
-      [`Scaled ${parsed.value}${parsed.unit} by ${factor}`],
+      [`Scaled ${formatValue(parsed)} by ${factor}`],
     );
   },
 
@@ -671,8 +732,8 @@ export const math = {
       ((parsedVal.unit as string) === (parsedMin.unit as string) &&
         (parsedVal.unit as string) === (parsedMax.unit as string) &&
         !isExpressionUnit(parsedVal)) ||
-      (canResolve(parsedVal, parsedMin, ctx) &&
-        canResolve(parsedVal, parsedMax, ctx));
+      (canResolve(parsedVal, parsedMin, "add", ctx) &&
+        canResolve(parsedVal, parsedMax, "add", ctx));
     if (canResolveAll) {
       const resVal = resolveToInternalBase(parsedVal, ctx);
       const resMin = resolveToInternalBase(parsedMin, ctx);
@@ -714,7 +775,6 @@ export const math = {
 
   parse(value: string | number): CSSMathValue {
     const parsed = parseCSSValue(value);
-    // Return standard CSSMathValue interface elements strictly (strips internal flags like isUnitless)
     return {
       value: parsed.value,
       unit: parsed.unit as CSSUnit,

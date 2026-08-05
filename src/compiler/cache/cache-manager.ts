@@ -10,16 +10,18 @@ export interface CacheEntry<T = any> {
   expires?: number;
 }
 
+export interface CacheStats {
+  totalStyles: number;
+  atomicStyles: number;
+  cacheHits: number;
+  cacheMisses: number;
+}
+
 export interface CacheData {
   version: string;
   created: string;
   updated: string;
-  stats: {
-    totalStyles: number;
-    atomicStyles: number;
-    cacheHits: number;
-    cacheMisses: number;
-  };
+  stats: CacheStats;
   entries: Record<string, CacheEntry>;
 }
 
@@ -40,6 +42,7 @@ export class CacheManager {
   private options: Required<CacheOptions>;
   private lastSize = 0;
   private lastSizeCheck = 0;
+  private inFlight = new Map<string, Promise<any>>();
 
   constructor(
     cachePath: string = "./.chaincss-cache",
@@ -107,7 +110,15 @@ export class CacheManager {
           return;
         }
 
-        this.cache = parsed;
+        this.cache = {
+          ...this.getDefaultCache(),
+          ...parsed,
+          stats: {
+            ...this.getDefaultCache().stats,
+            ...(parsed.stats || {}),
+          },
+        };
+
         if (this.isExpired()) {
           this.clear();
         } else {
@@ -141,10 +152,9 @@ export class CacheManager {
   }
 
   private isExpired(): boolean {
-    const created = this.cache.created
-      ? new Date(this.cache.created).getTime()
-      : 0;
-    return Date.now() - created > this.options.maxAge;
+    const createdTime = new Date(this.cache.created || "").getTime();
+    if (Number.isNaN(createdTime)) return true;
+    return Date.now() - createdTime > this.options.maxAge;
   }
 
   private checkAndPrune(): void {
@@ -217,6 +227,7 @@ export class CacheManager {
     this.stats = { hits: 0, misses: 0, writes: 0, reads: 0 };
     this.lastSize = 0;
     this.lastSizeCheck = 0;
+    this.inFlight.clear();
     if (fs.existsSync(this.cachePath)) {
       try {
         const stats = fs.statSync(this.cachePath);
@@ -247,7 +258,6 @@ export class CacheManager {
       }
     }
 
-    // Check real sizing context including volatile runtime additions
     const currentSize = this.getCacheSize(true);
     if (currentSize > this.options.maxSize) {
       const entries = Object.entries(this.cache.entries);
@@ -278,7 +288,6 @@ export class CacheManager {
     try {
       this.cache.updated = new Date().toISOString();
 
-      // Flush volatile tracking counters out to the structural engine layout
       if (this.cache.stats) {
         this.cache.stats.cacheHits =
           (this.cache.stats.cacheHits || 0) + this.stats.hits;
@@ -286,7 +295,6 @@ export class CacheManager {
           (this.cache.stats.cacheMisses || 0) + this.stats.misses;
       }
 
-      // Reset the local operational tracker loops safely
       this.stats.hits = 0;
       this.stats.misses = 0;
 
@@ -308,31 +316,28 @@ export class CacheManager {
   }
 
   getStats() {
-    // Unify transactional memory context with structural values
-    const instantHits = this.cache.stats.cacheHits + this.stats.hits;
-    const instantMisses = this.cache.stats.cacheMisses + this.stats.misses;
-    const total = instantHits + instantMisses;
-    const hitRate = total > 0 ? (instantHits / total) * 100 : 0;
+    const hits = (this.cache.stats?.cacheHits || 0) + this.stats.hits;
+    const misses = (this.cache.stats?.cacheMisses || 0) + this.stats.misses;
+    const total = hits + misses;
+    const hitRate = total > 0 ? (hits / total) * 100 : 0;
 
     return {
-      hits: instantHits,
-      misses: instantMisses,
+      hits,
+      misses,
       reads: this.stats.reads,
       writes: this.stats.writes,
       hitRate,
-      size: this.getCacheSize(this.dirty), // Force deep structural evaluation only if changes are dirty
+      size: this.getCacheSize(this.dirty),
       entryCount: Object.keys(this.cache.entries).length,
     };
   }
 
   getCacheSize(force = false): number {
     const now = Date.now();
-    // Return the cached record weight if it falls within the 1-second throttle boundary
     if (!force && now - this.lastSizeCheck < 1000 && this.lastSize > 0) {
       return this.lastSize;
     }
 
-    // If the data structure has modified fields, compute space size dynamically from the live structure
     if (this.dirty || force || this.lastSize === 0) {
       try {
         const structuralWeight = Buffer.byteLength(
@@ -342,9 +347,7 @@ export class CacheManager {
         this.lastSize = structuralWeight;
         this.lastSizeCheck = now;
         return structuralWeight;
-      } catch {
-        // Fallback to absolute file reading constraints if stringification throws exception drops
-      }
+      } catch {}
     }
 
     try {
@@ -442,9 +445,23 @@ export class CacheManager {
   ): Promise<T> {
     const cached = this.get<T>(key);
     if (cached !== undefined) return cached;
-    const computed = await compute();
-    this.set(key, computed, ttl);
-    return computed;
+
+    if (this.inFlight.has(key)) {
+      return this.inFlight.get(key) as Promise<T>;
+    }
+
+    const task = (async () => {
+      try {
+        const computed = await compute();
+        this.set(key, computed, ttl);
+        return computed;
+      } finally {
+        this.inFlight.delete(key);
+      }
+    })();
+
+    this.inFlight.set(key, task);
+    return task;
   }
 }
 

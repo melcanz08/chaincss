@@ -3,7 +3,6 @@
 /**
  * ChainCSS Compiler Public API Entrypoint
  * Highly structured and grouped by architectural domain.
- * FIXED v2.14.1 — added ManifestWriter + CompilerEvents exports
  */
 
 // --- 1. Core Compiler & Pipeline Engine (v2.7+) ---
@@ -56,6 +55,7 @@ export {
   ChainCSSPrefixer,
   type PrefixerConfig,
   type PrefixerResult,
+  type ProcessOptionsWithPaths,
 } from "./prefixer.js";
 
 // --- 4. Cache & Persistence Managers ---
@@ -80,11 +80,11 @@ export {
 // --- 5. Compiler Events & Diagnostics ---
 export {
   CompilerEvents,
+  createEvent,
   type CompilerEvent,
   type CompilerEventType,
   type CompilerEventMap,
   type CompilerEventHandler,
-  createEvent,
 } from "./services/compiler-events.js";
 
 // --- 6. Breakpoints & Responsive Layout ---
@@ -99,7 +99,7 @@ export {
 } from "./breakpoints.js";
 
 // --- 7. Recipes, Shorthands & Utility Macros ---
-export { recipe } from "./recipe.js";
+export { recipe, type Recipe, type RecipeOptions } from "./recipe.js";
 export { helpers } from "./utils/helpers.js";
 export {
   shorthandMap,
@@ -129,7 +129,7 @@ export {
   getAnimationPresetNames,
 } from "./animations.js";
 
-// --- 10. Intelligence & CLI Suggestion Engine ---
+// --- 10. Intelligence & Math Engine ---
 export {
   getSuggestion,
   getSuggestions,
@@ -137,7 +137,7 @@ export {
   getShorthandSuggestion,
 } from "./utils/suggestions.js";
 
-export { math } from "./math-engine.js";
-
-// Note: component-gen.ts is intentionally not exported as it's deprecated.
-// Use the component generation in btt.ts instead.
+export {
+  math,
+  type InternalMathValue,
+} from "./math-engine.js";
