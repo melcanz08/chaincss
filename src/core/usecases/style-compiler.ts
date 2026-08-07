@@ -366,9 +366,27 @@ export function partitionForBuild(
     );
   }
 }
+
 export function run(...styleObjects: StyleObject[]): string {
   return styleObjects
     .map((obj) => compileToCSS(obj))
     .filter(Boolean)
-    .join("\n\n");
+    .join('\n\n');
+}
+
+// New: transpile — accepts object or spread arguments
+export function transpile(...args: StyleObject[]): string {
+  const objects = args.length === 1 && typeof args[0] === 'object' && !Array.isArray(args[0]) && !(args[0] as any).selectors
+    ? Object.values(args[0])
+    : args;
+  
+  return run(...(objects as StyleObject[]));
+}
+
+// New: injectToDOM helper
+export function injectToDOM(id: string, css: string): void {
+  const el = document.getElementById(id);
+  if (el) {
+    el.textContent = css;
+  }
 }
