@@ -1074,6 +1074,72 @@ export const macros: Record<string, MacroHandler> = {
       styles: getSubStyles(v, useTokens),
     });
   },
+  // Semantic Token Macros
+  surface: (intent, c) => {
+    const map: Record<string, Record<string, string>> = {
+      interactive: { backgroundColor: '#6366f1', color: 'white', borderRadius: '8px', cursor: 'pointer' },
+      container: { backgroundColor: '#f8fafc', color: '#1a202c', borderRadius: '12px', border: '1px solid #e2e8f0' },
+      overlay: { backgroundColor: 'white', color: '#1a202c', borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.15)', zIndex: '50' },
+      sheet: { backgroundColor: '#f1f5f9', color: '#334155', borderRadius: '12px 12px 0 0', boxShadow: '0 -4px 20px rgba(0,0,0,0.1)' },
+      tooltip: { backgroundColor: '#1e293b', color: 'white', borderRadius: '4px', padding: '4px 8px', fontSize: '12px' },
+      input: { backgroundColor: 'white', color: '#1a202c', borderRadius: '8px', border: '1px solid #cbd5e1', padding: '8px 12px' },
+    }
+    const styles = map[intent]
+    if (styles) Object.assign(c, styles)
+  },
+
+  text: (intent, c) => {
+    const map: Record<string, Record<string, string>> = {
+      primary: { color: '#1a202c', fontWeight: '400' },
+      secondary: { color: '#64748b', fontWeight: '400' },
+      muted: { color: '#94a3b8', fontSize: '14px' },
+      link: { color: '#6366f1', fontWeight: '500', textDecoration: 'underline', cursor: 'pointer' },
+      inverse: { color: 'white', fontWeight: '500' },
+      code: { fontFamily: 'monospace', fontSize: '14px', color: '#334155', backgroundColor: '#f1f5f9', borderRadius: '4px', padding: '2px 6px' },
+    }
+    const styles = map[intent]
+    if (styles) Object.assign(c, styles)
+  },
+
+  elevation: (level, c) => {
+    const shadows: Record<string, string> = {
+      flat: 'none',
+      raised: '0 1px 3px rgba(0,0,0,0.08)',
+      floating: '0 4px 12px rgba(0,0,0,0.1)',
+      sticky: '0 4px 12px rgba(0,0,0,0.1)',
+      overlay: '0 20px 60px rgba(0,0,0,0.15)',
+      modal: '0 25px 80px rgba(0,0,0,0.25)',
+    }
+    c.boxShadow = shadows[level] || shadows.raised
+    if (level === 'sticky') { c.position = 'sticky'; c.top = '0' }
+    if (level === 'overlay' || level === 'modal') c.position = 'fixed'
+  },
+
+  state: (intent, c) => {
+    const styles: Record<string, any> = {
+      hover: { filter: 'brightness(1.1)', transition: 'filter 0.2s ease' },
+      active: { filter: 'brightness(0.95)', transform: 'scale(0.98)', transition: 'all 0.1s ease' },
+      focus: { outline: '2px solid #6366f1', outlineOffset: '2px' },
+      disabled: { opacity: '0.5', cursor: 'not-allowed', pointerEvents: 'none' },
+      loading: { cursor: 'wait', opacity: '0.7', pointerEvents: 'none' },
+      selected: { backgroundColor: '#eff6ff', color: '#1d4ed8', fontWeight: '600' },
+    }
+    const s = styles[intent]
+    if (s) Object.assign(c, s)
+  },
+
+  spacing: (intent, c) => {
+    const map: Record<string, Record<string, string>> = {
+      none: { padding: '0', gap: '0' },
+      tight: { padding: '4px 8px', gap: '4px' },
+      compact: { padding: '8px 12px', gap: '8px' },
+      comfortable: { padding: '12px 16px', gap: '12px' },
+      spacious: { padding: '24px 32px', gap: '24px' },
+      generous: { padding: '48px 64px', gap: '32px' },
+    }
+    const s = map[intent]
+    if (s) Object.assign(c, s)
+  },
 };
 
 const BUILTIN_MACROS = Object.freeze({ ...macros });

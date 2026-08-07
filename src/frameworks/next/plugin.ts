@@ -1,5 +1,5 @@
 // @ts-nocheck
-// src/frameworks/next/plugin.ts - COMPLETE Next.js plugin with RSC support
+// src/frameworks/next/plugin.ts — Next.js plugin with RSC support
 import fs from "fs";
 import path from "path";
 
@@ -32,22 +32,39 @@ class ChainCSSNextWebpackPlugin {
       PLUGIN_NAME,
       (compilation: any, callback: any) => {
         try {
-          // Collect CSS from compilation
           let collectedCSS = "";
 
-          // Look for chaincss assets in compilation
+          // Collect CSS from chaincss-related assets
           if (compilation.assets) {
             for (const [name, asset] of Object.entries(
               compilation.assets as any,
             )) {
-              if (name.includes("chaincss")) {
-                // @ts-ignore
-                collectedCSS += asset.source() + "\n";
+              if (
+                name.includes("chaincss") ||
+                name.endsWith(".chain.css") ||
+                name.includes(".chain.")
+              ) {
+                collectedCSS += (asset as any).source() + "\n";
               }
             }
           }
 
-          // If no CSS collected, create empty file (RSC will generate at runtime)
+          // Also check for .chain.css files emitted by the Vite/Rollup pipeline
+          const outputDir = path.dirname(path.resolve(process.cwd(), output));
+          // Also check for .chain.css files emitted by the Vite/Rollup pipeline
+          if (fs.existsSync(outputDir)) {
+            const files = fs.readdirSync(outputDir);
+            for (const file of files) {
+              if (file.includes("chaincss") || file.endsWith(".chain.css")) {
+                const filePath = path.join(outputDir, file);
+                if (filePath !== outputPath) {
+                  collectedCSS += fs.readFileSync(filePath, "utf-8") + "\n";
+                }
+              }
+            }
+          }
+
+          // Always write output — empty CSS is valid for RSC-only apps
           const outputPath = path.resolve(process.cwd(), output);
           const dir = path.dirname(outputPath);
 
@@ -55,16 +72,15 @@ class ChainCSSNextWebpackPlugin {
             fs.mkdirSync(dir, { recursive: true });
           }
 
-          // Only write if we have content or file doesn't exist
-          if (collectedCSS || !fs.existsSync(outputPath)) {
-            fs.writeFileSync(
-              outputPath,
-              collectedCSS || "/* chaincss - RSC generated */\n",
+          fs.writeFileSync(
+            outputPath,
+            collectedCSS || "/* ChainCSS — RSC generated */\n",
+          );
+
+          if (debug) {
+            console.log(
+              `[ChainCSS] Wrote ${collectedCSS.length} bytes to ${output}`,
             );
-            if (debug)
-              console.log(
-                `[ChainCSS] Wrote ${collectedCSS.length} bytes to ${output}`,
-              );
           }
 
           // Write manifest
@@ -73,11 +89,10 @@ class ChainCSSNextWebpackPlugin {
             const manifestData = {
               generatedAt: new Date().toISOString(),
               cssFile: output,
+              size: collectedCSS.length,
+              serverComponents: this.options.serverComponents,
             };
-            fs.writeFileSync(
-              manifestPath,
-              JSON.stringify(manifestData, null, 2),
-            );
+            fs.writeFileSync(manifestPath, JSON.stringify(manifestData, null, 2));
           }
         } catch (e) {
           console.error("[ChainCSS] Plugin error:", e);
@@ -97,19 +112,13 @@ export function withChainCSS(nextOptions: ChainCSSNextOptions = {}) {
       webpack(config: any, options: any) {
         const { isServer } = options;
 
-        // Add ChainCSS plugin for client builds
+        // Add ChainCSS plugin for all builds
         config.plugins = config.plugins || [];
         config.plugins.push(new ChainCSSNextWebpackPlugin(nextOptions));
 
-        // Handle chaincss imports
-        config.resolve = config.resolve || {};
-        config.resolve.alias = {
-          ...config.resolve.alias,
-          // Ensure single instance
-        };
-
-        // Important: Don't bundle server components on client
+        // Don't bundle Node.js modules on client
         if (!isServer) {
+          config.resolve = config.resolve || {};
           config.resolve.fallback = {
             ...config.resolve.fallback,
             fs: false,

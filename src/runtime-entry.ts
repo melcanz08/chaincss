@@ -1,4 +1,4 @@
-// chaincss/runtime - Framework adapters
+// chaincss/runtime-entry.ts - Framework adapters
 // Usage: import { useChainStyles } from 'chaincss/runtime'
 
 // Core runtime

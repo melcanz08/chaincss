@@ -466,7 +466,15 @@ export class ChainCSSCompiler {
       if (typeof v === "function" && (v as any).variants) {
         out[n] = this.compileRecipe(n, v);
       } else if ((v as any)?.selectors) {
-        out[n] = this.compileStyle(n, v as any);
+        const result = this.compileStyle(n, v as any);
+        out[n] = result;
+        // ADD: Collect changed rule IDs
+        const inspector = (result as any)?.inspector;
+        if (inspector?.ir?.rules) {
+          for (const rule of inspector.ir.rules) {
+            changedRuleIds.push(rule.id);
+          }
+        }
       }
     }
 
@@ -655,7 +663,7 @@ export class ChainCSSCompiler {
 
     // Content-addressable cache lookup via PersistentCache (stateCache)
     if (this.stateCache) {
-      const sourceHash = crypto.createHash("md5").update(source).digest("hex");
+      const sourceHash = crypto.createHash("sha256").update(source).digest("hex");
       const cached = await this.stateCache.getByHash(sourceHash);
       if (cached?.result) {
         return cached.result;
@@ -719,7 +727,7 @@ export class ChainCSSCompiler {
 
     // Save to content-addressable cache via PersistentCache (stateCache)
     if (this.stateCache) {
-      const sourceHash = crypto.createHash("md5").update(source).digest("hex");
+      const sourceHash = crypto.createHash("sha256").update(source).digest("hex");
       await this.stateCache.setByHash(sourceHash, out);
     }
 

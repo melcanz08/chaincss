@@ -18,7 +18,7 @@ import type {
  * Recursively clone a passMeta object, preserving Map, Set, and nested objects.
  * Does NOT use JSON serialization — safe for circular references, Maps, and Sets.
  */
-function clonePassMeta(meta: any): any {
+export function clonePassMeta(meta: any): any {
   if (meta === null || typeof meta !== "object") return meta;
   if (meta instanceof Set) return new Set(Array.from(meta).map(clonePassMeta));
   if (meta instanceof Map) {

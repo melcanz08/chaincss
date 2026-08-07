@@ -11,6 +11,7 @@ import type {
   IRDeclarationMeta,
 } from "./types.js";
 import type { PassMetadata } from "./metadata.js";
+import { clonePassMeta } from "./immutable.js";
 
 /** Ensures an IRRule's meta object is initialized and returns a mutable reference */
 export function ensureRuleMeta(rule: IRRule): NonNullable<IRRule["meta"]> {
@@ -183,7 +184,7 @@ function cloneRule(rule: IRRule): IRRule {
     conditions: rule.conditions.map((cond) => ({ ...cond })),
     history: rule.history ? [...rule.history] : [],
     meta: rule.meta ? { ...rule.meta } : undefined,
-    passMeta: rule.passMeta ? JSON.parse(JSON.stringify(rule.passMeta)) : undefined,
+    passMeta: rule.passMeta ? clonePassMeta(rule.passMeta) : undefined,
   };
 }
 
