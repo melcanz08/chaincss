@@ -55,3 +55,6 @@ export {
   setIncrementalMeta,
   markDirty,
 } from "./metadata.js";
+
+export { getDynamicVariableName } from "../dynamic/dynamic-variable.js";
+export { getIntentCatalog } from "../intent/intent-catalog.js";

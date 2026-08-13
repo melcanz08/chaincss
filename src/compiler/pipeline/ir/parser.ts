@@ -19,6 +19,12 @@ import type {
   IRKeyframeFrame,
 } from "./types.js";
 
+import { getDynamicVariableName } from "../dynamic/dynamic-variable.js";
+
+function isDynamicToken(value: string): boolean {
+  return value.startsWith("theme.") || value.startsWith("props.") || value.includes("${");
+}
+
 // ============================================================================
 // Case Normalization
 // ============================================================================
@@ -164,12 +170,36 @@ export function parseIR(
           continue;
         }
 
+        // ── Dynamic Values (functions) ──
+        if (typeof value === "function") {
+          const variable = getDynamicVariableName(selector, prop);
+          rule.declarations.push(
+            createDeclaration(normalizeProperty(prop), "", rule.source, {
+              dynamic: { kind: "function", variable },
+            })
+          );
+          continue;
+        }
+
+        // ── Dynamic Values (token/prop strings) ──
+        if (typeof value === "string" && isDynamicToken(value)) {
+          const variable = getDynamicVariableName(selector, prop);
+          const kind: "token" | "prop" = value.startsWith("theme.") ? "token" : "prop";
+          rule.declarations.push(
+            createDeclaration(normalizeProperty(prop), value, rule.source, {
+              dynamic: { kind, variable },
+            })
+          );
+          continue;
+        }
+
         // ── Regular CSS Declarations ──
         if (typeof value === "string" || typeof value === "number") {
           rule.declarations.push(
             createDeclaration(normalizeProperty(prop), value, rule.source),
           );
         }
+      
       }
 
       ir.rules.push(rule);
@@ -265,6 +295,59 @@ export function parseIR(
             nestedRules: [...templateAtRule.nestedRules],
           });
         }
+      }
+    }
+
+        // ── Parse Nested Rules ──
+    const allNestedRules = styleDef._nestedRules || styleDef.nestedRules;
+    if (allNestedRules && Array.isArray(allNestedRules)) {
+      for (let i = 0; i < allNestedRules.length; i++) {
+        const nestedDef = allNestedRules[i];
+        if (!nestedDef || typeof nestedDef !== "object") continue;
+        
+        const nestedSelector = nestedDef.selector || "";
+        const nestedStyles = nestedDef.styles || {};
+        
+        for (let j = 0; j < componentRules.length; j++) {
+          const rule = componentRules[j];
+          const resolvedSelector = nestedSelector.includes("&")
+            ? nestedSelector.replace(/&/g, rule.selector)
+            : `${rule.selector} ${nestedSelector}`.trim();
+          
+          const nestedRule = createRule(resolvedSelector, rule.source, rule.id);
+          
+          for (const [p, v] of Object.entries(nestedStyles)) {
+            if (typeof v === "string" || typeof v === "number") {
+              nestedRule.declarations.push(
+                createDeclaration(normalizeProperty(p), v, rule.source),
+              );
+            }
+          }
+          rule.nestedRules.push(nestedRule);
+        }
+      }
+    }
+
+    // ── Parse Semantic Intents ──
+    const allIntents: string[] = styleDef._intents || [];
+    if (allIntents.length > 0) {
+      for (let j = 0; j < componentRules.length; j++) {
+        const rule = componentRules[j];
+        if (!rule.passMeta) rule.passMeta = {};
+        if (!rule.passMeta.analysis) rule.passMeta.analysis = {};
+        if (!rule.passMeta.analysis.semantic) {
+          rule.passMeta.analysis.semantic = {
+            tokens: [],
+            intents: [],
+            constraints: [],
+          };
+        }
+        rule.passMeta.analysis.semantic.intents = [
+          ...(rule.passMeta.analysis.semantic.intents || []),
+          ...allIntents,
+        ];
+        // Legacy compatibility for existing intent-resolver fallback path
+        (rule.meta as any)._intent = allIntents[0];
       }
     }
 

@@ -32,6 +32,7 @@ function formatValue(value: string | number): string {
 }
 
 function hasValue(d: IRDeclaration): boolean {
+  if (d.dynamic) return true;
   return d.value !== undefined && d.value !== null && d.value !== "";
 }
 
@@ -189,7 +190,10 @@ function emitDeclBlock(
   const lines: string[] = new Array(declarations.length);
   for (let i = 0; i < declarations.length; i++) {
     const d = declarations[i];
-    lines[i] = `${ctx.indent}${kebab(d.property)}:${ctx.space}${formatValue(d.value)};`;
+    const value = d.dynamic
+      ? `var(${d.dynamic.variable})`
+      : formatValue(d.value);
+    lines[i] = `${ctx.indent}${kebab(d.property)}:${ctx.space}${value};`;
   }
   return `${selector}${ctx.space}{${ctx.nl}${lines.join(ctx.nl)}${ctx.nl}}`;
 }

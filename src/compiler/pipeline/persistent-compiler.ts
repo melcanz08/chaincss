@@ -20,6 +20,10 @@ export interface CompilerState {
   metadata: Map<IRNodeId, PassMetadata>;
   /** Files that have been compiled */
   compiledFiles: Set<string>;
+  /** Per-file export hashes for change detection */
+  fileExportHashes: Record<string, Record<string, string>>;
+  /** Cached compilation results per file per export */
+  cachedResults: Record<string, Record<string, any>>;
   /** Compilation statistics */
   stats: {
     totalCompiles: number;
@@ -94,6 +98,8 @@ export function createCompilerState(ir: StyleIR): CompilerState {
     ir: cloneIR(ir),
     metadata,
     compiledFiles: new Set(ir.meta?.sourceFiles ?? []),
+    fileExportHashes: {},
+    cachedResults: {},
     stats: {
       totalCompiles: 1,
       incrementalCompiles: 0,
@@ -280,6 +286,8 @@ export async function saveCompilerStateToDisk(
     ir: irToPersist,
     metadata: Array.from(state.metadata.entries()),
     compiledFiles: Array.from(state.compiledFiles),
+    fileExportHashes: state.fileExportHashes,
+    cachedResults: state.cachedResults,
     stats: state.stats,
     lastCompiledAt: state.lastCompiledAt,
   };
@@ -299,6 +307,8 @@ export async function restoreCompilerStateFromDisk(
     ir: cached.ir,
     metadata: new Map(cached.metadata),
     compiledFiles: new Set(cached.compiledFiles),
+    fileExportHashes: cached.fileExportHashes || {},
+    cachedResults: cached.cachedResults || {},
     stats: cached.stats,
     lastCompiledAt: cached.lastCompiledAt,
   };

@@ -15,6 +15,10 @@ import {
 } from "@shared/types/index.js";
 import { partitionStyles } from "./value-classifier.js";
 
+import { parseIR } from "../../compiler/pipeline/ir/parser.js";
+import { generateCSS } from "../../compiler/pipeline/ir/css-printer.js";
+import { createDefaultPipeline } from "../../compiler/pipeline/pipeline.js";
+
 interface InternalCompileOptions {
   minify?: boolean;
   sourceMap?: boolean;
@@ -89,64 +93,24 @@ export function compileToCSS(
   options: InternalCompileOptions = {},
 ): string {
   try {
-    const parsed = parseStyleObject(styleObject as Record<string, unknown>);
-    const parts: string[] = [];
-    const scope = options.scopeSelector || "";
-    const indent = options.minify ? "" : "  ";
-    const newline = options.minify ? "" : "\n";
-    const effectiveSelector = getEffectiveSelector(parsed.selectors, scope);
+    // Build a StyleDefinition with the scopeSelector as the rule selector
+    const styleDef: any = { ...styleObject };
+    if (options.scopeSelector && !styleDef.selectors) {
+      styleDef.selectors = [options.scopeSelector];
+    }
 
-    // FIX: merge _nestedRules + nestedRules + parsed
-    // parseStyleObject already handles _atRules and _nestedRules — no manual extraction needed
-    const allNestedRules = parsed.nestedRules || [];
-    const allAtRules = parsed.atRules || [];
-
-    const varPrefix = effectiveSelector
-      .replace(/^\./, "")
-      .replace(/^#/, "")
-      .replace(/[^a-zA-Z0-9_-]/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-+|-+$/g, "") || "chain-dynamic";
-    const mainDeclarations = compileDeclarations(
-      parsed.regularProps,
-      indent,
-      newline,
-      varPrefix,
+    const ir = parseIR(
+      { style: styleDef },
+      options.sourceFile,
     );
-    if (mainDeclarations && effectiveSelector) {
-      const source =
-        options.sourceMap && options.sourceFile
-          ? `/* ${options.sourceFile} */${newline}`
-          : "";
-      parts.push(
-        `${source}${effectiveSelector} {${newline}${mainDeclarations}${newline}}`,
-      );
-    }
-    for (const [pseudo, pseudoStyles] of Object.entries(parsed.pseudoClasses)) {
-      const pseudoCSS = compilePseudoClass(
-        effectiveSelector,
-        pseudo,
-        pseudoStyles,
-        indent,
-        newline,
-      );
-      if (pseudoCSS) parts.push(pseudoCSS);
-    }
-    for (const rule of allNestedRules) {
-      const nestedCSS = compileNestedRule(effectiveSelector, rule, options);
-      if (nestedCSS) parts.push(nestedCSS);
-    }
-    for (const rule of allAtRules) {
-      const atRuleCSS = compileAtRule(
-        rule,
-        effectiveSelector,
-        indent,
-        newline,
-        options,
-      );
-      if (atRuleCSS) parts.push(atRuleCSS);
-    }
-    return parts.join(options.minify ? "" : "\n\n");
+
+    // Run through the canonical pipeline
+    const pipeline = createDefaultPipeline();
+    const result = pipeline.execute(ir);
+
+    return generateCSS(result.ir, {
+      minify: !!options.minify,
+    });
   } catch (error) {
     const context = options.sourceFile || options.scopeSelector || "unknown";
     throw new Error(
@@ -381,12 +345,4 @@ export function transpile(...args: StyleObject[]): string {
     : args;
   
   return run(...(objects as StyleObject[]));
-}
-
-// New: injectToDOM helper
-export function injectToDOM(id: string, css: string): void {
-  const el = document.getElementById(id);
-  if (el) {
-    el.textContent = css;
-  }
 }

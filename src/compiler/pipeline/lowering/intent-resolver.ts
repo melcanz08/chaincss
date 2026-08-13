@@ -11,17 +11,14 @@ import type {
 } from "../pipeline-types.js";
 import { createDeclaration } from "../ir/index.js";
 import { resolveSemantic } from "../../tokens/semantic-tokens.js";
-
-export interface IntentDefinition {
-  name: string;
-  category: "layout" | "component" | "semantic" | "interaction" | string;
-  description: string;
-  semantics?: Array<{ category: string; intent: string }>;
-  properties?: Record<string, string | number>;
-  states?: Record<string, Record<string, string | number>>;
-  responsive?: Record<string, Record<string, string | number>>;
-  a11y?: string[];
-}
+import {
+  registerSemanticIntents,
+  resolveSemanticIntent,
+  hasSemanticIntent,
+} from "../intent/semantic-intent-registry.js";
+import type { SemanticIntentContext } from "../intent/semantic-intent-types.js";
+import { setIntentCatalog, addToCatalog } from "../intent/intent-catalog.js";
+import type { IntentDefinition } from "../intent/semantic-intent-types.js";
 
 const BUILTIN_INTENT_CATALOG: Record<string, IntentDefinition> = {
   "center-content": {
@@ -229,6 +226,16 @@ const BUILTIN_INTENT_CATALOG: Record<string, IntentDefinition> = {
       },
     },
   },
+  glass: {
+    name: "glass",
+    category: "semantic",
+    description: "Glassmorphism surface with transparency and backdrop blur",
+    properties: {
+      backgroundColor: "rgba(255,255,255,0.12)",
+      backdropFilter: "blur(12px)",
+      border: "1px solid rgba(255,255,255,0.18)",
+    },
+  },
 };
 
 export const INTENT_CATALOG: Record<string, IntentDefinition> = {
@@ -247,6 +254,7 @@ export function registerIntent(
     );
   }
   INTENT_CATALOG[name] = { ...def, name };
+  addToCatalog(name, INTENT_CATALOG[name]);
 }
 
 export function registerIntents(
@@ -263,6 +271,7 @@ export function resetIntents() {
     delete INTENT_CATALOG[k];
   }
   Object.assign(INTENT_CATALOG, BUILTIN_INTENT_CATALOG);
+  setIntentCatalog(INTENT_CATALOG);
 }
 
 export function getIntentCatalog() {
@@ -275,6 +284,12 @@ interface ResolvedIntent {
   responsive: Record<string, Record<string, string | number>>;
   a11y: string[];
   description: string;
+}
+
+function isCompositeResult(
+  result: any,
+): result is { expandsTo: string[] } {
+  return result && "expandsTo" in result && Array.isArray(result.expandsTo);
 }
 
 function resolveIntent(
@@ -329,22 +344,107 @@ export const intentResolver: LoweringPass = {
     let generatedNodes = 0;
 
     for (const rule of ir.rules) {
-      const intentName: string = (rule.passMeta?.analysis?.semantic
-        ?.intents?.[0] ??
-        (rule.meta as any)._intent ??
-        "") as string;
-      if (!intentName) continue;
+      // Collect all intent names from passMeta + legacy fallback
+      const intentNames: string[] =
+        rule.passMeta?.analysis?.semantic?.intents ??
+        ((rule.meta as any)._intent
+          ? [(rule.meta as any)._intent as string]
+          : []);
 
-      const theme = (context as any)?.config?.theme as "light" | "dark" | "high-contrast" | undefined;
-      const resolved = resolveIntent(intentName, theme);
-      if (!resolved) continue;
+      if (intentNames.length === 0) continue;
 
-      for (const [prop, value] of Object.entries(resolved.properties)) {
-        const existingDecl = rule.declarations.find((d) => d.property === prop);
+      const theme = (context as any)?.config?.theme as
+        | "light"
+        | "dark"
+        | "high-contrast"
+        | undefined;
+
+      // Accumulate merged results across all intents
+      const mergedProperties: Record<string, string | number> = {};
+      const mergedStates: Record<string, Record<string, string | number>> = {};
+      const mergedResponsive: Record<string, Record<string, string | number>> =
+        {};
+      const mergedA11y: string[] = [];
+
+      for (const intentName of intentNames) {
+      
+        // Try semantic registry first (handles composites + context)
+        const semanticCtx: SemanticIntentContext = {
+          theme,
+          config: (context as any)?.config,
+        };
+
+        let resolved: ResolvedIntent | null = null;
+
+        if (hasSemanticIntent(intentName)) {
+          const semResult = resolveSemanticIntent(
+            intentName,
+            semanticCtx,
+          );
+
+          if (semResult && !isCompositeResult(semResult)) {
+            // Semantic registry returned direct properties
+            resolved = {
+              properties: semResult.properties || {},
+              states: semResult.states || {},
+              responsive: semResult.responsive || {},
+              a11y: semResult.a11y || [],
+              description: "",
+            };
+          }
+          // If composite, resolveSemanticIntent already expanded recursively
+          // and merged — the result IS the final properties
+        }
+
+        // Fall back to flat INTENT_CATALOG
+        if (!resolved) {
+          resolved = resolveIntent(intentName, theme);
+        }
+
+        if (!resolved) continue;
+
+        // Merge properties (first intent wins on conflict)
+        for (const [prop, value] of Object.entries(resolved.properties)) {
+          if (!(prop in mergedProperties)) {
+            mergedProperties[prop] = value;
+          }
+        }
+
+        // Merge states
+        for (const [stateName, stateProps] of Object.entries(
+          resolved.states || {},
+        )) {
+          if (!mergedStates[stateName]) mergedStates[stateName] = {};
+          for (const [p, v] of Object.entries(stateProps)) {
+            if (!(p in mergedStates[stateName])) {
+              mergedStates[stateName][p] = v;
+            }
+          }
+        }
+
+        // Merge responsive
+        for (const [bp, bpProps] of Object.entries(
+          resolved.responsive || {},
+        )) {
+          if (!mergedResponsive[bp]) mergedResponsive[bp] = {};
+          Object.assign(mergedResponsive[bp], bpProps);
+        }
+
+        // Merge a11y (deduplicate)
+        for (const req of resolved.a11y || []) {
+          if (!mergedA11y.includes(req)) mergedA11y.push(req);
+        }
+      }
+
+      // Apply merged properties as declarations
+      for (const [prop, value] of Object.entries(mergedProperties)) {
+        const existingDecl = rule.declarations.find(
+          (d) => d.property === prop,
+        );
         if (!existingDecl) {
           rule.declarations.push(
             createDeclaration(prop, value, rule.source, {
-              intent: intentName,
+              intent: intentNames.join(","),
               category: "lowered-intent",
             }),
           );
@@ -354,13 +454,14 @@ export const intentResolver: LoweringPass = {
             "intent-resolver",
             "lowered-intent",
             undefined,
-            `intent("${intentName}") → ${prop}: ${value}`,
+            `intents([${intentNames.join(", ")}]) → ${prop}: ${value}`,
           );
           generatedNodes++;
         }
       }
 
-      for (const [stateName, stateProps] of Object.entries(resolved.states)) {
+      // Apply merged states
+      for (const [stateName, stateProps] of Object.entries(mergedStates)) {
         const pseudoClass = rule.pseudoClasses.find(
           (pc) => pc.name === stateName,
         );
@@ -388,7 +489,9 @@ export const intentResolver: LoweringPass = {
           });
         }
       }
-      if (Object.keys(resolved.responsive).length > 0) {
+
+      // Apply merged responsive
+      if (Object.keys(mergedResponsive).length > 0) {
         if (!rule.passMeta) rule.passMeta = {};
         if (!rule.passMeta.analysis) rule.passMeta.analysis = {};
         if (!rule.passMeta.analysis.semantic)
@@ -397,18 +500,64 @@ export const intentResolver: LoweringPass = {
             intents: [],
             constraints: [],
           };
-        (rule.passMeta.analysis as any).responsiveIntents = resolved.responsive;
-        // Backward compat
-        (rule.meta as any)._responsiveIntents = resolved.responsive;
+        (rule.passMeta.analysis as any).responsiveIntents = mergedResponsive;
+        (rule.meta as any)._responsiveIntents = mergedResponsive;
       }
-      if (resolved.a11y.length > 0) {
+
+      // Apply merged a11y
+      if (mergedA11y.length > 0) {
         if (!rule.passMeta) rule.passMeta = {};
         if (!rule.passMeta.analysis) rule.passMeta.analysis = {};
-        (rule.passMeta.analysis as any).a11yRequirements = resolved.a11y;
-        // Backward compat
-        (rule.meta as any)._a11yRequirements = resolved.a11y;
+        (rule.passMeta.analysis as any).a11yRequirements = mergedA11y;
+        (rule.meta as any)._a11yRequirements = mergedA11y;
       }
     }
     return { ir, generatedNodes };
   },
 };
+
+// ============================================================================
+// Semantic Intent Integration
+// ============================================================================
+
+/**
+ * Register semantic intents from user config into the existing intent catalog.
+ * Called during compiler initialization (see ChainCSSCompiler constructor
+ * or config loading).
+ */
+export function registerSemanticIntentsFromConfig(
+  configIntents?: Record<string, any>,
+): void {
+  if (!configIntents) return;
+
+  const semanticIntents: Record<string, any> = {};
+
+  for (const [name, def] of Object.entries(configIntents)) {
+    // Support both the new SemanticIntentDefinition format
+    // and the existing IntentDefinition format
+    if (typeof (def as any).resolve === "function") {
+      // New format: SemanticIntentDefinition with resolve() function
+      semanticIntents[name] = def;
+    } else if ((def as any).properties || (def as any).semantics) {
+      // Existing IntentDefinition format — already handled by registerIntents()
+      continue;
+    }
+  }
+
+  if (Object.keys(semanticIntents).length > 0) {
+    console.log("[DEBUG] registerSemanticIntentsFromConfig - names:", Object.keys(semanticIntents));
+    registerSemanticIntents(semanticIntents);
+  }
+}
+
+// Re-export for convenience
+export {
+  registerSemanticIntent,
+  resolveSemanticIntent,
+  hasSemanticIntent,
+  getSemanticIntentNames,
+  clearSemanticIntents,
+} from "../intent/semantic-intent-registry.js";
+
+export { parseDescription, extendDictionary } from "../intent/semantic-intent-parser.js";
+setIntentCatalog(INTENT_CATALOG);

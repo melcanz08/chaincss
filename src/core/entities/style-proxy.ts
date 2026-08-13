@@ -51,6 +51,8 @@ interface StyleCollectorLike {
   list(o: any): any;
   raw(prop: string | Record<string, any>, value?: any): any;
   [key: string]: any;
+  intents(names: string[]): any;
+  describe(description: string): any;
 }
 
 type Handler = (target: StyleCollectorLike, proxy: any, ...args: any[]) => any;
@@ -175,6 +177,20 @@ const CHAINABLE = new Map<string, Handler>([
     "addClass",
     (t, p, n: string) => {
       t.addClass(n);
+      return p;
+    },
+  ],
+  [
+    "intents",
+    (t, p, names: string[]) => {
+      t.intents(names);
+      return p;
+    },
+  ],
+  [
+    "describe",
+    (t, p, description: string) => {
+      t.describe(description);
       return p;
     },
   ],

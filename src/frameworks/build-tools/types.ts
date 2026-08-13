@@ -30,12 +30,6 @@ export interface ChainCSSPluginOptions {
   pipelineReport?: boolean;
 
   /**
-   * Bypasses the unified processing pipeline entirely.
-   * @default false
-   */
-  disablePipeline?: boolean;
-
-  /**
    * Minifies generated CSS output sheets.
    * @default false in dev, true in prod
    */
@@ -46,6 +40,8 @@ export interface ChainCSSPluginOptions {
 
   /** Direct token maps for variable substitution mapping */
   tokens?: ChainCSSConfig["tokens"];
+
+  intents?: ChainCSSConfig["intents"];
 
   /** Explicit file inclusion paths */
   include?: string[];

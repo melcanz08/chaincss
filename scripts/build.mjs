@@ -11,7 +11,7 @@
  */
 
 import { build, context } from 'esbuild';
-import { writeFileSync, mkdirSync, chmodSync, rmSync, readFileSync, existsSync } from 'fs';
+import { writeFileSync, mkdirSync, chmodSync, readFileSync, existsSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -21,7 +21,6 @@ const dist = resolve(root, 'dist');
 
 const isWatch = process.argv.includes('--watch');
 
-// Read version from package.json at build time
 const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
 const __VERSION__ = pkg.version;
 
@@ -63,31 +62,57 @@ const targets = [
     banner: { js: '#!/usr/bin/env node\n' },
     chmod: 0o755,
   },
-  // Browser entry
+  // Browser entry — no banner, define only
   {
     name: 'browser',
     entryPoints: ['src/browser.ts'],
     outfile: 'dist/browser.js',
     platform: 'browser',
     format: 'esm',
-    external: ["react", "react-dom", "vue", "svelte", "url", "fs", "fs/promises", "module", "path", "node:fs", "node:fs/promises", "node:path"],
+    external: ["react", "react-dom", "vue", "svelte", "url", "fs", "fs/promises", "module", "path", "node:fs", "node:fs/promises", "node:path", "chalk"],
+    define: {
+      'process.env.NODE_ENV': '"production"',
+      'process.env.CHAINCSS_METRICS': '"false"',
+      'process.platform': '"browser"',
+      'process.stdout': 'undefined',
+      'process.stderr': 'undefined',
+      'process.env.NO_COLOR': '"true"',
+      'process.env.WT_SESSION': 'undefined',
+      'process.env.TERM': 'undefined',
+      'process.env.LANG': 'undefined',
+    },
   },
-  // Runtime
+  // Runtime (browser ESM) — no banner, define only
   {
     name: 'runtime',
     entryPoints: ['src/frameworks/index.ts'],
     outfile: 'dist/runtime/index.js',
     platform: 'browser',
     format: 'esm',
-    external: ["react", "react-dom", "vue", "svelte", "url", "fs", "fs/promises", "module", "path"],
+    external: ["react", "react-dom", "vue", "svelte", "url", "fs", "fs/promises", "module", "path", "chalk"],
+    define: {
+      'process.env.NODE_ENV': '"production"',
+      'process.platform': '"browser"',
+      'process.stdout': 'undefined',
+      'process.stderr': 'undefined',
+      'process.env.NO_COLOR': '"true"',
+    },
   },
+  // Runtime (browser CJS) — no banner, define only
   {
     name: 'runtime-cjs',
     entryPoints: ['src/frameworks/index.ts'],
     outfile: 'dist/runtime/index.cjs',
     platform: 'browser',
     format: 'cjs',
-    external: ["react", "react-dom", "vue", "svelte", "url", "fs", "fs/promises", "module", "path"],
+    external: ["react", "react-dom", "vue", "svelte", "url", "fs", "fs/promises", "module", "path", "chalk"],
+    define: {
+      'process.env.NODE_ENV': '"production"',
+      'process.platform': '"browser"',
+      'process.stdout': 'undefined',
+      'process.stderr': 'undefined',
+      'process.env.NO_COLOR': '"true"',
+    },
   },
   // Compiler (for programmatic use)
   {
@@ -367,6 +392,7 @@ async function run() {
           packages: target.packages || undefined,
           banner: target.banner,
           define: {
+            ...target.define,
             '__CHAINCSS_VERSION__': JSON.stringify(__VERSION__),
           },
           logLevel: 'info',
@@ -375,7 +401,7 @@ async function run() {
         return ctx;
       })
     );
-    
+
     writeFileSync(
       resolve(dist, 'package.json'),
       JSON.stringify({ type: 'module' }, null, 2)
@@ -398,6 +424,7 @@ async function run() {
           packages: target.packages || undefined,
           banner: target.banner,
           define: {
+            ...target.define,
             '__CHAINCSS_VERSION__': JSON.stringify(__VERSION__),
           },
           logLevel: 'warning',

@@ -118,6 +118,10 @@ export interface ChainProxy extends ChainShorthandMethods {
   // Terminal methods
   $el(...selectors: string[]): StyleObject;
   build(selectors?: string[] | string): StyleObject;
+
+  // Semantic intents
+  intents(names: string[]): ChainProxy;
+  describe(description: string): ChainProxy;
 }
 
 export interface AtRule {

@@ -81,7 +81,7 @@ ChainCSS is built as a compiler platform—not simply a styling library.
 | Dependency Graph | Tracks relationships between rules, components, animations and tokens | Incremental compilation & graph analysis |
 | Symbol Table | Stores semantic compiler information | Efficient analysis and lookups |
 | Pass Scheduler | Orders compiler passes based on dependencies | Extensible and deterministic compilation |
-| Compiler Pipeline | Normalize -> Validate -> Analyze -> Optimize -> Lower | Independent, testable compiler passes |
+| Compiler Pipeline | Normalize → Validate → Analyze → Optimize → Lower | Independent, testable compiler passes |
 | Persistent Cache | Stores compiler state between builds | Faster rebuilds, survives process restarts |
 | Incremental Compiler | Recompiles only affected nodes via graph analysis | Efficient watch mode |
 | Emitter Registry | Generates multiple outputs from the same IR | CSS, Atomic CSS, Tailwind, Tokens, Figma, Graph JSON |
@@ -202,21 +202,153 @@ tokens: {
 
 ### Semantic Intent System
 
-Named design patterns that expand to complete CSS with theme-aware token resolution. 12 built-in intents across 4 categories.
+Design with intent, not implementation.
+
+Instead of repeatedly describing how an element should look using individual CSS properties, ChainCSS lets you describe **what the element is** or **what design concept it represents.**
 
 ```ts
-chain().raw({ intent: 'card' }).$el('product-card')
-// Expands to: display:flex; flex-direction:column; overflow:hidden;
-//   border-radius: var(--borderRadius-lg); border: 1px solid var(--colors-gray-200);
-//   hover: box-shadow + translateY(-2px); a11y: contrast + focus-visible
+chain()
+  .intents(['card'])
+  .$el('product-card')
 ```
 
-| Category | Intents |
-|----------|---------|
+The compiler resolves the intent into its underlying style definition and passes the result through the normal ChainCSS compilation pipeline.
+
+```
+"card"
+  ↓
+Intent Registry
+  ↓
+Intent Resolution
+  ↓
+Style IR
+  ↓
+Compiler Pipeline
+  ↓
+Optimized CSS
+```
+
+**Built-in intent vocabulary**
+
+ChainCSS ships with built-in intents covering common layout, component, semantic, and interaction concepts.
+
+| Category | Built-in Intents |
+|----------|------------------|
 | Layout | `center-content`, `stack`, `sidebar-layout`, `grid-list` |
 | Component | `card`, `button-primary`, `button-secondary`, `input-field`, `modal`, `tooltip` |
 | Semantic | `hero-section`, `sticky-header` |
 | Interaction | `hover-lift`, `focus-ring` |
+
+For example, `card` expands into properties such as `display: flex; flex-direction: column; overflow: hidden;` including generated interaction states and accessibility metadata.
+
+**User-defined intents**
+
+The built-in vocabulary is not a closed list. Applications can introduce their own design vocabulary through `chaincss.config.ts`:
+
+```ts
+export default defineConfig({
+  intents: {
+    glass: {
+      name: 'glass',
+      category: 'visual',
+      description: 'Frosted glass effect',
+      properties: {
+        background: 'rgba(255,255,255,0.1)',
+        backdropFilter: 'blur(10px)',
+        border: '1px solid rgba(255,255,255,0.2)',
+        borderRadius: '12px',
+      }
+    }
+  }
+});
+```
+
+The intent can then be used directly:
+
+```ts
+chain()
+  .intents(['glass'])
+  .$el('panel')
+```
+
+This means an intent is not limited to a predefined set. The application defines its own vocabulary. A design system could define `dashboard-header`, `marketing-hero`, `glass-panel`, `dense-table`, `mobile-navigation` — each name representing a reusable design concept rather than a single CSS property.
+
+**Composite intents**
+
+Intents can be composed from other intents:
+
+```ts
+intents: {
+  premium: {
+    name: 'premium',
+    category: 'composite',
+    resolve: () => ({
+      expandsTo: ['card', 'center-content'],
+    })
+  }
+}
+```
+
+```ts
+chain()
+  .intents(['premium'])
+  .$el('premium-card')
+```
+
+```
+premium
+ ├── card
+ └── center-content
+```
+
+The compiler recursively resolves the composition, deduplicates intents, detects cycles, and merges their resulting styles.
+
+**Multiple intents**
+
+Multiple concepts can be applied to the same style definition:
+
+```ts
+chain()
+  .intents(['center-content', 'sticky-header'])
+  .box({ minHeight: '400px' })
+  .$el('hero')
+```
+
+Intent-generated styles and explicit user declarations can coexist. Explicit style declarations take precedence over generated intent properties.
+
+**Natural-language intent descriptions**
+
+ChainCSS also provides `.describe()` as a higher-level authoring interface:
+
+```ts
+chain()
+  .describe('glass elevated spacious')
+  .$el('navbar')
+```
+
+The description is parsed into intent names and resolved through the same intent registry:
+
+```
+"glass elevated spacious"
+         ↓
+     intent parser
+         ↓
+["glass", "elevated", "spacious"]
+         ↓
+   intent registry
+         ↓
+     Style IR
+         ↓
+      CSS output
+```
+
+The vocabulary used by `.describe()` is based on the application's registered intents rather than a hard-coded list of CSS properties.
+
+**Why this matters**
+
+The intent system creates a layer above raw CSS implementation. Instead of repeatedly writing `background(...)`, `shadow(...)`, `border(...)`, `backdropFilter(...)`, `typography(...)` — a design system can define a concept once and use that concept throughout the application.
+
+All intent resolution occurs during compilation. Intents do not introduce runtime styling overhead.
 
 ### Accessibility Compilation
 
@@ -309,7 +441,7 @@ buttonVariants({ color: 'secondary', size: 'lg' })  // -> merged StyleDefinition
 
 ### Figma Integration
 
-Bidirectional sync: designers change colors in Figma -> Tokens Studio pushes to GitHub -> GitHub Action runs entanglement -> derived tokens update -> contrast auto-fixes.
+Bidirectional sync: designers change colors in Figma → Tokens Studio pushes to GitHub → GitHub Action runs entanglement → derived tokens update → contrast auto-fixes.
 
 ```bash
 chaincss figma init --repo org/design-tokens --fileId abc123
@@ -413,8 +545,8 @@ The objective is to provide the ergonomics of a fluent styling API while leverag
 
 MIT
 
-**Author:** Rommel Caneos
+**Author:** Rommel Edorot Caneos
 
 [Contact](mailto:rec0608m@gmail.com) | [Website](https://www.chaincss.dev)
 
-[GitHub](https://github.com/melcanz08/chaincss) 
+[GitHub](https://github.com/melcanz08/chaincss)

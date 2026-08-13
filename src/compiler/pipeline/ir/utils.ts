@@ -248,3 +248,18 @@ export function recordHistory(
     reason,
   });
 }
+
+/**
+ * Derive a CSS custom property name from a selector and property.
+ * Matches the algorithm in style-compiler.ts compileDeclarations().
+ */
+export function getDynamicVariableName(selector: string, property: string): string {
+  const prefix = selector
+    .replace(/^\./, "")
+    .replace(/^#/, "")
+    .replace(/[^a-zA-Z0-9_-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "") || "chain-dynamic";
+  const kebabProp = property.replace(/([A-Z])/g, "-$1").toLowerCase();
+  return `--${prefix}-${kebabProp}`;
+}

@@ -65,7 +65,6 @@ export class ChainCSSCompiler {
   private config: Required<ChainCSSConfig>;
   private prefixer: ChainCSSPrefixer | null = null;
   private pipeline: Pipeline;
-  private pipelineEnabled: boolean;
   private loader: ModuleLoader;
   private cache: CacheStore<CompileResult>;
   private persistentCache: CacheManager | null = null;
@@ -131,8 +130,6 @@ export class ChainCSSCompiler {
       this.stateCache = null;
     }
     this.manifestWriter = new ManifestWriter();
-    this.pipelineEnabled =
-      (config as any).experimental?.enablePipeline !== false;
     this.pipeline = createDefaultPipeline({
       contexts: {
         optimization: {
@@ -200,10 +197,12 @@ export class ChainCSSCompiler {
         ),
       );
     }
+    // Register semantic intents (new format with resolve() functions)
+  
     if (cfg.intents && Object.keys(cfg.intents).length) {
       promises.push(
         import("@compiler/pipeline/lowering/intent-resolver.js").then((r) =>
-          (r as any).registerIntents?.(cfg.intents, !!cfg.allowOverride),
+          (r as any).registerSemanticIntentsFromConfig?.(cfg.intents),
         ),
       );
     }
@@ -259,62 +258,16 @@ export class ChainCSSCompiler {
     const selectors = (def as any).selectors?.length
       ? (def as any).selectors
       : [`.${id}`];
-    const nestedRules = ensureIterable((def as any)._nestedRules);
-    const atRules = ensureIterable((def as any)._atRules);
-    const {
-      _nestedRules,
-      _atRules,
-      selectors: _sel,
-      ...baseProps
-    } = def as any;
-    const baseDef = { ...baseProps, selectors };
 
-    const baseResult = this.pipelineEnabled
-      ? this.styleCompiler.compileViaPipeline(id, baseDef)
-      : this.styleCompiler.compileDirect(id, baseDef);
+    // Pass everything through to the canonical pipeline.
+    // parseIR() handles _nestedRules, _atRules, pseudo-classes,
+    // dynamic values, and intents natively (Phases 2-4).
+    const styleDef = {
+      ...(def as any),
+      selectors,
+    };
 
-    let css = baseResult.css;
-    let classMap = (baseResult as any).classMap || {};
-    let atomicClasses = (baseResult as any).atomicClasses || [];
-    let stats = (baseResult as any).stats || {};
-
-    for (const rule of nestedRules) {
-      const resolvedSelector = rule.selector.includes("&")
-        ? rule.selector.replace(/&/g, selectors[0])
-        : `${selectors[0]}${rule.selector.startsWith(":") || rule.selector.startsWith("[") ? "" : " "}${rule.selector}`;
-
-      const nestedDef = { ...rule.styles, selectors: [resolvedSelector] };
-      const r = this.pipelineEnabled
-        ? this.styleCompiler.compileViaPipeline(
-            `${id}:${rule.selector}`,
-            nestedDef,
-          )
-        : this.styleCompiler.compileDirect(`${id}:${rule.selector}`, nestedDef);
-
-      css += `\n${r.css}`;
-      classMap = { ...classMap, ...(r as any).classMap };
-      atomicClasses = [...atomicClasses, ...((r as any).atomicClasses || [])];
-    }
-
-    for (const at of atRules) {
-      const innerDef = { ...at.styles, selectors };
-      const r = this.pipelineEnabled
-        ? this.styleCompiler.compileViaPipeline(`${id}:${at.type}`, innerDef)
-        : this.styleCompiler.compileDirect(`${id}:${at.type}`, innerDef);
-
-      css += `\n@${at.type} ${at.query} { ${r.css} }`;
-      classMap = { ...classMap, ...(r as any).classMap };
-      atomicClasses = [...atomicClasses, ...((r as any).atomicClasses || [])];
-    }
-
-    const result = {
-      css,
-      classMap,
-      atomicClasses,
-      stats,
-      dynamic: (baseResult as any).dynamic,
-      inspector: (baseResult as any).inspector,
-    } as CompileResult;
+    const result = this.styleCompiler.compileViaPipeline(id, styleDef);
 
     this.trackCSS(result.css);
     this.trackStats(result.stats as any);
@@ -446,16 +399,86 @@ export class ChainCSSCompiler {
     return out;
   }
 
+    /**
+   * Hash a StyleDefinition for change detection.
+   * Only hashes the parts that affect compilation output.
+   * Uses MD5 for speed — this is a cache key, not a security hash.
+   */
+  private hashStyleDefinition(def: any): string {
+    if (!def || typeof def !== "object") return crypto.randomUUID();
+
+    const relevant: any = {};
+
+    // Selectors determine the output class names
+    if (def.selectors) {
+      relevant.selectors = def.selectors;
+    }
+
+    // Top-level style properties (filter out internal/structural keys)
+    const props: Record<string, any> = {};
+    for (const [key, value] of Object.entries(def)) {
+      if (
+        key.startsWith("_") ||
+        key === "selectors" ||
+        key === "nestedRules" ||
+        key === "atRules" ||
+        typeof value === "function"
+      ) {
+        continue;
+      }
+      props[key] = value;
+    }
+    if (Object.keys(props).length > 0) {
+      relevant.properties = props;
+    }
+
+    // Nested rules affect output
+    if (def._nestedRules || def.nestedRules) {
+      const nested = def._nestedRules || def.nestedRules;
+      relevant.nestedRules = nested.map((r: any) => ({
+        selector: r.selector,
+        styles: r.styles,
+      }));
+    }
+
+    // At-rules affect output
+    if (def._atRules || def.atRules) {
+      const atRules = def._atRules || def.atRules;
+      relevant.atRules = atRules.map((r: any) => ({
+        type: r.type,
+        query: r.query,
+        name: r.name,
+        styles: r.styles,
+      }));
+    }
+
+    return crypto
+      .createHash("md5")
+      .update(JSON.stringify(relevant))
+      .digest("hex");
+  }
+
   private async compileFileIncremental(
     filePath: string,
   ): Promise<Record<string, CompileResult>> {
     const ex = await this.loader.import(filePath);
     const out: Record<string, CompileResult> = {};
-    const changedRuleIds: string[] = [];
 
-    for (const [n, v] of Object.entries(ex || {})) {
-      if (!v || typeof v !== "object") continue;
-      const value = { ...v };
+    // Retrieve previous state for change detection
+    const previousHashes: Record<string, string> =
+      this.compilerState?.fileExportHashes?.[filePath] ?? {};
+    const previousResults: Record<string, CompileResult> =
+      this.compilerState?.cachedResults?.[filePath] ?? {};
+
+    const newHashes: Record<string, string> = {};
+    const changedRuleIds: string[] = [];
+    let anyRecompiled = false;
+    let skippedCount = 0;
+
+    for (const [name, exported] of Object.entries(ex || {})) {
+      if (!exported || typeof exported !== "object") continue;
+
+      const value = { ...exported };
       if (value._nestedRules) {
         value._nestedRules = ensureIterable(value._nestedRules);
       }
@@ -463,29 +486,77 @@ export class ChainCSSCompiler {
         value._atRules = ensureIterable(value._atRules);
       }
 
-      if (typeof v === "function" && (v as any).variants) {
-        out[n] = this.compileRecipe(n, v);
-      } else if ((v as any)?.selectors) {
-        const result = this.compileStyle(n, v as any);
-        out[n] = result;
-        // ADD: Collect changed rule IDs
-        const inspector = (result as any)?.inspector;
-        if (inspector?.ir?.rules) {
-          for (const rule of inspector.ir.rules) {
-            changedRuleIds.push(rule.id);
+      // Recipes: always recompile (they're functions, expensive to compare)
+      if (typeof exported === "function" && (exported as any).variants) {
+        out[name] = this.compileRecipe(name, exported);
+        newHashes[name] = crypto.randomUUID(); // always treat as changed
+        anyRecompiled = true;
+        continue;
+      }
+
+      if ((exported as any)?.selectors) {
+        const defHash = this.hashStyleDefinition(exported as any);
+        newHashes[name] = defHash;
+
+        if (defHash === previousHashes[name] && previousResults[name]) {
+          // UNCHANGED — return cached result, skip recompilation
+          out[name] = previousResults[name];
+          skippedCount++;
+        } else {
+          // CHANGED — full recompile needed
+          const result = this.compileStyle(name, exported as any);
+          out[name] = result;
+          anyRecompiled = true;
+
+          // Collect changed rule IDs for dependency graph tracking
+          const inspector = (result as any)?.inspector;
+          if (inspector?.ir?.rules) {
+            for (const rule of inspector.ir.rules) {
+              changedRuleIds.push(rule.id);
+            }
           }
         }
       }
     }
 
-    if (changedRuleIds.length > 0 && this.compilerState) {
-      markChangedRules(this.compilerState, changedRuleIds);
+    // Update compiler state
+    if (this.compilerState) {
+      // Store hashes for next comparison
+      if (!this.compilerState.fileExportHashes) {
+        (this.compilerState as any).fileExportHashes = {};
+      }
+      this.compilerState.fileExportHashes[filePath] = newHashes;
+
+      // Store cached results
+      if (!this.compilerState.cachedResults) {
+        (this.compilerState as any).cachedResults = {};
+      }
+      this.compilerState.cachedResults[filePath] = out;
+
+      // Mark changed rules in dependency graph
+      if (changedRuleIds.length > 0) {
+        markChangedRules(this.compilerState, changedRuleIds);
+      }
+
+      // Update IR state from any recompiled result
+      if (anyRecompiled) {
+        const recompiledResult = Object.values(out).find(
+          (r: any) => r?.inspector?.ir,
+        ) as any;
+        if (recompiledResult?.inspector?.ir) {
+          updateState(this.compilerState, recompiledResult.inspector.ir, [filePath]);
+        }
+      }
     }
 
-    const firstResult = Object.values(out)[0];
-    const inspector = (firstResult as any)?.inspector;
-    if (inspector?.ir && this.compilerState) {
-      updateState(this.compilerState, inspector.ir, [filePath]);
+    // Log incremental stats in verbose mode
+    if ((this.config as any).verbose && skippedCount > 0) {
+      const total = Object.keys(out).length;
+      console.log(
+        chalk.dim(
+          `  ⚡ Incremental: ${skippedCount}/${total} exports skipped (${total - skippedCount} recompiled)`,
+        ),
+      );
     }
 
     return out;
@@ -548,19 +619,9 @@ export class ChainCSSCompiler {
   // Pipeline Control
   // ==========================================================================
 
-  public setPipelineEnabled(v: boolean) {
-    this.pipelineEnabled = v;
-    return this;
-  }
-
   public setPipeline(p: Pipeline) {
     this.pipeline = p;
-    this.pipelineEnabled = true;
     return this;
-  }
-
-  public isPipelineEnabled() {
-    return this.pipelineEnabled;
   }
 
   public getPipeline() {

@@ -53,7 +53,12 @@ export const intentNormalizer: NormalizationPass = {
         const decl = decls[i];
         if (!decl || !decl.property) continue;
 
-        const rawValue = String(decl.value);
+        // Skip CSS custom properties and vendor-prefixed properties
+        if (decl.property.startsWith('--') || 
+            decl.property.startsWith('-webkit-') || 
+            decl.property.startsWith('-moz-')) {
+          continue;
+        }
 
         if (shorthands.has(decl.property) || macros.has(decl.property))
           continue;
@@ -63,6 +68,7 @@ export const intentNormalizer: NormalizationPass = {
           (rule.meta as any)?._intent
         )
           continue;
+        const rawValue = String(decl.value);
 
         const result = intent.correct(decl.property, rawValue);
 

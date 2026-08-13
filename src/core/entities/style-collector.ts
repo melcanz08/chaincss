@@ -15,6 +15,7 @@ import type {
 } from "@shared/types/index.js";
 import { getBreakpoint } from "@compiler/breakpoints.js";
 import { hashString } from "@shared/utils/browser.js";
+import { parseDescription } from '@compiler/pipeline/intent/semantic-intent-parser.js';
 
 export type StyleObject = _StyleObject;
 export type AtRule = _AtRule;
@@ -34,6 +35,7 @@ export class StyleCollector {
   private classPrefix: string;
   private pseudoStore: PropertyStore | null = null;
   private pseudoName: string = "";
+  private _intents: string[] = [];
 
   constructor(
     private options?: { debug?: boolean; classPrefix?: string; tokens?: any },
@@ -830,6 +832,21 @@ export class StyleCollector {
     if (!this.classes.includes(className)) this.classes.push(className);
     return this;
   }
+
+  intents(names: string[]): this {
+    for (const name of names) {
+      if (typeof name === 'string' && name.trim()) {
+        this._intents.push(name.trim());
+      }
+    }
+    return this;
+  }
+
+  describe(description: string): this {
+    const names = parseDescription(description);
+    return this.intents(names);
+  }
+
   enableDebug(): this {
     this.debugger.setEnabled(true);
     return this;
@@ -845,6 +862,7 @@ export class StyleCollector {
       ...this.props.getAll(),
     };
     if (this._mixed) result._mixed = true;
+    if (this._intents.length > 0) result._intents = [...this._intents];
     if (this.classes.length > 0) result._classes = [...this.classes];
     const extraAt = (this as any).atRules || [];
     const extraAtUnderscore = (this as any)._atRules || [];
@@ -907,6 +925,7 @@ export class StyleCollector {
     this.pseudoStore = null;
     this.pseudoName = "";
     this.classes = [];
+    this._intents = [];
     (this as any).nestedRules = undefined;
     (this as any)._nestedRules = undefined;
     (this as any).atRules = undefined;

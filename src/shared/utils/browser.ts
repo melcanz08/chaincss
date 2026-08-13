@@ -354,6 +354,16 @@ function getNodeEnv(): string | undefined {
   return undefined;
 }
 
+// css injector to dom 
+export function injectToDOM(css: string, id?: string): void {
+  const styleTag = document.createElement('style');
+  if (id) styleTag.id = id;
+  styleTag.textContent = css;
+  if (styleTag.textContent) {
+    document.head.appendChild(styleTag);
+  }
+}
+
 export const isDevelopment = getNodeEnv() === "development";
 export const isProduction = getNodeEnv() === "production";
 

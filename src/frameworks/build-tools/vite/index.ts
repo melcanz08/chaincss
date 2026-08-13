@@ -326,6 +326,7 @@ export default function chaincssPlugin(
         ...ps,
         atomic: { ...dc.atomic, ...ps.atomic, enabled: atomic },
         tokens: options.tokens || dc.tokens,
+        intents: (options as any).intents || dc.intents,
         output: {
           ...dc.output,
           minify: options.minify !== undefined ? options.minify : isProduction,
@@ -338,7 +339,6 @@ export default function chaincssPlugin(
         isProduction ? "production" : "default",
       );
       (compiler as any).pipeline = envPipeline;
-      (compiler as any).setPipelineEnabled(!options.disablePipeline);
       if (!silent) summary(`Pipeline Engine Hook Active (atomic: ${atomic})`);
     },
     async transform(_code: any, id: any) {
@@ -479,6 +479,17 @@ export default function chaincssPlugin(
         compiling.add(abs);
         log(`Hot Module Reload Triggered: ${path.basename(abs)}`);
         try {
+          // Check if the file actually changed vs cached state
+          const source = fs.readFileSync(abs, "utf8");
+          const sourceHash = crypto.createHash("md5").update(source).digest("hex");
+          const previousHash = (compiler as any).compilerState?.fileExportHashes?.[abs]?.["__full_file__"];
+
+          if (previousHash === sourceHash) {
+            // File unchanged — skip compilation entirely
+            log(`  ⚡ Skipped (unchanged): ${path.basename(abs)}`);
+            return;
+          }
+
           if ((compiler as any)?.invalidateFileCache)
             (compiler as any).invalidateFileCache(abs);
           const mod =
@@ -490,6 +501,15 @@ export default function chaincssPlugin(
           if (mod) devServer.moduleGraph.invalidateModule(mod);
           const { css } = await compileFile(abs);
           updateCSS(abs, css);
+
+          // Store hash for next comparison
+          if ((compiler as any).compilerState) {
+            const state = (compiler as any).compilerState;
+            if (!state.fileExportHashes) state.fileExportHashes = {};
+            if (!state.fileExportHashes[abs]) state.fileExportHashes[abs] = {};
+            state.fileExportHashes[abs]["__full_file__"] = sourceHash;
+          }
+
           devServer.ws.send({
             type: "custom",
             event: "chaincss-update",
@@ -559,18 +579,36 @@ export default function chaincssPlugin(
       compiling.add(filePath);
       log(`Direct Buffer Update Intercepted: ${path.basename(filePath)}`);
       try {
+        // Check if the file actually changed vs cached state
+        const source = fs.readFileSync(filePath, "utf8");
+        const sourceHash = crypto.createHash("md5").update(source).digest("hex");
+        const previousHash = (compiler as any).compilerState?.fileExportHashes?.[filePath]?.["__full_file__"];
+
+        if (previousHash === sourceHash) {
+          log(`  ⚡ Skipped (unchanged): ${path.basename(filePath)}`);
+          return [];
+        }
+
         const mod = ctx.server.moduleGraph.getModuleById(filePath);
         if (mod) ctx.server.moduleGraph.invalidateModule(mod);
         if ((compiler as any)?.invalidateFileCache)
           (compiler as any).invalidateFileCache(filePath);
         const { css } = await compileFile(filePath);
         updateCSS(filePath, css);
+
+        // Store hash for next comparison
+        if ((compiler as any).compilerState) {
+          const state = (compiler as any).compilerState;
+          if (!state.fileExportHashes) state.fileExportHashes = {};
+          if (!state.fileExportHashes[filePath]) state.fileExportHashes[filePath] = {};
+          state.fileExportHashes[filePath]["__full_file__"] = sourceHash;
+        }
+
         ctx.server.ws.send({
           type: "custom",
           event: "chaincss-update",
           data: { timestamp: Date.now() },
         });
-        // Only return modules matching this file — prevents unnecessary graph cascades
         return ctx.modules.filter(
           (m: any) => m.id === filePath || m.file === filePath,
         );

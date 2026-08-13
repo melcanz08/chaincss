@@ -7,6 +7,7 @@ import type {
   IRDeclaration,
   IRRule,
   IRTransformRecord,
+  IRDynamicValue,
   StyleIR,
   SourceLocation,
   ParsedValue,
@@ -241,6 +242,7 @@ export function createDeclaration(
   source?: SourceLocation,
   meta: Record<string, any> = {},
 ): IRDeclaration {
+  const { dynamic, ...restMeta } = meta;
   return {
     id: nextId("decl"),
     property,
@@ -250,9 +252,10 @@ export function createDeclaration(
       record("parser", "created", undefined, "Parsed from StyleDefinition"),
     ],
     meta: {
-      ...meta,
+      ...restMeta,
       parsed: parseValue(value),
     },
+    dynamic: dynamic as IRDynamicValue | undefined,
   };
 }
 

@@ -22,8 +22,6 @@ function escapeCSSIdentifier(str: string): string {
 /**
  * Generates a concise, predictable utility class name for a property/value pair.
  */
-// src/compiler/pipeline/optimizers/atomic-extractor.ts
-
 function generateAtomicClassName(
   property: string,
   value: string | number,
@@ -74,7 +72,6 @@ function generateAtomicClassName(
 
   const prefix = abbreviations[property] ?? `${property}-`;
 
-  // Clean value while preserving negative sign distinction
   const rawVal = isNegative ? val.slice(1) : val;
   let cleanValue = rawVal
     .replace(/^#/, "")
@@ -95,12 +92,10 @@ function generateAtomicClassName(
     baseName = `${prefix}${cleanValue}`;
   }
 
-  // --- FIX: Prevent collision with bare utility names ---
   const reservedShorthands = new Set(["flex", "grid", "block", "inline", "hidden", "absolute", "relative", "fixed"]);
   if (reservedShorthands.has(baseName)) {
     baseName = `_${baseName}`;
   }
-  // ------------------------------------------------------
 
   if (isNegative) {
     baseName = `neg-${baseName}`;
@@ -123,6 +118,64 @@ function generateAtomicClassName(
   return baseName;
 }
 
+// ============================================================================
+// Helpers
+// ============================================================================
+
+const DELIM = "\x00";
+
+function makeKey(
+  scopeKey: string,
+  property: string,
+  value: string | number,
+  impFlag: string,
+): string {
+  return `${scopeKey}${DELIM}${property}${DELIM}${String(value)}${DELIM}${impFlag}`;
+}
+
+interface UsageEntry {
+  count: number;
+  property: string;
+  value: string | number;
+  important: boolean;
+  pseudo: string;
+  media: string;
+}
+
+function gatherDeclarations(
+  usageMap: Map<string, UsageEntry>,
+  declarations: any[] | undefined,
+  scopeKey: string,
+  pseudo: string,
+  media: string,
+): void {
+  if (!declarations) return;
+  for (const decl of declarations) {
+    if (!decl || decl.property == null || decl.value == null) continue;
+
+    const impFlag = decl.important ? "!imp" : "";
+    const key = makeKey(scopeKey, decl.property, decl.value, impFlag);
+    const existing = usageMap.get(key);
+
+    if (existing) {
+      existing.count++;
+    } else {
+      usageMap.set(key, {
+        count: 1,
+        property: decl.property,
+        value: decl.value,
+        important: Boolean(decl.important),
+        pseudo,
+        media,
+      });
+    }
+  }
+}
+
+// ============================================================================
+// Main Optimizer
+// ============================================================================
+
 export const atomicExtractor: OptimizationPass = {
   name: "atomic-extractor",
   cost: "moderate",
@@ -141,53 +194,55 @@ export const atomicExtractor: OptimizationPass = {
       };
     }
 
-    interface UsageEntry {
-      count: number;
-      property: string;
-      value: string | number;
-      important: boolean;
-      pseudo: string;
-      media: string;
-    }
-
     const usageMap = new Map<string, UsageEntry>();
 
+    // ==========================================================================
     // 1. Gather usage frequencies
-    for (const rule of ir.rules) {
-      if (rule.isDead || (rule as any).meta?.atomic) continue;
-      if ((rule as any).pseudoClasses?.length || rule.atRules?.length) continue;
+    // ==========================================================================
 
-      const scopeKey = "root::all";
-      const pseudo = "root";
-      const media = "all";
+    function walkRule(rule: IRRule, parentMedia: string): void {
+      if (rule.isDead || (rule as any).meta?.atomic) return;
 
-      for (const decl of rule.declarations || []) {
-        if (!decl || decl.property == null || decl.value == null) continue;
+      const media = parentMedia;
 
-        const impFlag = decl.important ? "!imp" : "";
-        const key = `${scopeKey}::${decl.property}:${String(decl.value)}${impFlag}`;
-        const existing = usageMap.get(key);
+      // Top-level declarations
+      gatherDeclarations(usageMap, rule.declarations, "root", "root", media);
 
-        if (existing) {
-          existing.count++;
-        } else {
-          usageMap.set(key, {
-            count: 1,
-            property: decl.property,
-            value: decl.value,
-            important: Boolean(decl.important),
-            pseudo,
-            media,
-          });
+      // Pseudo-class declarations (hover, focus, active, etc.)
+      // IRPseudoClass.name is the pseudo: "hover", "focus", "active"
+      for (const pc of rule.pseudoClasses || []) {
+        const pseudo = pc.name || "root";
+        gatherDeclarations(usageMap, pc.declarations, pseudo, pseudo, media);
+      }
+
+      // At-rule nested rules (media queries, container queries)
+      for (const atRule of rule.atRules || []) {
+        const atMedia = atRule.query
+          ? `${atRule.type}:${atRule.query}`
+          : atRule.type;
+        // Walk nested rules inside the at-rule
+        for (const nested of atRule.nestedRules || []) {
+          walkRule(nested, atMedia);
         }
       }
+
+      // Recurse into nested rules
+      for (const nested of rule.nestedRules || []) {
+        walkRule(nested, media);
+      }
+    }
+
+    for (const rule of ir.rules) {
+      walkRule(rule, "all");
     }
 
     const atomicRules: IRRule[] = [];
     const atomicClassMap = new Map<string, string>();
     const threshold = context?.config?.atomicThreshold ?? 3;
 
+    // ==========================================================================
     // 2. Extract entries meeting usage threshold
+    // ==========================================================================
     for (const [key, data] of usageMap) {
       if (data.count < threshold) continue;
 
@@ -215,7 +270,26 @@ export const atomicExtractor: OptimizationPass = {
         atomicDecl.important = true;
       }
 
-      atomicRule.declarations.push(atomicDecl);
+      // Wrap in media query if not "all"
+      if (data.media !== "all") {
+        const parts = data.media.split(":");
+        const type = parts[0] as any;
+        const query = parts.slice(1).join(":");
+        const atRule = {
+          id: `at-${rawName}`,
+          type,
+          query,
+          name: undefined,
+          declarations: [atomicDecl],
+          nestedRules: [],
+          source: atomicRule.source,
+          history: [],
+        };
+        atomicRule.atRules = [atRule];
+        atomicRule.declarations = [];
+      } else {
+        atomicRule.declarations.push(atomicDecl);
+      }
 
       atomicRule.meta = {
         ...atomicRule.meta,
@@ -236,26 +310,27 @@ export const atomicExtractor: OptimizationPass = {
       atomicRules.push(atomicRule);
     }
 
+    // ==========================================================================
     // 3. Substitute original rules with atomic token references
+    // ==========================================================================
     let declarationsReplaced = 0;
     let rulesEliminated = 0;
     let bytesSaved = 0;
 
-    for (const rule of ir.rules) {
-      if (rule.isDead || (rule as any).meta?.atomic) continue;
-      if ((rule as any).pseudoClasses?.length || rule.atRules?.length) continue;
+    function substituteRule(rule: IRRule, parentMedia: string): void {
+      if (rule.isDead || (rule as any).meta?.atomic) return;
 
-      const scopeKey = "root::all";
       const atomicClasses: string[] = [];
 
       if (!(rule as any).meta) (rule as any).meta = {};
       if (!(rule as any).history) (rule as any).history = [];
 
+      // Substitute top-level declarations
       rule.declarations = (rule.declarations || []).filter((decl: any) => {
         if (!decl) return false;
 
         const impFlag = decl.important ? "!imp" : "";
-        const key = `${scopeKey}::${decl.property}:${String(decl.value)}${impFlag}`;
+        const key = makeKey("root", decl.property, decl.value, impFlag);
         const className = atomicClassMap.get(key);
 
         if (className) {
@@ -283,6 +358,50 @@ export const atomicExtractor: OptimizationPass = {
         return true;
       });
 
+      // Substitute pseudo-class declarations
+      const keptPseudoClasses: typeof rule.pseudoClasses = [];
+      for (const pc of rule.pseudoClasses || []) {
+        const pseudo = pc.name || "root";
+
+        pc.declarations = (pc.declarations || []).filter((decl: any) => {
+          if (!decl) return false;
+
+          const impFlag = decl.important ? "!imp" : "";
+          const key = makeKey(pseudo, decl.property, decl.value, impFlag);
+          const className = atomicClassMap.get(key);
+
+          if (className) {
+            atomicClasses.push(className);
+            declarationsReplaced++;
+
+            const origBytes =
+              decl.property.length +
+              String(decl.value).length +
+              (decl.important ? 15 : 4);
+            const refBytes = className.length + 1;
+            bytesSaved += Math.max(0, origBytes - refBytes);
+
+            try {
+              recordHistory(
+                decl as any,
+                "atomic-extractor",
+                "extracted-to-atomic",
+                key,
+                `Moved to atomic class .${className}`,
+              );
+            } catch {}
+            return false;
+          }
+          return true;
+        });
+
+        // Only keep pseudo-classes that still have declarations
+        if (pc.declarations.length > 0) {
+          keptPseudoClasses.push(pc);
+        }
+      }
+      rule.pseudoClasses = keptPseudoClasses;
+
       if (atomicClasses.length > 0) {
         (rule.meta as any).atomicClasses = [
           ...((rule.meta as any).atomicClasses || []),
@@ -297,13 +416,32 @@ export const atomicExtractor: OptimizationPass = {
           timestamp: Date.now(),
           reason: `Replaced declarations with ${atomicClasses.length} atomic tokens in "${rule.selector}"`,
         } as any);
+      }
 
-        // Mark fully emptied rules as dead
-        if (rule.declarations.length === 0) {
-          rule.isDead = true;
-          rulesEliminated++;
+      // Mark fully emptied rules as dead
+      if (
+        rule.declarations.length === 0 &&
+        (rule.pseudoClasses || []).length === 0
+      ) {
+        rule.isDead = true;
+        rulesEliminated++;
+      }
+
+      // Recurse into nested rules
+      for (const nested of rule.nestedRules || []) {
+        substituteRule(nested, parentMedia);
+      }
+
+      // Recurse into at-rule nested rules
+      for (const atRule of rule.atRules || []) {
+        for (const nested of atRule.nestedRules || []) {
+          substituteRule(nested, parentMedia);
         }
       }
+    }
+
+    for (const rule of ir.rules) {
+      substituteRule(rule, "all");
     }
 
     // Prepend generated atomic rules to preserve cascade

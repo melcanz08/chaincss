@@ -39,6 +39,15 @@ export interface SourceLocation {
   component?: string;
 }
 
+export interface IRDynamicValue {
+  /** The original function or value reference (serialized for IR portability) */
+  // binding: string;  // function.toString() or token path like "theme.primary"
+  /** CSS custom property variable name, e.g. "--chain-btn-color" */
+  variable: string;
+  /** The type of dynamic value */
+  kind: 'function' | 'token' | 'prop';
+}
+
 /** A single CSS declaration (property: value) */
 export interface IRDeclaration {
   id: IRNodeId;
@@ -50,6 +59,8 @@ export interface IRDeclaration {
   history: IRTransformRecord[];
   /** Metadata from passes */
   meta?: IRDeclarationMeta;
+    /** Dynamic value metadata — set by parser, consumed by css-printer and runtime */
+  dynamic?: IRDynamicValue;
 }
 
 // ============================================================================

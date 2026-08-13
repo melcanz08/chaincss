@@ -193,15 +193,9 @@ export function createStyleCompilation(ctx: CompilationContext) {
 
     const className = getClassName(selectors, styleId, global);
     const { hasDynamic, dynamicValues } = partitionForBuild(styleObject as any);
-    if (hasDynamic && className) {
-      const cssWithVars = compileToCSS(styleObject as any, {
-        scopeSelector: `.${className}`,
-        minify: !!ctx.config.output.minify,
-      });
-      if (cssWithVars) {
-        finalCss = finalCss + "\n" + cssWithVars;
-      }
-    }
+    // Dynamic var() emission is now handled by the pipeline printer (Phase 3).
+    // partitionForBuild is kept only for runtime binding extraction (dynamicValues).
+    
     const out: CompileResult = {
       css: formatCSS(finalCss, ctx.config.output.minify),
       classMap: global ? {} : { [styleId]: className },
@@ -234,52 +228,5 @@ export function createStyleCompilation(ctx: CompilationContext) {
     return out;
   }
 
-  function compileDirect(
-    styleId: string,
-    styleDef: StyleDefinition,
-  ): CompileResult {
-    const hash = hashStyleDef(styleDef);
-    const key = `direct:${styleId}:${hash}`;
-    const cached = getCached(key, hash);
-    if (cached) return cached;
-
-    const selectors = (styleDef as any).selectors || [];
-    const global = isGlobalSelector(selectors);
-    const styleObject = styleDefToObject(styleDef);
-
-    const css = compileToCSS(
-      styleObject as any,
-      {
-        scopeSelector: Array.isArray(selectors)
-          ? selectors.join(",")
-          : `.${styleId}`,
-        minify: ctx.config.output.minify,
-        sourceMap: ctx.config.sourceComments,
-        sourceFile: styleId,
-      } as any,
-    );
-
-    const className = getClassName(selectors, styleId, global);
-    const { hasDynamic, dynamicValues } = partitionForBuild(styleObject as any);
-
-    const out: CompileResult = {
-      css: formatCSS(css, ctx.config.output.minify),
-      classMap: global ? {} : { [styleId]: className },
-      dynamic: hasDynamic ? dynamicValues : undefined,
-      atomicClasses: [],
-      stats: {
-        totalStyles: 1,
-        atomicStyles: 0,
-        uniqueProperties: 0,
-        savings: "0%",
-        deadRulesEliminated: 0,
-        pipelinePasses: 0,
-      },
-    };
-
-    setCached(key, out, hash);
-    return out;
-  }
-
-  return { compileViaPipeline, compileDirect, hashStyleDef, styleDefToObject };
+  return { compileViaPipeline, hashStyleDef, styleDefToObject };
 }

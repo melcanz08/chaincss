@@ -19,7 +19,7 @@ describe('atomic-extractor', ()=>{
     expect(result.savings.declarationsEliminated).toBe(3)
   })
 
-  it('uses same scope for counting and replacement (fix for has-pseudo bug)', ()=>{
+  it('extracts both root-scope and pseudo-scope declarations independently', ()=>{
     const ir = makeIR([
       { id:'r1', selector:'.a', declarations:[{property:'color',value:'red'}], pseudoClasses:[{name:'hover',declarations:[{property:'color',value:'red'}]}], atRules:[], nestedRules:[], meta:{}, isDead:false, history:[] },
       { id:'r2', selector:'.b', declarations:[{property:'color',value:'red'}], pseudoClasses:[{name:'hover',declarations:[{property:'color',value:'red'}]}], atRules:[], nestedRules:[], meta:{}, isDead:false, history:[] },
@@ -27,8 +27,22 @@ describe('atomic-extractor', ()=>{
     ])
     const ctx = { atomicUsageMap: new Map() }
     const result = atomicExtractor.optimize(ir, ctx)
-    // All root scope colors should be extracted, has-pseudo scope should not interfere
-    expect(result.savings.declarationsEliminated).toBe(0) // root declarations from rules with pseudoClasses are also skipped
+
+    // Root scope: 3x color:red → 1 atomic extracted, 3 declarations eliminated
+    // Hover scope: 3x color:red → 1 atomic extracted (hover-color-red), 3 declarations eliminated
+    // Total: 2 atomic rules, 6 declarations eliminated
+    expect(result.savings.declarationsEliminated).toBe(6)
+
+    // Should generate 2 atomic rules: one for root, one for hover-prefixed
+    const atomicRules = result.ir.rules.filter((r: any) => r.meta?.atomic)
+    expect(atomicRules.length).toBe(2)
+
+    // One should be the root color, one should be hover-prefixed
+    const selectors = atomicRules.map((r: any) => r.selector)
+    expect(selectors.some((s: string) => s.startsWith('.hover-'))).toBe(true)
+
+    // Total rules: 2 atomic + 3 original = 5
+    expect(result.ir.rules.length).toBe(5)
   })
 
   it('avoids collision with shorthand names like flex', ()=>{

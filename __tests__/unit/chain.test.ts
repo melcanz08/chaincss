@@ -4,9 +4,10 @@
  * + kept macros (center, pill, hide, mx/my, size, glass, etc)
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { chain } from '@core/entities/style-collector.js';
-import { compileToCSS, partitionForBuild } from '@core/usecases/style-compiler.js';
-import { classifyValue } from '@core/usecases/value-classifier.js';
+import { chain } from '../../src/core/entities/style-collector.js';
+import { compileToCSS, partitionForBuild } from '../../src/core/usecases/style-compiler.js';
+import { classifyValue } from '../../src/core/usecases/value-classifier.js';
+import { ChainCSSCompiler } from '../../src/core/usecases/compiler.js';
 
 const getHover = (s: any) => s._nestedRules?.find((r: any) => r.selector === '&:hover')?.styles
 
@@ -438,6 +439,33 @@ describe('CSS Compilation', () => {
     expect(css).toContain('background: red;');
     expect(css).toContain('color: white;');
     expect(css).toContain('padding: 16px;');
+  });
+
+  it('preserves intents through build()', () => {
+    const styles = chain()
+      .intents(['card'])
+      .build();
+
+    expect(styles._intents).toEqual(['card']);
+  });
+
+  it('resolves a single intent through the fluent API', () => {
+    const compiler = new ChainCSSCompiler({
+      tokens: {},
+      atomic: { enabled: false },
+      output: { minify: false },
+    });
+
+    const styles = chain()
+      .intents(['card'])
+      .$el('card');
+
+    const result = compiler.compileStyle('card', styles);
+    const css = result.css;
+
+    expect(css).toContain('display: flex');
+    expect(css).toContain('flex-direction: column');
+    expect(css).toContain('overflow: hidden');
   });
 
   it('emits CSS custom property placeholder for functions', () => {

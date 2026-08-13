@@ -16,7 +16,7 @@ function createMockCollector() {
     build: vi.fn(() => styles),
     explain: vi.fn(() => 'explain'),
     isMixed: vi.fn(() => false),
-    addClass: vi.fn(), enableDebug: vi.fn(),
+    addClass: vi.fn(), enableDebug: vi.fn(), intents: vi.fn(),
     media: mk(), supports: mk(), container: mk(), layer: mk(), nest: mk(),
     children: mk(), when: mk(), keyframes: vi.fn((n,s)=>{styles[`@keyframes ${n}`]=s}), fontFace: vi.fn(),
   } as any;
@@ -91,6 +91,16 @@ describe('StyleProxy - Robust', () => {
     const proxy = createStyleProxy(collector, {});
     proxy.flex();
     expect(proxy.$el('test').selector).toContain('test');
+  });
+  it('intents forwards names to collector', () => {
+    const proxy = createStyleProxy(collector, {});
+
+    proxy.intents(['card', 'button-primary']);
+
+    expect(collector.intents).toHaveBeenCalledWith([
+      'card',
+      'button-primary',
+    ]);
   });
 });
 

@@ -103,6 +103,7 @@ export async function buildCommand(options: BuildOptions): Promise<void> {
 
   const compiler = new ChainCSSCompiler({
     tokens: config.tokens,
+    intents: config.intents,
     atomic: {
       enabled:
         options.atomic !== undefined
@@ -288,7 +289,9 @@ export async function buildCommand(options: BuildOptions): Promise<void> {
     const compilationPromises = files.map(async (file) => {
       const relativePath = path.relative(process.cwd(), file);
       try {
-        const results = await compiler.compileFile(file);
+        // Use incremental compilation when persistent state is available
+        const useIncremental = isPersistent && compilerState !== null;
+        const results = await compiler.compileFile(file, useIncremental);
         completedCount++;
         logger.progress(
           completedCount,
@@ -321,6 +324,9 @@ export async function buildCommand(options: BuildOptions): Promise<void> {
       }
     }
 
+    // Collect all IRs for cross-file optimization
+    const allIRs: any[] = [];
+
     for (const output of compiledOutputs) {
       if (output.success && output.results) {
         const { fileCSS } = processCompilationResult(
@@ -329,6 +335,70 @@ export async function buildCommand(options: BuildOptions): Promise<void> {
           true,
         );
         fileCSSCache.set(output.file, fileCSS);
+
+        // Collect IRs for cross-file source optimization
+        for (const result of Object.values(output.results) as any[]) {
+          if (result?.inspector?.ir) {
+            allIRs.push(result.inspector.ir);
+          }
+        }
+      }
+    }
+
+     // ==========================================================================
+    // Build merged IR for cross-file optimization and multi-target emission
+    // ==========================================================================
+    const mergedIR = allIRs.length > 0 ? {
+      ...allIRs[0],
+      rules: allIRs.flatMap((ir: any) => ir.rules || []),
+      diagnostics: allIRs.flatMap((ir: any) => ir.diagnostics || []),
+      meta: {
+        ...allIRs[0].meta,
+        sourceFiles: [
+          ...new Set(
+            allIRs.flatMap((ir: any) => ir.meta?.sourceFiles || []),
+          ),
+        ],
+      },
+    } : null;
+
+    // ==========================================================================
+    // CROSS-FILE SOURCE OPTIMIZATION
+    // Runs after all files are compiled to deduplicate across file boundaries
+    // ==========================================================================
+    if (mergedIR && allIRs.length > 1) {
+      try {
+        const { sourceOptimizer } = await import(
+          "@compiler/pipeline/optimizers/source-optimizer.js"
+        );
+
+        const result = sourceOptimizer.optimize(mergedIR, {
+          minify: options.minify || config.output?.minify,
+        });
+
+        if (result.changes > 0) {
+          logger.success(
+            `🔧 Cross-file optimization: ${result.changes} rules deduplicated (~${result.savings.bytesSaved} bytes saved)`,
+          );
+
+          const { cssEmitter } = await import(
+            "@compiler/pipeline/lowering/css-emitter.js"
+          );
+          const emitResult = cssEmitter.generate(result.ir, {
+            minify: options.minify || config.output?.minify,
+          });
+
+          if (emitResult.generatedOutput) {
+            fileCSSCache.clear();
+            fileCSSCache.set("styles", emitResult.generatedOutput);
+          }
+        }
+      } catch (err) {
+        if (options.verbose) {
+          logger.warn(
+            `Cross-file optimization skipped: ${(err as Error).message}`,
+          );
+        }
       }
     }
 
@@ -352,58 +422,29 @@ export async function buildCommand(options: BuildOptions): Promise<void> {
     // ==========================================================================
     // MULTI-TARGET EMISSION
     // ==========================================================================
-    if (emissionTargets && emissionTargets.length > 0) {
+    if (emissionTargets && emissionTargets.length > 0 && mergedIR) {
       const { emit } =
         await import("@compiler/pipeline/lowering/emitter-registry.js");
 
-      // Build merged IR from all successfully compiled files
-      const allIRs: any[] = [];
-      for (const output of compiledOutputs) {
-        if (output.success && output.results) {
-          for (const result of Object.values(output.results) as any[]) {
-            if (result?.inspector?.ir) {
-              allIRs.push(result.inspector.ir);
-            }
-          }
-        }
-      }
+      for (const target of emissionTargets) {
+        if (target === "css") continue;
 
-      if (allIRs.length > 0) {
-        const mergedIR = {
-          ...allIRs[0],
-          rules: allIRs.flatMap((ir: any) => ir.rules || []),
-          diagnostics: allIRs.flatMap((ir: any) => ir.diagnostics || []),
-          meta: {
-            ...allIRs[0].meta,
-            sourceFiles: [
-              ...new Set(
-                allIRs.flatMap((ir: any) => ir.meta?.sourceFiles || []),
-              ),
-            ],
-          },
-        };
-
-        for (const target of emissionTargets) {
-          // Skip 'css' since it's already emitted via writeCombinedStylesheet
-          if (target === "css") continue;
-
-          try {
-            const result = emit(mergedIR, target as any, {
-              minify: options.minify,
-            });
-            if (result) {
-              const targetPath = path.join(outputDir, result.fileName);
-              ensureDirectory(path.dirname(targetPath));
-              fs.writeFileSync(targetPath, result.output, "utf8");
-              logger.info(
-                `  🎯 ${target}: ${path.relative(process.cwd(), targetPath)} (${(result.bytes / 1024).toFixed(1)}KB)`,
-              );
-            }
-          } catch (err) {
-            logger.warn(
-              `  ⚠️ Failed to emit ${target}: ${(err as Error).message}`,
+        try {
+          const result = emit(mergedIR, target as any, {
+            minify: options.minify,
+          });
+          if (result) {
+            const targetPath = path.join(outputDir, result.fileName);
+            ensureDirectory(path.dirname(targetPath));
+            fs.writeFileSync(targetPath, result.output, "utf8");
+            logger.info(
+              `  🎯 ${target}: ${path.relative(process.cwd(), targetPath)} (${(result.bytes / 1024).toFixed(1)}KB)`,
             );
           }
+        } catch (err) {
+          logger.warn(
+            `  ⚠️ Failed to emit ${target}: ${(err as Error).message}`,
+          );
         }
       }
     }
@@ -488,6 +529,7 @@ export async function buildCommand(options: BuildOptions): Promise<void> {
 
         try {
           const startRebuild = Date.now();
+          // Use incremental compilation in watch mode
           const results = await compiler.compileFile(filePath, true);
           const { fileCSS } = processCompilationResult(
             filePath,
