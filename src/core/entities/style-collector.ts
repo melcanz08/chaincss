@@ -1,12 +1,12 @@
 // src/core/entities/style-collector.ts
 
-import { macros as macroRegistry } from "@compiler/utils/shorthands.js";
+import { createStyleProxy } from "./style-proxy.js";
 import { PropertyStore, type PropertyStoreEntry } from "./property-store.js";
 import { RuleBuilder } from "./rule-builder.js";
-import { DebugCollector, type Explanation } from "./debug-collector.js";
-import { createStyleProxy } from "./style-proxy.js";
 import { classifyValue } from "../usecases/value-classifier.js";
+import { DebugCollector, type Explanation } from "./debug-collector.js";
 export type { Explanation } from "./debug-collector.js";
+import { macros as macroRegistry } from "@compiler/utils/shorthands.js";
 import type {
   ChainProxy,
   StyleObject as _StyleObject,

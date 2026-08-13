@@ -226,14 +226,468 @@ const BUILTIN_INTENT_CATALOG: Record<string, IntentDefinition> = {
       },
     },
   },
+    // ==========================================================================
+  // Visual intents
+  // ==========================================================================
   glass: {
     name: "glass",
-    category: "semantic",
-    description: "Glassmorphism surface with transparency and backdrop blur",
+    category: "visual",
+    description: "Frosted glassmorphism effect",
     properties: {
-      backgroundColor: "rgba(255,255,255,0.12)",
+      background: "rgba(255,255,255,0.1)",
       backdropFilter: "blur(12px)",
-      border: "1px solid rgba(255,255,255,0.18)",
+      WebkitBackdropFilter: "blur(12px)",
+      border: "1px solid rgba(255,255,255,0.2)",
+      borderRadius: "16px",
+    },
+  },
+  elevated: {
+    name: "elevated",
+    category: "visual",
+    description: "Raised shadow elevation",
+    properties: {
+      boxShadow: "0 8px 30px rgba(0,0,0,0.12)",
+    },
+  },
+  bordered: {
+    name: "bordered",
+    category: "visual",
+    description: "Visible border",
+    properties: {
+      border: "1px solid #e5e7eb",
+    },
+  },
+  rounded: {
+    name: "rounded",
+    category: "visual",
+    description: "Rounded corners",
+    properties: {
+      borderRadius: "8px",
+    },
+  },
+  gradient: {
+    name: "gradient",
+    category: "visual",
+    description: "Subtle gradient background",
+    properties: {
+      background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+    },
+  },
+
+  // ==========================================================================
+  // Spacing intents
+  // ==========================================================================
+  compact: {
+    name: "compact",
+    category: "spacing",
+    description: "Tight padding",
+    properties: {
+      padding: "8px 12px",
+    },
+  },
+  spacious: {
+    name: "spacious",
+    category: "spacing",
+    description: "Generous padding",
+    properties: {
+      padding: "24px 32px",
+    },
+  },
+  padded: {
+    name: "padded",
+    category: "spacing",
+    description: "Default padding",
+    properties: {
+      padding: "16px",
+    },
+  },
+  "margin-auto": {
+    name: "margin-auto",
+    category: "spacing",
+    description: "Centered margin",
+    properties: {
+      margin: "0 auto",
+    },
+  },
+
+  // ==========================================================================
+  // Layout intents
+  // ==========================================================================
+  container: {
+    name: "container",
+    category: "layout",
+    description: "Centered max-width container",
+    properties: {
+      maxWidth: "1200px",
+      margin: "0 auto",
+      padding: "0 24px",
+    },
+  },
+  "grid-two-column": {
+    name: "grid-two-column",
+    category: "layout",
+    description: "Two equal columns",
+    properties: {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      gap: "16px",
+    },
+  },
+  "flex-row": {
+    name: "flex-row",
+    category: "layout",
+    description: "Simple horizontal flex",
+    properties: {
+      display: "flex",
+      flexDirection: "row",
+      alignItems: "center",
+    },
+  },
+  "flex-col": {
+    name: "flex-col",
+    category: "layout",
+    description: "Simple vertical flex",
+    properties: {
+      display: "flex",
+      flexDirection: "column",
+    },
+  },
+  "full-width": {
+    name: "full-width",
+    category: "layout",
+    description: "Full width element",
+    properties: {
+      width: "100%",
+    },
+  },
+  stretch: {
+    name: "stretch",
+    category: "layout",
+    description: "Fill available space",
+    properties: {
+      flex: "1",
+    },
+  },
+
+  // ==========================================================================
+  // Component intents
+  // ==========================================================================
+  badge: {
+    name: "badge",
+    category: "component",
+    description: "Small status label",
+    properties: {
+      display: "inline-flex",
+      alignItems: "center",
+      padding: "4px 10px",
+      borderRadius: "9999px",
+      fontSize: "12px",
+      fontWeight: "600",
+      lineHeight: "1.5",
+    },
+  },
+  avatar: {
+    name: "avatar",
+    category: "component",
+    description: "Circular profile image",
+    properties: {
+      width: "40px",
+      height: "40px",
+      borderRadius: "50%",
+      overflow: "hidden",
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+  },
+  divider: {
+    name: "divider",
+    category: "component",
+    description: "Horizontal separator",
+    properties: {
+      borderTop: "1px solid #e5e7eb",
+      margin: "12px 0",
+    },
+  },
+  accordion: {
+    name: "accordion",
+    category: "component",
+    description: "Collapsible section",
+    properties: {
+      borderBottom: "1px solid #e5e7eb",
+      padding: "12px 16px",
+    },
+  },
+  tab: {
+    name: "tab",
+    category: "component",
+    description: "Tab navigation item",
+    properties: {
+      display: "inline-flex",
+      alignItems: "center",
+      padding: "8px 16px",
+      cursor: "pointer",
+      borderBottom: "2px solid transparent",
+    },
+    states: {
+      hover: { borderBottomColor: "#6366f1" },
+    },
+  },
+  dropdown: {
+    name: "dropdown",
+    category: "component",
+    description: "Popup menu",
+    properties: {
+      position: "absolute",
+      zIndex: "50",
+      minWidth: "160px",
+      padding: "8px 0",
+      borderRadius: "8px",
+      boxShadow: "0 8px 30px rgba(0,0,0,0.15)",
+    },
+  },
+  banner: {
+    name: "banner",
+    category: "component",
+    description: "Notification banner",
+    properties: {
+      display: "flex",
+      alignItems: "center",
+      padding: "12px 16px",
+      borderRadius: "8px",
+    },
+  },
+  breadcrumb: {
+    name: "breadcrumb",
+    category: "component",
+    description: "Navigation trail",
+    properties: {
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
+      fontSize: "14px",
+    },
+  },
+  pagination: {
+    name: "pagination",
+    category: "component",
+    description: "Page numbers",
+    properties: {
+      display: "flex",
+      alignItems: "center",
+      gap: "4px",
+    },
+  },
+  "progress-bar": {
+    name: "progress-bar",
+    category: "component",
+    description: "Loading indicator",
+    properties: {
+      width: "100%",
+      height: "8px",
+      borderRadius: "9999px",
+      overflow: "hidden",
+    },
+  },
+  skeleton: {
+    name: "skeleton",
+    category: "component",
+    description: "Loading placeholder",
+    properties: {
+      background: "#e5e7eb",
+      borderRadius: "4px",
+      animation: "pulse 1.5s ease-in-out infinite",
+    },
+  },
+  toast: {
+    name: "toast",
+    category: "component",
+    description: "Transient notification",
+    properties: {
+      position: "fixed",
+      bottom: "24px",
+      right: "24px",
+      padding: "12px 16px",
+      borderRadius: "8px",
+      boxShadow: "0 8px 30px rgba(0,0,0,0.15)",
+      zIndex: "100",
+    },
+  },
+  drawer: {
+    name: "drawer",
+    category: "component",
+    description: "Side panel",
+    properties: {
+      position: "fixed",
+      top: "0",
+      left: "0",
+      height: "100vh",
+      width: "280px",
+      padding: "16px",
+      boxShadow: "0 0 30px rgba(0,0,0,0.15)",
+    },
+  },
+  carousel: {
+    name: "carousel",
+    category: "component",
+    description: "Sliding content",
+    properties: {
+      display: "flex",
+      overflow: "hidden",
+      scrollSnapType: "x mandatory",
+    },
+  },
+
+  // ==========================================================================
+  // Semantic intents
+  // ==========================================================================
+  header: {
+    name: "header",
+    category: "semantic",
+    description: "Page header",
+    properties: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      padding: "16px 24px",
+      borderBottom: "1px solid #e5e7eb",
+    },
+  },
+  footer: {
+    name: "footer",
+    category: "semantic",
+    description: "Page footer",
+    properties: {
+      padding: "24px",
+      borderTop: "1px solid #e5e7eb",
+    },
+  },
+  sidebar: {
+    name: "sidebar",
+    category: "semantic",
+    description: "Persistent side navigation",
+    properties: {
+      width: "240px",
+      padding: "16px",
+      borderRight: "1px solid #e5e7eb",
+    },
+  },
+  section: {
+    name: "section",
+    category: "semantic",
+    description: "Generic page section",
+    properties: {
+      padding: "48px 24px",
+    },
+  },
+  article: {
+    name: "article",
+    category: "semantic",
+    description: "Long-form content",
+    properties: {
+      maxWidth: "720px",
+      margin: "0 auto",
+      lineHeight: "1.7",
+    },
+  },
+  aside: {
+    name: "aside",
+    category: "semantic",
+    description: "Supplementary content",
+    properties: {
+      flex: "1",
+      maxWidth: "320px",
+    },
+  },
+
+  // ==========================================================================
+  // Interaction intents
+  // ==========================================================================
+  clickable: {
+    name: "clickable",
+    category: "interaction",
+    description: "Clickable element",
+    properties: {
+      cursor: "pointer",
+      userSelect: "none",
+    },
+  },
+  disabled: {
+    name: "disabled",
+    category: "interaction",
+    description: "Disabled state",
+    properties: {
+      opacity: "0.5",
+      pointerEvents: "none",
+      cursor: "not-allowed",
+    },
+  },
+  selected: {
+    name: "selected",
+    category: "interaction",
+    description: "Selected/active state",
+    properties: {
+      backgroundColor: "#6366f1",
+      color: "#ffffff",
+    },
+  },
+
+  // ==========================================================================
+  // Typography intents
+  // ==========================================================================
+  heading: {
+    name: "heading",
+    category: "typography",
+    description: "Large heading",
+    properties: {
+      fontSize: "32px",
+      fontWeight: "700",
+      lineHeight: "1.2",
+    },
+  },
+  "body-text": {
+    name: "body-text",
+    category: "typography",
+    description: "Body paragraph",
+    properties: {
+      fontSize: "16px",
+      lineHeight: "1.6",
+    },
+  },
+  caption: {
+    name: "caption",
+    category: "typography",
+    description: "Small caption",
+    properties: {
+      fontSize: "12px",
+      lineHeight: "1.5",
+      color: "#6b7280",
+    },
+  },
+  muted: {
+    name: "muted",
+    category: "typography",
+    description: "Muted text color",
+    properties: {
+      color: "#6b7280",
+    },
+  },
+  truncate: {
+    name: "truncate",
+    category: "typography",
+    description: "Single-line ellipsis",
+    properties: {
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap",
+    },
+  },
+  bold: {
+    name: "bold",
+    category: "typography",
+    description: "Bold text",
+    properties: {
+      fontWeight: "700",
     },
   },
 };

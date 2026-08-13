@@ -228,18 +228,19 @@ Compiler Pipeline
 Optimized CSS
 ```
 
-**Built-in intent vocabulary**
+**Built-in intent vocabulary — 58 intents across 7 categories**
 
-ChainCSS ships with built-in intents covering common layout, component, semantic, and interaction concepts.
+ChainCSS ships with an extensible built-in vocabulary covering layout, component, semantic, interaction, visual, spacing, and typography concepts.
 
-| Category | Built-in Intents |
-|----------|------------------|
-| Layout | `center-content`, `stack`, `sidebar-layout`, `grid-list` |
-| Component | `card`, `button-primary`, `button-secondary`, `input-field`, `modal`, `tooltip` |
-| Semantic | `hero-section`, `sticky-header` |
-| Interaction | `hover-lift`, `focus-ring` |
-
-For example, `card` expands into properties such as `display: flex; flex-direction: column; overflow: hidden;` including generated interaction states and accessibility metadata.
+| Category | Count | Examples |
+|----------|-------|----------|
+| Layout | 10 | `center-content`, `stack`, `grid-list`, `container`, `flex-row`, `flex-col` |
+| Component | 22 | `card`, `button-primary`, `modal`, `badge`, `avatar`, `toast`, `drawer`, `carousel` |
+| Semantic | 8 | `hero-section`, `sticky-header`, `header`, `footer`, `sidebar`, `section` |
+| Interaction | 7 | `hover-lift`, `focus-ring`, `clickable`, `disabled`, `selected` |
+| Visual | 5 | `glass`, `elevated`, `bordered`, `rounded`, `gradient` |
+| Spacing | 4 | `compact`, `spacious`, `padded`, `margin-auto` |
+| Typography | 6 | `heading`, `body-text`, `caption`, `muted`, `truncate`, `bold` |
 
 **User-defined intents**
 
@@ -248,64 +249,36 @@ The built-in vocabulary is not a closed list. Applications can introduce their o
 ```ts
 export default defineConfig({
   intents: {
-    glass: {
-      name: 'glass',
-      category: 'visual',
-      description: 'Frosted glass effect',
+    'dashboard-header': {
+      name: 'dashboard-header',
+      category: 'component',
+      description: 'Dashboard page header',
       properties: {
-        background: 'rgba(255,255,255,0.1)',
-        backdropFilter: 'blur(10px)',
-        border: '1px solid rgba(255,255,255,0.2)',
-        borderRadius: '12px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '16px 24px',
       }
     }
   }
 });
 ```
 
-The intent can then be used directly:
-
-```ts
-chain()
-  .intents(['glass'])
-  .$el('panel')
-```
-
-This means an intent is not limited to a predefined set. The application defines its own vocabulary. A design system could define `dashboard-header`, `marketing-hero`, `glass-panel`, `dense-table`, `mobile-navigation` — each name representing a reusable design concept rather than a single CSS property.
-
 **Composite intents**
 
-Intents can be composed from other intents:
+Intents can be composed from other intents with recursive resolution, cycle detection, and deduplication:
 
 ```ts
 intents: {
   premium: {
     name: 'premium',
     category: 'composite',
-    resolve: () => ({
-      expandsTo: ['card', 'center-content'],
-    })
+    resolve: () => ({ expandsTo: ['card', 'glass'] })
   }
 }
 ```
 
-```ts
-chain()
-  .intents(['premium'])
-  .$el('premium-card')
-```
-
-```
-premium
- ├── card
- └── center-content
-```
-
-The compiler recursively resolves the composition, deduplicates intents, detects cycles, and merges their resulting styles.
-
-**Multiple intents**
-
-Multiple concepts can be applied to the same style definition:
+**Multiple intents + explicit styles**
 
 ```ts
 chain()
@@ -314,41 +287,14 @@ chain()
   .$el('hero')
 ```
 
-Intent-generated styles and explicit user declarations can coexist. Explicit style declarations take precedence over generated intent properties.
-
-**Natural-language intent descriptions**
-
-ChainCSS also provides `.describe()` as a higher-level authoring interface:
+**Natural-language `.describe()`**
 
 ```ts
-chain()
-  .describe('glass elevated spacious')
-  .$el('navbar')
+chain().describe('glass elevated spacious').$el('navbar')
+// → parses to ['glass', 'elevated', 'spacious'] → CSS output
 ```
 
-The description is parsed into intent names and resolved through the same intent registry:
-
-```
-"glass elevated spacious"
-         ↓
-     intent parser
-         ↓
-["glass", "elevated", "spacious"]
-         ↓
-   intent registry
-         ↓
-     Style IR
-         ↓
-      CSS output
-```
-
-The vocabulary used by `.describe()` is based on the application's registered intents rather than a hard-coded list of CSS properties.
-
-**Why this matters**
-
-The intent system creates a layer above raw CSS implementation. Instead of repeatedly writing `background(...)`, `shadow(...)`, `border(...)`, `backdropFilter(...)`, `typography(...)` — a design system can define a concept once and use that concept throughout the application.
-
-All intent resolution occurs during compilation. Intents do not introduce runtime styling overhead.
+All intent resolution happens at compile time — zero runtime cost.
 
 ### Accessibility Compilation
 
@@ -466,27 +412,16 @@ chaincss dev --port 3000
 ## CLI Commands
 
 ```bash
-# Project scaffolding
 chaincss init
 chaincss create app my-app --template react --pm pnpm
-
-# Development
 chaincss dev --port 3000
 chaincss watch --verbose
-
-# Production
 chaincss build --minify --atomic --persistent
 chaincss build --target css,tailwind,design-tokens,figma,graph-json
-
-# Quality
 chaincss check --strict
 chaincss audit --fail-on AA --fix --write
-
-# Token management
 chaincss entanglement --input tokens.json --watch --fix
 chaincss figma init --repo org/design-tokens
-
-# Cache & debugging
 chaincss cache stats
 chaincss cache validate
 chaincss timeline list
