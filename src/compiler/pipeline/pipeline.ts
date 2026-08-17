@@ -3,7 +3,6 @@
 // Unified Core Engine & Orchestrator for ChainCSS Compilation Pipeline
 // ============================================================================
 
-import { clearKeyframeCache } from "../utils/shorthands.js";
 import type { StyleIR, IRRule } from "./ir/types.js";
 import { intentNormalizer } from "./normalizers/intent-normalizer.js";
 import { unitNormalizer } from "./normalizers/unit-normalizer.js";
@@ -27,7 +26,7 @@ import { patternDetector } from "./analyzers/pattern-detector.js";
 import AnimationRegistry from "../animations.js";
 import { astOptimizer } from "./optimizers/ast-optimizer.js";
 import { schedulePasses, type PassDeclaration } from "./pass-scheduler.js";
-import { buildIRGraph } from "./ir/graph-builder.js";
+import { buildIRGraph } from "../incremental/graph-builder.js";
 import { buildSymbolTable } from "./symbol-table.js";
 import type {
   PipelineConfig,
@@ -52,6 +51,33 @@ import { ensureRuleMeta } from "./ir/utils.js";
 import { defaultMetrics } from "../metrics/index.js";
 import { defaultTracer } from "../tracing/index.js";
 import { DiagnosticReporter } from "../diagnostics/index.js";
+
+// ============================================================================
+// Animation keyword set — hoisted
+// ============================================================================
+const ANIMATION_KEYWORDS = new Set([
+  "none", "infinite", "linear", "ease", "ease-in", "ease-out", "ease-in-out",
+  "step-start", "step-end", "normal", "reverse", "alternate", "alternate-reverse",
+  "forwards", "backwards", "both", "running", "paused",
+  "inherit", "initial", "unset", "revert",
+]);
+
+function extractAnimationName(part: string): string | null {
+  const tokens = part.trim().split(/\s+/);
+  for (const token of tokens) {
+    const lower = token.toLowerCase();
+    if (ANIMATION_KEYWORDS.has(lower)) continue;
+    if (/^\d+(\.\d+)?(s|ms)?$/.test(token)) continue;
+    if (/^(cubic-bezier|steps)\(/.test(token)) continue;
+    return token;
+  }
+  return null;
+}
+
+function animationMatchesName(declValue: string, animName: string): boolean {
+  const regex = new RegExp(`\\b${animName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`);
+  return regex.test(declValue);
+}
 
 // ============================================================================
 // Pass Declarations
@@ -261,7 +287,6 @@ const tokenNormalizationAdapter: NormalizationPass = {
   },
 };
 
-/** Helper to check if a rule or any sub-decls reference an animation name */
 function ruleReferencesAnimation(rule: IRRule, animName: string): boolean {
   const allDecls = [
     ...(rule.declarations || []),
@@ -270,7 +295,7 @@ function ruleReferencesAnimation(rule: IRRule, animName: string): boolean {
   for (const decl of allDecls) {
     if (
       (decl.property === "animation" || decl.property === "animation-name") &&
-      String(decl.value).includes(animName)
+      animationMatchesName(String(decl.value), animName)
     ) {
       return true;
     }
@@ -297,7 +322,6 @@ const dynamicAnimationResolver: OptimizationPass = {
     const activeAnimationNames = new Set<string>();
     const registry = AnimationRegistry as any;
 
-    // Helper to traverse rules recursively
     function collectAnimationNames(rules: IRRule[]) {
       for (const rule of rules) {
         if (rule.isDead) continue;
@@ -312,8 +336,9 @@ const dynamicAnimationResolver: OptimizationPass = {
           ) {
             const raw = String(decl.value).split(",");
             for (const part of raw) {
-              const name = part.trim().split(" ")[0]!;
-              if (name && !["none", "inherit", "initial", "unset"].includes(name)) {
+              // Fix #2: Extract name by checking all tokens against keywords
+              const name = extractAnimationName(part);
+              if (name) {
                 activeAnimationNames.add(name);
               }
             }
@@ -332,8 +357,10 @@ const dynamicAnimationResolver: OptimizationPass = {
       if (registry.has(animName)) {
         const rawNode = registry.getCompiledKeyframeNode(animName);
         if (rawNode) {
-          // Clone to prevent mutating registry's cached object
-          const keyframeNode = JSON.parse(JSON.stringify(rawNode));
+          // Fix #4: Use structuredClone when available
+          const keyframeNode = typeof structuredClone === "function"
+            ? structuredClone(rawNode)
+            : JSON.parse(JSON.stringify(rawNode));
           keyframeNodesToAppend.push(keyframeNode);
           keyframeNode.meta = keyframeNode.meta || {};
           keyframeNode.meta.dependents = keyframeNode.meta.dependents || [];
@@ -383,7 +410,7 @@ const BASE_OPTIMIZATION = [
   dynamicAnimationResolver,
   cssCompressor,
 ];
-const BASE_LOWERING = [intentResolver, cssEmitter];
+const BASE_LOWERING = [intentResolver, tokenLowering, cssEmitter];
 
 export type PipelinePreset =
   | "default"
@@ -453,7 +480,6 @@ const PRESETS: Record<PipelinePreset, Partial<PipelineConfig>> = {
   },
 };
 
-// Helper to recursively stamp passMeta on rules and nested rules
 function stampPassMeta(rules: IRRule[], metaStamp: Record<string, any>) {
   for (const rule of rules) {
     rule.passMeta = { ...rule.passMeta, ...metaStamp };
@@ -463,7 +489,6 @@ function stampPassMeta(rules: IRRule[], metaStamp: Record<string, any>) {
   }
 }
 
-// Helper to update symbol table and graph
 function refreshIRMetadata(ir: StyleIR, metricsEnabled: boolean) {
   if (metricsEnabled) defaultMetrics.start("graph_build");
   ir.graph = buildIRGraph(ir);
@@ -480,9 +505,6 @@ function refreshIRMetadata(ir: StyleIR, metricsEnabled: boolean) {
   }
 }
 
-// ============================================================================
-// Core Pipeline Execution Engine
-// ============================================================================
 export class Pipeline {
   private config: PipelineConfig;
   private passDeclarations: PassDeclaration[] = PASS_DECLARATIONS;
@@ -490,7 +512,7 @@ export class Pipeline {
   private metricsEnabled: boolean = true;
   private diagnostics: DiagnosticReporter;
   private tracer: typeof defaultTracer;
-  private immutableMode: boolean = true;
+  private immutableMode: boolean = false; // Fix #5: Default false — no silent mutation mismatch
 
   constructor(config: PipelineConfig) {
     this.config = config;
@@ -515,11 +537,7 @@ export class Pipeline {
   public getLastResult(): PipelineResult | null {
     return this.lastResult;
   }
-  public getScheduleValidation(): {
-    errors: string[];
-    warnings: string[];
-    valid: boolean;
-  } {
+  public getScheduleValidation() {
     return {
       errors: validationResult.errors,
       warnings: validationResult.warnings,
@@ -561,11 +579,15 @@ export class Pipeline {
   public execute(ir: StyleIR, filePath?: string): PipelineResult {
     const startTime = performance.now();
     const timeline: PipelineStageResult[] = [];
-    let currentIR = ir;
+    
+    // Fix #5: Clone IR when immutableMode is enabled
+    let currentIR = this.immutableMode
+      ? JSON.parse(JSON.stringify(ir))
+      : ir;
 
     const rootSpan = this.tracer.startSpan("pipeline-execute", undefined);
     this.tracer.setAttribute(rootSpan.id, "filePath", filePath || "unknown");
-    this.tracer.setAttribute(rootSpan.id, "ruleCount", ir.rules?.length || 0);
+    this.tracer.setAttribute(rootSpan.id, "ruleCount", currentIR.rules?.length || 0);
 
     if (this.metricsEnabled) {
       defaultMetrics.start("total_compile", { filePath });
@@ -574,7 +596,6 @@ export class Pipeline {
 
     currentIR.diagnostics = currentIR.diagnostics || [];
 
-    // Initial Symbol Table & Graph construction
     refreshIRMetadata(currentIR, this.metricsEnabled);
 
     const pipelineContext = {
@@ -591,10 +612,7 @@ export class Pipeline {
         if (this.metricsEnabled) defaultMetrics.start("normalize");
         for (const pass of this.config.normalization as NormalizationPass[]) {
           const passStart = performance.now();
-          const span = this.tracer.startSpan(
-            `normalize-${pass.name}`,
-            rootSpan.id,
-          );
+          const span = this.tracer.startSpan(`normalize-${pass.name}`, rootSpan.id);
           const stageContext = {
             ...pipelineContext,
             ...(pipelineContext.normalization || {}),
@@ -602,15 +620,13 @@ export class Pipeline {
           const res = pass.normalize(currentIR, stageContext as any);
           currentIR = res.ir;
           this.tracer.endSpan(span.id, "ok");
-          const passName = pass.name || "normalization";
           timeline.push({
             stage: "normalization",
-            pass: passName,
+            pass: pass.name || "normalization",
             duration: performance.now() - passStart,
             result: res,
           });
-          if (this.metricsEnabled)
-            defaultMetrics.increment("pipeline_passes_run");
+          if (this.metricsEnabled) defaultMetrics.increment("pipeline_passes_run");
         }
         if (this.metricsEnabled) defaultMetrics.stop("normalize");
         activeStage = null;
@@ -622,10 +638,7 @@ export class Pipeline {
         if (this.metricsEnabled) defaultMetrics.start("validate");
         for (const pass of this.config.validation as ValidationPass[]) {
           const passStart = performance.now();
-          const span = this.tracer.startSpan(
-            `validate-${pass.name}`,
-            rootSpan.id,
-          );
+          const span = this.tracer.startSpan(`validate-${pass.name}`, rootSpan.id);
           let res: ValidationResult = {
             diagnostics: [],
             passed: true,
@@ -646,15 +659,13 @@ export class Pipeline {
                     pass: (d as any).pass || pass.name || "validation",
                   });
                   if (d.severity === "error") {
-                    if (this.metricsEnabled)
-                      defaultMetrics.increment("errors_encountered");
+                    if (this.metricsEnabled) defaultMetrics.increment("errors_encountered");
                     this.diagnostics.error(d.message, {
                       file: (d as any).file,
                       line: (d as any).line,
                     });
                   } else if (d.severity === "warning") {
-                    if (this.metricsEnabled)
-                      defaultMetrics.increment("warnings_issued");
+                    if (this.metricsEnabled) defaultMetrics.increment("warnings_issued");
                     this.diagnostics.warning(d.message, {
                       file: (d as any).file,
                       line: (d as any).line,
@@ -665,15 +676,13 @@ export class Pipeline {
             }
           }
           this.tracer.endSpan(span.id, "ok");
-          const passName = pass.name || "validation";
           timeline.push({
             stage: "validation",
-            pass: passName,
+            pass: pass.name || "validation",
             duration: performance.now() - passStart,
             result: res,
           });
-          if (this.metricsEnabled)
-            defaultMetrics.increment("pipeline_passes_run");
+          if (this.metricsEnabled) defaultMetrics.increment("pipeline_passes_run");
         }
         if (this.metricsEnabled) defaultMetrics.stop("validate");
         activeStage = null;
@@ -685,10 +694,7 @@ export class Pipeline {
         if (this.metricsEnabled) defaultMetrics.start("analyze");
         for (const pass of this.config.analysis as AnalysisPass[]) {
           const passStart = performance.now();
-          const span = this.tracer.startSpan(
-            `analyze-${pass.name}`,
-            rootSpan.id,
-          );
+          const span = this.tracer.startSpan(`analyze-${pass.name}`, rootSpan.id);
 
           let res: AnalysisResult = { ir: currentIR, annotations: [] };
           if (typeof pass.analyze === "function") {
@@ -697,18 +703,20 @@ export class Pipeline {
               ...(pipelineContext.analysis || {}),
             };
             const passRes = pass.analyze(currentIR, stageContext as any);
-            if (passRes) res = passRes;
+            if (passRes) {
+              res = passRes;
+              // Fix #3: Update currentIR with analysis results
+              currentIR = res.ir || currentIR;
+            }
           }
           this.tracer.endSpan(span.id, "ok");
-          const passName = pass.name || "analysis";
           timeline.push({
             stage: "analysis",
-            pass: passName,
+            pass: pass.name || "analysis",
             duration: performance.now() - passStart,
             result: res,
           });
-          if (this.metricsEnabled)
-            defaultMetrics.increment("pipeline_passes_run");
+          if (this.metricsEnabled) defaultMetrics.increment("pipeline_passes_run");
         }
         if (this.metricsEnabled) defaultMetrics.stop("analyze");
         activeStage = null;
@@ -720,10 +728,7 @@ export class Pipeline {
         if (this.metricsEnabled) defaultMetrics.start("optimize");
         for (const pass of this.config.optimization as OptimizationPass[]) {
           const passStart = performance.now();
-          const span = this.tracer.startSpan(
-            `optimize-${pass.name}`,
-            rootSpan.id,
-          );
+          const span = this.tracer.startSpan(`optimize-${pass.name}`, rootSpan.id);
           const stageContext = {
             ...pipelineContext,
             ...(pipelineContext.optimization || {}),
@@ -731,20 +736,17 @@ export class Pipeline {
           const res = pass.optimize(currentIR, stageContext as any);
           currentIR = res.ir;
           this.tracer.endSpan(span.id, "ok");
-          const passName = pass.name || "optimization";
           timeline.push({
             stage: "optimization",
-            pass: passName,
+            pass: pass.name || "optimization",
             duration: performance.now() - passStart,
             result: res,
           });
-          if (this.metricsEnabled)
-            defaultMetrics.increment("pipeline_passes_run");
+          if (this.metricsEnabled) defaultMetrics.increment("pipeline_passes_run");
         }
         if (this.metricsEnabled) defaultMetrics.stop("optimize");
         activeStage = null;
 
-        // Rebuild Symbol Table & IR Graph after AST modifications
         refreshIRMetadata(currentIR, this.metricsEnabled);
       }
 
@@ -769,38 +771,29 @@ export class Pipeline {
             }
           }
           this.tracer.endSpan(span.id, "ok");
-          const passName = pass.name || "lowering";
           timeline.push({
             stage: "lowering",
-            pass: passName,
+            pass: pass.name || "lowering",
             duration: performance.now() - passStart,
             result: res,
           });
-          if (this.metricsEnabled)
-            defaultMetrics.increment("pipeline_passes_run");
+          if (this.metricsEnabled) defaultMetrics.increment("pipeline_passes_run");
         }
         if (this.metricsEnabled) defaultMetrics.stop("lower");
         activeStage = null;
       }
 
-      // Stamp passMeta recursively on all rules and nested rules
       const metaStamp = Object.fromEntries(
-        timeline.map((entry) => [
-          entry.pass,
-          { _ran: true, _stage: entry.stage },
-        ]),
+        timeline.map((entry) => [entry.pass, { _ran: true, _stage: entry.stage }]),
       );
       stampPassMeta(currentIR.rules, metaStamp);
 
       if (this.metricsEnabled) {
         defaultMetrics.increment("rules_compiled", currentIR.rules.length);
         const atomicRules = currentIR.rules.filter(
-          (r) => r.passMeta?.optimization?.atomic?.isAtomic === true,
+          (r: IRRule) => r.passMeta?.optimization?.atomic?.isAtomic === true,
         );
-        defaultMetrics.increment(
-          "atomic_classes_generated",
-          atomicRules.length,
-        );
+        defaultMetrics.increment("atomic_classes_generated", atomicRules.length);
         defaultMetrics.stop("total_compile");
       }
       this.tracer.endSpan(rootSpan.id, "ok");
@@ -819,7 +812,6 @@ export class Pipeline {
       defaultMetrics.recordHistory();
       return result;
     } catch (error) {
-      // Safely close active stage timer if pipeline crashed mid-stage
       if (this.metricsEnabled) {
         if (activeStage) {
           try { defaultMetrics.stop(activeStage as any); } catch {}
@@ -857,10 +849,7 @@ export class Pipeline {
     }
   }
 
-  public async process(
-    ir: StyleIR,
-    filePath?: string,
-  ): Promise<PipelineResult> {
+  public async process(ir: StyleIR, filePath?: string): Promise<PipelineResult> {
     return this.execute(ir, filePath);
   }
 
@@ -884,9 +873,6 @@ export class Pipeline {
 
 export class UnifiedPipeline extends Pipeline {}
 
-// ============================================================================
-// Factory & Helper Functions
-// ============================================================================
 function deepMerge<T extends Record<string, any>>(
   base: T,
   overrides: Partial<T>,
@@ -949,12 +935,7 @@ export function createPipeline(
       merged.contexts.optimization.atomicUsageMap = new Map<string, number>();
     }
   }
-  if (merged.lowering) {
-    merged.lowering = (merged.lowering as LoweringPass[]).filter(
-      (p) => p.name !== tokenLowering.name,
-    );
-  }
-  clearKeyframeCache();
+  // Fix #7: Removed clearKeyframeCache() — cache is now per-registry, not global
   const pipeline = new Pipeline(merged as PipelineConfig);
   pipeline.setPassDeclarations(PASS_DECLARATIONS);
   return pipeline;

@@ -204,11 +204,27 @@ export class PersistentCache {
 
     const cachePath = path.join(this.cacheDir, `${hash}.json`);
     if (this.metadata.entries[hash]) {
+      // Fix #1: Check dependencies before returning cached result
       try {
         await fs.promises.access(cachePath);
-        return hash;
+        const raw = await fs.promises.readFile(cachePath, "utf8");
+        const existingEntry: PersistentCacheEntry = JSON.parse(raw);
+
+        if (
+          !this.isExpired(existingEntry) &&
+          (await this.checkDependenciesValid(existingEntry))
+        ) {
+          return hash;
+        }
+
+        // Dependencies changed or expired — invalidate old entry
+        await fs.promises.unlink(cachePath).catch(() => {});
+        delete this.metadata.entries[hash];
+        this.recalculateTotalSize();
       } catch {
         // File missing — re-create
+        delete this.metadata.entries[hash];
+        this.recalculateTotalSize();
       }
     }
 
@@ -286,7 +302,24 @@ export class PersistentCache {
 
     const cachePath = path.join(this.cacheDir, `${hash}.json`);
     if (this.metadata.entries[hash] && fs.existsSync(cachePath)) {
-      return;
+      // Fix #1: Sync path — check dependencies before early return
+      try {
+        const raw = fs.readFileSync(cachePath, "utf8");
+        const existingEntry: PersistentCacheEntry = JSON.parse(raw);
+        if (
+          !this.isExpired(existingEntry) &&
+          this.checkDependenciesValidSync(existingEntry)
+        ) {
+          return;
+        }
+        // Dependencies changed — invalidate
+        fs.unlinkSync(cachePath);
+        delete this.metadata.entries[hash];
+        this.recalculateTotalSize();
+      } catch {
+        delete this.metadata.entries[hash];
+        this.recalculateTotalSize();
+      }
     }
 
     const depHashes: Record<string, string> = {};
@@ -382,7 +415,12 @@ export class PersistentCache {
   // Internal: Metadata & Validation
   // ==========================================================================
 
+  // Fix #3: Version check in isExpired
   private isExpired(entry: PersistentCacheEntry): boolean {
+    // Version mismatch invalidates cache
+    if (entry.compilerVersion !== COMPILER_VERSION) return true;
+    if (entry.version !== CACHE_VERSION) return true;
+
     return (
       Date.now() - entry.timestamp >
       this.options.maxAgeDays * 24 * 60 * 60 * 1000
@@ -461,7 +499,6 @@ export class PersistentCache {
   private async saveMetadataAsync(): Promise<void> {
     await this.ensureDirAsync();
 
-    // Read disk state, overlay local entries, but exclude keys deleted in memory
     if (fs.existsSync(this.metadataPath)) {
       try {
         const diskMeta = JSON.parse(
@@ -469,7 +506,6 @@ export class PersistentCache {
         );
         const mergedEntries = { ...diskMeta.entries, ...this.metadata.entries };
 
-        // Clean up keys deleted from memory metadata
         for (const key of Object.keys(diskMeta.entries || {})) {
           if (!this.metadata.entries[key]) {
             delete mergedEntries[key];

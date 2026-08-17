@@ -33,7 +33,7 @@ export {
   traverseGraph,
   findAffectedNodes,
   getGraphStats,
-} from "./graph-builder.js";
+} from "../../incremental/graph-builder.js";
 
 // CSS AST
 export {

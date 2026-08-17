@@ -1,7 +1,7 @@
 // src/core/usecases/style-compilation.ts
 
 import { formatCSS } from "@shared/utils/index.js";
-import { compileToCSS, partitionForBuild } from "./style-compiler.js";
+import { partitionForBuild } from "./style-compiler.js";
 import { parseIR } from "@compiler/pipeline/ir/parser.js";
 import { generateCSS } from "@compiler/pipeline/ir/css-printer.js";
 import type {
@@ -37,12 +37,8 @@ function hashString(str: string): string {
 function fastStableStringify(val: any): string {
   if (val === null || typeof val !== "object") return JSON.stringify(val) ?? "";
   if (Array.isArray(val)) {
-    let s = "[";
-    for (let i = 0; i < val.length; i++) {
-      if (i) s += ",";
-      s += fastStableStringify(val[i]);
-    }
-    return s + "]";
+    // Fix #2: Use array join instead of string concat loop
+    return "[" + val.map(fastStableStringify).join(",") + "]";
   }
   const keys = Object.keys(val).sort();
   let out = "{";
@@ -74,17 +70,19 @@ function styleDefToObject(styleDef: StyleDefinition): StyleObject {
     ...props
   } = styleDef as any;
 
-  // props already contains & and . selectors — no extra loop needed
-  const obj: any = props;
+  const obj: any = { ...props };
 
   if (selectors) obj.selectors = selectors;
-  if (hover) obj["&:hover"] = hover;
+  // Fix #1: Merge hover with existing &:hover instead of overwriting
+  if (hover) {
+    obj["&:hover"] = { ...(obj["&:hover"] || {}), ...hover };
+  }
   // Bridge: runtime may use prefixed or un-prefixed
   if (atRules || _atRules) obj._atRules = atRules || _atRules;
   if (nestedRules || _nestedRules)
     obj._nestedRules = nestedRules || _nestedRules;
   if (dynamic) obj.dynamic = dynamic;
-  // themes intentionally dropped — handled upstream
+  // themes intentionally dropped — handled upstream in CLI/config loader
 
   return obj as StyleObject;
 }
@@ -95,11 +93,11 @@ function hashStyleDef(styleDef: StyleDefinition): string {
 
   let hashInput = fastStableStringify(rest);
 
-  // Include function source code in hash for dynamic styles
+  // Fix #5: Normalize function whitespace for consistent hashing
   if (dynamic) {
     for (const [key, fn] of Object.entries(dynamic)) {
       if (typeof fn === "function") {
-        hashInput += `|${key}:${fn.toString()}`;
+        hashInput += `|${key}:${fn.toString().replace(/\s+/g, " ").trim()}`;
       }
     }
   }
@@ -117,7 +115,10 @@ function getClassName(
   isGlobal: boolean,
 ): string {
   if (isGlobal) return "";
-  return selectors[0]?.replace(/^\.|^#/, "") || `chain-${styleId}`;
+  // Fix #6: Robust className extraction — handles compound selectors
+  const first = selectors[0] || "";
+  const match = first.match(/\.([a-zA-Z_][\w-]*)/);
+  return match ? match[1] : `chain-${styleId}`;
 }
 
 export function createStyleCompilation(ctx: CompilationContext) {
@@ -140,9 +141,11 @@ export function createStyleCompilation(ctx: CompilationContext) {
   }
 
   function compileViaPipeline(
-    styleId: string,
+    styleId: string, 
     styleDef: StyleDefinition,
+    pipelineOverride?: Pipeline  // NEW
   ): CompileResult {
+    const pipeline = pipelineOverride || ctx.pipeline;  // Use override if provided
     const hash = hashStyleDef(styleDef);
     const key = `pipeline:${styleId}:${hash}`;
     const cached = getCached(key, hash);
@@ -152,7 +155,7 @@ export function createStyleCompilation(ctx: CompilationContext) {
     const global = isGlobalSelector(selectors);
     const styleObject = styleDefToObject(styleDef);
     const ir = parseIR({ [styleId]: styleObject as any }, styleId);
-    const result = ctx.pipeline.execute(ir);
+    const result = pipeline.execute(ir);
 
     const total = result.ir.rules.length;
     const alive = result.ir.rules.filter((r) => !r.isDead).length;
@@ -161,7 +164,6 @@ export function createStyleCompilation(ctx: CompilationContext) {
       (r) => r.meta?.atomic === true,
     ).length;
 
-    // Only 1 generateCSS in prod — savings calc only in verbose
     let finalCss = generateCSS(result.ir, {
       minify: !!ctx.config.output.minify,
     });
@@ -193,9 +195,7 @@ export function createStyleCompilation(ctx: CompilationContext) {
 
     const className = getClassName(selectors, styleId, global);
     const { hasDynamic, dynamicValues } = partitionForBuild(styleObject as any);
-    // Dynamic var() emission is now handled by the pipeline printer (Phase 3).
-    // partitionForBuild is kept only for runtime binding extraction (dynamicValues).
-    
+
     const out: CompileResult = {
       css: formatCSS(finalCss, ctx.config.output.minify),
       classMap: global ? {} : { [styleId]: className },

@@ -6,18 +6,18 @@ import type {
   PseudoStyles,
   AtRule,
   NestedRule,
-  CSSPrimitiveValue,
 } from "@shared/types/index.js";
 import {
   parseStyleObject,
-  isCSSPrimitiveValue,
-  isDynamicValue,
 } from "@shared/types/index.js";
 import { partitionStyles } from "./value-classifier.js";
 
 import { parseIR } from "../../compiler/pipeline/ir/parser.js";
 import { generateCSS } from "../../compiler/pipeline/ir/css-printer.js";
-import { createDefaultPipeline } from "../../compiler/pipeline/pipeline.js";
+import {
+  createDefaultPipeline,
+  type Pipeline,
+} from "../../compiler/pipeline/pipeline.js";
 
 interface InternalCompileOptions {
   minify?: boolean;
@@ -25,75 +25,39 @@ interface InternalCompileOptions {
   scopeSelector?: string;
   sourceFile?: string;
 }
-
-const kebabCache = new Map<string, string>();
-// Track access order for LRU (linked list via Map iteration order)
-const kebabAccessOrder: string[] = [];
-const KEBAB_CACHE_LIMIT = 1000;
-
-function camelToKebab(str: string): string {
-  const cached = kebabCache.get(str);
-  if (cached !== undefined) {
-    // Move to end of access order (most recently used)
-    const idx = kebabAccessOrder.indexOf(str);
-    if (idx > -1) {
-      kebabAccessOrder.splice(idx, 1);
-      kebabAccessOrder.push(str);
-    }
-    return cached;
-  }
-  
-  // Evict least recently used if at capacity
-  if (kebabCache.size >= KEBAB_CACHE_LIMIT && kebabAccessOrder.length > 0) {
-    const lruKey = kebabAccessOrder.shift()!;
-    kebabCache.delete(lruKey);
-  }
-  
-  const result = str.replace(/([A-Z])/g, "-$1").toLowerCase();
-  kebabCache.set(str, result);
-  kebabAccessOrder.push(str);
-  return result;
-}
-
-function safeIndent(cssText: string, indent: string): string {
-  if (!indent) return cssText;
-  return cssText.replace(/^(?=.+)/gm, indent);
-}
-function sanitizeCSSValue(v: string): string {
-  // Only block </style> tag injection attacks
-  if (/<\/style/i.test(v)) {
-    throw new Error(
-      `[ChainCSS] Invalid CSS value containing style tag injection: ${v.slice(0, 80)}`
-    );
-  }
-  return v.replace(/[\r\n]+/g, " ").trim();
-}
-function getEffectiveSelector(
-  selectors: string | string[] | undefined,
-  fallback: string,
-): string {
-  if (Array.isArray(selectors)) return selectors.join(", ");
-  return selectors || fallback;
-}
-function resolveNestedSelector(parent: string, child: string): string {
-  if (!parent) return child;
-  if (child.includes("&")) return child.replace(/&/g, parent);
-  return `${parent} ${child}`;
-}
 function buildAtRuleKey(atRule: AtRule): string {
   const parts: string[] = [`@${atRule.type}`];
-  if (atRule.query) parts.push(atRule.query);
-  if (atRule.condition) parts.push(atRule.condition);
-  if (atRule.name) parts.push(atRule.name);
+  const query = getAtRuleQuery(atRule);
+  if (query) parts.push(query);
   return parts.join(" ");
 }
+
+// Fix #1: Module-level pipeline singleton — no new pipeline per compileToCSS
+let _defaultPipeline: Pipeline | null = null;
+
+function getDefaultPipeline(): Pipeline {
+  if (!_defaultPipeline) {
+    _defaultPipeline = createDefaultPipeline();
+  }
+  return _defaultPipeline;
+}
+
+function getAtRuleQuery(r: AtRule): string {
+  if (r.type === "media") return r.query || "";
+  if (r.type === "supports" || r.type === "container") return r.condition || "";
+  if (r.type === "layer") return r.name || "";
+  return "";
+}
+function getAtRuleStyles(r: AtRule): StyleObject | undefined {
+  return "styles" in r ? r.styles : undefined;
+}
+
 
 export function compileToCSS(
   styleObject: StyleObject,
   options: InternalCompileOptions = {},
 ): string {
   try {
-    // Build a StyleDefinition with the scopeSelector as the rule selector
     const styleDef: any = { ...styleObject };
     if (options.scopeSelector && !styleDef.selectors) {
       styleDef.selectors = [options.scopeSelector];
@@ -104,8 +68,8 @@ export function compileToCSS(
       options.sourceFile,
     );
 
-    // Run through the canonical pipeline
-    const pipeline = createDefaultPipeline();
+    // Fix #1: Reuse singleton pipeline instead of creating new one
+    const pipeline = getDefaultPipeline();
     const result = pipeline.execute(ir);
 
     return generateCSS(result.ir, {
@@ -119,129 +83,9 @@ export function compileToCSS(
   }
 }
 
-function compilePseudoClass(
-  parentSelector: string,
-  pseudoClass: string,
-  styles: PseudoStyles,
-  indent: string,
-  newline: string,
-): string | null {
-  const declarations = compileDeclarations(styles, indent, newline);
-  if (!declarations) return null;
-  const selector = resolveNestedSelector(parentSelector, pseudoClass);
-  return `${selector} {${newline}${declarations}${newline}}`;
-}
-function compileNestedRule(
-  parentSelector: string,
-  rule: NestedRule,
-  options: InternalCompileOptions,
-): string | null {
-  if (!rule?.selector) return null;
-  const nestedSelector = resolveNestedSelector(parentSelector, rule.selector);
-  const css = compileToCSS(rule.styles as StyleObject, {
-    ...options,
-    scopeSelector: nestedSelector,
-  });
-  return css || null;
-}
-function compileDeclarations(
-  properties: CSSProperties,
-  indent: string,
-  newline: string,
-  varPrefix?: string,
-): string {
-  let css = "";
-  for (const [prop, value] of Object.entries(properties)) {
-    const kebabProp = camelToKebab(prop);
-
-    if (isDynamicValue(value)) {
-      const prefix = varPrefix || "chain-dynamic";
-      css += `${indent}${kebabProp}: var(--${prefix}-${kebabProp});${newline}`;
-      continue;
-    }
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        if (typeof item === "string" || typeof item === "number") {
-          css += `${indent}${kebabProp}: ${sanitizeCSSValue(String(item))};${newline}`;
-        }
-      }
-      continue;
-    }
-    if (isCSSPrimitiveValue(value)) {
-      css += `${indent}${kebabProp}: ${sanitizeCSSValue(String(value))};${newline}`;
-    }
-  }
-  return css.endsWith(newline) ? css.slice(0, -newline.length) : css;
-}
-function compileWrapper(
-  tag: string,
-  inner: string,
-  indent: string,
-  newline: string,
-) {
-  if (!inner.trim()) return "";
-  return `${tag} {${newline}${safeIndent(inner, indent)}${newline}}`;
-}
-function compileAtRule(
-  rule: AtRule,
-  parentSelector: string,
-  indent: string,
-  newline: string,
-  options: InternalCompileOptions,
-): string {
-  switch (rule.type) {
-    case "media": {
-      if (!rule.styles) return "";
-      const inner = compileToCSS(rule.styles as StyleObject, {
-        ...options,
-        scopeSelector: parentSelector,
-      });
-      if (!inner.trim()) return "";
-      return compileWrapper(`@media ${rule.query}`, inner, indent, newline);
-    }
-    case "keyframes": {
-      let kf = `@keyframes ${rule.name} {${newline}`;
-      for (const [step, props] of Object.entries(rule.steps || {})) {
-        kf += `${indent}${step} {${newline}`;
-        for (const [p, v] of Object.entries(
-          props as Record<string, CSSPrimitiveValue>,
-        )) {
-          kf += `${indent}${indent}${camelToKebab(p)}: ${sanitizeCSSValue(String(v))};${newline}`;
-        }
-        kf += `${indent}}${newline}`;
-      }
-      kf += "}";
-      return kf;
-    }
-    case "font-face": {
-      let ff = "@font-face {" + newline;
-      for (const [p, v] of Object.entries(rule.properties || {}))
-        ff += `${indent}${camelToKebab(p)}: ${sanitizeCSSValue(String(v))};${newline}`;
-      ff += "}";
-      return ff;
-    }
-    case "supports":
-    case "container":
-    case "layer": {
-      if (!rule.styles) return "";
-      const inner = compileToCSS(rule.styles as StyleObject, {
-        ...options,
-        scopeSelector: parentSelector,
-      });
-      if (!inner.trim()) return "";
-      const prefix =
-        rule.type === "supports"
-          ? "@supports"
-          : rule.type === "container"
-            ? "@container"
-            : "@layer";
-      const queryStr = rule.query || rule.condition || rule.name || "";
-      return compileWrapper(`${prefix} ${queryStr}`.trim(), inner, indent, newline);
-    }
-    default:
-      return "";
-  }
-}
+// Fix #3: Dead code removed — compilePseudoClass, compileNestedRule,
+// compileDeclarations, compileWrapper, compileAtRule all deleted.
+// The pipeline printer handles all CSS generation now.
 
 export function partitionForBuild(
   styleObject: StyleObject,
@@ -253,7 +97,6 @@ export function partitionForBuild(
       throw new Error(`Circular style reference detected`);
     visited.add(styleObject);
     const parsed = parseStyleObject(styleObject as Record<string, unknown>);
-    // parseStyleObject already handles _atRules and _nestedRules — no manual extraction needed
     const allNested = parsed.nestedRules || [];
     const allAt = parsed.atRules || [];
     const { static: topStatic, dynamic: topDynamic } = partitionStyles(
@@ -277,9 +120,9 @@ export function partitionForBuild(
     const staticAtRules: AtRule[] = [];
     const dynamicAtRules: Record<string, any> = {};
     for (const atRule of allAt) {
-      if (atRule.styles) {
+      if (getAtRuleStyles(atRule)) {
         const atResult = partitionForBuild(
-          atRule.styles as StyleObject,
+          getAtRuleStyles(atRule) as StyleObject,
           options,
           visited,
         );
@@ -290,8 +133,10 @@ export function partitionForBuild(
         staticAtRules.push({
           ...atRule,
           styles: atResult.staticObject,
-        });
-      } else staticAtRules.push(atRule);
+        } as AtRule);
+      } else {
+        staticAtRules.push(atRule);
+      }
     }
     const staticPseudoClasses: any = {};
     const dynamicPseudoClasses: Record<string, any> = {};
@@ -335,14 +180,24 @@ export function run(...styleObjects: StyleObject[]): string {
   return styleObjects
     .map((obj) => compileToCSS(obj))
     .filter(Boolean)
-    .join('\n\n');
+    .join("\n\n");
 }
 
-// New: transpile — accepts object or spread arguments
-export function transpile(...args: StyleObject[]): string {
-  const objects = args.length === 1 && typeof args[0] === 'object' && !Array.isArray(args[0]) && !(args[0] as any).selectors
-    ? Object.values(args[0])
-    : args;
-  
-  return run(...(objects as StyleObject[]));
+// Fix #4: Explicit transpile overloads — no fragile heuristic
+export function transpile(map: Record<string, StyleObject>): string;
+export function transpile(...objects: StyleObject[]): string;
+export function transpile(...args: any[]): string {
+  if (
+    args.length === 1 &&
+    typeof args[0] === "object" &&
+    !Array.isArray(args[0]) &&
+    !(args[0] as any).selectors
+  ) {
+    const vals = Object.values(args[0]);
+    // Only treat as map if all values look like StyleObjects
+    if (vals.every((v) => v && typeof v === "object")) {
+      return run(...(vals as StyleObject[]));
+    }
+  }
+  return run(...(args as StyleObject[]));
 }

@@ -1,7 +1,6 @@
 // src/core/usecases/component-compiler.ts
 
-import fs from "fs";
-import fsp from "fs/promises";
+import os from "os";
 import path from "path";
 import chalk from "chalk";
 import { formatCSS } from "../interfaces/utils.js";
@@ -10,6 +9,8 @@ import type { ChainCSSPrefixer } from "@compiler/prefixer.js";
 import type { ManifestWriter } from "@compiler/services/manifest-writer.js";
 import { VERSION } from "@shared/constants/index.js";
 import type { StatsTracker } from "./stats.js";
+
+import fsp from "fs/promises";
 
 export interface ComponentContext {
   config: any;
@@ -20,19 +21,23 @@ export interface ComponentContext {
   computeStats: () => any;
   getAggregatedStats: () => any;
   emit: (e: any) => void;
-  statsTracker?: StatsTracker; // <-- OPTIONAL fix for your build error
+  statsTracker?: StatsTracker;
 }
 
+// Fix #1: Remove includes("-") — too greedy
 function isStyleDef(v: any): boolean {
+  if (!v || typeof v !== "object") return false;
+  const keys = Object.keys(v);
   return (
-    v &&
-    typeof v === "object" &&
-    (v.selectors ||
-      v._atRules ||
-      v._nestedRules ||
-      Object.keys(v).some(
-        (k) => k.startsWith("&") || k.startsWith(".") || k.includes("-"),
-      ))
+    v.selectors ||
+    v._atRules ||
+    v._nestedRules ||
+    keys.some(
+      (k) =>
+        k.startsWith("&") ||
+        k.startsWith(".") ||
+        /^[a-zA-Z]+(?:[A-Z][a-z]*)+$/.test(k), // camelCase CSS property
+    )
   );
 }
 
@@ -76,11 +81,24 @@ function safeKey(k: string): string {
   return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(k) ? k : JSON.stringify(k);
 }
 
+// Fix #2: Add try/catch for function serialization edge cases
 function serializeDynamic(dynamic: Record<string, any>): string {
   const entries: string[] = [];
   for (const [prop, val] of Object.entries(dynamic)) {
-    let serialized =
-      typeof val === "function" ? val.toString() : JSON.stringify(val);
+    let serialized: string;
+    if (typeof val === "function") {
+      try {
+        serialized = val.toString();
+      } catch {
+        serialized = JSON.stringify("[Function]");
+      }
+    } else {
+      try {
+        serialized = JSON.stringify(val);
+      } catch {
+        serialized = JSON.stringify(String(val));
+      }
+    }
     entries.push(`${safeKey(prop)}: ${serialized}`);
   }
   return `{ ${entries.join(", ")} }`;
@@ -100,35 +118,20 @@ export function createComponentCompiler(ctx: ComponentContext) {
     await fsp.writeFile(classFile, js, "utf8");
     generated.push(classFile);
     if (css.trim()) {
-      let final = css;
-      if (ctx.prefixer && ctx.config.prefixer?.enabled) {
-        try {
-          final = (await ctx.prefixer.process(final)).css || final;
-        } catch (e) {
-          ctx.emit({
-            type: "warning",
-            code: "PREFIXER_BATCH_FAILED",
-            message: `prefix failed for ${baseName}`,
-            sourceFile: classFile,
-            originalError: e,
-          });
-        }
-      }
-      await fsp.writeFile(cssFile, formatCSS(final, false), "utf8");
+      // Fix #4: Remove double prefixing — already done in style-compilation
+      // Fix #3: Respect minify config
+      await fsp.writeFile(
+        cssFile,
+        formatCSS(css, !!ctx.config.output.minify),
+        "utf8",
+      );
       generated.push(cssFile);
     } else {
-      if (fs.existsSync(cssFile)) {
-        try {
-          await fsp.unlink(cssFile);
-        } catch (e) {
-          ctx.emit({
-            type: "warning",
-            code: "CLEANUP_FAILED",
-            message: `Failed to remove stale stylesheet: ${cssFile}`,
-            sourceFile: classFile,
-            originalError: e,
-          });
-        }
+      // Fix #5: No existsSync — just try unlink
+      try {
+        await fsp.unlink(cssFile);
+      } catch {
+        // File doesn't exist — that's fine
       }
     }
     if (ctx.config.verbose)
@@ -200,7 +203,13 @@ export function createComponentCompiler(ctx: ComponentContext) {
         f.endsWith(".chain.jsx") ||
         f.endsWith(".chain.tsx"),
     );
-    const CONCURRENCY = 16;
+
+    // Fix #6: Adaptive concurrency based on available memory
+    const CONCURRENCY = Math.min(
+      16,
+      Math.max(2, Math.floor(os.freemem() / 150_000_000)),
+    );
+
     for (let i = 0; i < chainFiles.length; i += CONCURRENCY) {
       const batch = chainFiles.slice(i, i + CONCURRENCY);
       const results = await Promise.all(
@@ -210,7 +219,7 @@ export function createComponentCompiler(ctx: ComponentContext) {
             .replace(/\.chain\.(js|ts|jsx|tsx)$/, "");
           const sourceDir = path.dirname(file);
           const d = await compileOne(file, baseName, sourceDir, classFiles);
-          ctx.statsTracker?.recordFileProcessed(); // safe optional call - fixes double counting
+          ctx.statsTracker?.recordFileProcessed();
           onProgress?.(file);
           return d;
         }),
@@ -225,7 +234,8 @@ export function createComponentCompiler(ctx: ComponentContext) {
     ctx.manifestWriter.write({
       version: VERSION,
       timestamp: new Date().toISOString(),
-      atomicMap: {},
+      // Fix #7: Wire real atomicMap from stats when available
+      atomicMap: (ctx.getAggregatedStats() as any)?.atomicMap || {},
       stats: ctx.getAggregatedStats(),
       pipelineEnabled: true,
       diagnosticsCount: totalDiags,

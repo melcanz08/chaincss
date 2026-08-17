@@ -31,7 +31,7 @@ export interface Explanation {
   visualization: string;
 }
 
-// 1. Hoist regex, avoid re-alloc
+// Fix #5: Responsive width from terminal or options
 const ANSI_REGEX = /\x1b\[[0-9;]*m/g;
 const supportsColor =
   typeof process !== "undefined" &&
@@ -48,15 +48,12 @@ const ansi = {
   magenta: supportsColor ? "\x1b[35m" : "",
 } as const;
 
-// Fast visible length: strip ANSI, then length. Only do emoji double-width check if string contains non-ascii
 const HAS_WIDE_RE = /[^\x00-\x7F]/;
 
 function getVisibleLength(str: string): number {
-  // Strip ANSI once
   const stripped = str.replace(ANSI_REGEX, "");
   if (!stripped) return 0;
-  if (!HAS_WIDE_RE.test(stripped)) return stripped.length; // fast path: ascii only
-  // Slow path only for emoji / wide chars
+  if (!HAS_WIDE_RE.test(stripped)) return stripped.length;
   let count = 0;
   for (const char of stripped) {
     const cp = char.codePointAt(0) || 0;
@@ -66,28 +63,37 @@ function getVisibleLength(str: string): number {
   return count;
 }
 
+// Fix #2: Iterate by original string index, not current.length
 function truncateVisible(str: string, maxLength: number): string {
   if (getVisibleLength(str) <= maxLength) return str;
-  // Fast truncate on stripped length, then re-add ...
-  // We need to preserve ANSI, so iterate but early exit
+
   let current = "";
   let currentLen = 0;
   const strippedTarget = maxLength - 3;
-  for (const char of str) {
-    if (char === "\x1b") {
-      // copy full ANSI sequence without counting
-      const m = str.slice(current.length).match(/^\x1b\[[0-9;]*m/);
+  let i = 0;
+
+  while (i < str.length) {
+    // Copy full ANSI sequence without counting
+    if (str[i] === "\x1b") {
+      const m = str.slice(i).match(/^\x1b\[[0-9;]*m/);
       if (m) {
         current += m[0];
+        i += m[0].length;
         continue;
       }
     }
+
+    const char = str[i];
     const cp = char.codePointAt(0) || 0;
     const charLen = cp > 0xffff || (cp >= 0x2000 && cp <= 0x32ff) ? 2 : 1;
+
     if (currentLen + charLen > strippedTarget) break;
+
     current += char;
     currentLen += charLen;
+    i++;
   }
+
   return current + "...";
 }
 
@@ -116,13 +122,34 @@ function safeSerialize(value: any): string {
   }
 }
 
+// Fix #5: Terminal width detection
+function getTerminalWidth(): number {
+  if (
+    typeof process !== "undefined" &&
+    (process.stdout as any)?.columns &&
+    (process.stdout as any).columns > 20
+  ) {
+    return (process.stdout as any).columns;
+  }
+  return 80; // default fallback
+}
+
+const MAX_ENTRIES = 200;
+
 export class DebugCollector {
   private entries: DebugEntry[] = [];
   private enabled: boolean;
+  private width: number;
 
-  constructor(enabled = false) {
+  constructor(enabled = false, options?: { width?: number; maxEntries?: number }) {
     this.enabled = enabled;
+    // Fix #5: Width from options or terminal
+    this.width = options?.width || Math.min(getTerminalWidth(), 100);
+    // Fix #3: Entry cap via options
+    this.maxEntries = options?.maxEntries || MAX_ENTRIES;
   }
+
+  private maxEntries: number;
 
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
@@ -139,6 +166,8 @@ export class DebugCollector {
     context: string,
   ): void {
     if (!this.enabled) return;
+    // Fix #3: Cap entries to prevent memory leak
+    if (this.entries.length >= this.maxEntries) return;
     this.entries.push({
       prop,
       realProp: entry.realProp,
@@ -184,7 +213,11 @@ export class DebugCollector {
     const nodes = this.entries.map((e) => ({
       prop: e.prop,
       cssProperty: e.realProp,
-      value: safeSerialize(e.originalValue),
+      // Fix #4: Quote strings in visualization
+      value:
+        typeof e.originalValue === "string"
+          ? `"${e.originalValue}"`
+          : safeSerialize(e.originalValue),
       resolved: e.resolvedValue,
       mode: e.classification === "static" ? "📦 build" : "🏃 runtime",
       context: e.context,
@@ -205,7 +238,8 @@ export class DebugCollector {
 
   private renderVisualization(summary: Explanation["summary"]): string {
     const lines: string[] = [];
-    const width = 66;
+    // Fix #5: Use instance width instead of hardcoded 66
+    const width = this.width;
     const innerWidth = width - 4;
 
     lines.push("┌" + "─".repeat(width - 2) + "┐");
@@ -222,7 +256,10 @@ export class DebugCollector {
       const ctxText =
         e.context && e.context !== "root" ? ` (${e.context})` : "";
       const propLabel = `${ansi.cyan}${e.prop}${ctxText}${ansi.reset}`;
-      const rightVal = safeSerialize(e.originalValue);
+      const rightVal =
+        typeof e.originalValue === "string"
+          ? `"${e.originalValue}"`
+          : safeSerialize(e.originalValue);
       const valText = isStatic
         ? `${ansi.green}${rightVal}${ansi.reset}`
         : `${ansi.yellow}${rightVal}${ansi.reset}`;
@@ -231,23 +268,17 @@ export class DebugCollector {
       const rightPart = valText;
       const arrow = " → ";
 
-      const totalLen =
-        getVisibleLength(leftPart) + arrow.length + getVisibleLength(rightPart);
+      // Fix #1: Cache getVisibleLength calls
+      const leftLen = getVisibleLength(leftPart);
+      const rightLen = getVisibleLength(rightPart);
+      const totalLen = leftLen + arrow.length + rightLen;
 
       if (totalLen > innerWidth) {
-        const maxRight = Math.max(
-          15,
-          innerWidth - getVisibleLength(leftPart) - arrow.length,
-        );
+        const maxRight = Math.max(15, innerWidth - leftLen - arrow.length);
         const truncatedRight = truncateVisible(rightPart, maxRight);
+        const truncatedLen = getVisibleLength(truncatedRight);
         const pad = " ".repeat(
-          Math.max(
-            0,
-            innerWidth -
-              (getVisibleLength(leftPart) +
-                arrow.length +
-                getVisibleLength(truncatedRight)),
-          ),
+          Math.max(0, innerWidth - (leftLen + arrow.length + truncatedLen)),
         );
         lines.push(`│ ${leftPart}${arrow}${truncatedRight}${pad} │`);
       } else {

@@ -26,10 +26,9 @@ import type {
 import type { 
   ChainCSSConfig,
   ChainCSSUserConfig,
-  MacroHandler as ConfigMacroHandler,
 } from "@shared/config/index.js";
 
-export type DynamicValueGetter = (...args: any[]) => any;
+export type DynamicValueGetter = (...args: unknown[]) => unknown;
 
 export type MacroHandler = (
   value: any,
@@ -39,6 +38,7 @@ export type MacroHandler = (
 export type MacroMap = Record<string, MacroHandler>;
 export type ShorthandMap = Record<string, string>;
 
+// Fix #5: Replace `any` index signature with `unknown` for better type safety
 export interface StyleDefinition {
   selectors: string[];
   hover?: Record<string, string | number>;
@@ -48,11 +48,9 @@ export interface StyleDefinition {
   _componentName?: string;
   _generateComponent?: boolean;
   _framework?: "react" | "vue" | "svelte" | "solid" | "auto";
-  _propsDefinition?: Record<string, any>;
-  /** Explicit bucket for custom CSS properties */
+  _propsDefinition?: Record<string, unknown>;
   customProperties?: Record<string, string | number>;
-  /** Allow arbitrary CSS properties */
-  [cssProperty: string]: any;
+  [cssProperty: string]: unknown;
 }
 
 // ============================================================================
@@ -78,11 +76,10 @@ export interface ChainShorthandMethods {
   raw(prop: string, value: string | number): ChainProxy;
 }
 
+// ChainProxy keeps `any` — unavoidable for Proxy-based dynamic dispatch
 export interface ChainProxy extends ChainShorthandMethods {
-  // Direct CSS property access (existing proxy behavior)
   [cssProperty: string]: any;
 
-  // Pseudo-classes
   hover(): ChainProxy;
   focus(): ChainProxy;
   active(): ChainProxy;
@@ -92,56 +89,88 @@ export interface ChainProxy extends ChainShorthandMethods {
   after(): ChainProxy;
   placeholder(): ChainProxy;
 
-  // Pseudo-class end
   end(): ChainProxy;
 
-  // At-rules
   media(query: string, fn: (c: ChainProxy) => void): ChainProxy;
   supports(condition: string, fn: (c: ChainProxy) => void): ChainProxy;
   container(query: string, fn: (c: ChainProxy) => void): ChainProxy;
   layer(name: string, fn: (c: ChainProxy) => void): ChainProxy;
 
-  // Nesting
   nest(selector: string, fn: (c: ChainProxy) => void): ChainProxy;
   children(fn: (c: ChainProxy) => void): ChainProxy;
   when(condition: boolean, fn: (c: ChainProxy) => void): ChainProxy;
 
-  // Keyframes & Fonts
   keyframes(name: string, steps: Record<string, any>): ChainProxy;
   fontFace(properties: Record<string, string>): ChainProxy;
 
-  // Utilities
   addClass(className: string): ChainProxy;
   enableDebug(): ChainProxy;
   explain(): any;
 
-  // Terminal methods
   $el(...selectors: string[]): StyleObject;
   build(selectors?: string[] | string): StyleObject;
 
-  // Semantic intents
   intents(names: string[]): ChainProxy;
   describe(description: string): ChainProxy;
 }
 
-export interface AtRule {
-  type:
-    | "media"
-    | "keyframes"
-    | "font-face"
-    | "supports"
-    | "container"
-    | "layer"
-    | "counter-style"
-    | "property";
-  query?: string;
-  condition?: string;
-  name?: string;
-  styles?: StyleObject;
-  steps?: Record<string, Record<string, CSSPrimitiveValue>>;
-  properties?: Record<string, string>;
-  descriptors?: Record<string, string>;
-}
+// Fix #3: Discriminated union for AtRule — no more optional-field guessing
+export type AtRule =
+  | {
+      type: "media";
+      query: string;
+      styles: StyleObject;
+      id?: string;
+      source?: { file?: string; component?: string };
+      history?: any[];
+    }
+  | {
+      type: "supports";
+      condition: string;
+      styles: StyleObject;
+      id?: string;
+      source?: { file?: string; component?: string };
+      history?: any[];
+    }
+  | {
+      type: "container";
+      condition: string;
+      styles: StyleObject;
+      id?: string;
+      source?: { file?: string; component?: string };
+      history?: any[];
+    }
+  | {
+      type: "layer";
+      name: string;
+      styles: StyleObject;
+      id?: string;
+      source?: { file?: string; component?: string };
+      history?: any[];
+    }
+  | {
+      type: "keyframes";
+      name: string;
+      steps: Record<string, Record<string, CSSPrimitiveValue>>;
+      id?: string;
+      source?: { file?: string; component?: string };
+      history?: any[];
+    }
+  | {
+      type: "font-face";
+      properties: Record<string, string>;
+      id?: string;
+      source?: { file?: string; component?: string };
+      history?: any[];
+    }
+  | {
+      type: "counter-style" | "property";
+      name?: string;
+      descriptors?: Record<string, string>;
+      id?: string;
+      source?: { file?: string; component?: string };
+      history?: any[];
+    };
 
 export interface NestedRule {
   selector: string;
@@ -151,8 +180,8 @@ export interface NestedRule {
 export interface ThemeBlock {
   name: string;
   styles: StyleDefinition;
-  tokens: any;
-  fallback: any;
+  tokens: unknown;
+  fallback: unknown;
 }
 
 export interface AtomicClass {
@@ -170,15 +199,16 @@ export interface CompileResult {
   classMap: Record<string, string>;
   atomicClasses: AtomicClass[];
   stats: CompileStats;
-  dynamic?: Record<string, () => any>; // Dynamic values preserved for runtime
-  dynamicValues?: Record<string, any>;
+  // Fix #5: dynamic values are functions but we keep the return as unknown to avoid `any`
+  dynamic?: Record<string, (...args: unknown[]) => unknown>;
+  dynamicValues?: Record<string, unknown>;
   hasDynamic?: boolean;
   warnings?: string[];
   errors?: string[];
   inspector?: {
-    ir: any;
-    pipelineReport: any[];
-    diagnostics: any[];
+    ir: unknown;
+    pipelineReport: unknown[];
+    diagnostics: unknown[];
   };
 }
 
@@ -196,9 +226,9 @@ export interface CompileStats {
 }
 
 export interface TokenContext {
-  tokens: Record<string, any>;
+  tokens: Record<string, unknown>;
   prefix: string;
-  transform?: (value: any) => any;
+  transform?: (value: unknown) => unknown;
 }
 
 // ============================================================================
@@ -219,19 +249,16 @@ export type IntentMap = Record<string, IntentDefinition>;
 export type TokenRelationship =
   DerivedRelationship | ContrastRelationship | HarmonyRelationship;
 
-// Re-export config types (canonical source: @shared/config/index.ts)
-export type { ChainCSSConfig };
-export type { ChainCSSUserConfig };
-
-// Convenience alias
+// Fix #4: Keep one canonical re-export — remove duplicate at bottom
+export type { ChainCSSConfig, ChainCSSUserConfig };
 export type Config = ChainCSSUserConfig;
 
 export interface ChainCSSPlugin {
   name: string;
-  setup?: (compiler: any) => void;
+  setup?: (compiler: unknown) => void;
   transform?: (code: string, id: string) => string | null;
   transformCSS?: (css: string, filePath: string) => string;
-  transformAST?: (ast: any) => any;
+  transformAST?: (ast: unknown) => unknown;
 }
 
 export interface CompileOptions {
@@ -258,7 +285,7 @@ export interface CacheEntry {
 }
 
 export interface TokenValue {
-  value: any;
+  value: unknown;
   description?: string;
   deprecated?: boolean;
   aliases?: string[];
@@ -269,8 +296,8 @@ export interface DesignTokens {
   spacing: Record<string, TokenValue | string>;
   typography: Record<string, TokenValue | string>;
   breakpoints: Record<string, TokenValue | string>;
-  animations: Record<string, TokenValue | any>;
-  [key: string]: any;
+  animations: Record<string, TokenValue | unknown>;
+  [key: string]: unknown;
 }
 
 export interface BreakpointConfig {
@@ -297,7 +324,7 @@ export type DerivedMethod =
 
 export interface DerivedRelationship {
   type: "derived";
-  source: string; // dot path: colors.primary.500
+  source: string;
   target: string;
   method: DerivedMethod;
 }
@@ -306,7 +333,7 @@ export interface ContrastRelationship {
   type: "contrast";
   foreground: string;
   background: string | string[];
-  target?: number; // default 4.5
+  target?: number;
   autoFix?: "auto" | "darken" | "lighten";
   priority?: number;
 }
@@ -319,34 +346,19 @@ export interface HarmonyRelationship {
 }
 
 // ============================================================================
-// Math Engine Types (v3.0)
+// Math Engine Types
 // ============================================================================
 
+// Fix #6: Add modern viewport and container query units
 export type CSSUnit =
-  | "px"
-  | "rem"
-  | "em"
-  | "%"
-  | "vw"
-  | "vh"
-  | "vmin"
-  | "vmax"
-  | "ch"
-  | "ex"
-  | "cm"
-  | "mm"
-  | "in"
-  | "pt"
-  | "pc"
-  | "deg"
-  | "rad"
-  | "turn"
-  | "grad"
-  | "s"
-  | "ms"
-  | "dpi"
-  | "dpcm"
-  | "dppx";
+  | "px" | "rem" | "em" | "%"
+  | "vw" | "vh" | "vmin" | "vmax"
+  | "dvw" | "dvh" | "svh" | "lvh"
+  | "cqw" | "cqh" | "cqi" | "cqb" | "cqmin" | "cqmax"
+  | "ch" | "ex" | "cm" | "mm" | "in" | "pt" | "pc"
+  | "deg" | "rad" | "turn" | "grad"
+  | "s" | "ms"
+  | "dpi" | "dpcm" | "dppx";
 
 export interface CSSMathValue {
   value: number;
@@ -354,13 +366,13 @@ export interface CSSMathValue {
 }
 
 export interface MathContext {
-  rootFontSize?: number; // px, default 16
-  viewportWidth?: number; // px, default 1920
-  viewportHeight?: number; // px, default 1080
-  parentFontSize?: number; // px, default 16
-  dpi?: number; // default 96
-  elementWidth?: number; // px
-  elementHeight?: number; // px
+  rootFontSize?: number;
+  viewportWidth?: number;
+  viewportHeight?: number;
+  parentFontSize?: number;
+  dpi?: number;
+  elementWidth?: number;
+  elementHeight?: number;
 }
 
 export interface MathResult {
@@ -376,14 +388,14 @@ export interface MathResult {
 export interface FluidTypeConfig {
   minSize: number;
   maxSize: number;
-  minWidth?: number; // default 320
-  maxWidth?: number; // default 1280
+  minWidth?: number;
+  maxWidth?: number;
   unit?: "px" | "rem";
-  rootFontSize?: number; // for rem conversion
+  rootFontSize?: number;
 }
 
 // ============================================================================
-// Self-Healing / Intent Engine Types (v3.0)
+// Self-Healing / Intent Engine Types
 // ============================================================================
 
 export interface IntentRule {
@@ -408,14 +420,14 @@ export interface IntentContext {
   property?: string;
   value?: string;
   selector?: string;
-  parentStyles?: Record<string, any>;
+  parentStyles?: Record<string, unknown>;
   mediaContext?: string;
   themeContext?: string;
 }
 
 export type HealMode = "strict" | "dev" | "smart";
 export interface HealResult {
-  fixed: Record<string, any>;
+  fixed: Record<string, unknown>;
   corrections: CorrectionResult[];
   warnings: string[];
   mode: HealMode;
@@ -436,7 +448,6 @@ export interface StyleGraphNode {
   isDead: boolean;
   hash: string;
   sourceComponent?: string;
-  /** Track merged component→selector mappings to prevent classMap loss during identical rule merging */
   mergedComponents?: Record<string, string>;
 }
 
@@ -457,7 +468,7 @@ export interface GraphCompileOptions {
   eliminateDead?: boolean;
   knownSelectors?: string[];
   mergeIdentical?: boolean;
-  mergeThreshold?: number; // min properties to consider merging
+  mergeThreshold?: number;
   sortOutput?: "specificity" | "source-order" | "topological";
   verbose?: boolean;
 }
@@ -534,40 +545,23 @@ export type OptionalKeys<T, K extends keyof T> = Omit<T, K> &
   Partial<Pick<T, K>>;
 
 // ============================================================================
-// Strict Style Types — Eliminates `any` from style-compiler.ts
+// Strict Style Types
 // ============================================================================
 
-/**
- * Primitive CSS value — what actually ends up in a CSS property.
- * Functions indicate dynamic values that need runtime resolution.
- */
 export type CSSPrimitiveValue = string | number | (string | number)[];
 
-/**
- * A collection of CSS property-value pairs (no nesting, no pseudos)
- */
 export interface CSSProperties {
   [property: string]: CSSPrimitiveValue | DynamicValueGetter;
 }
 
-/**
- * Pseudo-class styles (e.g., { backgroundColor: 'red' } inside &:hover)
- */
 export interface PseudoStyles {
   [cssProperty: string]: CSSPrimitiveValue;
 }
 
-/**
- * Map of pseudo-class selectors to their styles
- */
 export interface PseudoClasses {
   [pseudoSelector: `&:${string}`]: PseudoStyles;
 }
 
-/**
- * The canonical style object that flows through the compiler.
- * Separates concerns: properties, pseudos, at-rules, nested rules.
- */
 export interface StyleObject {
   selectors?: string | string[];
   _atRules?: AtRule[];
@@ -578,11 +572,11 @@ export interface StyleObject {
   _transforms?: Array<{ type: string; [key: string]: unknown }>;
   _name?: string;
   _mixed?: boolean;
+  _intents?: string[];
 
-  /** Top-level CSS properties and structural mappings */
   [property: string]:
     | CSSPrimitiveValue
-    | DynamicValueGetter 
+    | DynamicValueGetter
     | PseudoStyles
     | AtRule[]
     | NestedRule[]
@@ -593,9 +587,6 @@ export interface StyleObject {
     | undefined;
 }
 
-/**
- * Structured result of parsing a StyleObject.
- */
 export interface ParsedStyleObject {
   regularProps: CSSProperties;
   pseudoClasses: PseudoClasses;
@@ -608,48 +599,34 @@ export interface ParsedStyleObject {
 // Type Guards
 // ============================================================================
 
-export function isStyleDefinition(value: any): value is StyleDefinition {
-  return value && typeof value === "object" && Array.isArray(value.selectors);
-}
-
-export function isAtRule(value: any): value is AtRule {
+export function isStyleDefinition(value: unknown): value is StyleDefinition {
   return (
-    value &&
     typeof value === "object" &&
-    value.type &&
-    [
-      "media",
-      "keyframes",
-      "font-face",
-      "supports",
-      "container",
-      "layer",
-    ].includes(value.type)
+    value !== null &&
+    Array.isArray((value as StyleDefinition).selectors)
   );
 }
 
-export function isAtomicClass(value: any): value is AtomicClass {
-  return (
-    value &&
-    typeof value === "object" &&
-    typeof value.className === "string" &&
-    typeof value.prop === "string"
-  );
+export function isAtRule(value: unknown): value is AtRule {
+  if (typeof value !== "object" || value === null) return false;
+  const type = (value as AtRule).type;
+  return [
+    "media", "keyframes", "font-face", "supports",
+    "container", "layer", "counter-style", "property",
+  ].includes(type as string);
 }
 
-export function isCompileResult(value: any): value is CompileResult {
-  return (
-    value &&
-    typeof value === "object" &&
-    typeof value.css === "string" &&
-    typeof value.classMap === "object" &&
-    typeof value.stats === "object"
-  );
+export function isAtomicClass(value: unknown): value is AtomicClass {
+  if (typeof value !== "object" || value === null) return false;
+  const a = value as AtomicClass;
+  return typeof a.className === "string" && typeof a.prop === "string";
 }
 
-// ============================================================================
-// Type Guards for strict style types
-// ============================================================================
+export function isCompileResult(value: unknown): value is CompileResult {
+  if (typeof value !== "object" || value === null) return false;
+  const c = value as CompileResult;
+  return typeof c.css === "string" && typeof c.classMap === "object" && typeof c.stats === "object";
+}
 
 export function isCSSPrimitiveValue(value: unknown): value is CSSPrimitiveValue {
   if (typeof value === "string" || typeof value === "number") return true;
@@ -661,7 +638,7 @@ export function isCSSPrimitiveValue(value: unknown): value is CSSPrimitiveValue 
 
 export function isDynamicValue(
   value: unknown,
-): value is (...args: any[]) => string {
+): value is (...args: unknown[]) => unknown {
   return typeof value === "function";
 }
 
@@ -677,23 +654,18 @@ export function isPseudoStyles(value: unknown): value is PseudoStyles {
 export function isNestedRuleV2(value: unknown): value is NestedRule {
   if (typeof value !== "object" || value === null) return false;
   const obj = value as Record<string, unknown>;
-  return (
-    typeof obj.selector === "string" &&
-    typeof obj.styles === "object" &&
-    obj.styles !== null
-  );
+  return typeof obj.selector === "string" && typeof obj.styles === "object" && obj.styles !== null;
 }
 
 export function isAtRuleV2(value: unknown): value is AtRule {
-  if (typeof value !== "object" || value === null) return false;
-  const obj = value as Record<string, unknown>;
-  return typeof obj.type === "string";
+  return isAtRule(value);
 }
 
-/**
- * Parse a raw object into a structured ParsedStyleObject.
- * Centralizes all the type-checking in one place.
- */
+// Fix #1: Internal keys that must never leak into regularProps
+const INTERNAL_SKIP = new Set([
+  "_classes", "_mixed", "_intents", "_transforms", "_name",
+]);
+
 export function parseStyleObject(
   obj: Record<string, unknown>,
 ): ParsedStyleObject {
@@ -703,34 +675,27 @@ export function parseStyleObject(
   const nestedRules: NestedRule[] = [];
   let selectors: string | string[] | undefined;
 
-  // 1. Process explicit keys
-  // Sort keys to ensure deterministic processing order for CSS generation
+  // Fix #2: Preserve insertion order for CSS cascade — no alphabetical sort
   const keys = Object.keys(obj);
-  // Sort: _-prefixed keys first, then alphabetical using < > comparison
-  keys.sort((a, b) => {
-    const aInternal = a.startsWith("_");
-    const bInternal = b.startsWith("_");
-    if (aInternal && !bInternal) return -1;
-    if (!aInternal && bInternal) return 1;
-    return a < b ? -1 : a > b ? 1 : 0;
-  });
 
   for (const key of keys) {
     const value = obj[key];
 
-    // Handle Internal Architectural Keys
+    // Fix #1: Skip internal metadata keys
+    if (INTERNAL_SKIP.has(key)) continue;
+
     if (key === "_atRules" && Array.isArray(value)) {
       atRules.push(...value.filter(isAtRuleV2));
       continue;
     }
     if (key === "_nestedRules" && Array.isArray(value)) {
-      nestedRules.push(
-        ...value.filter((r): r is NestedRule => isNestedRuleV2(r)),
-      );
+      nestedRules.push(...value.filter((r): r is NestedRule => isNestedRuleV2(r)));
       continue;
     }
+    if (key === "_intents" && Array.isArray(value)) {
+      continue; // already handled by INTERNAL_SKIP
+    }
 
-    // Handle Public Keys
     if (key === "selectors") {
       if (
         typeof value === "string" ||
@@ -749,9 +714,7 @@ export function parseStyleObject(
     }
 
     if (key === "nestedRules" && Array.isArray(value)) {
-      nestedRules.push(
-        ...value.filter((r): r is NestedRule => isNestedRuleV2(r)),
-      );
+      nestedRules.push(...value.filter((r): r is NestedRule => isNestedRuleV2(r)));
       continue;
     }
 
@@ -760,7 +723,6 @@ export function parseStyleObject(
       continue;
     }
 
-    // Standard properties
     if (isCSSPrimitiveValue(value) || isDynamicValue(value)) {
       regularProps[key] = value as CSSPrimitiveValue | DynamicValueGetter;
     }
@@ -773,32 +735,24 @@ export function parseStyleObject(
 // Type Guards for new tools
 // ============================================================================
 
-export function isMathResult(value: any): value is MathResult {
-  return (
-    value &&
-    typeof value === "object" &&
-    typeof value.expression === "string" &&
-    typeof value.toString === "function"
-  );
+export function isMathResult(value: unknown): value is MathResult {
+  if (typeof value !== "object" || value === null) return false;
+  const m = value as MathResult;
+  return typeof m.expression === "string" && typeof m.toString === "function";
 }
 
-export function isCorrectionResult(value: any): value is CorrectionResult {
-  return (
-    value &&
-    typeof value === "object" &&
-    typeof value.original === "string" &&
-    typeof value.corrected === "string" &&
-    typeof value.confidence === "number"
-  );
+export function isCorrectionResult(value: unknown): value is CorrectionResult {
+  if (typeof value !== "object" || value === null) return false;
+  const c = value as CorrectionResult;
+  return typeof c.original === "string" && typeof c.corrected === "string" && typeof c.confidence === "number";
 }
 
-export function isGraphCompileResult(value: any): value is GraphCompileResult {
-  return (
-    isCompileResult(value) &&
-    typeof (value as any).graph === "object" &&
-    typeof (value as any).eliminatedDead === "number"
-  );
+export function isGraphCompileResult(value: unknown): value is GraphCompileResult {
+  if (!isCompileResult(value)) return false;
+  const g = value as GraphCompileResult;
+  return typeof g.graph === "object" && typeof g.eliminatedDead === "number";
 }
+
 // ============================================================================
 // Runtime Types (re-exported from runtime/types)
 // ============================================================================
@@ -825,12 +779,9 @@ export type {
   RuntimeStyleDefinition,
 } from "@frameworks/core/types.js";
 
-// ============================================================================
-// Plugin Types (re-exported from plugins/types)
-// ============================================================================
-
 export type { ChainCSSPluginOptions } from "@frameworks/build-tools/types.js";
 
+// Fix #4: Single canonical re-export — removed duplicate at bottom
 export type {
   GridOptions,
   FlexOptions,

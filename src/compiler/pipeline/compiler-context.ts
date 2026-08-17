@@ -14,7 +14,7 @@ import {
   getGraphStats,
   exportGraphAsJSON,
   type GraphExport,
-} from "./ir/graph-builder.js";
+} from "../incremental/graph-builder.js";
 import {
   buildSymbolTable,
   resolveSymbol,

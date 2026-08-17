@@ -5,7 +5,11 @@
   "scripts": {
     "run": "node --expose-gc run.js",
     "quick": "node --expose-gc run.js --quick",
-    "ci": "node --expose-gc run.js --ci --output results/"
+    "ci": "node --expose-gc run.js --ci --output results/",
+    "bench:incremental": "node benchmark-stateful-incremental.js",
+    "bench:incremental:small": "node benchmark-stateful-incremental.js --small",
+    "bench:incremental:large": "node benchmark-stateful-incremental.js --large",
+    "bench:incremental": "node --import tsx benchmarks/benchmark-stateful-incremental.js"
   },
   "dependencies": {
     "@stylexjs/stylex": "^0.10.0",

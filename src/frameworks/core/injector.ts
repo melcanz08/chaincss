@@ -12,7 +12,6 @@
 
 import { compileToCSS } from "@core/usecases/style-compiler.js";
 import type { StyleObject } from "@shared/types/index.js";
-import { partitionStyles } from "@core/usecases/value-classifier.js";
 
 const TOKEN_KEY = "__CHAINCSS_TOKENS__";
 

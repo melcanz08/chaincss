@@ -10,18 +10,12 @@ import type {
   OptimizationResult,
 } from "../pipeline-types.js";
 
-/**
- * Safely escapes characters for standard CSS selector compatibility.
- */
 function escapeCSSIdentifier(str: string): string {
   return str
     .replace(/^([0-9])/, "\\3$1 ")
     .replace(/[^a-zA-Z0-9_-]/g, "\\$&");
 }
 
-/**
- * Generates a concise, predictable utility class name for a property/value pair.
- */
 function generateAtomicClassName(
   property: string,
   value: string | number,
@@ -151,23 +145,30 @@ function gatherDeclarations(
 ): void {
   if (!declarations) return;
   for (const decl of declarations) {
-    if (!decl || decl.property == null || decl.value == null) continue;
+    if (!decl || decl.property == null) continue;
 
-    const impFlag = decl.important ? "!imp" : "";
-    const key = makeKey(scopeKey, decl.property, decl.value, impFlag);
-    const existing = usageMap.get(key);
+    // Fix #2: Expand array fallback values
+    const values = Array.isArray(decl.value) ? decl.value : [decl.value];
 
-    if (existing) {
-      existing.count++;
-    } else {
-      usageMap.set(key, {
-        count: 1,
-        property: decl.property,
-        value: decl.value,
-        important: Boolean(decl.important),
-        pseudo,
-        media,
-      });
+    for (const val of values) {
+      if (val == null) continue;
+
+      const impFlag = decl.important ? "!imp" : "";
+      const key = makeKey(scopeKey, decl.property, val, impFlag);
+      const existing = usageMap.get(key);
+
+      if (existing) {
+        existing.count++;
+      } else {
+        usageMap.set(key, {
+          count: 1,
+          property: decl.property,
+          value: val,
+          important: Boolean(decl.important),
+          pseudo,
+          media,
+        });
+      }
     }
   }
 }
@@ -196,37 +197,27 @@ export const atomicExtractor: OptimizationPass = {
 
     const usageMap = new Map<string, UsageEntry>();
 
-    // ==========================================================================
-    // 1. Gather usage frequencies
-    // ==========================================================================
-
     function walkRule(rule: IRRule, parentMedia: string): void {
       if (rule.isDead || (rule as any).meta?.atomic) return;
 
       const media = parentMedia;
 
-      // Top-level declarations
       gatherDeclarations(usageMap, rule.declarations, "root", "root", media);
 
-      // Pseudo-class declarations (hover, focus, active, etc.)
-      // IRPseudoClass.name is the pseudo: "hover", "focus", "active"
       for (const pc of rule.pseudoClasses || []) {
         const pseudo = pc.name || "root";
         gatherDeclarations(usageMap, pc.declarations, pseudo, pseudo, media);
       }
 
-      // At-rule nested rules (media queries, container queries)
       for (const atRule of rule.atRules || []) {
         const atMedia = atRule.query
           ? `${atRule.type}:${atRule.query}`
           : atRule.type;
-        // Walk nested rules inside the at-rule
         for (const nested of atRule.nestedRules || []) {
           walkRule(nested, atMedia);
         }
       }
 
-      // Recurse into nested rules
       for (const nested of rule.nestedRules || []) {
         walkRule(nested, media);
       }
@@ -240,9 +231,6 @@ export const atomicExtractor: OptimizationPass = {
     const atomicClassMap = new Map<string, string>();
     const threshold = context?.config?.atomicThreshold ?? 3;
 
-    // ==========================================================================
-    // 2. Extract entries meeting usage threshold
-    // ==========================================================================
     for (const [key, data] of usageMap) {
       if (data.count < threshold) continue;
 
@@ -270,7 +258,6 @@ export const atomicExtractor: OptimizationPass = {
         atomicDecl.important = true;
       }
 
-      // Wrap in media query if not "all"
       if (data.media !== "all") {
         const parts = data.media.split(":");
         const type = parts[0] as any;
@@ -310,9 +297,9 @@ export const atomicExtractor: OptimizationPass = {
       atomicRules.push(atomicRule);
     }
 
-    // ==========================================================================
-    // 3. Substitute original rules with atomic token references
-    // ==========================================================================
+    // Fix #5: Sort atomicRules for deterministic output
+    atomicRules.sort((a, b) => a.selector.localeCompare(b.selector));
+
     let declarationsReplaced = 0;
     let rulesEliminated = 0;
     let bytesSaved = 0;
@@ -325,49 +312,15 @@ export const atomicExtractor: OptimizationPass = {
       if (!(rule as any).meta) (rule as any).meta = {};
       if (!(rule as any).history) (rule as any).history = [];
 
-      // Substitute top-level declarations
       rule.declarations = (rule.declarations || []).filter((decl: any) => {
         if (!decl) return false;
 
-        const impFlag = decl.important ? "!imp" : "";
-        const key = makeKey("root", decl.property, decl.value, impFlag);
-        const className = atomicClassMap.get(key);
+        // Fix #2: Substitute array fallback values
+        const values = Array.isArray(decl.value) ? decl.value : [decl.value];
 
-        if (className) {
-          atomicClasses.push(className);
-          declarationsReplaced++;
-
-          const origBytes =
-            decl.property.length +
-            String(decl.value).length +
-            (decl.important ? 15 : 4);
-          const refBytes = className.length + 1;
-          bytesSaved += Math.max(0, origBytes - refBytes);
-
-          try {
-            recordHistory(
-              decl as any,
-              "atomic-extractor",
-              "extracted-to-atomic",
-              key,
-              `Moved to atomic class .${className}`,
-            );
-          } catch {}
-          return false;
-        }
-        return true;
-      });
-
-      // Substitute pseudo-class declarations
-      const keptPseudoClasses: typeof rule.pseudoClasses = [];
-      for (const pc of rule.pseudoClasses || []) {
-        const pseudo = pc.name || "root";
-
-        pc.declarations = (pc.declarations || []).filter((decl: any) => {
-          if (!decl) return false;
-
+        for (const val of values) {
           const impFlag = decl.important ? "!imp" : "";
-          const key = makeKey(pseudo, decl.property, decl.value, impFlag);
+          const key = makeKey("root", decl.property, val, impFlag);
           const className = atomicClassMap.get(key);
 
           if (className) {
@@ -376,7 +329,7 @@ export const atomicExtractor: OptimizationPass = {
 
             const origBytes =
               decl.property.length +
-              String(decl.value).length +
+              String(val).length +
               (decl.important ? 15 : 4);
             const refBytes = className.length + 1;
             bytesSaved += Math.max(0, origBytes - refBytes);
@@ -392,10 +345,50 @@ export const atomicExtractor: OptimizationPass = {
             } catch {}
             return false;
           }
+        }
+        return true;
+      });
+
+      const keptPseudoClasses: typeof rule.pseudoClasses = [];
+      for (const pc of rule.pseudoClasses || []) {
+        const pseudo = pc.name || "root";
+
+        pc.declarations = (pc.declarations || []).filter((decl: any) => {
+          if (!decl) return false;
+
+          const values = Array.isArray(decl.value) ? decl.value : [decl.value];
+
+          for (const val of values) {
+            const impFlag = decl.important ? "!imp" : "";
+            const key = makeKey(pseudo, decl.property, val, impFlag);
+            const className = atomicClassMap.get(key);
+
+            if (className) {
+              atomicClasses.push(className);
+              declarationsReplaced++;
+
+              const origBytes =
+                decl.property.length +
+                String(val).length +
+                (decl.important ? 15 : 4);
+              const refBytes = className.length + 1;
+              bytesSaved += Math.max(0, origBytes - refBytes);
+
+              try {
+                recordHistory(
+                  decl as any,
+                  "atomic-extractor",
+                  "extracted-to-atomic",
+                  key,
+                  `Moved to atomic class .${className}`,
+                );
+              } catch {}
+              return false;
+            }
+          }
           return true;
         });
 
-        // Only keep pseudo-classes that still have declarations
         if (pc.declarations.length > 0) {
           keptPseudoClasses.push(pc);
         }
@@ -418,21 +411,21 @@ export const atomicExtractor: OptimizationPass = {
         } as any);
       }
 
-      // Mark fully emptied rules as dead
+      // Fix #1: Check all structural collections before marking dead
       if (
         rule.declarations.length === 0 &&
-        (rule.pseudoClasses || []).length === 0
+        (rule.pseudoClasses || []).length === 0 &&
+        (rule.atRules || []).length === 0 &&
+        (rule.nestedRules || []).length === 0
       ) {
         rule.isDead = true;
         rulesEliminated++;
       }
 
-      // Recurse into nested rules
       for (const nested of rule.nestedRules || []) {
         substituteRule(nested, parentMedia);
       }
 
-      // Recurse into at-rule nested rules
       for (const atRule of rule.atRules || []) {
         for (const nested of atRule.nestedRules || []) {
           substituteRule(nested, parentMedia);
@@ -444,7 +437,7 @@ export const atomicExtractor: OptimizationPass = {
       substituteRule(rule, "all");
     }
 
-    // Prepend generated atomic rules to preserve cascade
+    // Fix #5: combinedRules uses sorted atomicRules
     const combinedRules = [...atomicRules, ...ir.rules];
 
     if (atomicRules.length > 0) {

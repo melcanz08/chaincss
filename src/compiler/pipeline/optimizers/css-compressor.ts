@@ -12,7 +12,7 @@ import type { CSSValueNode } from "../ir/css-ast.js";
 import { printAST, parseCSSValue } from "../ir/css-ast.js";
 import { recordHistory } from "../ir/utils.js";
 
-// Properties that safely support 1, 2, 3, or 4-value box model shorthand rules
+// Fix #1: Add border-radius family to box shorthand properties
 const BOX_SHORTHAND_PROPERTIES = new Set([
   "margin",
   "padding",
@@ -23,9 +23,16 @@ const BOX_SHORTHAND_PROPERTIES = new Set([
   "scroll-margin",
   "scroll-padding",
   "outline-width",
+  // Border radius 1-4 value support
+  "border-radius",
+  "border-top-left-radius",
+  "border-top-right-radius",
+  "border-bottom-left-radius",
+  "border-bottom-right-radius",
 ]);
 
-// Units that MUST retain their unit even when the numeric value is 0
+// Fix #2: % is safe to strip for length properties, but keep for
+// transform, filter, and other non-length contexts
 const UNSAFE_ZERO_UNITS = new Set([
   "s",
   "ms",
@@ -33,37 +40,41 @@ const UNSAFE_ZERO_UNITS = new Set([
   "rad",
   "grad",
   "turn",
-  "%",
   "dpi",
   "dpcm",
   "dppx",
   "hz",
   "khz",
   "fr",
+  // % is safe for length props, but not for transform/scale etc.
+  // We keep it in UNSAFE for now since we don't track property context here.
+  "%",
 ]);
 
-/**
- * Checks if a property supports standard top-right-bottom-left shorthand collapsing.
- */
+// Fix #6: Maximum recursion depth for nested calc()
+const MAX_COMPRESS_DEPTH = 50;
+
 function isBoxShorthandProperty(prop: string): boolean {
   return BOX_SHORTHAND_PROPERTIES.has(prop.toLowerCase().trim());
 }
 
-/**
- * Compress an individual AST value node recursively.
- */
 function compressNode(
   node: CSSValueNode,
   decl: IRDeclaration,
   lowerProp: string,
-  insideMathFunction = false
+  insideMathFunction = false,
+  depth = 0, // Fix #6: Depth guard
 ): { node: CSSValueNode; changed: boolean } {
+  // Fix #6: Prevent stack overflow on deeply nested calc chains
+  if (depth > MAX_COMPRESS_DEPTH) {
+    return { node, changed: false };
+  }
+
   switch (node.kind) {
     case "color": {
       const hex = node.hex.toLowerCase();
       let newHex = hex;
 
-      // #rrggbb -> #rgb
       if (
         hex.length === 7 &&
         hex[0] === "#" &&
@@ -72,9 +83,7 @@ function compressNode(
         hex[5] === hex[6]
       ) {
         newHex = `#${hex[1]}${hex[3]}${hex[5]}`;
-      }
-      // #rrggbbaa -> #rgba
-      else if (
+      } else if (
         hex.length === 9 &&
         hex[0] === "#" &&
         hex[1] === hex[2] &&
@@ -92,7 +101,6 @@ function compressNode(
     }
 
     case "dimension": {
-      // Do not strip units inside math functions or for non-length units
       if (
         node.value === 0 &&
         !insideMathFunction &&
@@ -106,7 +114,6 @@ function compressNode(
     case "keyword": {
       const val = node.value.toLowerCase();
 
-      // Optimize font-weight keyword aliases
       if (lowerProp === "font-weight" || lowerProp === "fontweight") {
         if (val === "normal") {
           return { node: { kind: "number", value: 400 }, changed: true };
@@ -132,7 +139,8 @@ function compressNode(
       const newArgs = new Array(args.length);
 
       for (let i = 0, len = args.length; i < len; i++) {
-        const r = compressNode(args[i], decl, lowerProp, isMathFn);
+        // Fix #6: Pass depth + 1 to recursive calls
+        const r = compressNode(args[i], decl, lowerProp, isMathFn, depth + 1);
         if (r.changed) changed = true;
         newArgs[i] = r.node;
       }
@@ -146,28 +154,31 @@ function compressNode(
       const newItems = new Array(items.length);
 
       for (let i = 0, len = items.length; i < len; i++) {
-        const r = compressNode(items[i], decl, lowerProp, insideMathFunction);
+        // Fix #6: Pass depth + 1
+        const r = compressNode(
+          items[i],
+          decl,
+          lowerProp,
+          insideMathFunction,
+          depth + 1,
+        );
         if (r.changed) changed = true;
         newItems[i] = r.node;
       }
 
-      // Box model shorthand compression (requires space-separated values and matching property)
       const isSpaceSeparated = !node.separator || node.separator === " ";
       if (isSpaceSeparated && isBoxShorthandProperty(lowerProp)) {
         const strValues = newItems.map((item) => printAST(item));
 
-        // 4 values: [top, right, bottom, left]
         if (strValues.length === 4) {
           const [t, r, b, l] = strValues;
           if (t === r && t === b && t === l) {
-            // [10px, 10px, 10px, 10px] -> [10px]
             return {
               node: { kind: "list", items: [newItems[0]], separator: " " },
               changed: true,
             };
           }
           if (t === b && r === l) {
-            // [10px, 20px, 10px, 20px] -> [10px, 20px]
             return {
               node: {
                 kind: "list",
@@ -178,7 +189,6 @@ function compressNode(
             };
           }
           if (r === l) {
-            // [10px, 20px, 30px, 20px] -> [10px, 20px, 30px]
             return {
               node: {
                 kind: "list",
@@ -190,18 +200,15 @@ function compressNode(
           }
         }
 
-        // 3 values: [top, horizontal, bottom]
         if (strValues.length === 3) {
           const [t, h, b] = strValues;
           if (t === h && t === b) {
-            // [10px, 10px, 10px] -> [10px]
             return {
               node: { kind: "list", items: [newItems[0]], separator: " " },
               changed: true,
             };
           }
           if (t === b) {
-            // [10px, 20px, 10px] -> [10px, 20px]
             return {
               node: {
                 kind: "list",
@@ -213,10 +220,8 @@ function compressNode(
           }
         }
 
-        // 2 values: [vertical, horizontal]
         if (strValues.length === 2) {
           if (strValues[0] === strValues[1]) {
-            // [10px, 10px] -> [10px]
             return {
               node: { kind: "list", items: [newItems[0]], separator: " " },
               changed: true,
@@ -229,8 +234,20 @@ function compressNode(
     }
 
     case "binary": {
-      const left = compressNode(node.left, decl, lowerProp, insideMathFunction);
-      const right = compressNode(node.right, decl, lowerProp, insideMathFunction);
+      const left = compressNode(
+        node.left,
+        decl,
+        lowerProp,
+        insideMathFunction,
+        depth + 1,
+      );
+      const right = compressNode(
+        node.right,
+        decl,
+        lowerProp,
+        insideMathFunction,
+        depth + 1,
+      );
       return {
         node: { ...node, left: left.node, right: right.node },
         changed: left.changed || right.changed,
@@ -242,12 +259,9 @@ function compressNode(
   }
 }
 
-/**
- * Compresses declarations within a rule context.
- */
 function compressDeclarations(
   declarations: IRDeclaration[],
-  passName: string
+  passName: string,
 ): { changes: number; bytesSaved: number } {
   let changes = 0;
   let bytesSaved = 0;
@@ -284,7 +298,7 @@ function compressDeclarations(
         passName,
         "compressed-declaration-value",
         undefined,
-        `Compressed value for "${decl.property}" from "${oldValStr}" to "${newValStr}"`
+        `Compressed value for "${decl.property}" from "${oldValStr}" to "${newValStr}"`,
       );
     }
   }
@@ -292,12 +306,9 @@ function compressDeclarations(
   return { changes, bytesSaved };
 }
 
-/**
- * Recursively traverses rules, pseudo-classes, nested rules, and at-rules.
- */
 function processRule(
   rule: IRRule,
-  passName: string
+  passName: string,
 ): { changes: number; bytesSaved: number } {
   let totalChanges = 0;
   let totalBytesSaved = 0;

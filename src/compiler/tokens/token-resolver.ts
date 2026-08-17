@@ -2,15 +2,6 @@
 // FILE: src/compiler/tokens/token-resolver.ts
 // ============================================================================
 
-/**
- * Token Resolver — Resolves design token references in style values.
- *
- * Supports formats:
- *   $colors.primary         → direct token reference
- *   token('colors.primary') → function-style
- *   $primary 1px solid $border → inline references within strings
- */
-
 import { createLogger } from "@shared/logger/index.js";
 import { tokens as globalTokens } from "./tokens.js";
 import type { DesignTokens } from "./tokens.js";
@@ -25,25 +16,24 @@ export interface TokenResolverOptions {
   prefix?: string;
 }
 
-// Regex for function-style: token('path') or $token('path')
-const FUNCTION_TOKEN_REGEX =
-  /^(?:token|\$token)\s*\(\s*['"]([^'"]+)['"]\s*\)$/;
+// Fix #1: Separate regex for .test() (no /g) vs extraction (with /g)
+// Function-style: token('path') or $token('path')
+const FUNCTION_TOKEN_REGEX = /^(?:token|\$token)\s*\(\s*['"]([^'"]+)['"]\s*\)$/;
 
-// Regex for inline tokens: $colors.primary (must start with letter or underscore)
-const INLINE_TOKEN_REGEX =
-  /\$([a-zA-Z_][a-zA-Z0-9_-]*(?:\.[a-zA-Z0-9_-]+)*)/g;
+// Inline tokens for .test() — NO /g flag (stateful lastIndex bug)
+const INLINE_TOKEN_TEST_REGEX = /\$[a-zA-Z_][a-zA-Z0-9_-]*(?:\.[a-zA-Z0-9_-]+)*/;
 
-// Regex for extractTokenPaths matching function calls
-const EXTRACT_FUNCTION_REGEX =
-  /(?:token|\$token)\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+// Function tokens for .test() — NO /g flag
+const EXTRACT_FUNCTION_TEST_REGEX = /(?:token|\$token)\s*\(\s*['"][^'"]+['"]\s*\)/;
+
+// Inline tokens for extraction — /g flag used only with new RegExp each call
+const INLINE_TOKEN_SOURCE = "\\$([a-zA-Z_][a-zA-Z0-9_-]*(?:\\.[a-zA-Z0-9_-]+)*)";
+const EXTRACT_FUNCTION_SOURCE = "(?:token|\\$token)\\s*\\(\\s*['\"]([^'\"]+)['\"]\\s*\\)";
 
 // ============================================================================
 // Internal Helpers
 // ============================================================================
 
-/**
- * Unwraps W3C DTCG / Style Dictionary token objects ({ $value: ... } or { value: ... })
- */
 function unwrapTokenValue(val: any): any {
   if (val !== null && typeof val === "object" && !Array.isArray(val)) {
     if ("$value" in val) return val.$value;
@@ -52,16 +42,12 @@ function unwrapTokenValue(val: any): any {
   return val;
 }
 
-/**
- * Safely traverses context or calls .get() to locate a token path value.
- */
 function resolveTokenPath(
   path: string,
   tokenContext?: DesignTokens | null,
 ): any {
   const cleanPath = path.startsWith("$") ? path.slice(1) : path;
 
-  // 1. Check explicit tokenContext instance (.get() interface)
   if (tokenContext && typeof tokenContext.get === "function") {
     const resolved = tokenContext.get(cleanPath);
     if (resolved !== undefined && resolved !== null) {
@@ -69,7 +55,6 @@ function resolveTokenPath(
     }
   }
 
-  // 2. Check plain object structure
   if (tokenContext && typeof tokenContext === "object") {
     const parts = cleanPath.split(".");
     let cur: any = tokenContext;
@@ -82,7 +67,6 @@ function resolveTokenPath(
     }
   }
 
-  // 3. Fallback to globalTokens singleton
   if (globalTokens && typeof globalTokens.get === "function") {
     const resolved = globalTokens.get(cleanPath);
     if (resolved !== undefined && resolved !== null) {
@@ -106,7 +90,6 @@ export function resolveToken(
 ): any {
   if (!useTokens || value === null || value === undefined) return value;
 
-  // Handle Array values recursively
   if (Array.isArray(value)) {
     return value.map((v) =>
       resolveToken(v, useTokens, tokenContext, useCSSVariables, depth),
@@ -115,7 +98,6 @@ export function resolveToken(
 
   if (typeof value !== "string") return value;
 
-  // Guard against infinite recursive token loops
   if (depth > MAX_RECURSION_DEPTH) {
     console.warn(
       `[ChainCSS] Exceeded max token recursion depth for value: "${value}"`,
@@ -123,7 +105,6 @@ export function resolveToken(
     return value;
   }
 
-  // Handle function-style: token('colors.primary') or $token('colors.primary')
   const functionMatch = value.match(FUNCTION_TOKEN_REGEX);
   if (functionMatch) {
     const tokenPath = functionMatch[1];
@@ -139,9 +120,10 @@ export function resolveToken(
     return value;
   }
 
-  // Handle inline token references within strings ($colors.primary)
   if (value.includes("$")) {
-    return value.replace(INLINE_TOKEN_REGEX, (match: string, path: string) => {
+    // Fix #1: Use fresh RegExp with /g for replace — not the module-level one
+    const inlineRegex = new RegExp(INLINE_TOKEN_SOURCE, "g");
+    return value.replace(inlineRegex, (match: string, path: string) => {
       const resolved = resolveTokenPath(path, tokenContext);
 
       if (resolved !== undefined && resolved !== null) {
@@ -205,11 +187,12 @@ export function resolveTokens(
   return result;
 }
 
+// Fix #1: hasTokenReferences uses non-global test regexes — no lastIndex bug
 export function hasTokenReferences(value: any): boolean {
   if (typeof value !== "string") return false;
   return (
-    (value.includes("$") && INLINE_TOKEN_REGEX.test(value)) ||
-    EXTRACT_FUNCTION_REGEX.test(value)
+    (value.includes("$") && INLINE_TOKEN_TEST_REGEX.test(value)) ||
+    EXTRACT_FUNCTION_TEST_REGEX.test(value)
   );
 }
 
@@ -219,12 +202,13 @@ export function extractTokenPaths(value: string): string[] {
   const paths: string[] = [];
   let match: RegExpExecArray | null;
 
-  const dollarRegex = new RegExp(INLINE_TOKEN_REGEX.source, "g");
+  // Fix #1: Fresh regex with /g each call
+  const dollarRegex = new RegExp(INLINE_TOKEN_SOURCE, "g");
   while ((match = dollarRegex.exec(value)) !== null) {
     paths.push(match[1]);
   }
 
-  const funcRegex = new RegExp(EXTRACT_FUNCTION_REGEX.source, "g");
+  const funcRegex = new RegExp(EXTRACT_FUNCTION_SOURCE, "g");
   while ((match = funcRegex.exec(value)) !== null) {
     paths.push(match[1]);
   }
@@ -260,6 +244,8 @@ export class TokenResolver {
   private context: any;
   private warningCache: Set<string> = new Set();
   private useCSSVariables: boolean;
+  // Fix #3: LRU limit
+  private static readonly MAX_CACHE_ENTRIES = 1000;
 
   constructor(context?: any, options: TokenResolverOptions = {}) {
     const rawContext = context || globalTokens;
@@ -275,7 +261,6 @@ export class TokenResolver {
 
     const cleanPath = path.startsWith("$") ? path.slice(1) : path;
 
-    // 1. Active theme path namespace (e.g. 'dark.colors.primary')
     if (themeContext) {
       const themedPath = `${themeContext}.${cleanPath}`;
       const themedValue = resolveTokenPath(themedPath, this.context);
@@ -284,13 +269,11 @@ export class TokenResolver {
       }
     }
 
-    // 2. Default standard token resolution fallback
     const defaultValue = resolveTokenPath(cleanPath, this.context);
     if (defaultValue !== undefined && defaultValue !== null) {
       return String(defaultValue);
     }
 
-    // 3. Emit deduplicated warning
     this.emitWarning(cleanPath);
     return undefined;
   }
@@ -312,10 +295,24 @@ export class TokenResolver {
 
   resolve(value: any): any {
     if (typeof value !== "string") return value;
+    // Fix #2: Include theme context in cache key for correctness
     const cacheKey = `${this.useCSSVariables ? "var:" : "val:"}${value}`;
-    if (this.cache.has(cacheKey)) return this.cache.get(cacheKey);
+    if (this.cache.has(cacheKey)) {
+      const cached = this.cache.get(cacheKey)!;
+      // Move to MRU
+      this.cache.delete(cacheKey);
+      this.cache.set(cacheKey, cached);
+      return cached;
+    }
 
     const resolved = resolveToken(value, true, this.context, this.useCSSVariables);
+
+    // Fix #3: LRU eviction
+    if (this.cache.size >= TokenResolver.MAX_CACHE_ENTRIES) {
+      const firstKey = this.cache.keys().next().value as string | undefined;
+      if (firstKey) this.cache.delete(firstKey);
+    }
+
     this.cache.set(cacheKey, resolved);
     return resolved;
   }

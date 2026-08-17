@@ -3,7 +3,7 @@
 
 import crypto from "node:crypto";
 import type { StyleIR, IRRule, IRNodeId } from "./ir/types.js";
-import { buildIRGraph, findAffectedNodes } from "./ir/graph-builder.js";
+import { buildIRGraph, findAffectedNodes } from "../incremental/graph-builder.js";
 import { cloneIR } from "./ir/immutable.js";
 import type { PassMetadata } from "./ir/metadata.js";
 import {
@@ -120,8 +120,26 @@ export function markChangedRules(
   state: CompilerState,
   changedRuleIds: IRNodeId[],
 ): void {
-  // Rebuild/cache graph on state.ir
-  const graph = (state.ir.graph ??= buildIRGraph(state.ir));
+  // Get current graph, rebuild if any changed rule is missing from it
+  let graph = state.ir.graph;
+
+  const nodeExists = (id: string): boolean => {
+    if (!graph?.nodes) return false;
+    return graph.nodes instanceof Map
+      ? graph.nodes.has(id)
+      : Object.prototype.hasOwnProperty.call(graph.nodes as Record<string, any>, id);
+  };
+
+  const needsRebuild = !graph || !changedRuleIds.some((id) => nodeExists(id));
+
+  if (needsRebuild) {
+    graph = state.ir.graph = buildIRGraph(state.ir);
+  }
+
+  if (!graph) {
+    graph = buildIRGraph(state.ir);
+    state.ir.graph = graph;
+  }
 
   const allAffected = new Set<IRNodeId>();
   for (const id of changedRuleIds) {

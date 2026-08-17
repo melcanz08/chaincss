@@ -1,3 +1,5 @@
+// src/compiler/services/module-loader.ts
+
 import fs from "fs/promises";
 import { existsSync, readFileSync, statSync } from "fs";
 import path from "path";
@@ -16,7 +18,6 @@ export class ModuleLoader {
   private importedModules = new Map<string, CacheEntry>();
   private dependencyGraph = new Map<string, Set<string>>();
   private jitiInstance: any = null;
-  private instanceSeed = crypto.randomUUID().slice(0, 8);
 
   private hashContent(c: string): string {
     return crypto.createHash("sha256").update(c).digest("hex").slice(0, 16);
@@ -35,7 +36,8 @@ export class ModuleLoader {
       const parentURL = pathToFileURL(parentPath).href;
       this.jitiInstance = createJiti(parentURL, {
         interopDefault: true,
-        fsCache: true,
+        // Fix #4: Disable fsCache in dev — we handle caching ourselves
+        fsCache: false,
         moduleCache: false,
       });
       return this.jitiInstance;
@@ -56,21 +58,23 @@ export class ModuleLoader {
     const contentHash = this.hashContent(source);
 
     try {
-      // Use jiti to evaluate the source directly
-      // This creates a temporary module from the source string
-      const mod = await jiti.import(virtualPath, { default: true });
+      // Fix #1: Use evalModule to compile the source string directly,
+      // not load from disk
+      const mod = await jiti.evalModule(source, {
+        filename: virtualPath,
+        id: virtualPath,
+      });
 
       this.importedModules.set(virtualPath, {
+        // Fix #3: Use consistent timestamp source
         timestamp: Date.now(),
         hash: contentHash,
         size: source.length,
         version: 0,
       });
 
-      // Ensure we return a proper object
       const result = this.interopModule(mod);
 
-      // If the result is not an object or is null/undefined, return empty object
       if (
         result === null ||
         result === undefined ||
@@ -89,7 +93,7 @@ export class ModuleLoader {
 
   private purgeRequireCache(
     resolvedPath: string,
-    projectRequire: NodeRequire,
+    projectRequire: NodeJS.Require,
     seen = new Set<string>(),
   ): void {
     if (seen.has(resolvedPath) || resolvedPath.includes("node_modules")) return;
@@ -107,7 +111,6 @@ export class ModuleLoader {
   private interopModule(mod: any) {
     if (!mod) return {};
 
-    // If mod is already a plain object, return it
     if (typeof mod === "object" && !Array.isArray(mod) && !mod.default) {
       return mod;
     }
@@ -117,7 +120,6 @@ export class ModuleLoader {
       return mod;
     }
 
-    // Preserve function type if default is a function (e.g. recipes)
     if (typeof def === "function") {
       const out = Object.assign(def.bind({}), def);
       for (const k of Object.keys(mod)) {
@@ -129,7 +131,6 @@ export class ModuleLoader {
       return out;
     }
 
-    // Default is an object
     if (typeof def === "object") {
       const out = { ...def };
       for (const k of Object.keys(mod)) {
@@ -140,7 +141,6 @@ export class ModuleLoader {
       return out;
     }
 
-    // Fallback
     const out: Record<string, any> = {};
     for (const k of Object.keys(mod)) {
       if (k !== "default") {
@@ -178,6 +178,7 @@ export class ModuleLoader {
           : existingCache.version;
     }
 
+    // Fix #3: Use mtimeMs consistently — not Date.now()
     const cachePayload: CacheEntry = {
       timestamp: stat.mtimeMs,
       hash: contentHash,
@@ -193,10 +194,11 @@ export class ModuleLoader {
             ? jiti.import(absolutePath, { default: true })
             : jiti(absolutePath));
 
-          this.dependencyGraph.delete(absolutePath);
+          // Fix #2: Don't delete dependency graph — preserve for HMR invalidation
+          // this.dependencyGraph.delete(absolutePath); ← REMOVED
+
           this.importedModules.set(absolutePath, cachePayload);
           const result = this.interopModule(r);
-          // Ensure we return a valid object
           if (result && typeof result === "object") {
             return result;
           }
@@ -223,7 +225,9 @@ export class ModuleLoader {
       this.purgeRequireCache(resolvedPath, projectRequire);
       const imported = projectRequire(absolutePath);
 
-      this.dependencyGraph.delete(absolutePath);
+      // Fix #2: Don't delete dependency graph
+      // this.dependencyGraph.delete(absolutePath); ← REMOVED
+
       this.importedModules.set(absolutePath, cachePayload);
       const result = this.interopModule(imported);
       if (result && typeof result === "object") {
@@ -233,11 +237,18 @@ export class ModuleLoader {
     } catch (error: any) {
       if (error.code === "ERR_REQUIRE_ESM") {
         try {
-          const uniqueQuery = `v=${this.instanceSeed}-${currentVersion}`;
-          const fileUrl = `${pathToFileURL(absolutePath).href}?${uniqueQuery}`;
+          // Fix #6: Use purgeRequireCache + jiti instead of query-busting URL
+          // Query-busting creates unbounded module cache growth
+          const pkgPath = path.join(process.cwd(), "package.json");
+          const baseRequire = existsSync(pkgPath) ? pkgPath : absolutePath;
+          const projectRequire = createRequire(baseRequire);
+          const resolvedPath = projectRequire.resolve(absolutePath);
+          this.purgeRequireCache(resolvedPath, projectRequire);
 
-          const imported = await import(fileUrl);
-          this.dependencyGraph.delete(absolutePath);
+          // Try native import without query parameter
+          const imported = await import(pathToFileURL(absolutePath).href);
+
+          // Fix #2: Don't delete dependency graph
           this.importedModules.set(absolutePath, cachePayload);
           const result = this.interopModule(imported);
           if (result && typeof result === "object") {
@@ -304,6 +315,8 @@ export class ModuleLoader {
     };
 
     collect(absolutePath);
+    // Fix #5: Remove self from dependency set
+    visited.delete(absolutePath);
     return visited;
   }
 

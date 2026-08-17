@@ -228,19 +228,18 @@ Compiler Pipeline
 Optimized CSS
 ```
 
-**Built-in intent vocabulary — 58 intents across 7 categories**
+**Built-in intent vocabulary**
 
-ChainCSS ships with an extensible built-in vocabulary covering layout, component, semantic, interaction, visual, spacing, and typography concepts.
+ChainCSS ships with built-in intents covering common layout, component, semantic, and interaction concepts.
 
-| Category | Count | Examples |
-|----------|-------|----------|
-| Layout | 10 | `center-content`, `stack`, `grid-list`, `container`, `flex-row`, `flex-col` |
-| Component | 22 | `card`, `button-primary`, `modal`, `badge`, `avatar`, `toast`, `drawer`, `carousel` |
-| Semantic | 8 | `hero-section`, `sticky-header`, `header`, `footer`, `sidebar`, `section` |
-| Interaction | 7 | `hover-lift`, `focus-ring`, `clickable`, `disabled`, `selected` |
-| Visual | 5 | `glass`, `elevated`, `bordered`, `rounded`, `gradient` |
-| Spacing | 4 | `compact`, `spacious`, `padded`, `margin-auto` |
-| Typography | 6 | `heading`, `body-text`, `caption`, `muted`, `truncate`, `bold` |
+| Category | Built-in Intents |
+|----------|------------------|
+| Layout | `center-content`, `stack`, `sidebar-layout`, `grid-list` |
+| Component | `card`, `button-primary`, `button-secondary`, `input-field`, `modal`, `tooltip` |
+| Semantic | `hero-section`, `sticky-header` |
+| Interaction | `hover-lift`, `focus-ring` |
+
+For example, `card` expands into properties such as `display: flex; flex-direction: column; overflow: hidden;` including generated interaction states and accessibility metadata.
 
 **User-defined intents**
 
@@ -249,36 +248,58 @@ The built-in vocabulary is not a closed list. Applications can introduce their o
 ```ts
 export default defineConfig({
   intents: {
-    'dashboard-header': {
-      name: 'dashboard-header',
-      category: 'component',
-      description: 'Dashboard page header',
+    glass: {
+      name: 'glass',
+      category: 'visual',
+      description: 'Frosted glass effect',
       properties: {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '16px 24px',
+        background: 'rgba(255,255,255,0.1)',
+        backdropFilter: 'blur(10px)',
+        border: '1px solid rgba(255,255,255,0.2)',
+        borderRadius: '12px',
       }
     }
   }
 });
 ```
 
+The intent can then be used directly:
+
+```ts
+chain()
+  .intents(['glass'])
+  .$el('panel')
+```
+
 **Composite intents**
 
-Intents can be composed from other intents with recursive resolution, cycle detection, and deduplication:
+Intents can be composed from other intents:
 
 ```ts
 intents: {
   premium: {
     name: 'premium',
     category: 'composite',
-    resolve: () => ({ expandsTo: ['card', 'glass'] })
+    resolve: () => ({
+      expandsTo: ['card', 'center-content'],
+    })
   }
 }
 ```
 
-**Multiple intents + explicit styles**
+```ts
+chain()
+  .intents(['premium'])
+  .$el('premium-card')
+```
+
+```
+premium
+ ├── card
+ └── center-content
+```
+
+**Multiple intents**
 
 ```ts
 chain()
@@ -287,14 +308,153 @@ chain()
   .$el('hero')
 ```
 
-**Natural-language `.describe()`**
+**Natural-language intent descriptions**
 
 ```ts
-chain().describe('glass elevated spacious').$el('navbar')
-// → parses to ['glass', 'elevated', 'spacious'] → CSS output
+chain()
+  .describe('glass elevated spacious')
+  .$el('navbar')
 ```
 
-All intent resolution happens at compile time — zero runtime cost.
+The description is parsed into intent names and resolved through the same intent registry:
+
+```
+"glass elevated spacious"
+         ↓
+     intent parser
+         ↓
+["glass", "elevated", "spacious"]
+         ↓
+   intent registry
+         ↓
+     Style IR
+         ↓
+      CSS output
+```
+
+---
+
+### Intent System — Complete Feature Set
+
+ChainCSS includes a **four-phase intent system** that turns design vocabulary into production CSS.
+
+#### Phase 1: Relationships & Constraints
+
+Intents know how they relate to each other.
+
+```ts
+chain()
+  .intents(['card', 'compact'])
+  .$el('card')
+```
+
+- **`requires`** — Auto-adds required intents (`card` requires `rounded`)
+- **`conflicts`** — Prevents invalid combinations (`compact` conflicts with `spacious`)
+- **`enhances`** — Suggests great combinations (`card` enhances `elevated`, `glass`)
+- **`maxCombinations`** — Limits stacking
+- **`priority`** — Resolution order
+
+#### Phase 2: Themes & Variants
+
+Intents adapt to context.
+
+```ts
+chain()
+  .intents(['card'])
+  .$el('card')
+```
+
+Compiles both light and dark CSS:
+
+```css
+/* Light */
+.chain-card { background: #ffffff; }
+
+/* Dark — automatically generated */
+[data-theme="dark"] .chain-card { background: #1e293b; }
+```
+
+Variants provide named alternatives:
+
+```ts
+chain()
+  .intents(['card'])
+  .$el('premium-card')
+// variant: 'premium' → gradient background
+```
+
+#### Phase 3: Composition Patterns
+
+Intents compose into more complex components.
+
+```ts
+chain()
+  .intents(['premium-card'])
+  .$el('premium-card')
+```
+
+`premium-card` expands to:
+
+```
+card + glass + elevated
+```
+
+With conditional behavior:
+
+```ts
+// Dark mode automatically:
+// + glow
+// - elevated
+```
+
+#### Phase 4: Natural Language
+
+Describe designs in plain English.
+
+```ts
+chain()
+  .describe('dark premium card')
+  .$el('premium-dark-card')
+```
+
+The deterministic parser:
+
+- Maps synonyms (`frosted` → `glass`)
+- Detects themes (`dark`, `light`, `high-contrast`)
+- Detects variants (`premium`, `outlined`, `success`)
+- Resolves composition (`premium card` → `premium-card`)
+- Ignores stop words (`a`, `the`, `with`, `and`)
+
+#### Intent Resolution Pipeline
+
+```
+.describe('dark premium card')
+    ↓
+Parser: intents=['premium-card'], theme='dark'
+    ↓
+Composition: premium-card → card + glass + elevated
+    ↓
+Conditions: dark → + glow, - elevated
+    ↓
+Relationships: card requires rounded
+    ↓
+Themes: apply dark overrides
+    ↓
+Tokens: resolve $colors.*
+    ↓
+CSS: [data-theme="dark"] .chain-premium-card { ... }
+```
+
+#### Intent Catalog
+
+| Phase | Feature | Count |
+|-------|---------|-------|
+| Base | Built-in intents | 58+ |
+| Phase 1 | Relationship rules | 50+ relationships |
+| Phase 2 | Theme variants | dark, high-contrast |
+| Phase 2 | Named variants | premium, outlined, success, danger, warning |
+| Phase 3 | Composition intents | premium-card, premium-button, glass-panel, hero-banner, modal-glass, input-group |
+| Phase 4 | Natural language | Dictionary + synonyms + stop words |
 
 ### Accessibility Compilation
 

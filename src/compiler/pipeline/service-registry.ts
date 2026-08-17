@@ -22,9 +22,9 @@ export interface CacheService {
 
 export interface GraphService {
   getAffectedRules(ruleId: string): string[];
-  getStats(): ReturnType<typeof import("./ir/graph-builder.js").getGraphStats>;
+  getStats(): ReturnType<typeof import("../incremental/graph-builder.js").getGraphStats>;
   dependsOn(ruleId: string, dependencyId: string): boolean;
-  exportGraph(): import("./ir/graph-builder.js").GraphExport;
+  exportGraph(): import("../incremental/graph-builder.js").GraphExport;
   readonly graph: IRGraph;
 }
 

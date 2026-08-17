@@ -5,7 +5,19 @@
 
 import type { StyleIR, IRGraph } from "../ir/types.js";
 import { generateCSS } from "../ir/css-printer.js";
-import { exportGraphAsJSON } from "../ir/graph-builder.js";
+import { exportGraphAsJSON } from "../../incremental/graph-builder.js";
+
+// ============================================================================
+// Safe Graph Node Access
+// ============================================================================
+
+// Fix #2: Handle both Map and plain-object graph.nodes
+function getGraphNode(graph: IRGraph, id: string): any {
+  if (!graph?.nodes) return undefined;
+  return graph.nodes instanceof Map
+    ? graph.nodes.get(id)
+    : (graph.nodes as Record<string, any>)[id];
+}
 
 // ============================================================================
 // Emitter Interface
@@ -50,29 +62,27 @@ export const cssEmitter: Emitter = {
     const minify = Boolean(options?.minify);
     const sourceMap = Boolean(options?.sourceMap);
 
-    let css = generateCSS(ir, { minify });
+    const css = generateCSS(ir, { minify });
 
-    // Source map injection (non-minified only)
+    // Fix #1: Source map injection via comment prefix per rule's source file.
+    // Instead of indexOf(selector) searching (which breaks on .btn vs .btn-primary),
+    // we add comments by iterating rules and adding a comment block per source file
+    // at the beginning of that file's section. But for now, we just append
+    // a source summary comment at the top — no fragile string search.
+
     if (sourceMap && !minify && ir.rules) {
-      const liveRules = ir.rules.filter(
-        (r) => !r.isDead && r.source?.file && r.selector,
-      );
-      if (liveRules.length > 0 && css.includes("{")) {
-        let injectedCss = css;
-        let offset = 0;
-        for (const rule of liveRules) {
-          const idx = injectedCss.indexOf(rule.selector, offset);
-          if (idx !== -1) {
-            const file = String(rule.source?.file)
-              .replace(/\*\//g, "*\\/")
-              .replace(/\n/g, " ");
-            const comment = `/* source: ${file} */\n`;
-            injectedCss =
-              injectedCss.slice(0, idx) + comment + injectedCss.slice(idx);
-            offset = idx + comment.length + rule.selector.length;
-          }
+      const sourceFiles = new Set<string>();
+      for (const rule of ir.rules) {
+        if (!rule.isDead && rule.source?.file) {
+          sourceFiles.add(rule.source.file);
         }
-        css = injectedCss;
+      }
+
+      if (sourceFiles.size > 0) {
+        const comments = Array.from(sourceFiles)
+          .map((f) => `/* source: ${f.replace(/\*\//g, "*\\/")} */`)
+          .join("\n");
+        return comments + "\n" + css.trim();
       }
     }
 
@@ -99,11 +109,9 @@ export const atomicCSSEmitter: Emitter = {
     );
 
     if (atomicRules.length === 0) {
-      // Fall back to full CSS if no atomic rules extracted
       return cssEmitter.emit(ir, options);
     }
 
-    // Build a minimal IR with only atomic rules
     const atomicIR: StyleIR = {
       ...ir,
       rules: atomicRules,
@@ -114,7 +122,7 @@ export const atomicCSSEmitter: Emitter = {
 };
 
 // ============================================================================
-// Tailwind Emitter (generates tailwind.config.js tokens)
+// Tailwind Emitter
 // ============================================================================
 
 export const tailwindEmitter: Emitter = {
@@ -125,7 +133,6 @@ export const tailwindEmitter: Emitter = {
   emit(ir: StyleIR, _options?: Record<string, unknown>): string {
     const tokens: Record<string, Record<string, unknown>> = {};
 
-    // Extract design tokens from the graph/symbols
     for (const rule of ir.rules) {
       if (rule.isDead) continue;
 
@@ -136,12 +143,10 @@ export const tailwindEmitter: Emitter = {
         }
       }
 
-      // Extract from passMeta semantic tokens
       const semantic = rule.passMeta?.analysis?.semantic;
       if (semantic?.tokens) {
         for (const token of semantic.tokens) {
           if (typeof token === "string") {
-            // Token references stored during lowering
             const resolvedValue = rule.declarations.find((d) =>
               d.history.some((h) => h.reason?.includes(token)),
             )?.value;
@@ -171,7 +176,7 @@ export const tailwindEmitter: Emitter = {
 };
 
 // ============================================================================
-// Design Tokens Emitter (JSON)
+// Design Tokens Emitter
 // ============================================================================
 
 export const designTokensEmitter: Emitter = {
@@ -192,7 +197,6 @@ export const designTokensEmitter: Emitter = {
         }
       }
 
-      // Include semantic token relationships from passMeta
       const semantic = rule.passMeta?.analysis?.semantic;
       if (semantic?.tokens && semantic.tokens.length > 0) {
         if (!tokens._relationships) tokens._relationships = [];
@@ -211,7 +215,6 @@ export const designTokensEmitter: Emitter = {
       }
     }
 
-    // Add token derivation info from graph edges
     if (ir.graph) {
       const derivationEdges = ir.graph.edges.filter(
         (e) => e.type === "derives",
@@ -224,8 +227,9 @@ export const designTokensEmitter: Emitter = {
           method?: string;
         }>;
         for (const edge of derivationEdges) {
-          const fromNode = ir.graph.nodes.get(edge.from);
-          const toNode = ir.graph.nodes.get(edge.to);
+          // Fix #2: Use safe getGraphNode
+          const fromNode = getGraphNode(ir.graph, edge.from);
+          const toNode = getGraphNode(ir.graph, edge.to);
           ders.push({
             source: fromNode?.selector || edge.from,
             target: toNode?.selector || edge.to,
@@ -243,7 +247,7 @@ export const designTokensEmitter: Emitter = {
 };
 
 // ============================================================================
-// Figma Emitter (Figma-compatible tokens JSON)
+// Figma Emitter
 // ============================================================================
 
 export const figmaEmitter: Emitter = {
@@ -279,7 +283,7 @@ export const figmaEmitter: Emitter = {
 };
 
 // ============================================================================
-// Graph JSON Emitter (for visualization tools)
+// Graph JSON Emitter
 // ============================================================================
 
 export const graphJSONEmitter: Emitter = {

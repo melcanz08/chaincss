@@ -49,25 +49,36 @@ export const intentNormalizer: NormalizationPass = {
         reason: string;
       }> = [];
 
+      // Fix #1: Build Set of existing property names once — O(1) lookup
+      const existingProps = new Set<string>();
+      for (let j = 0; j < decls.length; j++) {
+        if (decls[j]?.property) existingProps.add(decls[j].property);
+      }
+
       for (let i = 0, len = decls.length; i < len; i++) {
         const decl = decls[i];
         if (!decl || !decl.property) continue;
 
         // Skip CSS custom properties and vendor-prefixed properties
-        if (decl.property.startsWith('--') || 
-            decl.property.startsWith('-webkit-') || 
-            decl.property.startsWith('-moz-')) {
+        if (
+          decl.property.startsWith("--") ||
+          decl.property.startsWith("-webkit-") ||
+          decl.property.startsWith("-moz-")
+        ) {
           continue;
         }
 
-        if (shorthands.has(decl.property) || macros.has(decl.property))
-          continue;
+        // Fix #3: Lowercase for shorthand/macro lookup
+        const lowerProp = decl.property.toLowerCase();
+
+        if (shorthands.has(lowerProp) || macros.has(lowerProp)) continue;
         if (
           (decl as any).meta?.intent ||
           rule.passMeta?.analysis?.semantic?.intents?.length ||
           (rule.meta as any)?._intent
         )
           continue;
+
         const rawValue = String(decl.value);
 
         const result = intent.correct(decl.property, rawValue);
@@ -78,8 +89,11 @@ export const intentNormalizer: NormalizationPass = {
 
           // Sync target property if specified by the intent result
           if (result.property && result.property !== decl.property) {
-            if (shorthands.has(result.property)) continue;
+            const lowerResult = result.property.toLowerCase();
+            if (shorthands.has(lowerResult)) continue;
             decl.property = result.property;
+            // Update existingProps with corrected property
+            existingProps.add(result.property);
           }
 
           if (result.intent === "property-correction") {
@@ -136,11 +150,10 @@ export const intentNormalizer: NormalizationPass = {
             }
           }
         } else {
-          // Only validate declarations that did not match a known intent correction
           const validation = intent.validate(decl.property, rawValue);
           if (!validation.valid && validation.suggestion) {
-            if (shorthands.has(decl.property) || macros.has(decl.property))
-              continue;
+            // Fix #3: Lowercase for shorthand/macro lookup
+            if (shorthands.has(lowerProp) || macros.has(lowerProp)) continue;
             if (!ir.diagnostics) ir.diagnostics = [];
             ir.diagnostics.push({
               id: `intent-suggest-${decl.id}`,
@@ -154,18 +167,13 @@ export const intentNormalizer: NormalizationPass = {
         }
       }
 
+      // Fix #1: Use Set for O(1) duplicate detection
       for (let i = 0, len = pendingDefaults.length; i < len; i++) {
         const { property, value, reason } = pendingDefaults[i];
-        let alreadyExists = false;
-        for (let j = 0, jLen = decls.length; j < jLen; j++) {
-          if (decls[j].property === property) {
-            alreadyExists = true;
-            break;
-          }
-        }
-        if (!alreadyExists) {
+        if (!existingProps.has(property)) {
           const newDecl = createDeclaration(property, value, rule.source);
           decls.push(newDecl);
+          existingProps.add(property);
           corrections.push({
             nodeId: rule.id,
             property,

@@ -43,6 +43,9 @@ export interface ChainCSSPluginOptions {
 
   intents?: ChainCSSConfig["intents"];
 
+  /** Active theme for intent resolution (light, dark, high-contrast) */
+  theme?: string;
+
   /** Explicit file inclusion paths */
   include?: string[];
 

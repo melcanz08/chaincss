@@ -1,7 +1,5 @@
 // src/core/interfaces/utils.ts
 
-import type { StyleDefinition } from "@shared/types/index.js";
-
 // Re-export only what we actually need explicitly to avoid collisions
 export {
   resolveToken,
@@ -10,13 +8,12 @@ export {
 
 // ---- HASHING & NAMING (Isomorphic) ----
 const hashCache = new Map<string, string>();
+const HASH_CACHE_LIMIT = 5000;
 let nodeCrypto: any = null;
 
 function getNodeCrypto() {
   if (nodeCrypto !== null) return nodeCrypto;
   try {
-    // dynamic require so browser bundlers can tree-shake it out
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     nodeCrypto = require("node:crypto");
   } catch {
     nodeCrypto = false;
@@ -25,9 +22,20 @@ function getNodeCrypto() {
 }
 
 export function hashString(str: string, length: number = 6): string {
-  const cacheKey = `${str}::${length}`;
-  if (hashCache.size > 5000) hashCache.clear(); // LRU-ish guard for watch mode
-  if (hashCache.has(cacheKey)) return hashCache.get(cacheKey)!;
+  // Fix #2: Use \0 separator — never appears in CSS strings
+  const cacheKey = str.length + "\0" + str;
+
+  // Fix #1: LRU eviction — remove oldest single entry, not clear all
+  if (hashCache.has(cacheKey)) {
+    const val = hashCache.get(cacheKey)!;
+    hashCache.delete(cacheKey);
+    hashCache.set(cacheKey, val);
+    return val;
+  }
+  if (hashCache.size >= HASH_CACHE_LIMIT) {
+    const firstKey = hashCache.keys().next().value as string | undefined;
+    if (firstKey) hashCache.delete(firstKey);
+  }
 
   let hash: string;
   const crypto = getNodeCrypto();
@@ -125,13 +133,14 @@ export function deepMerge<T extends Record<string, any>>(
     const src = (source as any)[key];
     const tgt = result[key];
     if (
-      src &&
+      src !== null &&
       typeof src === "object" &&
       !Array.isArray(src) &&
+      tgt !== null &&
       typeof tgt === "object" &&
       !Array.isArray(tgt)
     ) {
-      result[key] = deepMerge(tgt || {}, src);
+      result[key] = deepMerge(tgt, src);
     } else if (src !== undefined) {
       result[key] = src;
     }
@@ -202,7 +211,7 @@ import fsp from "fs/promises";
 import path from "path";
 
 export function ensureDir(dir: string): void {
-  fs.mkdirSync(dir, { recursive: true }); // no existsSync race
+  fs.mkdirSync(dir, { recursive: true });
 }
 export async function ensureDirAsync(dir: string): Promise<void> {
   await fsp.mkdir(dir, { recursive: true });
@@ -258,14 +267,66 @@ export function getAllFiles(dir: string, pattern?: RegExp): string[] {
 export function formatCSS(css: string, minify = false): string {
   if (!css?.trim()) return "";
   if (minify) {
-    return css
-      .replace(/\/\*.*?\*\//g, "")
-      .replace(/\s+/g, " ")
-      .replace(/\s*([{};:])\s*/g, "$1")
-      .replace(/;}/g, "}")
-      .trim();
+    // Fix #4: Quote-aware minify — preserve string contents
+    let result = "";
+    let inSingle = false;
+    let inDouble = false;
+    let inComment = false;
+
+    for (let i = 0; i < css.length; i++) {
+      const ch = css[i];
+      const next = css[i + 1];
+
+      if (inComment) {
+        if (ch === "*" && next === "/") {
+          inComment = false;
+          i++;
+        }
+        continue;
+      }
+      if (ch === "/" && next === "*") {
+        inComment = true;
+        i++;
+        continue;
+      }
+      if (ch === "'" && !inDouble) {
+        inSingle = !inSingle;
+        result += ch;
+        continue;
+      }
+      if (ch === '"' && !inSingle) {
+        inDouble = !inDouble;
+        result += ch;
+        continue;
+      }
+
+      if (!inSingle && !inDouble) {
+        if (/\s/.test(ch)) {
+          // Collapse whitespace outside strings
+          const prev = result[result.length - 1];
+          if (prev && !/\s/.test(prev) && !/[{};:,]/.test(prev)) {
+            result += " ";
+          }
+          continue;
+        }
+        // Remove spaces before/after structural chars
+        if (ch === "{" || ch === "}" || ch === ";" || ch === ":") {
+          result = result.replace(/\s+$/, "");
+          result += ch;
+          continue;
+        }
+        if (ch === ",") {
+          result = result.replace(/\s+$/, "");
+          result += ",";
+          continue;
+        }
+      }
+      result += ch;
+    }
+
+    return result.replace(/;}/g, "}").trim();
   }
-  // Fast path: avoid multiple large replaces
+
   return css
     .replace(/\s*{\s*/g, " {\n  ")
     .replace(/;\s*/g, ";\n  ")
@@ -273,6 +334,7 @@ export function formatCSS(css: string, minify = false): string {
     .replace(/\n\s*\n/g, "\n")
     .trim();
 }
+
 export function formatJS(code: string, minify = false): string {
   return minify
     ? code
@@ -422,7 +484,8 @@ export function formatBytes(bytes: number): string {
 
 // ---- VALIDATION ----
 export function isValidSelector(s: string): boolean {
-  if (!s || typeof s !== "string" || s.length > 100) return false;
+  // Fix #5: Remove arbitrary length limit — only check invalid characters
+  if (!s || typeof s !== "string") return false;
   return !/[<>`]/.test(s);
 }
 export function isValidClassName(c: string): boolean {

@@ -2,7 +2,6 @@
 // FILE: src/compiler/pipeline/lowering/intent-resolver.ts
 // ============================================================================
 
-import { recordHistory } from "../ir/utils.js";
 import type { StyleIR } from "../ir/types.js";
 import type {
   LoweringPass,
@@ -10,6 +9,7 @@ import type {
   LoweringContext,
 } from "../pipeline-types.js";
 import { createDeclaration } from "../ir/index.js";
+import { recordHistory } from "../ir/utils.js";
 import { resolveSemantic } from "../../tokens/semantic-tokens.js";
 import {
   registerSemanticIntents,
@@ -19,13 +19,47 @@ import {
 import type { SemanticIntentContext } from "../intent/semantic-intent-types.js";
 import { setIntentCatalog, addToCatalog } from "../intent/intent-catalog.js";
 import type { IntentDefinition } from "../intent/semantic-intent-types.js";
+import { validateIntentCombination } from "../intent/intent-validator.js";
+import { resolveCompositions } from "../intent/intent-composer.js";
+
+// ============================================================================
+// NEW: Property normalization helper (same as parser)
+// ============================================================================
+
+const propCache = new Map<string, string>();
+const PROP_CACHE_LIMIT = 500;
+
+function normalizeProperty(prop: string): string {
+  if (propCache.has(prop)) return propCache.get(prop)!;
+
+  let result: string;
+  if (prop.startsWith("--")) {
+    result = prop;
+  } else if (!/[A-Z]/.test(prop)) {
+    result = prop;
+  } else {
+    const needsLeadingDash = /^[A-Z]/.test(prop) || /^ms[A-Z]/.test(prop);
+    const kebabed = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+    result = needsLeadingDash
+      ? kebabed.startsWith("-")
+        ? kebabed
+        : "-" + kebabed
+      : kebabed;
+  }
+
+  if (propCache.size >= PROP_CACHE_LIMIT) {
+    const firstKey = propCache.keys().next().value as string | undefined;
+    if (firstKey) propCache.delete(firstKey);
+  }
+  propCache.set(prop, result);
+  return result;
+}
 
 const BUILTIN_INTENT_CATALOG: Record<string, IntentDefinition> = {
   "center-content": {
     name: "center-content",
     category: "layout",
     description: "Center content both horizontally and vertically",
-    semantics: [{ category: "surface", intent: "container" }],
     properties: {
       display: "flex",
       justifyContent: "center",
@@ -84,6 +118,34 @@ const BUILTIN_INTENT_CATALOG: Record<string, IntentDefinition> = {
     },
     responsive: { mobile: { padding: "16px" } },
     a11y: ["contrast", "focus-visible"],
+    themes: {
+      dark: {
+        properties: {
+          backgroundColor: "#1e293b",
+          color: "#f1f5f9",
+        },
+      },
+      "high-contrast": {
+        properties: {
+          backgroundColor: "#000000",
+          color: "#ffffff",
+        },
+      },
+    },
+    variants: {
+      outlined: {
+        properties: {
+          backgroundColor: "transparent",
+          border: "2px solid #6366f1",
+        },
+      },
+      premium: {
+        properties: {
+          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          color: "#ffffff",
+        },
+      },
+    },
   },
   "button-primary": {
     name: "button-primary",
@@ -106,6 +168,14 @@ const BUILTIN_INTENT_CATALOG: Record<string, IntentDefinition> = {
       userSelect: "none",
     },
     a11y: ["contrast", "touch-target", "focus-visible"],
+    themes: {
+      dark: {
+        properties: {
+          backgroundColor: "#818cf8",
+          color: "#1e293b",
+        },
+      },
+    },
   },
   "button-secondary": {
     name: "button-secondary",
@@ -128,6 +198,17 @@ const BUILTIN_INTENT_CATALOG: Record<string, IntentDefinition> = {
     },
     states: { hover: { backgroundColor: "$colors.neutral.50" } },
     a11y: ["contrast", "touch-target", "focus-visible"],
+    themes: {
+      dark: {
+        properties: {
+          border: "1px solid #475569",
+          color: "#e2e8f0",
+        },
+        states: {
+          hover: { backgroundColor: "#334155" },
+        },
+      },
+    },
   },
   "input-field": {
     name: "input-field",
@@ -146,6 +227,15 @@ const BUILTIN_INTENT_CATALOG: Record<string, IntentDefinition> = {
       transition: "border-color 0.2s ease, box-shadow 0.2s ease",
     },
     a11y: ["contrast"],
+    themes: {
+      dark: {
+        properties: {
+          backgroundColor: "#1e293b",
+          color: "#f1f5f9",
+          border: "1px solid #475569",
+        },
+      },
+    },
   },
   modal: {
     name: "modal",
@@ -163,6 +253,23 @@ const BUILTIN_INTENT_CATALOG: Record<string, IntentDefinition> = {
       margin: "auto",
     },
     a11y: ["contrast", "focus-visible"],
+    themes: {
+      dark: {
+        properties: {
+          backgroundColor: "#1e293b",
+          color: "#f1f5f9",
+        },
+      },
+    },
+    variants: {
+      fullscreen: {
+        properties: {
+          maxWidth: "100vw",
+          minHeight: "100vh",
+          margin: "0",
+        },
+      },
+    },
   },
   tooltip: {
     name: "tooltip",
@@ -201,6 +308,14 @@ const BUILTIN_INTENT_CATALOG: Record<string, IntentDefinition> = {
       backdropFilter: "blur(8px)",
       borderBottom: "1px solid rgba(0,0,0,0.05)",
     },
+    themes: {
+      dark: {
+        properties: {
+          backgroundColor: "rgba(30,41,59,0.9)",
+          borderBottom: "1px solid rgba(255,255,255,0.1)",
+        },
+      },
+    },
   },
   "hover-lift": {
     name: "hover-lift",
@@ -226,9 +341,7 @@ const BUILTIN_INTENT_CATALOG: Record<string, IntentDefinition> = {
       },
     },
   },
-    // ==========================================================================
   // Visual intents
-  // ==========================================================================
   glass: {
     name: "glass",
     category: "visual",
@@ -239,6 +352,14 @@ const BUILTIN_INTENT_CATALOG: Record<string, IntentDefinition> = {
       WebkitBackdropFilter: "blur(12px)",
       border: "1px solid rgba(255,255,255,0.2)",
       borderRadius: "16px",
+    },
+    themes: {
+      dark: {
+        properties: {
+          background: "rgba(0,0,0,0.3)",
+          border: "1px solid rgba(255,255,255,0.1)",
+        },
+      },
     },
   },
   elevated: {
@@ -273,10 +394,15 @@ const BUILTIN_INTENT_CATALOG: Record<string, IntentDefinition> = {
       background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
     },
   },
-
-  // ==========================================================================
+  glow: {
+    name: "glow",
+    category: "visual",
+    description: "Glowing effect for dark mode",
+    properties: {
+      boxShadow: "0 0 20px rgba(102, 126, 234, 0.5), 0 0 40px rgba(102, 126, 234, 0.3)",
+    },
+  },
   // Spacing intents
-  // ==========================================================================
   compact: {
     name: "compact",
     category: "spacing",
@@ -309,10 +435,7 @@ const BUILTIN_INTENT_CATALOG: Record<string, IntentDefinition> = {
       margin: "0 auto",
     },
   },
-
-  // ==========================================================================
   // Layout intents
-  // ==========================================================================
   container: {
     name: "container",
     category: "layout",
@@ -341,6 +464,7 @@ const BUILTIN_INTENT_CATALOG: Record<string, IntentDefinition> = {
       display: "flex",
       flexDirection: "row",
       alignItems: "center",
+      gap: "12px",
     },
   },
   "flex-col": {
@@ -368,10 +492,7 @@ const BUILTIN_INTENT_CATALOG: Record<string, IntentDefinition> = {
       flex: "1",
     },
   },
-
-  // ==========================================================================
   // Component intents
-  // ==========================================================================
   badge: {
     name: "badge",
     category: "component",
@@ -384,6 +505,26 @@ const BUILTIN_INTENT_CATALOG: Record<string, IntentDefinition> = {
       fontSize: "12px",
       fontWeight: "600",
       lineHeight: "1.5",
+    },
+    variants: {
+      success: {
+        properties: {
+          backgroundColor: "#48bb78",
+          color: "#ffffff",
+        },
+      },
+      danger: {
+        properties: {
+          backgroundColor: "#f56565",
+          color: "#ffffff",
+        },
+      },
+      warning: {
+        properties: {
+          backgroundColor: "#ed8936",
+          color: "#ffffff",
+        },
+      },
     },
   },
   avatar: {
@@ -456,6 +597,22 @@ const BUILTIN_INTENT_CATALOG: Record<string, IntentDefinition> = {
       padding: "12px 16px",
       borderRadius: "8px",
     },
+    variants: {
+      success: {
+        properties: {
+          backgroundColor: "#f0fdf4",
+          border: "1px solid #bbf7d0",
+          color: "#15803d",
+        },
+      },
+      danger: {
+        properties: {
+          backgroundColor: "#fef2f2",
+          border: "1px solid #fecaca",
+          color: "#b91c1c",
+        },
+      },
+    },
   },
   breadcrumb: {
     name: "breadcrumb",
@@ -512,6 +669,20 @@ const BUILTIN_INTENT_CATALOG: Record<string, IntentDefinition> = {
       boxShadow: "0 8px 30px rgba(0,0,0,0.15)",
       zIndex: "100",
     },
+    variants: {
+      success: {
+        properties: {
+          backgroundColor: "#48bb78",
+          color: "#ffffff",
+        },
+      },
+      error: {
+        properties: {
+          backgroundColor: "#f56565",
+          color: "#ffffff",
+        },
+      },
+    },
   },
   drawer: {
     name: "drawer",
@@ -537,10 +708,7 @@ const BUILTIN_INTENT_CATALOG: Record<string, IntentDefinition> = {
       scrollSnapType: "x mandatory",
     },
   },
-
-  // ==========================================================================
   // Semantic intents
-  // ==========================================================================
   header: {
     name: "header",
     category: "semantic",
@@ -599,10 +767,7 @@ const BUILTIN_INTENT_CATALOG: Record<string, IntentDefinition> = {
       maxWidth: "320px",
     },
   },
-
-  // ==========================================================================
   // Interaction intents
-  // ==========================================================================
   clickable: {
     name: "clickable",
     category: "interaction",
@@ -631,10 +796,7 @@ const BUILTIN_INTENT_CATALOG: Record<string, IntentDefinition> = {
       color: "#ffffff",
     },
   },
-
-  // ==========================================================================
   // Typography intents
-  // ==========================================================================
   heading: {
     name: "heading",
     category: "typography",
@@ -690,6 +852,109 @@ const BUILTIN_INTENT_CATALOG: Record<string, IntentDefinition> = {
       fontWeight: "700",
     },
   },
+
+  // ==========================================================================
+  // PHASE 3: Composition Intents
+  // ==========================================================================
+  "premium-card": {
+    name: "premium-card",
+    category: "composite",
+    description: "Premium card composing card, glass, and elevated",
+    compose: [
+      { intent: "card" },
+      { intent: "glass", args: { intensity: 0.8 } },
+      { intent: "elevated", args: { level: 3 } },
+    ],
+    conditions: [
+      {
+        when: { theme: "dark" },
+        add: ["glow"],
+        remove: ["elevated"],
+      },
+    ],
+  },
+  "premium-button": {
+    name: "premium-button",
+    category: "composite",
+    description: "Premium button composing primary, elevated, and hover-lift",
+    compose: [
+      { intent: "button-primary" },
+      { intent: "elevated" },
+      { intent: "hover-lift" },
+    ],
+    conditions: [
+      {
+        when: { theme: "dark" },
+        add: ["glass"],
+      },
+    ],
+  },
+  "dark-card": {
+    name: "dark-card",
+    category: "composite",
+    description: "Card with dark theme baked in",
+    compose: [
+      { intent: "card" },
+      { intent: "bordered" },
+    ],
+    conditions: [
+      {
+        when: { theme: "light" },
+        add: ["elevated"],
+      },
+      {
+        when: { theme: "dark" },
+        add: ["glass"],
+        remove: ["elevated"],
+      },
+    ],
+  },
+  "glass-panel": {
+    name: "glass-panel",
+    category: "composite",
+    description: "Glass panel with border and spacing",
+    compose: [
+      { intent: "glass" },
+      { intent: "bordered" },
+      { intent: "spacious" },
+    ],
+  },
+  "hero-banner": {
+    name: "hero-banner",
+    category: "composite",
+    description: "Hero banner with gradient and centered content",
+    compose: [
+      { intent: "hero-section" },
+      { intent: "gradient" },
+      { intent: "center-content" },
+    ],
+    conditions: [
+      {
+        when: { theme: "dark" },
+        add: ["glass"],
+      },
+    ],
+  },
+  "modal-glass": {
+    name: "modal-glass",
+    category: "composite",
+    description: "Modal with glass effect and elevation",
+    compose: [
+      { intent: "modal" },
+      { intent: "glass" },
+      { intent: "elevated" },
+    ],
+  },
+  "input-group": {
+    name: "input-group",
+    category: "composite",
+    description: "Input field with border and compact spacing",
+    compose: [
+      { intent: "input-field" },
+      { intent: "bordered" },
+      { intent: "compact" },
+    ],
+  },
 };
 
 export const INTENT_CATALOG: Record<string, IntentDefinition> = {
@@ -720,11 +985,14 @@ export function registerIntents(
   }
 }
 
+// Fix #4: Deep clone built-in catalog on reset
 export function resetIntents() {
   for (const k of Object.keys(INTENT_CATALOG)) {
     delete INTENT_CATALOG[k];
   }
-  Object.assign(INTENT_CATALOG, BUILTIN_INTENT_CATALOG);
+  // Deep clone to prevent shared reference mutation
+  const cloned = JSON.parse(JSON.stringify(BUILTIN_INTENT_CATALOG));
+  Object.assign(INTENT_CATALOG, cloned);
   setIntentCatalog(INTENT_CATALOG);
 }
 
@@ -740,15 +1008,10 @@ interface ResolvedIntent {
   description: string;
 }
 
-function isCompositeResult(
-  result: any,
-): result is { expandsTo: string[] } {
-  return result && "expandsTo" in result && Array.isArray(result.expandsTo);
-}
-
 function resolveIntent(
   intentName: string,
   theme?: "light" | "dark" | "high-contrast",
+  variant?: string,
 ): ResolvedIntent | null {
   const intent = INTENT_CATALOG[intentName];
   if (!intent) return null;
@@ -757,6 +1020,7 @@ function resolveIntent(
   const states: Record<string, Record<string, string | number>> = {};
   const responsive: Record<string, Record<string, string | number>> = {};
 
+  // 1. Resolve semantics
   if (intent.semantics) {
     for (const sem of intent.semantics) {
       const resolved = resolveSemantic(sem.category as any, sem.intent, {
@@ -775,14 +1039,61 @@ function resolveIntent(
       }
     }
   }
+
+  // 2. Apply base properties
   if (intent.properties) Object.assign(properties, intent.properties);
+
+  // 3. Apply base states
   if (intent.states) {
     for (const [s, p] of Object.entries(intent.states)) {
       if (!states[s]) states[s] = {};
       Object.assign(states[s], p);
     }
   }
+
+  // 4. Apply responsive
   if (intent.responsive) Object.assign(responsive, intent.responsive);
+
+  // 5. NEW: Apply theme overrides
+  if (theme && intent.themes && intent.themes[theme]) {
+    const themeOverrides = intent.themes[theme];
+
+    if (themeOverrides.properties) {
+      Object.assign(properties, themeOverrides.properties);
+    }
+
+    if (themeOverrides.states) {
+      for (const [stateName, stateProps] of Object.entries(themeOverrides.states)) {
+        if (!states[stateName]) states[stateName] = {};
+        Object.assign(states[stateName], stateProps);
+      }
+    }
+
+    if (themeOverrides.responsive) {
+      Object.assign(responsive, themeOverrides.responsive);
+    }
+  }
+
+  // 6. NEW: Apply variant overrides (after theme so variant wins)
+  if (variant && intent.variants && intent.variants[variant]) {
+    const variantOverrides = intent.variants[variant];
+
+    if (variantOverrides.properties) {
+      Object.assign(properties, variantOverrides.properties);
+    }
+
+    if (variantOverrides.states) {
+      for (const [stateName, stateProps] of Object.entries(variantOverrides.states)) {
+        if (!states[stateName]) states[stateName] = {};
+        Object.assign(states[stateName], stateProps);
+      }
+    }
+
+    if (variantOverrides.responsive) {
+      Object.assign(responsive, variantOverrides.responsive);
+    }
+  }
+
   return {
     properties,
     states,
@@ -797,8 +1108,14 @@ export const intentResolver: LoweringPass = {
   generate(ir: StyleIR, context: LoweringContext): LoweringResult {
     let generatedNodes = 0;
 
+    const globalStyles: Record<string, Record<string, string | number>> = {};
+
+    // Read theme and variant from config
+    const configTheme = (context as any)?.config?.theme as
+      | "light" | "dark" | "high-contrast" | undefined;
+    const configVariant = (context as any)?.config?.variant as string | undefined;
+
     for (const rule of ir.rules) {
-      // Collect all intent names from passMeta + legacy fallback
       const intentNames: string[] =
         rule.passMeta?.analysis?.semantic?.intents ??
         ((rule.meta as any)._intent
@@ -807,178 +1124,320 @@ export const intentResolver: LoweringPass = {
 
       if (intentNames.length === 0) continue;
 
-      const theme = (context as any)?.config?.theme as
-        | "light"
-        | "dark"
-        | "high-contrast"
-        | undefined;
+      // ==========================================================================
+      // Validate intent combination before resolution
+      // ==========================================================================
+      const validation = validateIntentCombination(intentNames, {
+        autoResolve: true,
+        suggestEnhancements: true,
+      });
 
-      // Accumulate merged results across all intents
-      const mergedProperties: Record<string, string | number> = {};
-      const mergedStates: Record<string, Record<string, string | number>> = {};
-      const mergedResponsive: Record<string, Record<string, string | number>> =
-        {};
-      const mergedA11y: string[] = [];
-
-      for (const intentName of intentNames) {
-      
-        // Try semantic registry first (handles composites + context)
-        const semanticCtx: SemanticIntentContext = {
-          theme,
-          config: (context as any)?.config,
-        };
-
-        let resolved: ResolvedIntent | null = null;
-
-        if (hasSemanticIntent(intentName)) {
-          const semResult = resolveSemanticIntent(
-            intentName,
-            semanticCtx,
-          );
-
-          if (semResult && !isCompositeResult(semResult)) {
-            // Semantic registry returned direct properties
-            resolved = {
-              properties: semResult.properties || {},
-              states: semResult.states || {},
-              responsive: semResult.responsive || {},
-              a11y: semResult.a11y || [],
-              description: "",
-            };
-          }
-          // If composite, resolveSemanticIntent already expanded recursively
-          // and merged — the result IS the final properties
+      for (const warning of validation.warnings) {
+        if ((context as any)?.config?.verbose) {
+          console.warn(`[ChainCSS Intent] ${warning}`);
         }
-
-        // Fall back to flat INTENT_CATALOG
-        if (!resolved) {
-          resolved = resolveIntent(intentName, theme);
-        }
-
-        if (!resolved) continue;
-
-        // Merge properties (first intent wins on conflict)
-        for (const [prop, value] of Object.entries(resolved.properties)) {
-          if (!(prop in mergedProperties)) {
-            mergedProperties[prop] = value;
+      }
+      if (
+        validation.suggestions.length > 0 &&
+        (context as any)?.config?.verbose
+      ) {
+        console.log(
+          `[ChainCSS Intent] 💡 Suggested enhancements: ${validation.suggestions.join(", ")}`,
+        );
+      }
+      if (!validation.valid) {
+        const errorMessage = validation.errors.join("\n");
+        
+        if ((context as any)?.config?.strictIntents) {
+          throw new Error(`[ChainCSS Intent] ${errorMessage}`);
+        } else {
+          console.error(`[ChainCSS Intent] ❌ ${errorMessage}`);
+          
+          for (const error of validation.errors) {
+            ir.diagnostics.push({
+              id: `intent-validation-${Date.now()}-${Math.random()}`,
+              nodeId: rule.id,
+              severity: "error",
+              message: error,
+              pass: "intent-resolver",
+            });
           }
         }
+      }
+      const resolvedIntentNames = validation.resolvedIntents;
 
-        // Merge states
-        for (const [stateName, stateProps] of Object.entries(
-          resolved.states || {},
-        )) {
-          if (!mergedStates[stateName]) mergedStates[stateName] = {};
-          for (const [p, v] of Object.entries(stateProps)) {
-            if (!(p in mergedStates[stateName])) {
-              mergedStates[stateName][p] = v;
-            }
-          }
-        }
+      const compositionResult = resolveCompositions(resolvedIntentNames, {
+        theme: configTheme || "light",
+        variant: configVariant,
+      });
+      const finalIntentNames = compositionResult.intents;
 
-        // Merge responsive
-        for (const [bp, bpProps] of Object.entries(
-          resolved.responsive || {},
-        )) {
-          if (!mergedResponsive[bp]) mergedResponsive[bp] = {};
-          Object.assign(mergedResponsive[bp], bpProps);
-        }
-
-        // Merge a11y (deduplicate)
-        for (const req of resolved.a11y || []) {
-          if (!mergedA11y.includes(req)) mergedA11y.push(req);
+      for (const warning of compositionResult.warnings) {
+        if ((context as any)?.config?.verbose) {
+          console.warn(`[ChainCSS Composition] ${warning}`);
         }
       }
 
-      // Apply merged properties as declarations
-      for (const [prop, value] of Object.entries(mergedProperties)) {
-        const existingDecl = rule.declarations.find(
-          (d) => d.property === prop,
-        );
-        if (!existingDecl) {
-          rule.declarations.push(
-            createDeclaration(prop, value, rule.source, {
-              intent: intentNames.join(","),
-              category: "lowered-intent",
-            }),
-          );
-          const decl = rule.declarations[rule.declarations.length - 1];
+      // Collect global styles from global intents
+      // ==========================================================================
+      for (const intentName of finalIntentNames) {
+        const catalogIntent = INTENT_CATALOG[intentName];
+        
+        if (catalogIntent?.global && catalogIntent.globalStyles) {
+          for (const [selector, styles] of Object.entries(catalogIntent.globalStyles)) {
+            if (!globalStyles[selector]) {
+              globalStyles[selector] = {};
+            }
+            Object.assign(globalStyles[selector], styles);
+          }
+        }
+      }
+
+      // ==========================================================================
+      // Determine which themes to resolve
+      // ==========================================================================
+      const baseTheme = configTheme || "light";
+      const themeModes: Array<"light" | "dark" | "high-contrast"> = 
+        baseTheme === "dark" ? ["dark"] : ["light", "dark"];
+
+      // ==========================================================================
+      // Resolve intents for each theme and apply
+      // ==========================================================================
+      for (const activeTheme of themeModes) {
+        const mergedProperties: Record<string, string | number> = {};
+        const mergedStates: Record<string, Record<string, string | number>> = {};
+        const mergedResponsive: Record<string, Record<string, string | number>> = {};
+        const mergedA11y: string[] = [];
+
+        // Resolve all intents for this theme
+        for (const intentName of finalIntentNames) {
+          const semanticCtx: SemanticIntentContext = {
+            theme: activeTheme,
+            config: (context as any)?.config,
+            variant: configVariant,
+          };
+
+          let resolved: ResolvedIntent | null = null;
+
+          if (hasSemanticIntent(intentName)) {
+            const semResult = resolveSemanticIntent(intentName, semanticCtx);
+            if (semResult && (semResult as any).properties) {
+              resolved = {
+                properties: (semResult as any).properties || {},
+                states: (semResult as any).states || {},
+                responsive: (semResult as any).responsive || {},
+                a11y: (semResult as any).a11y || [],
+                description: "",
+              };
+            }
+          }
+
+          if (!resolved) {
+            resolved = resolveIntent(intentName, activeTheme, configVariant);
+          }
+
+          if (!resolved) continue;
+
+          // Merge properties
+          for (const [prop, value] of Object.entries(resolved.properties)) {
+            if (!(prop in mergedProperties)) {
+              mergedProperties[prop] = value;
+            }
+          }
+
+          // Merge states
+          for (const [stateName, stateProps] of Object.entries(resolved.states || {})) {
+            if (!mergedStates[stateName]) mergedStates[stateName] = {};
+            for (const [p, v] of Object.entries(stateProps)) {
+              if (!(p in mergedStates[stateName])) {
+                mergedStates[stateName][p] = v;
+              }
+            }
+          }
+
+          // Merge responsive
+          for (const [bp, bpProps] of Object.entries(resolved.responsive || {})) {
+            if (!mergedResponsive[bp]) mergedResponsive[bp] = {};
+            for (const [p, v] of Object.entries(bpProps)) {
+              if (!(p in mergedResponsive[bp])) {
+                mergedResponsive[bp][p] = v;
+              }
+            }
+          }
+
+          // Merge a11y
+          for (const req of resolved.a11y || []) {
+            if (!mergedA11y.includes(req)) mergedA11y.push(req);
+          }
+        }
+
+        // ======================================================================
+        // Apply: base theme → rule directly, other themes → override rule
+        // ======================================================================
+        if (activeTheme === baseTheme) {
+          // Apply as base styles on the original rule
+          const userSetProps = new Set<string>();
+          for (const decl of rule.declarations) {
+            userSetProps.add(normalizeProperty(decl.property));
+          }
+
+          for (const [prop, value] of Object.entries(mergedProperties)) {
+            const normalizedProp = normalizeProperty(prop);
+            if (userSetProps.has(normalizedProp)) continue;
+            
+            const existingDecl = rule.declarations.find(
+              (d) => normalizeProperty(d.property) === normalizedProp,
+            );
+            if (!existingDecl) {
+              rule.declarations.push(
+                createDeclaration(normalizedProp, value, rule.source, {
+                  intent: resolvedIntentNames.join(","),
+                  category: "lowered-intent",
+                }),
+              );
           recordHistory(
-            decl,
+            rule.declarations[rule.declarations.length - 1],
             "intent-resolver",
             "lowered-intent",
             undefined,
-            `intents([${intentNames.join(", ")}]) → ${prop}: ${value}`,
+            `intents([${resolvedIntentNames.join(", ")}]) → ${normalizedProp}: ${value}`,
           );
+              generatedNodes++;
+            }
+          }
+
+          // Apply states
+          for (const [stateName, stateProps] of Object.entries(mergedStates)) {
+            const pseudoClass = rule.pseudoClasses.find(
+              (pc) => pc.name === stateName,
+            );
+            if (pseudoClass) {
+              const pcUserSetProps = new Set<string>();
+              for (const decl of pseudoClass.declarations) {
+                pcUserSetProps.add(normalizeProperty(decl.property));
+              }
+              for (const [p, v] of Object.entries(stateProps)) {
+                const normalizedP = normalizeProperty(p);
+                if (pcUserSetProps.has(normalizedP)) continue;
+                const existingDecl = pseudoClass.declarations.find(
+                  (d) => normalizeProperty(d.property) === normalizedP,
+                );
+                if (!existingDecl) {
+                  pseudoClass.declarations.push(
+                    createDeclaration(normalizedP, v, rule.source),
+                  );
+                }
+              }
+            } else {
+              rule.pseudoClasses.push({
+                id: `intent-state-${rule.id}-${stateName}`,
+                name: stateName,
+                parentId: rule.id,
+                source: rule.source,
+                history: [],
+                declarations: Object.entries(stateProps).map(([p, v]) =>
+                  createDeclaration(normalizeProperty(p), v, rule.source),
+                ),
+              });
+            }
+          }
+
+          // Apply responsive
+          if (Object.keys(mergedResponsive).length > 0) {
+            if (!rule.passMeta) rule.passMeta = {};
+            if (!rule.passMeta.analysis) rule.passMeta.analysis = {};
+            if (!rule.passMeta.analysis.semantic)
+              rule.passMeta.analysis.semantic = {
+                tokens: [],
+                intents: [],
+                constraints: [],
+              };
+            (rule.passMeta.analysis as any).responsiveIntents = mergedResponsive;
+            (rule.meta as any)._responsiveIntents = mergedResponsive;
+          }
+
+          // Apply a11y
+          if (mergedA11y.length > 0) {
+            if (!rule.passMeta) rule.passMeta = {};
+            if (!rule.passMeta.analysis) rule.passMeta.analysis = {};
+            (rule.passMeta.analysis as any).a11yRequirements = mergedA11y;
+            (rule.meta as any)._a11yRequirements = mergedA11y;
+          }
+        } else {
+          // Create theme override rule with [data-theme="..."] selector
+          const themeOverrideRule: any = {
+            id: `${rule.id}-theme-${activeTheme}`,
+            selector: `[data-theme="${activeTheme}"] ${rule.selector}`,
+            declarations: [],
+            pseudoClasses: [],
+            atRules: [],
+            nestedRules: [],
+            conditions: [],
+            meta: {
+              dependencies: [rule.id],
+              dependents: [],
+              _themeOverride: true,
+            },
+            isDead: false,
+            specificity: (rule.specificity || 10) + 10,
+            hash: `${rule.hash}-theme-${activeTheme}`,
+            source: rule.source,
+            history: [],
+          };
+
+          // Add properties
+          for (const [prop, value] of Object.entries(mergedProperties)) {
+            themeOverrideRule.declarations.push(
+              createDeclaration(normalizeProperty(prop), value, rule.source, {
+                intent: resolvedIntentNames.join(","),
+                category: "theme-override",
+                theme: activeTheme,
+              }),
+            );
+            recordHistory(
+              themeOverrideRule.declarations[themeOverrideRule.declarations.length - 1],
+              "intent-resolver",
+              "theme-override",
+              undefined,
+              `intents([${resolvedIntentNames.join(", ")}]) theme=${activeTheme} → ${normalizeProperty(prop)}: ${value}`,
+            );
+          }
+
+          // Add states
+          for (const [stateName, stateProps] of Object.entries(mergedStates)) {
+            themeOverrideRule.pseudoClasses.push({
+              id: `theme-${activeTheme}-state-${rule.id}-${stateName}`,
+              name: stateName,
+              parentId: themeOverrideRule.id,
+              source: rule.source,
+              history: [],
+              declarations: Object.entries(stateProps).map(([p, v]) =>
+                createDeclaration(normalizeProperty(p), v, rule.source),
+              ),
+            });
+          }
+
+          ir.rules.push(themeOverrideRule);
           generatedNodes++;
         }
       }
-
-      // Apply merged states
-      for (const [stateName, stateProps] of Object.entries(mergedStates)) {
-        const pseudoClass = rule.pseudoClasses.find(
-          (pc) => pc.name === stateName,
-        );
-        if (pseudoClass) {
-          for (const [p, v] of Object.entries(stateProps)) {
-            const existingDecl = pseudoClass.declarations.find(
-              (d) => d.property === p,
-            );
-            if (!existingDecl) {
-              pseudoClass.declarations.push(
-                createDeclaration(p, v, rule.source),
-              );
-            }
-          }
-        } else {
-          rule.pseudoClasses.push({
-            id: `intent-state-${rule.id}-${stateName}`,
-            name: stateName,
-            parentId: rule.id,
-            source: rule.source,
-            history: [],
-            declarations: Object.entries(stateProps).map(([p, v]) =>
-              createDeclaration(p, v, rule.source),
-            ),
-          });
-        }
-      }
-
-      // Apply merged responsive
-      if (Object.keys(mergedResponsive).length > 0) {
-        if (!rule.passMeta) rule.passMeta = {};
-        if (!rule.passMeta.analysis) rule.passMeta.analysis = {};
-        if (!rule.passMeta.analysis.semantic)
-          rule.passMeta.analysis.semantic = {
-            tokens: [],
-            intents: [],
-            constraints: [],
-          };
-        (rule.passMeta.analysis as any).responsiveIntents = mergedResponsive;
-        (rule.meta as any)._responsiveIntents = mergedResponsive;
-      }
-
-      // Apply merged a11y
-      if (mergedA11y.length > 0) {
-        if (!rule.passMeta) rule.passMeta = {};
-        if (!rule.passMeta.analysis) rule.passMeta.analysis = {};
-        (rule.passMeta.analysis as any).a11yRequirements = mergedA11y;
-        (rule.meta as any)._a11yRequirements = mergedA11y;
-      }
     }
+
+    // Store global styles
+    if (Object.keys(globalStyles).length > 0) {
+      if (!ir.meta) {
+        ir.meta = {} as any;
+      }
+      (ir.meta as any).globalStyles = globalStyles;
+    }
+
     return { ir, generatedNodes };
   },
 };
-
 // ============================================================================
 // Semantic Intent Integration
 // ============================================================================
 
-/**
- * Register semantic intents from user config into the existing intent catalog.
- * Called during compiler initialization (see ChainCSSCompiler constructor
- * or config loading).
- */
 export function registerSemanticIntentsFromConfig(
   configIntents?: Record<string, any>,
 ): void {
@@ -987,19 +1446,15 @@ export function registerSemanticIntentsFromConfig(
   const semanticIntents: Record<string, any> = {};
 
   for (const [name, def] of Object.entries(configIntents)) {
-    // Support both the new SemanticIntentDefinition format
-    // and the existing IntentDefinition format
     if (typeof (def as any).resolve === "function") {
-      // New format: SemanticIntentDefinition with resolve() function
       semanticIntents[name] = def;
     } else if ((def as any).properties || (def as any).semantics) {
-      // Existing IntentDefinition format — already handled by registerIntents()
       continue;
     }
   }
 
   if (Object.keys(semanticIntents).length > 0) {
-    console.log("[DEBUG] registerSemanticIntentsFromConfig - names:", Object.keys(semanticIntents));
+    // Fix #3: Removed debug console.log
     registerSemanticIntents(semanticIntents);
   }
 }
@@ -1014,4 +1469,5 @@ export {
 } from "../intent/semantic-intent-registry.js";
 
 export { parseDescription, extendDictionary } from "../intent/semantic-intent-parser.js";
+
 setIntentCatalog(INTENT_CATALOG);

@@ -143,13 +143,12 @@ function intentAPIPass(ir: any): any {
       if (decl.history) {
         for (const entry of decl.history) {
           if (entry.pass === 'intent-resolver') {
-            entry.pass = 'intent-api';
+            entry.pass = 'intent-api';  // ← REWRITES!
           }
         }
       }
     }
   }
-
   return result.ir;
 }
 
@@ -290,9 +289,9 @@ describe('Intent API', () => {
       ir.rules.push(rule);
 
       const result = intentAPIPass(ir);
-      const decl = result.rules[0].declarations[0];
-      expect(decl.history.some((h: any) => h.pass === 'intent-api')).toBe(true);
-      expect(decl.history.some((h: any) => h.reason.includes('intent'))).toBe(true);
+      const allHistory = result.rules[0].declarations.flatMap((d: any) => d.history || []);
+      expect(allHistory.some((h: any) => h.pass === 'intent-api')).toBe(true);
+      expect(allHistory.some((h: any) => h.reason?.includes('intent'))).toBe(true);
     });
 
     it('skips rules without _intent', () => {

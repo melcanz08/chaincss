@@ -10,11 +10,8 @@ import type {
 } from "../pipeline-types.js";
 import { recordHistory } from "../ir/utils.js";
 
-/**
- * Computes actual byte size of a rule block for precise optimization metrics.
- */
 function estimateRuleBytes(rule: IRRule): { bytes: number; declCount: number } {
-  let bytes = (rule.selector || "").length + 3; // selector + " {}"
+  let bytes = (rule.selector || "").length + 3;
   let declCount = 0;
 
   if (rule.declarations) {
@@ -72,28 +69,33 @@ function estimateRuleBytes(rule: IRRule): { bytes: number; declCount: number } {
   return { bytes, declCount };
 }
 
-/**
- * Determines whether a rule represents global/unscoped styles or CSS features
- * that must not be purged by template reference graphs.
- */
+// Fix #2: Split combined selectors for global/preserved check
 function isGlobalOrPreservedRule(rule: IRRule): boolean {
   if (rule.meta?.preserve || rule.meta?.global || rule.meta?.atomic) {
     return true;
   }
 
-  const sel = (rule.selector || "").trim().toLowerCase();
+  const selector = (rule.selector || "").toLowerCase();
+  // Split combined selectors like ":root, html, body"
+  const parts = selector.split(",").map((s) => s.trim());
+
   if (
-    sel === ":root" ||
-    sel === "html" ||
-    sel === "body" ||
-    sel.startsWith("*") ||
-    sel.startsWith("::after") ||
-    sel.startsWith("::before")
+    parts.some(
+      (s) =>
+        s === ":root" ||
+        s === "html" ||
+        s === "body" ||
+        s === "*" ||
+        s === "::selection" ||
+        s === "::placeholder" ||
+        s.startsWith("::after") ||
+        s.startsWith("::before"),
+    )
   ) {
     return true;
   }
 
-  // Preserve global at-rules like @keyframes, @font-face, @layer, @import
+  // Preserve global at-rules
   if (rule.atRules && rule.atRules.length > 0) {
     for (const at of rule.atRules as any[]) {
       const type = (at.type || at.name || "").toLowerCase();
@@ -111,11 +113,12 @@ function isGlobalOrPreservedRule(rule: IRRule): boolean {
   return false;
 }
 
-/**
- * Determines if a rule has any meaningful declarations or active sub-structures.
- */
+// Fix #5: Check conditions in hasDeclarationsOrChildren
 function hasDeclarationsOrChildren(rule: IRRule): boolean {
   if (rule.declarations && rule.declarations.length > 0) return true;
+
+  // Fix #5: Rules with only if() conditions are not empty
+  if (rule.conditions && rule.conditions.length > 0) return true;
 
   if (rule.pseudoClasses) {
     for (const p of rule.pseudoClasses) {
@@ -146,16 +149,13 @@ function hasDeclarationsOrChildren(rule: IRRule): boolean {
   return false;
 }
 
-/**
- * Performs BFS from root entry nodes to build the complete set of transitively reachable graph IDs.
- */
+// Fix #1: BFS from roots following DEPENDENTS (not dependencies)
 function buildReachableNodeSet(graph: StyleIR["graph"]): Set<string> {
   const reachable = new Set<string>();
   if (!graph) return reachable;
 
   const queue: string[] = [];
 
-  // Gather root nodes
   if (graph.rootNodes) {
     const rootList =
       graph.rootNodes instanceof Set
@@ -186,15 +186,14 @@ function buildReachableNodeSet(graph: StyleIR["graph"]): Set<string> {
     return reachable;
   }
 
-  // Traversal to resolve transitively used nodes
   while (queue.length > 0) {
     const currentId = queue.shift()!;
     const node = nodesMap.get(currentId);
     if (!node) continue;
 
-    const dependencies =
-      node.dependencies || node.deps || node.meta?.dependencies || [];
-    for (const depId of dependencies) {
+    // Fix #1: Follow DEPENDENTS from roots to reach all downstream nodes
+    const dependents = node.dependents || node.meta?.dependents || [];
+    for (const depId of dependents) {
       const depStr = String(depId);
       if (!reachable.has(depStr)) {
         reachable.add(depStr);
@@ -206,9 +205,6 @@ function buildReachableNodeSet(graph: StyleIR["graph"]): Set<string> {
   return reachable;
 }
 
-/**
- * Prunes nested rules and at-rules recursively.
- */
 function pruneNestedStructures(
   rule: IRRule,
   passName: string,
@@ -340,7 +336,6 @@ export const deadCodeEliminator: OptimizationPass = {
     for (const rule of ir.rules) {
       if (!rule) continue;
 
-      // 1. Skip and account for pre-flagged dead rules
       if (rule.isDead) {
         const { bytes, declCount } = estimateRuleBytes(rule);
         totalRulesEliminated++;
@@ -349,17 +344,14 @@ export const deadCodeEliminator: OptimizationPass = {
         continue;
       }
 
-      // 2. Recursively prune nested rules & at-rules first
       const nestedRes = pruneNestedStructures(rule, "dead-code-eliminator");
       totalRulesEliminated += nestedRes.eliminatedRules;
       totalDeclsEliminated += nestedRes.eliminatedDecls;
       totalBytesSaved += nestedRes.savedBytes;
 
-      // 3. Evaluate emptiness and global preservation status
       const hasContent = hasDeclarationsOrChildren(rule);
       const isPreserved = isGlobalOrPreservedRule(rule);
 
-      // 4. Graph reachability check
       let isUnreachableFromGraph = false;
       if (hasGraph && !isPreserved) {
         const inGraph =
@@ -372,7 +364,6 @@ export const deadCodeEliminator: OptimizationPass = {
         }
       }
 
-      // 5. Eliminate if empty OR unreachable in graph
       if (!hasContent || isUnreachableFromGraph) {
         rule.isDead = true;
         const { bytes, declCount } = estimateRuleBytes(rule);

@@ -126,11 +126,13 @@ export interface OptimizationPass {
 // Stage 5: Generation / Lowering
 // ============================================================================
 export interface LoweringContext {
-  tokens?: Record<string, any>; // Design tokens for $token resolution
+  tokens?: Record<string, any>;        // Design tokens for $token resolution
+  tokenContract?: Record<string, any>; // Token contract for tokenLowering pass  ← ADD THIS
   target?: GenerationTarget;
   minify?: boolean;
   sourceMap?: boolean;
   namespace?: string;
+  config?: Record<string, any>;
 }
 
 export interface LoweringResult {

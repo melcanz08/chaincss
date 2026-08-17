@@ -5,62 +5,67 @@ import { isDynamicValue } from "@shared/types/index.js";
 
 export type ValueClass = "static" | "dynamic" | "invalid";
 
-// Hoisted checks — avoid re-creating strings per call
+// Fix #1: Hoisted regex — no re-creation per content call
 const DOLLAR_BRACE = "${";
 const THEME_PREFIX = "theme.";
 const PROPS_PREFIX = "props.";
+const QUOTED_DOLLAR_BRACE = /(['"])(?:(?!\1).)*\$\{(?:(?!\1).)*\1/;
 
 export function classifyValue(value: unknown, propKey?: string): ValueClass {
-  // 1. Fast path: dynamic values are functions / runtime handlers — checked via types.ts
+  // Fast path: dynamic values are functions / runtime handlers
   if (isDynamicValue(value)) return "dynamic";
 
   const t = typeof value;
+
   if (t === "string") {
-    // Content property exception: `content: "'${icon}'"` is static CSS, not JS interpolation
-    // Your original logic kept it static — preserve it
+    const s = value as string;
+
+    // Content property exception
     if (propKey === "content") {
-      const s = value as string;
-      // Only treat as static if ${ appears inside CSS quotes (escaped content)
-      // Pattern: ${ inside single or double quotes = static CSS content
-      // Pattern: bare ${ outside quotes = dynamic JS interpolation
-      const quotedDollarBrace = /(['"])(?:(?!\1).)*\$\{(?:(?!\1).)*\1/;
-      if (quotedDollarBrace.test(s)) {
-        // ${ inside CSS string quotes — e.g. content: "'\e${hex}'" or content: "attr(data-${x})"
+      if (QUOTED_DOLLAR_BRACE.test(s)) {
         return "static";
       }
-      // If ${ appears outside quotes, it IS dynamic — e.g. content: `${icon}`
       if (s.includes(DOLLAR_BRACE)) return "dynamic";
       return "static";
     }
 
-    // Fast prefix checks without startsWith alloc: charCode
-    const s = value as string;
-    if (s.length >= 6) {
-      // NOTE: "theme." and "props." string prefixes are classified as dynamic
-      // but string-based token references are NOT fully supported yet.
-      // Use $token.path syntax or function-based dynamic values instead.
-      // See: token-resolver.ts for supported token reference formats.
-      if (s[0] === "t" && s.startsWith(THEME_PREFIX)) return "dynamic";
-      if (s[0] === "p" && s.startsWith(PROPS_PREFIX)) return "dynamic";
-    }
-    // Only one includes scan now
+    // Fix #4: Only treat as dynamic if it's a token reference pattern
+    // "theme." and "props." prefixes are legacy — restrict to actual token syntax
     if (s.includes(DOLLAR_BRACE)) return "dynamic";
+
+    // Legacy prefix checks — only if followed by valid token path characters
+    if (s.startsWith(THEME_PREFIX) || s.startsWith(PROPS_PREFIX)) {
+      // Verify it looks like a token path: theme.foo.bar or props.foo
+      const afterPrefix = s.slice(THEME_PREFIX.length);
+      if (/^[a-zA-Z_$][\w$]*(?:\.[a-zA-Z_$][\w$]*)*$/.test(afterPrefix)) {
+        return "dynamic";
+      }
+      // Falls through as static — it's just text starting with "theme." or "props."
+    }
 
     return "static";
   }
 
-  if (t === "number") return "static";
+  if (t === "number") {
+    // Fix #2: NaN and Infinity are invalid, not static
+    return Number.isFinite(value as number) ? "static" : "invalid";
+  }
 
-  // Arrays: CSS fallback values like ["-webkit-flex", "flex"]
+  // Fix #3: Array with any dynamic element → dynamic
   if (Array.isArray(value)) {
-    return (value as unknown[]).every(
-      (v) => typeof v === "string" || typeof v === "number",
-    )
+    const arr = value as unknown[];
+    // Check for dynamic elements first
+    for (const v of arr) {
+      if (isDynamicValue(v)) return "dynamic";
+      if (typeof v === "string" && v.includes(DOLLAR_BRACE)) return "dynamic";
+    }
+    // Otherwise, all elements must be string | number for static
+    return arr.every((v) => typeof v === "string" || typeof v === "number")
       ? "static"
       : "invalid";
   }
 
-  // Booleans, null, etc are invalid
+  // Fix #6: Explicit null/undefined/boolean/object → invalid
   return "invalid";
 }
 
@@ -71,20 +76,24 @@ export function partitionStyles(properties: CSSProperties): {
   const staticProps: Record<string, CSSPrimitiveValue> = {};
   const dynamicProps: Record<string, any> = {};
 
-  // FIX: for...in is 2-3x faster than Object.entries which allocs [k,v] arrays
   for (const key in properties) {
     if (!Object.prototype.hasOwnProperty.call(properties, key)) continue;
     const value = (properties as any)[key];
     const cls = classifyValue(value, key);
-    if (cls === "dynamic") dynamicProps[key] = value;
-    else if (cls === "static") staticProps[key] = value as CSSPrimitiveValue;
+
+    // Fix #5: Skip invalid values instead of storing them
+    if (cls === "dynamic") {
+      dynamicProps[key] = value;
+    } else if (cls === "static") {
+      staticProps[key] = value as CSSPrimitiveValue;
+    }
+    // "invalid" is silently skipped
   }
 
   return { static: staticProps, dynamic: dynamicProps };
 }
 
 export function hasDynamicValues(properties: CSSProperties): boolean {
-  // FIX: early exit without allocating entries array
   for (const key in properties) {
     if (!Object.prototype.hasOwnProperty.call(properties, key)) continue;
     if (classifyValue((properties as any)[key], key) === "dynamic") return true;

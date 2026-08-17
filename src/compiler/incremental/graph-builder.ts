@@ -1,5 +1,5 @@
 // ============================================================================
-// FILE: src/compiler/pipeline/ir/graph-builder.ts
+// FILE: src/compiler/incremental/graph-builder.ts
 // Builds a dependency graph from the StyleIR
 // ============================================================================
 
@@ -11,9 +11,9 @@ import type {
   IRGraphEdge,
   IRDeclaration,
   IRAtRule,
-} from "./types.js";
+} from "../pipeline/ir/types.js";
 
-import { ensureRuleMeta } from "./utils.js";
+import { ensureRuleMeta } from "../pipeline/ir/utils.js";
 
 // Helper to safely coerce arrays or record objects into arrays
 function ensureArray<T>(item: T[] | Record<string, T> | undefined | null): T[] {
@@ -48,17 +48,10 @@ function getNodeValues(graph: IRGraph): IRRule[] {
   return Object.values(graph.nodes as Record<string, IRRule>);
 }
 
-/**
- * Clean token names by removing leading $ if present
- */
 function normalizeTokenName(name: string): string {
-  return (name || "").trim().replace(/^\$/, "");
+  return (name || "").trim().replace(/^\$/, "").trim();
 }
 
-/**
- * Get or create a synthetic token node for star-topology token graphs.
- * These nodes don't produce CSS — they exist only for dependency tracking.
- */
 function getOrCreateTokenNode(
   nodes: Map<IRNodeId, IRRule>,
   rawTokenName: string,
@@ -85,7 +78,7 @@ function getOrCreateTokenNode(
       isDead: false,
       specificity: 0,
       hash: "",
-      source: { file: "", line: 0, column: 0 },
+      source: { file: "__synthetic__", line: 0, column: 0 },
       history: [],
     };
     nodes.set(tokenId, tokenNode);
@@ -99,12 +92,37 @@ function getOrCreateTokenNode(
 // ============================================================================
 
 export function buildIRGraph(ir: StyleIR): IRGraph {
+  const edgeSet = new Set<string>();
   const nodes = new Map<IRNodeId, IRRule>();
   const edges: IRGraphEdge[] = [];
 
-  // ==========================================================================
-  // Phase 1: Collect all nodes
-  // ==========================================================================
+  function addEdge(
+    edges: IRGraphEdge[],
+    _nodes: Map<IRNodeId, IRRule>,
+    from: IRRule,
+    to: IRRule,
+    type: IRGraphEdge["type"],
+    metadata?: Record<string, unknown>,
+  ) {
+    const key = `${from.id}:${to.id}:${type}`;
+    if (edgeSet.has(key)) return;
+    edgeSet.add(key);
+
+    edges.push({ from: from.id, to: to.id, type, metadata });
+
+    const fromMeta = ensureRuleMeta(from);
+    fromMeta.dependents ??= [];
+    if (!fromMeta.dependents.includes(to.id)) {
+      fromMeta.dependents.push(to.id);
+    }
+
+    const toMeta = ensureRuleMeta(to);
+    toMeta.dependencies ??= [];
+    if (!toMeta.dependencies.includes(from.id)) {
+      toMeta.dependencies.push(from.id);
+    }
+  }
+
   function collectRules(
     rulesInput: IRRule[] | Record<string, IRRule> | undefined | null,
     parentId?: IRNodeId,
@@ -116,7 +134,6 @@ export function buildIRGraph(ir: StyleIR): IRGraph {
       if (rule.isDead) continue;
       nodes.set(rule.id, rule);
 
-      // Parent relationship (extends)
       if (parentId) {
         const parentNode = nodes.get(parentId);
         if (parentNode) {
@@ -124,7 +141,6 @@ export function buildIRGraph(ir: StyleIR): IRGraph {
         }
       }
 
-      // Media/container/supports/layer containment edges
       if (containerAtRule) {
         const containerId = `atrule-${containerAtRule.id}`;
         const containerNode = nodes.get(containerId);
@@ -137,13 +153,11 @@ export function buildIRGraph(ir: StyleIR): IRGraph {
         }
       }
 
-      // Nested rules
       const nestedRules = ensureArray(rule.nestedRules);
       if (nestedRules.length > 0) {
         collectRules(nestedRules, rule.id);
       }
 
-      // At-rule nested rules → add containment edges
       const atRules = ensureArray(rule.atRules);
       if (atRules.length > 0) {
         for (const atRule of atRules) {
@@ -151,8 +165,7 @@ export function buildIRGraph(ir: StyleIR): IRGraph {
           const atRuleId = `atrule-${atRule.id}`;
           const virtualRule: IRRule = {
             id: atRuleId,
-            selector:
-              `@${atRule.type} ${atRule.query || atRule.name || ""}`.trim(),
+            selector: `@${atRule.type} ${atRule.query || atRule.name || ""}`.trim(),
             declarations: ensureArray(atRule.declarations),
             pseudoClasses: [],
             atRules: [],
@@ -173,27 +186,23 @@ export function buildIRGraph(ir: StyleIR): IRGraph {
           };
           nodes.set(atRuleId, virtualRule);
 
-          // Rule → at-rule containment edge
           addEdge(edges, nodes, rule, virtualRule, "contains", {
             atRuleType: atRule.type,
             query: atRule.query,
             name: atRule.name,
           });
 
-          // Collect nested rules inside the at-rule
           const atNested = ensureArray(atRule.nestedRules);
           if (atNested.length > 0) {
             collectRules(atNested, rule.id, atRule);
           }
 
-          // Keyframe frames → parent keyframes at-rule edge
           const keyframes = ensureArray(atRule.keyframes);
           if (atRule.type === "keyframes" && keyframes.length > 0) {
             for (let idx = 0; idx < keyframes.length; idx++) {
               const frame = keyframes[idx];
               if (!frame || typeof frame !== "object") continue;
-              const frameId =
-                frame.id || `${atRuleId}-frame-${frame.keyText || idx}`;
+              const frameId = frame.id || `${atRuleId}-frame-${frame.keyText || idx}`;
               const frameRule: IRRule = {
                 id: frameId,
                 selector: frame.keyText,
@@ -227,21 +236,16 @@ export function buildIRGraph(ir: StyleIR): IRGraph {
 
   collectRules(ir.rules);
 
-  // ==========================================================================
-  // Phase 2: Build edges between nodes (Optimized via Inverted Indexing)
-  // ==========================================================================
-
-  // Filter regular rules for selector overlap (exclude virtual at-rules and tokens)
+  // Selector overlap detection
   const regularRules = Array.from(nodes.values()).filter(
     (r) => !r.id.startsWith("atrule-") && !r.id.startsWith("token-"),
   );
 
-  const regularNodeData = regularRules.map((rule) => {
-    const selectorParts = extractSelectorTokens(rule.selector);
-    return { rule, selectorParts };
-  });
+  const regularNodeData = regularRules.map((rule) => ({
+    rule,
+    selectorParts: extractSelectorTokens(rule.selector),
+  }));
 
-  // 1. Build Inverted Index for Selector Overlaps
   const selectorIndex = new Map<string, IRRule[]>();
   for (const data of regularNodeData) {
     for (const part of data.selectorParts) {
@@ -254,7 +258,7 @@ export function buildIRGraph(ir: StyleIR): IRGraph {
     }
   }
 
-  const MAX_BUCKET_SIZE = 100; // Ignore overly generic selector parts
+  const MAX_BUCKET_SIZE = 100;
   const checkedPairs = new Set<string>();
 
   for (const dataA of regularNodeData) {
@@ -287,7 +291,7 @@ export function buildIRGraph(ir: StyleIR): IRGraph {
     }
   }
 
-  // 2. Token Reference Detection — O(K) Star Topology
+  // Token reference detection
   const allCurrentNodes = Array.from(nodes.values());
   const tokenIndex = new Map<string, IRRule[]>();
 
@@ -306,12 +310,11 @@ export function buildIRGraph(ir: StyleIR): IRGraph {
   for (const [tokenName, consumerRules] of tokenIndex) {
     const tokenNode = getOrCreateTokenNode(nodes, tokenName);
     for (const consumerRule of consumerRules) {
-      // Directed edge: [Synthetic Token Node] → [Consumer Rule]
       addEdge(edges, nodes, tokenNode, consumerRule, "references");
     }
   }
 
-  // Phase 2b: Animation → keyframe edges
+  // Animation dependency detection
   const fullNodeArray = Array.from(nodes.values());
   for (let i = 0; i < fullNodeArray.length; i++) {
     const animNames = extractAnimationNames(fullNodeArray[i]);
@@ -321,11 +324,7 @@ export function buildIRGraph(ir: StyleIR): IRGraph {
         if (other.id.startsWith("atrule-")) {
           const atRuleType = (other.meta as any)?._atRuleType;
           const atRuleName = (other.meta as any)?._atRuleName;
-          if (
-            atRuleType === "keyframes" &&
-            atRuleName &&
-            animNames.has(atRuleName)
-          ) {
+          if (atRuleType === "keyframes" && atRuleName && animNames.has(atRuleName)) {
             addEdge(edges, nodes, other, fullNodeArray[i], "animates");
           }
         }
@@ -333,12 +332,8 @@ export function buildIRGraph(ir: StyleIR): IRGraph {
     }
   }
 
-  // Phase 2c: Token derivation edges
-  detectTokenDerivationEdges(ir, edges, nodes);
+  detectTokenDerivationEdges(ir, edges, nodes, addEdge);
 
-  // ==========================================================================
-  // Phase 3: Identify root and leaf nodes
-  // ==========================================================================
   const finalNodes = Array.from(nodes.values());
 
   const rootNodes = finalNodes
@@ -353,38 +348,6 @@ export function buildIRGraph(ir: StyleIR): IRGraph {
 }
 
 // ============================================================================
-// Edge Helpers
-// ============================================================================
-
-function addEdge(
-  edges: IRGraphEdge[],
-  nodes: Map<IRNodeId, IRRule>,
-  from: IRRule,
-  to: IRRule,
-  type: IRGraphEdge["type"],
-  metadata?: Record<string, unknown>,
-) {
-  const exists = edges.some(
-    (e) => e.from === from.id && e.to === to.id && e.type === type,
-  );
-  if (exists) return;
-
-  edges.push({ from: from.id, to: to.id, type, metadata });
-
-  const fromMeta = ensureRuleMeta(from);
-  fromMeta.dependents ??= [];
-  if (!fromMeta.dependents.includes(to.id)) {
-    fromMeta.dependents.push(to.id);
-  }
-
-  const toMeta = ensureRuleMeta(to);
-  toMeta.dependencies ??= [];
-  if (!toMeta.dependencies.includes(from.id)) {
-    toMeta.dependencies.push(from.id);
-  }
-}
-
-// ============================================================================
 // Selector Overlap Detection
 // ============================================================================
 
@@ -394,7 +357,7 @@ function extractSelectorTokens(selector: string): Set<string> {
   for (const compound of compounds) {
     const matches = compound.match(/([.#:]?[a-zA-Z_][a-zA-Z0-9_-]*)/g) || [];
     for (const m of matches) {
-      if (m.startsWith(":")) continue; // Exclude pseudo-classes from overlap index
+      if (m.startsWith(":")) continue;
       tokens.add(m);
     }
   }
@@ -419,11 +382,7 @@ function extractTokenReferences(rule: IRRule): Set<string> {
   const tokens = new Set<string>();
 
   function scanDeclarations(
-    declsInput:
-      | IRDeclaration[]
-      | Record<string, IRDeclaration>
-      | undefined
-      | null,
+    declsInput: IRDeclaration[] | Record<string, IRDeclaration> | undefined | null,
   ) {
     const decls = ensureArray(declsInput);
     for (const decl of decls) {
@@ -453,28 +412,11 @@ function extractTokenReferences(rule: IRRule): Set<string> {
 // ============================================================================
 
 const ANIMATION_KEYWORDS = new Set([
-  "none",
-  "inherit",
-  "initial",
-  "unset",
-  "revert",
-  "infinite",
-  "linear",
-  "ease",
-  "ease-in",
-  "ease-out",
-  "ease-in-out",
-  "step-start",
-  "step-end",
-  "normal",
-  "reverse",
-  "alternate",
-  "alternate-reverse",
-  "forwards",
-  "backwards",
-  "both",
-  "running",
-  "paused",
+  "none", "inherit", "initial", "unset", "revert",
+  "infinite", "linear", "ease", "ease-in", "ease-out", "ease-in-out",
+  "step-start", "step-end", "normal", "reverse",
+  "alternate", "alternate-reverse", "forwards", "backwards",
+  "both", "running", "paused",
 ]);
 
 function isTimingOrNumericToken(part: string): boolean {
@@ -488,11 +430,7 @@ function extractAnimationNames(rule: IRRule): Set<string> {
   const names = new Set<string>();
 
   function scanDeclarations(
-    declsInput:
-      | IRDeclaration[]
-      | Record<string, IRDeclaration>
-      | undefined
-      | null,
+    declsInput: IRDeclaration[] | Record<string, IRDeclaration> | undefined | null,
   ) {
     const decls = ensureArray(declsInput);
     for (const decl of decls) {
@@ -530,11 +468,18 @@ function detectTokenDerivationEdges(
   ir: StyleIR,
   edges: IRGraphEdge[],
   nodes: Map<IRNodeId, IRRule>,
+  addEdgeFn: (
+    edges: IRGraphEdge[],
+    nodes: Map<IRNodeId, IRRule>,
+    from: IRRule,
+    to: IRRule,
+    type: IRGraphEdge["type"],
+    metadata?: Record<string, unknown>,
+  ) => void,
 ) {
   const tokenDefs = new Map<string, IRNodeId>();
   const rules = ensureArray(ir?.rules);
 
-  // 1. Identify rules defining tokens and link: [Defining Rule] → [Synthetic Token Node]
   for (const rule of rules) {
     if (!rule || typeof rule !== "object" || rule.isDead) continue;
 
@@ -551,14 +496,11 @@ function detectTokenDerivationEdges(
 
         tokenDefs.set(cleanToken, rule.id);
         const tokenNode = getOrCreateTokenNode(nodes, cleanToken);
-
-        // Defining rule produces this synthetic token
-        addEdge(edges, nodes, rule, tokenNode, "defines");
+        addEdgeFn(edges, nodes, rule, tokenNode, "defines");
       }
     }
   }
 
-  // 2. Handle token-to-token derivations: [Source Token] → [Target Token]
   const irMeta = ir?.meta as any;
   const tokenRelationships = ensureArray(
     irMeta?._tokenRelationships || irMeta?.tokenRelationships,
@@ -580,7 +522,7 @@ function detectTokenDerivationEdges(
         const sourceTokenNode = getOrCreateTokenNode(nodes, cleanSource);
         const targetTokenNode = getOrCreateTokenNode(nodes, cleanTarget);
 
-        addEdge(edges, nodes, sourceTokenNode, targetTokenNode, "derives", {
+        addEdgeFn(edges, nodes, sourceTokenNode, targetTokenNode, "derives", {
           method: rel.method,
           source: cleanSource,
           target: cleanTarget,
@@ -600,9 +542,10 @@ export function traverseGraph(
   visitor: (node: IRRule, depth: number) => void,
 ) {
   const visited = new Set<IRNodeId>();
-  const queue: Array<{ id: IRNodeId; depth: number }> = ensureArray(
-    startNodes,
-  ).map((id) => ({ id, depth: 0 }));
+  const queue: Array<{ id: IRNodeId; depth: number }> = ensureArray(startNodes).map((id) => ({
+    id,
+    depth: 0,
+  }));
 
   while (queue.length > 0) {
     const { id, depth } = queue.shift()!;
@@ -621,10 +564,6 @@ export function traverseGraph(
     }
   }
 }
-
-// ============================================================================
-// Invalidation & Dynamic Token Traversal
-// ============================================================================
 
 export interface InvalidationOptions {
   includeTokenNodes?: boolean;
@@ -653,9 +592,7 @@ export function findAffectedNodes(
 
   const affected: IRNodeId[] = [];
   const visited = new Set<IRNodeId>();
-  const queue: Array<{ id: IRNodeId; depth: number }> = [
-    { id: startId, depth: 0 },
-  ];
+  const queue: Array<{ id: IRNodeId; depth: number }> = [{ id: startId, depth: 0 }];
 
   while (queue.length > 0) {
     const { id, depth } = queue.shift()!;
@@ -665,8 +602,7 @@ export function findAffectedNodes(
     const node = getNode(graph, id);
     if (!node) continue;
 
-    const isTokenNode =
-      id.startsWith("token-") || Boolean((node.meta as any)?._isSyntheticToken);
+    const isTokenNode = id.startsWith("token-") || Boolean((node.meta as any)?._isSyntheticToken);
 
     if (!isTokenNode || includeTokenNodes) {
       affected.push(id);
@@ -708,64 +644,50 @@ export function getGraphStats(graph: IRGraph) {
     maxDepth,
     edgeTypes: edgeTypeCounts,
     averageDependencies:
-      allNodes.reduce(
-        (sum, n) => sum + ensureArray(n.meta?.dependencies).length,
-        0,
-      ) / (allNodes.length || 1),
+      allNodes.reduce((sum, n) => sum + ensureArray(n.meta?.dependencies).length, 0) /
+      (allNodes.length || 1),
     averageDependents:
-      allNodes.reduce(
-        (sum, n) => sum + ensureArray(n.meta?.dependents).length,
-        0,
-      ) / (allNodes.length || 1),
+      allNodes.reduce((sum, n) => sum + ensureArray(n.meta?.dependents).length, 0) /
+      (allNodes.length || 1),
   };
 }
 
 function findMaxDepth(graph: IRGraph): number {
   let maxDepth = 0;
   const depths = new Map<IRNodeId, number>();
-  const visiting = new Set<IRNodeId>();
 
-  function getDepth(id: IRNodeId): { depth: number; cyclic: boolean } {
-    if (depths.has(id)) return { depth: depths.get(id)!, cyclic: false };
-    if (visiting.has(id)) return { depth: 0, cyclic: true };
+  if (!graph?.nodes) return 0;
 
-    visiting.add(id);
+  const nodeKeys =
+    graph.nodes instanceof Map
+      ? Array.from(graph.nodes.keys())
+      : Object.keys(graph.nodes);
 
-    const node = getNode(graph, id);
-    const deps = ensureArray(node?.meta?.dependencies);
-    let maxChildDepth = 0;
-    let hitCycle = false;
+  for (const startId of nodeKeys) {
+    if (depths.has(startId)) continue;
 
-    for (const dep of deps) {
-      const res = getDepth(dep as IRNodeId);
-      if (res.depth > maxChildDepth) {
-        maxChildDepth = res.depth;
-      }
-      if (res.cyclic) {
-        hitCycle = true;
-      }
-    }
+    const visited = new Set<IRNodeId>();
+    const stack: Array<{ id: IRNodeId; depth: number }> = [{ id: startId, depth: 0 }];
 
-    visiting.delete(id);
-    const depth = deps.length > 0 ? maxChildDepth + 1 : 0;
+    while (stack.length > 0) {
+      const { id, depth } = stack.pop()!;
+      if (visited.has(id)) continue;
+      visited.add(id);
 
-    if (!hitCycle) {
+      maxDepth = Math.max(maxDepth, depth);
       depths.set(id, depth);
-    }
 
-    return { depth, cyclic: hitCycle };
-  }
+      const node = getNode(graph, id);
+      const deps = ensureArray(node?.meta?.dependencies);
 
-  if (graph?.nodes) {
-    const nodeKeys =
-      graph.nodes instanceof Map
-        ? Array.from(graph.nodes.keys())
-        : Object.keys(graph.nodes);
-
-    for (const id of nodeKeys) {
-      maxDepth = Math.max(maxDepth, getDepth(id).depth);
+      for (const dep of deps as IRNodeId[]) {
+        if (!visited.has(dep)) {
+          stack.push({ id: dep, depth: depth + 1 });
+        }
+      }
     }
   }
+
   return maxDepth;
 }
 
@@ -803,10 +725,7 @@ export interface GraphExport {
   leafNodes: string[];
 }
 
-export function exportGraphAsJSON(
-  graph: IRGraph,
-  _ir?: StyleIR,
-): GraphExport {
+export function exportGraphAsJSON(graph: IRGraph, _ir?: StyleIR): GraphExport {
   const nodes: GraphExportNode[] = [];
   const edges: GraphExportEdge[] = [];
 

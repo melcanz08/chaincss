@@ -1,13 +1,13 @@
 // src/compiler/pipeline/incremental-compiler.ts
 // Incremental compilation using the dependency graph
 
-import type { StyleIR, IRRule, IRNodeId, IRGraph } from "./ir/types.js";
+import type { StyleIR, IRRule, IRNodeId, IRGraph } from "../pipeline/ir/types.js";
 import {
   buildIRGraph,
   findAffectedNodes,
-} from "./ir/graph-builder.js";
-import type { PipelineResult } from "./pipeline-types.js";
-import type { Pipeline } from "./pipeline.js";
+} from "./graph-builder.js";
+import type { PipelineResult } from "../pipeline/pipeline-types.js";
+import type { Pipeline } from "../pipeline/pipeline.js";
 
 export interface IncrementalChange {
   /** IDs of rules that were added or modified */
@@ -39,7 +39,7 @@ export interface IncrementalResult extends PipelineResult {
 /**
  * Recursively count all rules including nested ones.
  */
-function countTotalRules(rules: IRRule[]): number {
+export function countTotalRules(rules: IRRule[]): number {
   let count = 0;
   for (const r of rules) {
     count++;

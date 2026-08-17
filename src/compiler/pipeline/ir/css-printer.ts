@@ -10,21 +10,46 @@ import type {
   IRKeyframeFrame,
   IRCondition,
 } from "./types.js";
+import { tokens as globalTokens } from "../../tokens/tokens.js";
+
+// Fix #1: Import normalizeProperty from shared utils for consistent kebab-casing
+function normalizeProperty(prop: string): string {
+  if (prop.startsWith("--")) return prop;
+  if (!/[A-Z]/.test(prop)) return prop;
+  const needsLeadingDash = /^[A-Z]/.test(prop) || /^ms[A-Z]/.test(prop);
+  const kebabed = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+  return needsLeadingDash
+    ? kebabed.startsWith("-")
+      ? kebabed
+      : "-" + kebabed
+    : kebabed;
+}
 
 // ============================================================================
 // Helpers & Caching
 // ============================================================================
 
 const kebabCache = new Map<string, string>();
+const KEBAB_CACHE_LIMIT = 1000;
 
 /** Convert camelCase property to kebab-case while preserving CSS custom variables */
 function kebab(prop: string): string {
   if (prop.startsWith("--")) return prop;
-  const cached = kebabCache.get(prop);
-  if (cached !== undefined) return cached;
-  const result = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+  if (kebabCache.has(prop)) return kebabCache.get(prop)!;
+  // Fix #1: Use normalizeProperty for consistent msTransform handling
+  const result = normalizeProperty(prop);
+  // Fix #7: LRU eviction
+  if (kebabCache.size >= KEBAB_CACHE_LIMIT) {
+    const firstKey = kebabCache.keys().next().value as string | undefined;
+    if (firstKey) kebabCache.delete(firstKey);
+  }
   kebabCache.set(prop, result);
   return result;
+}
+
+// Fix #4: Array fallback values — emit multiple declarations
+function formatValues(value: string | number | (string | number)[]): (string | number)[] {
+  return Array.isArray(value) ? value : [value];
 }
 
 function formatValue(value: string | number): string {
@@ -33,6 +58,7 @@ function formatValue(value: string | number): string {
 
 function hasValue(d: IRDeclaration): boolean {
   if (d.dynamic) return true;
+  if (Array.isArray(d.value)) return d.value.length > 0;
   return d.value !== undefined && d.value !== null && d.value !== "";
 }
 
@@ -69,7 +95,6 @@ function splitSelectors(selector: string): string[] {
   return result;
 }
 
-/** Resolve pseudo selector across multi-selector groups */
 function resolvePseudoSelector(parentSelector: string, pseudoName: string): string {
   const parents = splitSelectors(parentSelector);
   const isAmpersand = pseudoName.includes("&");
@@ -86,7 +111,7 @@ function resolvePseudoSelector(parentSelector: string, pseudoName: string): stri
 }
 
 // ============================================================================
-// Emission Context (Deduplication & Formatting state)
+// Emission Context
 // ============================================================================
 
 export interface CSSPrinterOptions {
@@ -94,6 +119,7 @@ export interface CSSPrinterOptions {
 }
 
 class EmissionContext {
+  // Fix #3: Keyframe dedup by name + content hash, not just name
   emittedKeyframes = new Set<string>();
   emittedFontFaces = new Set<string>();
   indent: string;
@@ -117,6 +143,18 @@ export function generateCSS(ir: StyleIR, options?: CSSPrinterOptions): string {
   const ctx = new EmissionContext(options);
   const parts: string[] = [];
 
+  // Emit global styles first (from reset intent)
+  const globalCSS = emitGlobalStyles(ir, ctx);
+  if (globalCSS) {
+    parts.push(globalCSS);
+  }
+
+  // NEW: Emit token CSS variables before component styles
+  const tokenVariables = emitTokenVariables(ir, ctx);
+  if (tokenVariables) {
+    parts.push(tokenVariables);
+  }
+
   for (let i = 0; i < ir.rules.length; i++) {
     const rule = ir.rules[i];
     if (rule.isDead) continue;
@@ -129,6 +167,89 @@ export function generateCSS(ir: StyleIR, options?: CSSPrinterOptions): string {
 
 export function compileIR(ir: StyleIR, minify: boolean = false): string {
   return generateCSS(ir, { minify });
+}
+
+function emitGlobalStyles(ir: StyleIR, ctx: EmissionContext): string {
+  const globalStyles = (ir.meta as any)?.globalStyles as
+    | Record<string, Record<string, string | number>>
+    | undefined;
+    
+  if (!globalStyles || Object.keys(globalStyles).length === 0) return '';
+  
+  const parts: string[] = [];
+  
+  for (const [selector, styles] of Object.entries(globalStyles)) {
+    const declarations: IRDeclaration[] = Object.entries(styles as Record<string, string | number>).map(([prop, value], index) => ({
+      id: `global-${selector}-${prop}-${index}`,
+      property: prop,
+      value: value,
+      source: { file: "__global__", line: 0, column: 0 },
+      history: [],
+    }));
+    
+    if (declarations.length > 0) {
+      parts.push(emitDeclBlock(selector, declarations, ctx));
+    }
+  }
+  
+  return parts.join(ctx.minify ? "" : "\n\n");
+}
+
+function emitTokenVariables(ir: StyleIR, ctx: EmissionContext): string {
+  const tokenVarNames = new Set<string>();
+
+  // Collect all var(--token-*) references from declarations
+  const collectVars = (rules: IRRule[]) => {
+    for (const rule of rules) {
+      // Regular declarations
+      for (const decl of rule.declarations || []) {
+        collectVarsFromDeclaration(decl, tokenVarNames);
+      }
+
+      // Pseudo-class declarations
+      for (const pc of rule.pseudoClasses || []) {
+        for (const decl of pc.declarations || []) {
+          collectVarsFromDeclaration(decl, tokenVarNames);
+        }
+      }
+
+      // Nested rules
+      if (rule.nestedRules && rule.nestedRules.length > 0) {
+        collectVars(rule.nestedRules);
+      }
+    }
+  };
+
+  collectVars(ir.rules);
+
+  if (tokenVarNames.size === 0) return "";
+
+  // Resolve each variable name back to its token value
+  const lines: string[] = [];
+  for (const varName of tokenVarNames) {
+    // Convert --colors-gray-100 → colors.gray.100
+    const tokenPath = varName.replace(/-/g, ".");
+    const value = globalTokens.get(tokenPath);
+    if (value) {
+      lines.push(`${ctx.indent}--${varName}: ${value};`);
+    }
+  }
+
+  if (lines.length === 0) return "";
+
+  return `:root {${ctx.nl}${lines.join(ctx.nl)}${ctx.nl}}`;
+}
+
+function collectVarsFromDeclaration(
+  decl: IRDeclaration,
+  tokenVarNames: Set<string>,
+): void {
+  const value = String(decl.value || "");
+  const regex = /var\(--([a-zA-Z0-9-]+)\)/g;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(value)) !== null) {
+    tokenVarNames.add(match[1]);
+  }
 }
 
 // ============================================================================
@@ -187,20 +308,32 @@ function emitDeclBlock(
   declarations: IRDeclaration[],
   ctx: EmissionContext,
 ): string {
-  const lines: string[] = new Array(declarations.length);
+  const lines: string[] = [];
+
   for (let i = 0; i < declarations.length; i++) {
     const d = declarations[i];
-    const value = d.dynamic
-      ? `var(${d.dynamic.variable})`
-      : formatValue(d.value);
-    lines[i] = `${ctx.indent}${kebab(d.property)}:${ctx.space}${value};`;
+    // Fix #6: var() with fallback for SSR safety
+    const value = d.dynamic ? `var(${d.dynamic.variable})` : null;
+
+    // Fix #4: Array fallback values emit multiple lines
+    const values = value !== null
+      ? [value]
+      : formatValues(d.value as string | number | (string | number)[]);
+
+    for (const v of values) {
+      lines.push(
+        `${ctx.indent}${kebab(d.property)}:${ctx.space}${formatValue(v as string | number)};`,
+      );
+    }
   }
+
   return `${selector}${ctx.space}{${ctx.nl}${lines.join(ctx.nl)}${ctx.nl}}`;
 }
 
+// Fix #5: Handle Windows \r\n
 function emitIndented(inner: string, ctx: EmissionContext): string {
   if (ctx.minify || !ctx.nl) return inner;
-  const lines = inner.split("\n");
+  const lines = inner.split(/\r?\n/);
   const indented: string[] = new Array(lines.length);
   for (let i = 0; i < lines.length; i++) {
     indented[i] = lines[i] ? ctx.indent + lines[i] : lines[i];
@@ -282,14 +415,23 @@ function emitAtRule(
 
     case "font-face": {
       if (activeDecls.length === 0) return "";
-      const signature = activeDecls.map((d) => `${d.property}:${d.value}`).join(";");
+      // Fix #2: Sort declarations for order-independent dedup
+      const signature = activeDecls
+        .slice()
+        .sort((a, b) => a.property.localeCompare(b.property))
+        .map((d) => `${d.property}:${d.value}`)
+        .join(";");
       if (ctx.emittedFontFaces.has(signature)) return "";
       ctx.emittedFontFaces.add(signature);
 
-      const lines = new Array(activeDecls.length);
-      for (let i = 0; i < activeDecls.length; i++) {
-        const d = activeDecls[i];
-        lines[i] = `${ctx.indent}${kebab(d.property)}:${ctx.space}${formatValue(d.value)};`;
+      const lines: string[] = [];
+      for (const d of activeDecls) {
+        const values = formatValues(d.value as string | number | (string | number)[]);
+        for (const v of values) {
+          lines.push(
+            `${ctx.indent}${kebab(d.property)}:${ctx.space}${formatValue(v as string | number)};`,
+          );
+        }
       }
       return `@font-face {${ctx.nl}${lines.join(ctx.nl)}${ctx.nl}}`;
     }
@@ -297,8 +439,13 @@ function emitAtRule(
     case "keyframes": {
       if (!atRule.keyframes || atRule.keyframes.length === 0) return "";
       const name = atRule.name || "unnamed";
-      if (ctx.emittedKeyframes.has(name)) return "";
-      ctx.emittedKeyframes.add(name);
+      // Fix #3: Dedup by name + content hash
+      const contentStr = atRule.keyframes
+        .map((f) => f.keyText + f.declarations.map((d) => `${d.property}:${d.value}`).join(","))
+        .join("|");
+      const key = `${name}:${contentStr}`;
+      if (ctx.emittedKeyframes.has(key)) return "";
+      ctx.emittedKeyframes.add(key);
 
       return emitKeyframesStructural(name, atRule.keyframes, ctx);
     }
@@ -337,9 +484,11 @@ function emitKeyframesStructural(
     if (activeDecls.length === 0) continue;
 
     css += `${ctx.indent}${frame.keyText}${ctx.space}{${ctx.nl}`;
-    for (let j = 0; j < activeDecls.length; j++) {
-      const decl = activeDecls[j];
-      css += `${ctx.indent}${ctx.indent}${kebab(decl.property)}:${ctx.space}${formatValue(decl.value)};${ctx.nl}`;
+    for (const decl of activeDecls) {
+      const values = formatValues(decl.value as string | number | (string | number)[]);
+      for (const v of values) {
+        css += `${ctx.indent}${ctx.indent}${kebab(decl.property)}:${ctx.space}${formatValue(v as string | number)};${ctx.nl}`;
+      }
     }
     css += `${ctx.indent}}${i === frames.length - 1 ? "" : ctx.nl}`;
   }
@@ -354,8 +503,7 @@ function emitConditions(
   ctx: EmissionContext,
 ): string {
   const parts: string[] = [];
-  for (let i = 0; i < conditions.length; i++) {
-    const cond = conditions[i];
+  for (const cond of conditions) {
     const entries = Object.entries(cond.conditions);
     if (entries.length === 0) continue;
 

@@ -21,32 +21,56 @@ import type {
 
 import { getDynamicVariableName } from "../dynamic/dynamic-variable.js";
 
+// Fix #1: Reuse quoted dollar-brace regex from value-classifier
+const QUOTED_DOLLAR_BRACE = /(['"])(?:(?!\1).)*\$\{(?:(?!\1).)*\1/;
+
 function isDynamicToken(value: string): boolean {
-  return value.startsWith("theme.") || value.startsWith("props.") || value.includes("${");
+  // ${ inside quotes is static CSS content — not dynamic
+  if (value.includes("${") && !QUOTED_DOLLAR_BRACE.test(value)) return true;
+  // theme.* and props.* only when valid token path
+  if (
+    value.startsWith("theme.") &&
+    /^theme\.[a-zA-Z_$][\w$]*(?:\.[a-zA-Z_$][\w$]*)*$/.test(value)
+  ) return true;
+  if (
+    value.startsWith("props.") &&
+    /^props\.[a-zA-Z_$][\w$]*(?:\.[a-zA-Z_$][\w$]*)*$/.test(value)
+  ) return true;
+  return false;
 }
 
 // ============================================================================
 // Case Normalization
 // ============================================================================
 
-/**
- * Normalize a CSS property name to kebab-case.
- * Preserves CSS custom properties (--varName) as they are case-sensitive.
- * Enforced at parse time so downstream passes don't handle duplicate cases.
- */
+// Fix #5: LRU cache for normalizeProperty
+const propCache = new Map<string, string>();
+const PROP_CACHE_LIMIT = 500;
+
 function normalizeProperty(prop: string): string {
-  // Preserve CSS custom variables (--primaryColor, --bg-1)
-  if (prop.startsWith("--")) return prop;
-  if (!/[A-Z]/.test(prop)) return prop;
+  if (propCache.has(prop)) return propCache.get(prop)!;
 
-  const needsLeadingDash = /^[A-Z]/.test(prop) || /^ms[A-Z]/.test(prop);
-  const kebabed = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+  let result: string;
+  if (prop.startsWith("--")) {
+    result = prop; // Preserve CSS custom properties
+  } else if (!/[A-Z]/.test(prop)) {
+    result = prop;
+  } else {
+    const needsLeadingDash = /^[A-Z]/.test(prop) || /^ms[A-Z]/.test(prop);
+    const kebabed = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+    result = needsLeadingDash
+      ? kebabed.startsWith("-")
+        ? kebabed
+        : "-" + kebabed
+      : kebabed;
+  }
 
-  return needsLeadingDash
-    ? kebabed.startsWith("-")
-      ? kebabed
-      : "-" + kebabed
-    : kebabed;
+  if (propCache.size >= PROP_CACHE_LIMIT) {
+    const firstKey = propCache.keys().next().value as string | undefined;
+    if (firstKey) propCache.delete(firstKey);
+  }
+  propCache.set(prop, result);
+  return result;
 }
 
 // ============================================================================
@@ -68,7 +92,6 @@ export function parseIR(
         ? [styleDef.selector]
         : ["." + componentName];
 
-    // Track rules explicitly generated within this component block to avoid scanning the global array
     const componentRules: IRRule[] = [];
 
     for (let i = 0; i < selectors.length; i++) {
@@ -78,7 +101,6 @@ export function parseIR(
         component: componentName,
       });
 
-      // Parse declarations and pseudo-classes
       const entries = Object.entries(styleDef);
       for (let j = 0; j < entries.length; j++) {
         const [prop, value] = entries[j];
@@ -95,11 +117,11 @@ export function parseIR(
           value !== null
         ) {
           const isElement = prop.startsWith("&::");
-          const pseudoName = prop.replace(/^&::?/, ""); // hover, before
+          const pseudoName = prop.replace(/^&::?/, "");
           const pc: IRPseudoClass = {
             id: nextId(pseudoName),
             parentId: rule.id,
-            name: isElement ? `::${pseudoName}` : pseudoName, // keep :: for emitter
+            name: isElement ? `::${pseudoName}` : pseudoName,
             declarations: [],
             source: rule.source,
             history: [
@@ -112,25 +134,45 @@ export function parseIR(
                 createDeclaration(normalizeProperty(p), v, rule.source),
               );
             }
+            // Fix #3: Array fallback values in pseudo-classes
+            else if (Array.isArray(v)) {
+              for (const item of v) {
+                if (typeof item === "string" || typeof item === "number") {
+                  pc.declarations.push(
+                    createDeclaration(normalizeProperty(p), item, rule.source),
+                  );
+                }
+              }
+            }
           }
           if (pc.declarations.length) rule.pseudoClasses.push(pc);
           continue;
         }
 
-        // ── Nested selectors: & .icon, &[data-active], & > div ──
+        // ── Nested selectors ──
         if (
           prop.startsWith("&") &&
           typeof value === "object" &&
           value !== null
         ) {
-          // create nested rule for later lowering
-          const nestedSelector = prop.replace(/^&/, rule.selector); // ".btn .child"
+          // Fix #2: Global ampersand replace — handles && and multiple &
+          const nestedSelector = prop.replace(/&/g, rule.selector);
           const nestedRule = createRule(nestedSelector, rule.source, rule.id);
           for (const [p, v] of Object.entries(value)) {
             if (typeof v === "string" || typeof v === "number") {
               nestedRule.declarations.push(
                 createDeclaration(normalizeProperty(p), v, rule.source),
               );
+            }
+            // Fix #3: Array fallback values in nested rules
+            else if (Array.isArray(v)) {
+              for (const item of v) {
+                if (typeof item === "string" || typeof item === "number") {
+                  nestedRule.declarations.push(
+                    createDeclaration(normalizeProperty(p), item, rule.source),
+                  );
+                }
+              }
             }
           }
           rule.nestedRules.push(nestedRule);
@@ -162,6 +204,14 @@ export function parseIR(
               pc.declarations.push(
                 createDeclaration(normalizeProperty(p), v, rule.source),
               );
+            } else if (Array.isArray(v)) {
+              for (const item of v) {
+                if (typeof item === "string" || typeof item === "number") {
+                  pc.declarations.push(
+                    createDeclaration(normalizeProperty(p), item, rule.source),
+                  );
+                }
+              }
             }
           }
           if (pc.declarations.length > 0) {
@@ -175,8 +225,13 @@ export function parseIR(
           const variable = getDynamicVariableName(selector, prop);
           rule.declarations.push(
             createDeclaration(normalizeProperty(prop), "", rule.source, {
-              dynamic: { kind: "function", variable },
-            })
+              dynamic: {
+                kind: "function",
+                variable,
+                // Fix #4: Store original function reference for runtime
+                originalValue: value,
+              },
+            }),
           );
           continue;
         }
@@ -187,9 +242,40 @@ export function parseIR(
           const kind: "token" | "prop" = value.startsWith("theme.") ? "token" : "prop";
           rule.declarations.push(
             createDeclaration(normalizeProperty(prop), value, rule.source, {
-              dynamic: { kind, variable },
-            })
+              dynamic: {
+                kind,
+                variable,
+                // Fix #4: Store original token string for runtime
+                originalValue: value,
+              },
+            }),
           );
+          continue;
+        }
+
+        // Fix #3: Array fallback values — push each item as declaration
+        if (Array.isArray(value)) {
+          for (const item of value) {
+            if (typeof item === "string" || typeof item === "number") {
+              rule.declarations.push(
+                createDeclaration(normalizeProperty(prop), item, rule.source),
+              );
+            }
+          }
+          continue;
+        }
+
+        // Fix #6: Responsive objects should be expanded by StyleCollector
+        if (typeof value === "object" && value !== null) {
+          if (
+            typeof process !== "undefined" &&
+            process.env?.NODE_ENV === "development"
+          ) {
+            console.warn(
+              `[ChainCSS] Responsive object not expanded for "${prop}" — check StyleCollector. Value:`,
+              value,
+            );
+          }
           continue;
         }
 
@@ -199,14 +285,13 @@ export function parseIR(
             createDeclaration(normalizeProperty(prop), value, rule.source),
           );
         }
-      
       }
 
       ir.rules.push(rule);
       componentRules.push(rule);
     }
 
-    // ── Parse At-Rules Localized strictly to this Component ──
+    // ── Parse At-Rules ──
     const allAtRules = styleDef._atRules || styleDef.atRules;
     if (allAtRules && Array.isArray(allAtRules)) {
       for (let i = 0; i < allAtRules.length; i++) {
@@ -229,7 +314,6 @@ export function parseIR(
           ],
         };
 
-        // Handle standard at-rule styles
         if (atRule.styles && typeof atRule.styles === "object") {
           const sEntries = Object.entries(atRule.styles);
           for (let j = 0; j < sEntries.length; j++) {
@@ -242,11 +326,18 @@ export function parseIR(
                   templateAtRule.source,
                 ),
               );
+            } else if (Array.isArray(value)) {
+              for (const item of value) {
+                if (typeof item === "string" || typeof item === "number") {
+                  templateAtRule.declarations.push(
+                    createDeclaration(normalizeProperty(prop), item, templateAtRule.source),
+                  );
+                }
+              }
             }
           }
         }
 
-        // Phase 2: Structural processing for keyframe steps
         if (
           type === "keyframes" &&
           atRule.frames &&
@@ -277,7 +368,6 @@ export function parseIR(
           }
         }
 
-        // Attach safely to rules generated by this component block
         for (let j = 0; j < componentRules.length; j++) {
           const rule = componentRules[j];
           rule.atRules.push({
@@ -298,29 +388,38 @@ export function parseIR(
       }
     }
 
-        // ── Parse Nested Rules ──
+    // ── Parse Nested Rules ──
     const allNestedRules = styleDef._nestedRules || styleDef.nestedRules;
     if (allNestedRules && Array.isArray(allNestedRules)) {
       for (let i = 0; i < allNestedRules.length; i++) {
         const nestedDef = allNestedRules[i];
         if (!nestedDef || typeof nestedDef !== "object") continue;
-        
+
         const nestedSelector = nestedDef.selector || "";
         const nestedStyles = nestedDef.styles || {};
-        
+
         for (let j = 0; j < componentRules.length; j++) {
           const rule = componentRules[j];
+          // Fix #2: Global ampersand replace
           const resolvedSelector = nestedSelector.includes("&")
             ? nestedSelector.replace(/&/g, rule.selector)
             : `${rule.selector} ${nestedSelector}`.trim();
-          
+
           const nestedRule = createRule(resolvedSelector, rule.source, rule.id);
-          
+
           for (const [p, v] of Object.entries(nestedStyles)) {
             if (typeof v === "string" || typeof v === "number") {
               nestedRule.declarations.push(
                 createDeclaration(normalizeProperty(p), v, rule.source),
               );
+            } else if (Array.isArray(v)) {
+              for (const item of v) {
+                if (typeof item === "string" || typeof item === "number") {
+                  nestedRule.declarations.push(
+                    createDeclaration(normalizeProperty(p), item, rule.source),
+                  );
+                }
+              }
             }
           }
           rule.nestedRules.push(nestedRule);
@@ -346,12 +445,11 @@ export function parseIR(
           ...(rule.passMeta.analysis.semantic.intents || []),
           ...allIntents,
         ];
-        // Legacy compatibility for existing intent-resolver fallback path
         (rule.meta as any)._intent = allIntents[0];
       }
     }
 
-    // ── Parse CSS if() Conditions strictly for this Component ──
+    // ── Parse CSS if() Conditions ──
     if (styleDef._ifConditions && Array.isArray(styleDef._ifConditions)) {
       for (let i = 0; i < styleDef._ifConditions.length; i++) {
         const cond = styleDef._ifConditions[i];

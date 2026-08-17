@@ -1,5 +1,5 @@
 // ============================================================================
-// FILE: src/frameworks/build-tools/vite/index.ts
+// FILE: src/frameworks/build-tools/vite/index.ts (OPTIMIZED & INCREMENTAL)
 // ============================================================================
 
 export type Plugin = any;
@@ -24,11 +24,15 @@ import {
   saveCompilerStateToDisk,
   restoreCompilerStateFromDisk,
 } from "@compiler/pipeline/persistent-compiler.js";
+import { StatefulIncrementalCompiler } from "@compiler/incremental/stateful-compiler.js";
+import { tokens as designTokens } from "@compiler/tokens/tokens.js";
+
 const CHAIN_FILE_RE = /\.chain\.(ts|js)x?$/;
 const TMP_MARKER = ".chaincss-tmp";
 const isTmpFile = (p: string) => p.includes(TMP_MARKER);
 const isGeneratedOutput = (p: string) =>
   p.endsWith(".css") || p.endsWith(".class.js");
+
 function writeClassFileContent(
   classMap: Record<string, string>,
   dynamicMap: Record<string, any>,
@@ -53,7 +57,6 @@ function writeClassFileContent(
         if (typeof v === "function") {
           lines.push(`    "${k}": ${v.toString()},`);
         } else if (typeof v === "string" && v.trim().length > 0) {
-          // Support pre-stringified function expressions from build pipelines
           lines.push(`    "${k}": ${v},`);
         }
       }
@@ -65,6 +68,7 @@ function writeClassFileContent(
   }
   return lines.join("\n");
 }
+
 export default function chaincssPlugin(
   options: ChainCSSPluginOptions = {},
 ): Plugin {
@@ -79,30 +83,67 @@ export default function chaincssPlugin(
   let _cachedCSS = "";
   const compiling = new Set<string>();
   const inspectorStore = new InspectorStore();
+  
+  // Incremental compiler instance
+  let incrementalCompiler: StatefulIncrementalCompiler | null = null;
+
   function updateCSS(file: string, css: string) {
     cssFileCache.set(path.resolve(file), css);
     rebuildCache();
   }
+
   function removeCSS(file: string) {
     const absPath = path.resolve(file);
     cssFileCache.delete(absPath);
     inspectorStore.clearFileContext(absPath);
     rebuildCache();
   }
+
   function rebuildCache() {
     _cachedCSS = Array.from(cssFileCache.values()).filter(Boolean).join("\n");
   }
+
   function getCSS() {
     return _cachedCSS;
   }
+
   function log(msg: string) {
     if (!silent && verbose) console.log(`[ChainCSS] ${msg}`);
   }
+
   function logError(msg: string) {
     console.error(`[ChainCSS] ❌ ${msg}`);
   }
+
   function summary(msg: string) {
     if (!silent) console.log(`[ChainCSS] ${msg}`);
+  }
+
+  function registerInspectorRules(inspectorData: any, absPath: string, name: string) {
+    if (!inspectorData?.ir) return;
+    const pipelineReport = Array.isArray(inspectorData.pipelineReport)
+      ? inspectorData.pipelineReport
+      : Object.values(inspectorData.pipelineReport || {});
+
+    const diagnostics = Array.isArray(inspectorData.diagnostics)
+      ? inspectorData.diagnostics
+      : Object.values(inspectorData.diagnostics || {});
+
+    const rules = serializeForInspector(
+      inspectorData.ir,
+      pipelineReport,
+      diagnostics,
+      absPath,
+      name,
+    );
+
+    if (rules) {
+      if (Array.isArray(rules)) {
+        inspectorStore.addAll(rules);
+      } else {
+        inspectorStore.addAll([rules as InspectorRule]);
+      }
+    }
   }
 
   async function compileFile(chainPath: string, forcedContent?: string) {
@@ -125,7 +166,7 @@ export default function chaincssPlugin(
       let css = "";
       const classMap: Record<string, string> = {};
       const dynamicMap: Record<string, any> = {};
-      const rulesToRegister: InspectorRule[] = [];
+
       try {
         for (const [name, compileResult] of Object.entries(results) as [
           string,
@@ -133,58 +174,19 @@ export default function chaincssPlugin(
         ][]) {
           if (compileResult?.css) css += compileResult.css + "\n";
           const className = Object.values(compileResult.classMap || {})[0] as
-            string | undefined;
+            | string
+            | undefined;
           if (className) classMap[name] = className;
           if ((compileResult as any)?.dynamic)
             dynamicMap[name] = (compileResult as any).dynamic;
-          const inspector = compileResult?.inspector;
-          if (inspector?.ir) {
-            const pipelineReport = Array.isArray(inspector.pipelineReport)
-              ? inspector.pipelineReport
-              : Object.values(inspector.pipelineReport || {});
 
-            const diagnostics = Array.isArray(inspector.diagnostics)
-              ? inspector.diagnostics
-              : Object.values(inspector.diagnostics || {});
-
-            const rules = serializeForInspector(
-              inspector.ir,
-              pipelineReport,
-              diagnostics,
-              absPath,
-              name,
-            );
-
-            if (rules) {
-              if (Array.isArray(rules)) {
-                rulesToRegister.push(...rules);
-              } else {
-                rulesToRegister.push(rules as InspectorRule);
-              }
-            }
-          }
+          registerInspectorRules(compileResult?.inspector, absPath, name);
         }
       } catch (e) {
         console.error("[ChainCSS] Error iterating results:", e);
-        console.error(
-          "[ChainCSS] results type:",
-          typeof results,
-          "value:",
-          results,
-        );
         throw e;
       }
-      if (rulesToRegister.length > 0) {
-        inspectorStore.addAll(rulesToRegister);
-        console.log(
-          "[ChainCSS] IR rules collected:",
-          rulesToRegister.length,
-          "total:",
-          inspectorStore.size,
-        );
-      } else {
-        console.log("[ChainCSS] No IR data for:", absPath);
-      }
+
       for (const [name, dyn] of Object.entries(dynamicMap)) {
         if (dyn && Object.keys(dyn).length > 0) {
           const className = classMap[name];
@@ -200,8 +202,8 @@ export default function chaincssPlugin(
           }
         }
       }
+
       const result = { css, classMap, dynamicMap };
-      // Save to persistent cache
       if ((compiler as any).stateCache) {
         const sourceHash = crypto
           .createHash("md5")
@@ -217,6 +219,7 @@ export default function chaincssPlugin(
       throw err;
     }
   }
+
   async function compileAllStyles() {
     if (!fs.existsSync(root)) return "";
     const cachePath = path.join(root, ".chaincss-cache");
@@ -264,7 +267,7 @@ export default function chaincssPlugin(
       summary(
         `Pre-compiling ${chainFiles.length} styling definition file(s)...`,
       );
-    // Parallel compilation with concurrency limit
+
     const concurrency = Math.min(cpus().length, chainFiles.length || 1);
     let successCount = 0;
     let index = 0;
@@ -303,15 +306,116 @@ export default function chaincssPlugin(
       );
     return getCSS();
   }
+
   function exportIRData() {
     return inspectorStore.export({
       pipelinePreset: isProduction ? "production" : "development",
       compiledAt: new Date().toISOString(),
     });
   }
+
+  function initializeIncrementalCompiler() {
+    if (!compiler) return;
+
+    const envPipeline = createPipeline(
+      isProduction ? "production" : "default",
+      {
+        contexts: {
+          lowering: {
+            tokenContract: options.tokens || designTokens,
+            config: {
+              theme: (options as any).theme || 'light',
+            },
+          },
+        },
+      },
+    );
+
+    incrementalCompiler = new StatefulIncrementalCompiler({
+      pipeline: envPipeline,
+      parseFile: async (filePath: string, source: string) => {
+        const results = await compiler.compileVirtualSource(source, filePath);
+        const ir = (results as any)?.__ir || {
+          id: path.basename(filePath),
+          rules: [],
+          meta: { passes: [], dirtyRules: 0, passCount: 0 },
+          diagnostics: [],
+        };
+        return ir;
+      },
+      generateRuleId: (filePath: string, stableName: string) => {
+        const hash = crypto.createHash("md5")
+          .update(`${filePath}:${stableName}`)
+          .digest("hex")
+          .slice(0, 8);
+        return hash;
+      },
+      rebuild: async () => {
+        const allFiles = findChainFiles(root);
+        const allRules: any[] = [];
+        
+        for (const file of allFiles) {
+          const source = fs.readFileSync(file, "utf8");
+          const results = await compiler.compileVirtualSource(source, file);
+          const ir = (results as any)?.__ir;
+          if (ir?.rules) {
+            allRules.push(...ir.rules);
+          }
+        }
+        
+        return {
+          id: "full-rebuild",
+          rules: allRules,
+          meta: {
+            version: "1.0",
+            createdAt: Date.now(),
+            sourceFiles: allFiles,
+            passCount: 0,
+            passes: [],
+            dirtyRules: 0,
+            compiledAt: Date.now(),
+          },
+          diagnostics: [],
+        };
+      },
+      fullRebuildOnConfig: true,
+      fullRebuildOnToken: false,
+    });
+  }
+
+  function findChainFiles(dir: string): string[] {
+    const results: string[] = [];
+    const IGNORED_DIRS = new Set([
+      "node_modules", "dist", ".git", ".vite", "build", "coverage", ".chaincss-cache",
+    ]);
+
+    function walk(currentDir: string) {
+      let entries: fs.Dirent[];
+      try {
+        entries = fs.readdirSync(currentDir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        const fullPath = path.join(currentDir, entry.name);
+        if (isTmpFile(fullPath) || isGeneratedOutput(fullPath)) continue;
+        if (entry.isDirectory()) {
+          if (IGNORED_DIRS.has(entry.name) || entry.name.startsWith(".")) continue;
+          walk(fullPath);
+        } else if (CHAIN_FILE_RE.test(entry.name)) {
+          results.push(fullPath);
+        }
+      }
+    }
+
+    walk(dir);
+    return results;
+  }
+
   return {
     name: "chaincss",
     enforce: "pre",
+    
     configResolved(config: any) {
       root = config.root;
       base = config.base || "/";
@@ -326,6 +430,7 @@ export default function chaincssPlugin(
         ...ps,
         atomic: { ...dc.atomic, ...ps.atomic, enabled: atomic },
         tokens: options.tokens || dc.tokens,
+        theme: (options as any).theme || 'light',
         intents: (options as any).intents || dc.intents,
         output: {
           ...dc.output,
@@ -335,12 +440,24 @@ export default function chaincssPlugin(
         verbose,
         silent,
       });
+
       const envPipeline = createPipeline(
         isProduction ? "production" : "default",
+        {
+          contexts: {
+            lowering: {
+              tokenContract: options.tokens || designTokens,
+              config: {
+                theme: (options as any).theme || 'light',
+              },
+            },
+          },
+        },
       );
-      (compiler as any).pipeline = envPipeline;
+      compiler.setPipeline(envPipeline);
       if (!silent) summary(`Pipeline Engine Hook Active (atomic: ${atomic})`);
     },
+
     async transform(_code: any, id: any) {
       if (!CHAIN_FILE_RE.test(id) || isTmpFile(id)) return null;
       const absPath = path.resolve(id);
@@ -356,8 +473,8 @@ export default function chaincssPlugin(
         return null;
       }
     },
+
     async buildStart() {
-      // Restore persistent compiler state for cold-start recovery
       if (
         compiler &&
         (compiler as any).isPersistentMode?.() &&
@@ -378,7 +495,7 @@ export default function chaincssPlugin(
               console.log("[ChainCSS] Restored compiler state from cache.");
           }
         } catch (e) {
-          /* silent fail — will do full compilation */
+          /* silent fail */
         }
       }
 
@@ -394,14 +511,23 @@ export default function chaincssPlugin(
         }
       }
     },
+
     configureServer(devServer: ViteDevServer) {
       devServer.httpServer?.once("listening", async () => {
         try {
           await compileAllStyles();
+          initializeIncrementalCompiler();
+          
+          if (incrementalCompiler && (compiler as any).getCurrentIR) {
+            const currentIR = (compiler as any).getCurrentIR();
+            if (currentIR) {
+              incrementalCompiler.setIR(currentIR);
+            }
+          }
         } catch (e) {
           logError((e as Error).message);
         }
-        // Save compiler state after initial compilation
+
         if (
           (compiler as any).isPersistentMode?.() &&
           (compiler as any).persistentCache
@@ -420,6 +546,7 @@ export default function chaincssPlugin(
           }
         }
       });
+
       const cssRoute = path.posix.join(base, "__chaincss.css");
       const clientRoute = path.posix.join(base, "@chaincss/client.js");
       const irRoute = path.posix.join(base, "__chaincss-ir.json");
@@ -470,6 +597,7 @@ export default function chaincssPlugin(
         res.setHeader("Cache-Control", "no-cache");
         res.end(JSON.stringify(exportIRData() || {}));
       });
+
       const handleFileChange = async (fp: string) => {
         if (isGeneratedOutput(fp)) return;
         if (!CHAIN_FILE_RE.test(fp) || isTmpFile(fp)) return;
@@ -478,16 +606,64 @@ export default function chaincssPlugin(
         if (compiling.has(abs)) return;
         compiling.add(abs);
         log(`Hot Module Reload Triggered: ${path.basename(abs)}`);
+
         try {
-          // Check if the file actually changed vs cached state
           const source = fs.readFileSync(abs, "utf8");
           const sourceHash = crypto.createHash("md5").update(source).digest("hex");
           const previousHash = (compiler as any).compilerState?.fileExportHashes?.[abs]?.["__full_file__"];
 
           if (previousHash === sourceHash) {
-            // File unchanged — skip compilation entirely
             log(`  ⚡ Skipped (unchanged): ${path.basename(abs)}`);
             return;
+          }
+
+          if (incrementalCompiler && incrementalCompiler.getIR()) {
+            try {
+              const updateResult = await incrementalCompiler.update({
+                changedFiles: [{
+                  filePath: abs,
+                  kind: "style",
+                  source,
+                }],
+              });
+
+              if (updateResult.finalCSS) {
+                updateCSS(abs, updateResult.finalCSS);
+              }
+
+              const stats = updateResult.incremental;
+              log(
+                `  ⚡ Incremental: ${stats.recompiledCount}/${stats.totalRules} rules recompiled, ` +
+                `${stats.reusedCount} reused`
+              );
+
+              devServer.ws.send({
+                type: "custom",
+                event: "chaincss-update",
+                data: {
+                  timestamp: Date.now(),
+                  incremental: true,
+                  stats: {
+                    recompiled: stats.recompiledCount,
+                    reused: stats.reusedCount,
+                    total: stats.totalRules,
+                  },
+                },
+              });
+
+              if ((compiler as any).compilerState) {
+                const state = (compiler as any).compilerState;
+                if (!state.fileExportHashes) state.fileExportHashes = {};
+                if (!state.fileExportHashes[abs]) state.fileExportHashes[abs] = {};
+                state.fileExportHashes[abs]["__full_file__"] = sourceHash;
+              }
+
+              return;
+            } catch (incrementalErr) {
+              logError(
+                `Incremental failed, falling back to full: ${(incrementalErr as Error).message}`
+              );
+            }
           }
 
           if ((compiler as any)?.invalidateFileCache)
@@ -497,12 +673,11 @@ export default function chaincssPlugin(
             (devServer.moduleGraph as any)
               .getModulesByFile?.(abs)
               ?.values?.()
-              .next?.()?.value;
+              ?.next?.()?.value;
           if (mod) devServer.moduleGraph.invalidateModule(mod);
           const { css } = await compileFile(abs);
           updateCSS(abs, css);
 
-          // Store hash for next comparison
           if ((compiler as any).compilerState) {
             const state = (compiler as any).compilerState;
             if (!state.fileExportHashes) state.fileExportHashes = {};
@@ -513,7 +688,7 @@ export default function chaincssPlugin(
           devServer.ws.send({
             type: "custom",
             event: "chaincss-update",
-            data: { timestamp: Date.now() },
+            data: { timestamp: Date.now(), incremental: false },
           });
         } catch (err) {
           logError(
@@ -523,13 +698,21 @@ export default function chaincssPlugin(
           setTimeout(() => compiling.delete(abs), 200);
         }
       };
+
       devServer.watcher.on("change", handleFileChange);
       devServer.watcher.on("add", handleFileChange);
       devServer.watcher.on("unlink", (fp: string) => {
         if (isGeneratedOutput(fp)) return;
         if (CHAIN_FILE_RE.test(fp) && !isTmpFile(fp)) {
           removeCSS(fp);
-          // Clean up generated artifacts
+          
+          if (incrementalCompiler && incrementalCompiler.getIR()) {
+            incrementalCompiler.update({
+              changedFiles: [],
+              deletedFiles: [path.resolve(fp)],
+            }).catch(() => {});
+          }
+          
           const classFile = fp.replace(CHAIN_FILE_RE, ".class.js");
           const cssFile = fp.replace(CHAIN_FILE_RE, ".css");
           try {
@@ -538,6 +721,7 @@ export default function chaincssPlugin(
           try {
             if (fs.existsSync(cssFile)) fs.unlinkSync(cssFile);
           } catch {}
+          
           devServer.ws.send({
             type: "custom",
             event: "chaincss-update",
@@ -545,6 +729,7 @@ export default function chaincssPlugin(
           });
         }
       });
+
       devServer.watcher.on("unlinkDir", (dirPath: string) => {
         const absDir = path.resolve(dirPath);
         let removedAny = false;
@@ -567,6 +752,7 @@ export default function chaincssPlugin(
         }
       });
     },
+
     async handleHotUpdate(ctx: any) {
       const filePath = path.resolve(ctx.file);
       if (
@@ -578,8 +764,8 @@ export default function chaincssPlugin(
       if (compiling.has(filePath)) return;
       compiling.add(filePath);
       log(`Direct Buffer Update Intercepted: ${path.basename(filePath)}`);
+
       try {
-        // Check if the file actually changed vs cached state
         const source = fs.readFileSync(filePath, "utf8");
         const sourceHash = crypto.createHash("md5").update(source).digest("hex");
         const previousHash = (compiler as any).compilerState?.fileExportHashes?.[filePath]?.["__full_file__"];
@@ -589,6 +775,45 @@ export default function chaincssPlugin(
           return [];
         }
 
+        if (incrementalCompiler && incrementalCompiler.getIR()) {
+          try {
+            const updateResult = await incrementalCompiler.update({
+              changedFiles: [{
+                filePath,
+                kind: "style",
+                source,
+              }],
+            });
+
+            if (updateResult.finalCSS) {
+              updateCSS(filePath, updateResult.finalCSS);
+            }
+
+            ctx.server.ws.send({
+              type: "custom",
+              event: "chaincss-update",
+              data: {
+                timestamp: Date.now(),
+                incremental: true,
+                stats: updateResult.incremental,
+              },
+            });
+
+            if ((compiler as any).compilerState) {
+              const state = (compiler as any).compilerState;
+              if (!state.fileExportHashes) state.fileExportHashes = {};
+              if (!state.fileExportHashes[filePath]) state.fileExportHashes[filePath] = {};
+              state.fileExportHashes[filePath]["__full_file__"] = sourceHash;
+            }
+
+            return ctx.modules.filter(
+              (m: any) => m.id === filePath || m.file === filePath,
+            );
+          } catch (incrementalErr) {
+            logError(`Incremental failed: ${(incrementalErr as Error).message}`);
+          }
+        }
+
         const mod = ctx.server.moduleGraph.getModuleById(filePath);
         if (mod) ctx.server.moduleGraph.invalidateModule(mod);
         if ((compiler as any)?.invalidateFileCache)
@@ -596,7 +821,6 @@ export default function chaincssPlugin(
         const { css } = await compileFile(filePath);
         updateCSS(filePath, css);
 
-        // Store hash for next comparison
         if ((compiler as any).compilerState) {
           const state = (compiler as any).compilerState;
           if (!state.fileExportHashes) state.fileExportHashes = {};
@@ -607,7 +831,7 @@ export default function chaincssPlugin(
         ctx.server.ws.send({
           type: "custom",
           event: "chaincss-update",
-          data: { timestamp: Date.now() },
+          data: { timestamp: Date.now(), incremental: false },
         });
         return ctx.modules.filter(
           (m: any) => m.id === filePath || m.file === filePath,
@@ -619,6 +843,7 @@ export default function chaincssPlugin(
         setTimeout(() => compiling.delete(filePath), 200);
       }
     },
+
     async generateBundle() {
       const ir = exportIRData();
       if (ir) {
@@ -629,7 +854,6 @@ export default function chaincssPlugin(
         });
       }
 
-      // CSS emission is independent of IR data — always emit if CSS exists
       const cssContent = getCSS();
       if (cssContent) {
         this.emitFile({
@@ -639,6 +863,7 @@ export default function chaincssPlugin(
         });
       }
     },
+
     async buildEnd() {
       if (
         compiler &&
@@ -661,6 +886,7 @@ export default function chaincssPlugin(
         }
       }
     },
+
     resolveId(id: string) {
       if (id === "virtual:chaincss.css" || id === "\0virtual:chaincss.css") {
         return "\0virtual:chaincss.css";
@@ -673,6 +899,7 @@ export default function chaincssPlugin(
       }
       return null;
     },
+
     load(id: string) {
       if (id === "\0virtual:chaincss.css") {
         return getCSS() || "/* ChainCSS empty */";
@@ -683,6 +910,7 @@ export default function chaincssPlugin(
       }
       return null;
     },
+
     transformIndexHtml() {
       if (isProduction) {
         return [

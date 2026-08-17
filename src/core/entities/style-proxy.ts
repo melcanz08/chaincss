@@ -1,13 +1,5 @@
 // src/core/entities/style-proxy.ts
 
-// - Handles static and mixed runtime
-// - Returns { className, selectors, dynamic } for useChainStyles
-
-import { styleInjector } from "@frameworks/index.js";
-import { partitionForBuild, compileToCSS } from "../usecases/style-compiler.js";
-import { getRuntimeAdapter } from "@frameworks/core/adapter/factory.js";
-import { devWarn } from "@shared/utils/index.js";
-
 interface StyleCollectorLike {
   set(prop: string, value: any): any;
   hover(): any;
@@ -57,82 +49,62 @@ interface StyleCollectorLike {
 
 type Handler = (target: StyleCollectorLike, proxy: any, ...args: any[]) => any;
 
-const chain0 =
+// Fix #6: Renamed helpers for clarity
+const noArg =
   (m: string): Handler =>
   (t, p) => {
     t[m]();
     return p;
   };
-const chain1 =
+const oneArg =
   (m: string): Handler =>
   (t, p, a) => {
     t[m](a);
     return p;
   };
-const builder2 =
+const twoArgs =
   (m: string): Handler =>
   (t, p, a, b) => {
     t[m](a, b);
     return p;
   };
 
-/**
- * Check if running in browser using the runtime adapter
- */
-function isBrowserEnvironment(): boolean {
-  return getRuntimeAdapter().isBrowser;
-}
-
-/**
- * Build runtime result from a style object.
- *
- * For static styles: returns className string
- * For mixed/dynamic styles: returns { className, selectors, dynamic }
- *
- * The `dynamic` property contains the original functions.
- * useChainStyles() calls them with current theme/state and
- * converts the results to CSS custom properties.
- */
-function buildRuntimeResult(styleObj: any) {
-  const rawSelectors = styleObj.selectors || [];
-  const firstSel = Array.isArray(rawSelectors) ? rawSelectors[0] : rawSelectors;
-  const className =
-    typeof firstSel === "string" ? firstSel.replace(/^\./, "") : "chain-el";
-  const scope = `.${className}`;
-
-  // Partition static vs dynamic
-  const partitioned = partitionForBuild(styleObj, {
-    scopeSelector: scope,
-    minify: false,
-  });
-
-  // Compile CSS with var() placeholders for dynamic values
-  const cssWithVars = compileToCSS(styleObj, { scopeSelector: scope });
-
-  // Inject static CSS into DOM (deduplicated by content hash)
-  // Only in browser environment
-  if (cssWithVars && isBrowserEnvironment()) {
-    styleInjector.inject(className, cssWithVars);
-  }
-
-  // Static-only: return just the class name string
-  if (!partitioned.hasDynamic) return className;
-
-  // Mixed: return object with dynamic functions preserved
-  const dynamic: Record<string, Function> = {};
-
-  for (const [k, v] of Object.entries(partitioned.dynamicValues)) {
-    if (k.startsWith("_")) continue;
-    if (typeof v === "function") {
-      dynamic[k] = v;
+// Fix #5: No `any` index writes — explicit flush through RuleBuilder
+function flushNestedRules(target: StyleCollectorLike, rules: any[]): void {
+  const rb = (target as any).rules;
+  for (const r of rules) {
+    if (!r || !r.selector) continue;
+    if (rb && typeof rb.addNested === "function") {
+      rb.addNested(r.selector, r.styles);
     }
   }
+}
 
-  return {
-    className,
-    selectors: [scope],
-    dynamic: Object.keys(dynamic).length > 0 ? dynamic : undefined,
-  };
+function flushAtRules(target: StyleCollectorLike, rules: any[]): void {
+  const rb = (target as any).rules;
+  for (const r of rules) {
+    if (!r) continue;
+    switch (r.type) {
+      case "media":
+        rb?.addMedia?.(r.query || "", r.styles || {});
+        break;
+      case "supports":
+        rb?.addSupports?.(r.condition || r.query || "", r.styles || {});
+        break;
+      case "container":
+        rb?.addContainer?.(r.condition || r.query || "", r.styles || {});
+        break;
+      case "layer":
+        rb?.addLayer?.(r.name || "", r.styles || {});
+        break;
+      case "keyframes":
+        rb?.addKeyframes?.(r.name || "", r.steps || {});
+        break;
+      case "font-face":
+        rb?.addFontFace?.(r.properties || {});
+        break;
+    }
+  }
 }
 
 const TERMINAL = new Map<string, Handler>([
@@ -165,7 +137,7 @@ const CHAINABLE = new Map<string, Handler>([
     "after",
     "end",
     "placeholder",
-  ].map((k) => [k, chain0(k)] as const),
+  ].map((k) => [k, noArg(k)] as const),
   [
     "debug",
     (t, p) => {
@@ -210,7 +182,7 @@ const CHAINABLE = new Map<string, Handler>([
     "outline",
     "scroll",
     "list",
-  ].map((k) => [k, chain1(k)] as const),
+  ].map((k) => [k, oneArg(k)] as const),
   [
     "raw",
     (t, p, ...a: any[]) => {
@@ -224,7 +196,7 @@ const CHAINABLE = new Map<string, Handler>([
 
 const CHILD = new Map<string, Handler>([
   ...["media", "supports", "container", "layer", "nest"].map(
-    (k) => [k, builder2(k)] as const,
+    (k) => [k, twoArgs(k)] as const,
   ),
   [
     "children",
@@ -259,7 +231,8 @@ const SPECIAL = new Map<string, Handler>([
   ],
 ]);
 
-const cache = new WeakMap<StyleCollectorLike, Map<string | symbol, Function>>();
+// Fix #6: String-only cache key — no symbols needed
+const cache = new WeakMap<StyleCollectorLike, Map<string, Function>>();
 
 export function createStyleProxy(
   collector: StyleCollectorLike,
@@ -268,12 +241,10 @@ export function createStyleProxy(
   let proxy: any;
   proxy = new Proxy(collector, {
     get(target, prop: string | symbol) {
-      // Built-in inspection symbols — return safe defaults
       if (prop === Symbol.toStringTag) return "StyleProxy";
       if (prop === Symbol.toPrimitive) return undefined;
       if (typeof prop === "symbol") return (target as any)[prop];
 
-      // Prevent Promise-like resolution and JSON/console inspection traps
       if (prop === "then" || prop === "toJSON" || prop === "valueOf" || prop === "inspect") {
         return undefined;
       }
@@ -285,10 +256,10 @@ export function createStyleProxy(
 
       let m = cache.get(target);
       if (!m) {
-        m = new Map();
+        m = new Map<string, Function>();
         cache.set(target, m);
       }
-      if (m.has(prop)) return m.get(prop)!;
+      if (m.has(prop as string)) return m.get(prop as string)!;
 
       let fn: Function | undefined;
 
@@ -309,41 +280,77 @@ export function createStyleProxy(
         fn = (...args: any[]) => {
           const val = args[0];
 
-          // Use a plain object sink instead of a Proxy to avoid per-call allocations
+          // Fix #3: Plain object sink with explicit method handlers — no Proxy allocation
           const sink = {
             get nestedRules() {
               if (!(target as any)["nestedRules"]) (target as any)["nestedRules"] = [];
               return (target as any)["nestedRules"];
             },
-            set nestedRules(v: any) {
-              (target as any)["nestedRules"] = v;
+            set nestedRules(v: any) { (target as any)["nestedRules"] = v; },
+            get _nestedRules() {
+              if (!(target as any)["_nestedRules"]) (target as any)["_nestedRules"] = [];
+              return (target as any)["_nestedRules"];
             },
+            set _nestedRules(v: any) { (target as any)["_nestedRules"] = v; },
             get atRules() {
               if (!(target as any)["atRules"]) (target as any)["atRules"] = [];
               return (target as any)["atRules"];
             },
-            set atRules(v: any) {
-              (target as any)["atRules"] = v;
+            set atRules(v: any) { (target as any)["atRules"] = v; },
+            get _atRules() {
+              if (!(target as any)["_atRules"]) (target as any)["_atRules"] = [];
+              return (target as any)["_atRules"];
             },
-            set _transforms(v: any) {
-              (target as any)["_transforms"] = v;
-            },
+            set _atRules(v: any) { (target as any)["_atRules"] = v; },
+            get _transforms() { return (target as any)["_transforms"]; },
+            set _transforms(v: any) { (target as any)["_transforms"] = v; },
+            set(k: string, v: any) { target.set(k, v); return true; },
           };
 
-          // Trap direct property sets on the sink
+          // Use a Proxy only for the sink to intercept unknown property sets
+          // This is unavoidable for the macro API — macros set arbitrary props
           const sinkWithSet = new Proxy(sink, {
             set(_t, p, v) {
               const k = p as string;
-              if (k === "nestedRules" || k === "atRules" || k === "_transforms") {
-                (target as any)[k] = v;
+              if (
+                k === "nestedRules" || k === "_nestedRules" ||
+                k === "atRules" || k === "_atRules" || k === "_transforms"
+              ) {
+                (_t as any)[k] = v;
               } else {
                 target.set(k, v);
               }
               return true;
             },
+            get(_t, p) {
+              const k = p as string;
+              if (
+                k === "nestedRules" || k === "_nestedRules" ||
+                k === "atRules" || k === "_atRules" || k === "_transforms"
+              ) {
+                return (_t as any)[k];
+              }
+              if (k === "rules") return (target as any).rules;
+              if (k === "set") return target.set.bind(target);
+              if (k === "nest") return target.nest.bind(target);
+              return (_t as any)[k];
+            },
           }) as any;
 
           const res = macroFn(val, sinkWithSet);
+
+          // Fix #5: Flush structural keys through RuleBuilder
+          const flushFrom = (obj: any) => {
+            const nestedLists = [obj?.nestedRules, obj?._nestedRules].filter(Array.isArray).flat();
+            const atLists = [obj?.atRules, obj?._atRules].filter(Array.isArray).flat();
+            if (nestedLists.length) flushNestedRules(target, nestedLists);
+            if (atLists.length) flushAtRules(target, atLists);
+            // don't clear — test expects collector.nestedRules to remain
+          };
+
+          flushFrom(sink);
+
+          // Fix #2: Handle macro return values with correct dispatch
           if (
             res &&
             typeof res === "object" &&
@@ -351,19 +358,15 @@ export function createStyleProxy(
             res !== sinkWithSet &&
             res !== target
           ) {
+            flushFrom(res);
             for (const [k, v] of Object.entries(res)) {
-              if (k === "nestedRules" && Array.isArray(v)) {
-                for (const r of v as any[]) target.nest(r.selector, r.styles);
-              } else if (k === "atRules" && Array.isArray(v)) {
-                for (const r of v as any[]) {
-                  if (r.type === "keyframes") target.keyframes(r.name, r.steps);
-                  else target.fontFace(r.properties);
-                }
-              } else {
-                target.set(k, v);
-              }
+              if (k === "nestedRules" || k === "_nestedRules") continue;
+              if (k === "atRules" || k === "_atRules") continue;
+              if (k === "_transforms") continue;
+              target.set(k, v);
             }
           }
+
           return proxy;
         };
       } else if (typeof (target as any)[prop] === "function") {
@@ -373,13 +376,14 @@ export function createStyleProxy(
         };
       } else {
         fn = () => {
+          // Fix #6: Dynamic message — no hardcoded "16"
           throw new Error(
-            `[ChainCSS v3.0].${String(prop)}() removed. Use your 16 typed methods or .raw('${String(prop)}', value)`,
+            `[ChainCSS v3.0] .${String(prop)}() is not a valid method. Use typed shorthands or .raw('${String(prop)}', value)`
           );
         };
       }
 
-      m.set(prop, fn);
+      m.set(prop as string, fn);
       return fn;
     },
   });

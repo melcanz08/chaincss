@@ -105,3 +105,11 @@ export {
   devLog,
   createDebugger,
 } from "@shared/utils/browser.js";
+
+// Incremental Compiler & Pipeline IR (for PulseDesign & HMR)
+export { StatefulIncrementalCompiler } from "@compiler/incremental/stateful-compiler.js";
+export type { 
+  IncrementalUpdateRequest, 
+  IncrementalUpdateResult
+} from "@compiler/incremental/types.js";
+export type { StyleIR } from "@compiler/pipeline/ir/types.js";

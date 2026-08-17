@@ -103,9 +103,13 @@ function handleTheme(cb: any, c: any, mode: string, useTokens: boolean): void {
     styles: getSubStyles(cb, useTokens),
   });
 }
-function nested(c: any, ...rules: any[]) {
-  if (!Array.isArray(c.nestedRules)) c.nestedRules = [];
-  c.nestedRules.push(...deepCloneStyles(rules));
+function nested(c: any,...rules: any[]) {
+  const cloned = deepCloneStyles(rules);
+  try { if (!Array.isArray(c.nestedRules)) c.nestedRules = []; c.nestedRules.push(...cloned); } catch {}
+  try { if (!Array.isArray(c._nestedRules)) c._nestedRules = []; c._nestedRules.push(...cloned); } catch {}
+  if (c?.rules?.addNested) {
+    for (const r of cloned) try { c.rules.addNested(r.selector, r.styles); } catch {}
+  }
 }
 
 export const macros: Record<string, MacroHandler> = {
@@ -826,12 +830,20 @@ export const macros: Record<string, MacroHandler> = {
     macros.clickScale(v, c, useTokens);
     nested(c, { selector: "&:hover", styles: { opacity: 0.85 } });
   },
-  clickScale: (_value: any, collector: any) => {
-    collector.cursor = "pointer";
-    collector.transition ??= "transform 0.1s ease";
-    nested(collector, {
-      selector: "&:active",
-      styles: { transform: "scale(0.95)" },
+  clickScale: (_value: any, c: any) => {
+    if (c && typeof c.set === 'function') {
+      c.set("cursor", "pointer");
+      c.set("transition", "transform 0.1s ease");
+    } else {
+      c.cursor = "pointer";
+      c.transition??= "transform 0.1s ease";
+    }
+    nested(c, { selector: "&:active", styles: { transform: "scale(0.95)" } });
+  },
+  focusRing: (_value: any, c: any) => {
+    nested(c, {
+      selector: "&:focus-visible",
+      styles: { outline: "2px solid var(--focus, #3b82f6)", outlineOffset: "2px" },
     });
   },
   hoverLift: (v, c) => {
@@ -850,15 +862,6 @@ export const macros: Record<string, MacroHandler> = {
     nested(c, {
       selector: "&:hover",
       styles: { boxShadow: `0 0 20px ${col}40` },
-    });
-  },
-  focusRing: (_value: any, collector: any) => {
-    nested(collector, {
-      selector: "&:focus-visible",
-      styles: {
-        outline: "2px solid var(--focus, #3b82f6)",
-        outlineOffset: "2px",
-      },
     });
   },
   focusVisible: (v, c, useTokens) => {

@@ -6,9 +6,12 @@ export interface AggregatedStats {
   deadRulesEliminated: number;
   pipelinePasses: number;
   filesProcessed: number;
-  totalDuration: number; // ms
-  averageCompressionSavings: number; // simple avg %
-  weightedCompressionSavings?: number; // avg weighted by totalStyles
+  /** CPU time (sum of all file durations — not wall time) */
+  cpuDuration: number;
+  /** Wall time since tracker creation (accurate with concurrency) */
+  wallDuration: number;
+  averageCompressionSavings: number;
+  weightedCompressionSavings?: number;
 }
 
 export interface CurrentStats {
@@ -18,8 +21,8 @@ export interface CurrentStats {
   savings: string;
   deadRulesEliminated: number;
   pipelinePasses: number;
-  compressionSavings?: string; // e.g. "45%"
-  totalDuration?: number; // ms
+  compressionSavings?: string;
+  totalDuration?: number;
 }
 
 function emptyStats(): AggregatedStats {
@@ -29,7 +32,8 @@ function emptyStats(): AggregatedStats {
     deadRulesEliminated: 0,
     pipelinePasses: 0,
     filesProcessed: 0,
-    totalDuration: 0,
+    cpuDuration: 0,
+    wallDuration: 0,
     averageCompressionSavings: 0,
     weightedCompressionSavings: 0,
   };
@@ -52,12 +56,26 @@ export class StatsTracker {
   private weightedSum = 0;
   private weightedTotal = 0;
 
+  // Fix #1: Wall time tracking — separate from CPU time
+  private wallStart: number;
+
+  constructor() {
+    this.wallStart =
+      typeof performance !== "undefined"
+        ? performance.now()
+        : Date.now();
+  }
+
   reset() {
     this.stats = emptyStats();
     this.compSum = 0;
     this.compCount = 0;
     this.weightedSum = 0;
     this.weightedTotal = 0;
+    this.wallStart =
+      typeof performance !== "undefined"
+        ? performance.now()
+        : Date.now();
   }
 
   record(current: CurrentStats) {
@@ -65,24 +83,32 @@ export class StatsTracker {
     s.totalStyles += current.totalStyles ?? 0;
     s.atomicStyles += current.atomicStyles ?? 0;
     s.deadRulesEliminated += current.deadRulesEliminated ?? 0;
+
+    // Fix #2: Document — max is "max pipeline depth", not total passes
     s.pipelinePasses = Math.max(s.pipelinePasses, current.pipelinePasses ?? 0);
 
     if (current.totalDuration != null) {
-      s.totalDuration += current.totalDuration;
+      // Fix #1: CPU time — sum of per-file durations
+      s.cpuDuration += current.totalDuration;
     }
+
+    // Fix #1: Wall time — actual elapsed time
+    s.wallDuration =
+      typeof performance !== "undefined"
+        ? performance.now() - this.wallStart
+        : Date.now() - this.wallStart;
 
     const pct = parsePercent(current.compressionSavings);
     if (pct !== null) {
       this.compSum += pct;
       this.compCount++;
-      s.averageCompressionSavings = Math.round(this.compSum / this.compCount);
+      // Fix #3: Keep float internally — round only on output
+      s.averageCompressionSavings = this.compSum / this.compCount;
 
       const weight = current.totalStyles > 0 ? current.totalStyles : 1;
       this.weightedSum += pct * weight;
       this.weightedTotal += weight;
-      s.weightedCompressionSavings = Math.round(
-        this.weightedSum / this.weightedTotal,
-      );
+      s.weightedCompressionSavings = this.weightedSum / this.weightedTotal;
     }
   }
 
@@ -105,7 +131,7 @@ export class StatsTracker {
     return {
       totalStyles: s.totalStyles,
       atomicStyles: s.atomicStyles,
-      uniqueProperties: 0, // reserved for AST prop tracking
+      uniqueProperties: 0,
       savings:
         s.deadRulesEliminated > 0
           ? `${s.deadRulesEliminated} rules eliminated`
@@ -113,9 +139,12 @@ export class StatsTracker {
       deadRulesEliminated: s.deadRulesEliminated,
       pipelinePasses: s.pipelinePasses,
       filesProcessed: s.filesProcessed,
-      totalDuration: `${s.totalDuration.toFixed(2)}ms`,
-      compressionSavings: `${s.averageCompressionSavings}%`,
-      weightedCompressionSavings: `${s.weightedCompressionSavings ?? 0}%`,
+      // Fix #1: Report both CPU and wall time
+      cpuDuration: `${s.cpuDuration.toFixed(2)}ms`,
+      wallDuration: `${s.wallDuration.toFixed(2)}ms`,
+      // Fix #3: Round only on output
+      compressionSavings: `${Math.round(s.averageCompressionSavings)}%`,
+      weightedCompressionSavings: `${Math.round(s.weightedCompressionSavings ?? 0)}%`,
     };
   }
 }

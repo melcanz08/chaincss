@@ -3,13 +3,13 @@
 import crypto from "node:crypto";
 import type { PersistentCache } from "../cache/content-addressable-cache.js";
 import type { StyleIR, IRGraph } from "./ir/types.js";
-import { buildIRGraph } from "./ir/graph-builder.js";
+import { buildIRGraph } from "../incremental/graph-builder.js";
 import {
   findDirtyRules,
   filterDirtyIR,
   mergeRecompiledIR,
   type IncrementalChange,
-} from "./incremental-compiler.js";
+} from "../incremental/incremental-compiler.js";
 import type { Pipeline } from "./pipeline.js";
 import type { PipelineResult } from "./pipeline-types.js";
 

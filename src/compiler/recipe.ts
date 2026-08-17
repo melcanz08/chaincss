@@ -3,7 +3,7 @@
 // ChainCSS Type-Safe Component Variant Compiler Engine
 // ============================================================================
 
-import type { StyleDefinition } from "../shared/types/index.js";
+import type { StyleDefinition, StyleObject } from "../shared/types/index.js";
 import { run } from "@core/usecases/style-compiler.js";
 
 export interface RecipeOptions<
@@ -253,7 +253,7 @@ export function recipe<
   const compileAll = (): string => {
     const all = getAllVariants();
     const styles: StyleDefinition[] = all.map((v) => pick(v));
-    return run(...styles);
+    return run(...(styles as unknown as StyleObject[]));
   };
 
   return Object.assign(pick, {
