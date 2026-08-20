@@ -84,6 +84,11 @@
     "./postcss": {
       "import": "./dist/postcss/index.js",
       "require": "./dist/postcss/index.cjs"
+    },
+    "./token-api": {
+      "types": "./dist/token-api.d.ts",
+      "import": "./dist/token-api.js",
+      "require": "./dist/token-api.cjs"
     }
   },
   "scripts": {

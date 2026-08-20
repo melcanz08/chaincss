@@ -366,6 +366,7 @@ export default function chaincssPlugin(
         return {
           id: "full-rebuild",
           rules: allRules,
+          atRules: [],
           meta: {
             version: "1.0",
             createdAt: Date.now(),

@@ -75,7 +75,7 @@ export const intentNormalizer: NormalizationPass = {
         if (
           (decl as any).meta?.intent ||
           rule.passMeta?.analysis?.semantic?.intents?.length ||
-          (rule.meta as any)?._intent
+          rule.passMeta?.analysis?.semantic?.intents?.[0]
         )
           continue;
 

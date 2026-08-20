@@ -139,6 +139,7 @@ export async function watchCommand(options: WatchOptions): Promise<void> {
         return {
           id: "full-rebuild",
           rules: allRules,
+          atRules: [],
           meta: {
             version: "1.0",
             createdAt: Date.now(),

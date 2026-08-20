@@ -14,6 +14,8 @@ import type {
   IRKeyframeFrame,
 } from "./types.js";
 
+import { VERSION } from "@shared/constants/index.js";
+
 /** Split function arguments respecting nested parentheses and string literals */
 function splitFuncArgs(args: string): string[] {
   const result: string[] = [];
@@ -208,6 +210,27 @@ export function nextId(prefix: string = "ir"): IRNodeId {
 }
 
 let _resetCount = 0;
+function stableId(prefix: string, key: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < key.length; i++) {
+    hash ^= key.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `${prefix}-${(hash >>> 0).toString(36)}`;
+}
+
+export function ruleId(selector: string, source?: SourceLocation): IRNodeId {
+  return stableId("rule", `${source?.file ?? ""}:${selector}`);
+}
+
+export function declarationId(ruleSelector: string, property: string): IRNodeId {
+  return stableId("decl", `${ruleSelector}:${property}`);
+}
+
+export function frameId(keyText: string, source?: SourceLocation): IRNodeId {
+  return stableId("frame", `${source?.file ?? ""}:${keyText}`);
+}
+
 export function resetIdCounter(): void {
   idCounter = 0;
   _resetCount++;
@@ -244,7 +267,7 @@ export function createDeclaration(
 ): IRDeclaration {
   const { dynamic, ...restMeta } = meta;
   return {
-    id: nextId("decl"),
+    id: declarationId(source?.file ?? "inline", property),
     property,
     value,
     source,
@@ -265,7 +288,7 @@ export function createRule(
   parentId?: IRNodeId,
 ): IRRule {
   return {
-    id: nextId("rule"),
+    id: ruleId(selector, source),
     parentId,
     selector,
     declarations: [],
@@ -290,7 +313,7 @@ export function createKeyframeFrame(
   source?: SourceLocation,
 ): IRKeyframeFrame {
   return {
-    id: nextId("frame"),
+    id: frameId(keyText, source),
     keyText,
     declarations: [],
     source: source || {},
@@ -301,9 +324,10 @@ export function createIR(sourceFiles: string[] = []): StyleIR {
   return {
     id: nextId("ir"),
     rules: [],
+    atRules: [],
     diagnostics: [],
     meta: {
-      version: "2.10.0",
+      version: VERSION,
       createdAt: Date.now(),
       sourceFiles,
       passCount: 0,

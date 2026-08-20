@@ -225,6 +225,23 @@ const targets = [
     format: "cjs",
     packages: "external",
   },
+  // Token API (clean platform integration)
+  {
+    name: "token-api",
+    entryPoints: ["src/token-api.ts"],
+    outfile: "dist/token-api.js",
+    platform: "node",
+    format: "esm",
+    packages: "external",
+  },
+  {
+    name: "token-api-cjs",
+    entryPoints: ["src/token-api.ts"],
+    outfile: "dist/token-api.cjs",
+    platform: "node",
+    format: "cjs",
+    packages: "external",
+  },
   // Next.js Server
   {
     name: 'next-server',

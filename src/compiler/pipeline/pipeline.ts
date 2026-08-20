@@ -3,7 +3,13 @@
 // Unified Core Engine & Orchestrator for ChainCSS Compilation Pipeline
 // ============================================================================
 
-import type { StyleIR, IRRule } from "./ir/types.js";
+import type { StyleIR, IRRule, IRAtRule } from "./ir/types.js";
+import {
+  createDeclaration,
+  createKeyframeFrame,
+  record,
+  nextId,
+} from "./ir/index.js";
 import { intentNormalizer } from "./normalizers/intent-normalizer.js";
 import { unitNormalizer } from "./normalizers/unit-normalizer.js";
 import { cssCompressor } from "./optimizers/css-compressor.js";
@@ -23,7 +29,10 @@ import { duplicateDeclarationDetector } from "./optimizers/duplicate-declaration
 import { responsiveAnalyzer } from "./analyzers/responsive-analyzer.js";
 import { layoutAnalyzer } from "./analyzers/layout-analyzer.js";
 import { patternDetector } from "./analyzers/pattern-detector.js";
-import AnimationRegistry from "../animations.js";
+import {
+  hasKeyframePreset,
+  getKeyframeFrames,
+} from "../animations.js";
 import { astOptimizer } from "./optimizers/ast-optimizer.js";
 import { schedulePasses, type PassDeclaration } from "./pass-scheduler.js";
 import { buildIRGraph } from "../incremental/graph-builder.js";
@@ -43,7 +52,7 @@ import type {
   AnalysisResult,
   LoweringResult,
 } from "./pipeline-types.js";
-import { ensureRuleMeta } from "./ir/utils.js";
+import { cloneIR } from "./ir/utils.js";
 
 // ============================================================================
 // Metrics & Observability
@@ -74,11 +83,6 @@ function extractAnimationName(part: string): string | null {
   return null;
 }
 
-function animationMatchesName(declValue: string, animName: string): boolean {
-  const regex = new RegExp(`\\b${animName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`);
-  return regex.test(declValue);
-}
-
 // ============================================================================
 // Pass Declarations
 // ============================================================================
@@ -86,7 +90,7 @@ const PASS_DECLARATIONS: PassDeclaration[] = [
   {
     name: "intent-normalizer",
     phase: "normalize",
-    requires: [],
+    requires: ["initial-ir"],
     produces: ["normalized-properties", "intent-corrections"],
     invalidates: [],
     cost: "cheap",
@@ -94,79 +98,31 @@ const PASS_DECLARATIONS: PassDeclaration[] = [
   {
     name: "unit-normalizer",
     phase: "normalize",
-    requires: [],
+    requires: ["normalized-properties"],
     produces: ["normalized-units"],
     invalidates: [],
     cost: "cheap",
   },
   {
-    name: "token-lowering-bridge",
+    name: "token-normalizer",
     phase: "normalize",
-    requires: [],
+    requires: ["normalized-units"],
     produces: ["resolved-tokens"],
-    invalidates: [],
+    invalidates: ["normalized-units"],
     cost: "moderate",
-  },
-  {
-    name: "accessibility-validator",
-    phase: "validate",
-    requires: [],
-    produces: ["a11y-diagnostics"],
-    invalidates: [],
-    cost: "moderate",
-  },
-  {
-    name: "conflict-validator",
-    phase: "validate",
-    requires: [],
-    produces: ["conflict-diagnostics"],
-    invalidates: [],
-    cost: "cheap",
-  },
-  {
-    name: "ide-diagnostics",
-    phase: "validate",
-    requires: [],
-    produces: ["ide-suggestions", "unused-symbol-warnings"],
-    invalidates: [],
-    cost: "cheap",
-  },
-  {
-    name: "responsive-analyzer",
-    phase: "analyze",
-    requires: [],
-    produces: ["responsive-annotations"],
-    invalidates: [],
-    cost: "moderate",
-  },
-  {
-    name: "layout-analyzer",
-    phase: "analyze",
-    requires: [],
-    produces: ["layout-annotations"],
-    invalidates: [],
-    cost: "moderate",
-  },
-  {
-    name: "pattern-detector",
-    phase: "analyze",
-    requires: [],
-    produces: ["pattern-clusters"],
-    invalidates: [],
-    cost: "expensive",
   },
   {
     name: "ast-optimizer",
     phase: "optimize",
-    requires: [],
+    requires: ["normalized-properties"],
     produces: ["optimized-ast"],
-    invalidates: [],
+    invalidates: ["normalized-properties", "ir-graph"],
     cost: "cheap",
   },
   {
     name: "dynamic-animation-resolver",
     phase: "optimize",
-    requires: [],
+    requires: ["optimized-ast"],
     produces: ["resolved-animations"],
     invalidates: [],
     cost: "cheap",
@@ -174,31 +130,31 @@ const PASS_DECLARATIONS: PassDeclaration[] = [
   {
     name: "duplicate-declaration-detector",
     phase: "optimize",
-    requires: [],
+    requires: ["optimized-ast"],
     produces: ["deduplicated-declarations"],
-    invalidates: [],
+    invalidates: ["optimized-ast"],
     cost: "cheap",
   },
   {
     name: "dead-code-eliminator",
     phase: "optimize",
-    requires: [],
+    requires: ["deduplicated-declarations"],
     produces: ["eliminated-dead-rules"],
-    invalidates: [],
+    invalidates: ["ir-graph"],
     cost: "cheap",
   },
   {
     name: "css-compressor",
     phase: "optimize",
-    requires: [],
+    requires: ["deduplicated-declarations"],
     produces: ["compressed-values"],
-    invalidates: [],
+    invalidates: ["deduplicated-declarations"],
     cost: "cheap",
   },
   {
     name: "specificity-sorter",
     phase: "optimize",
-    requires: [],
+    requires: ["compressed-values"],
     produces: ["sorted-rules"],
     invalidates: [],
     cost: "cheap",
@@ -206,7 +162,7 @@ const PASS_DECLARATIONS: PassDeclaration[] = [
   {
     name: "media-query-packer",
     phase: "optimize",
-    requires: [],
+    requires: ["sorted-rules"],
     produces: ["packed-media-queries"],
     invalidates: [],
     cost: "cheap",
@@ -214,23 +170,23 @@ const PASS_DECLARATIONS: PassDeclaration[] = [
   {
     name: "source-optimizer",
     phase: "optimize",
-    requires: [],
+    requires: ["packed-media-queries"],
     produces: ["deduplicated-rules"],
-    invalidates: [],
+    invalidates: ["ir-graph"],
     cost: "expensive",
   },
   {
     name: "atomic-extractor",
     phase: "optimize",
-    requires: [],
+    requires: ["deduplicated-rules"],
     produces: ["atomic-classes"],
-    invalidates: [],
+    invalidates: ["ir-graph"],
     cost: "expensive",
   },
   {
     name: "accessibility-optimizer",
     phase: "optimize",
-    requires: [],
+    requires: ["atomic-classes"],
     produces: ["a11y-auto-fixes"],
     invalidates: [],
     cost: "cheap",
@@ -238,23 +194,23 @@ const PASS_DECLARATIONS: PassDeclaration[] = [
   {
     name: "intent-resolver",
     phase: "lower",
-    requires: [],
+    requires: ["a11y-auto-fixes"],
     produces: ["resolved-intents", "generated-css"],
-    invalidates: [],
+    invalidates: ["ir-graph", "ir-symbol-table"],
     cost: "moderate",
   },
   {
     name: "token-resolver",
     phase: "lower",
-    requires: [],
+    requires: ["resolved-intents"],
     produces: ["lowered-tokens"],
-    invalidates: [],
+    invalidates: ["ir-symbol-table"],
     cost: "moderate",
   },
   {
     name: "constraint-resolver",
     phase: "lower",
-    requires: [],
+    requires: ["lowered-tokens"],
     produces: ["resolved-constraints"],
     invalidates: [],
     cost: "cheap",
@@ -262,7 +218,7 @@ const PASS_DECLARATIONS: PassDeclaration[] = [
   {
     name: "css-emitter",
     phase: "lower",
-    requires: [],
+    requires: ["resolved-constraints"],
     produces: ["final-css"],
     invalidates: [],
     cost: "cheap",
@@ -280,31 +236,12 @@ if (validationResult.errors.length > 0) {
 // Pipeline Adapters & Resolvers
 // ============================================================================
 const tokenNormalizationAdapter: NormalizationPass = {
-  name: "token-lowering-bridge",
+  name: "token-normalizer",
   normalize(ir, context): NormalizationResult {
     const res = tokenLowering.generate(ir, context as any);
     return { ir: res.ir, corrections: [] };
   },
 };
-
-function ruleReferencesAnimation(rule: IRRule, animName: string): boolean {
-  const allDecls = [
-    ...(rule.declarations || []),
-    ...(rule.pseudoClasses?.flatMap((pc) => pc.declarations || []) || []),
-  ];
-  for (const decl of allDecls) {
-    if (
-      (decl.property === "animation" || decl.property === "animation-name") &&
-      animationMatchesName(String(decl.value), animName)
-    ) {
-      return true;
-    }
-  }
-  if (rule.nestedRules) {
-    return rule.nestedRules.some((nested) => ruleReferencesAnimation(nested, animName));
-  }
-  return false;
-}
 
 const dynamicAnimationResolver: OptimizationPass = {
   name: "dynamic-animation-resolver",
@@ -320,7 +257,11 @@ const dynamicAnimationResolver: OptimizationPass = {
     }
 
     const activeAnimationNames = new Set<string>();
-    const registry = AnimationRegistry as any;
+
+    function kebabProp(prop: string): string {
+  if (prop.startsWith("--")) return prop;
+  return prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+}
 
     function collectAnimationNames(rules: IRRule[]) {
       for (const rule of rules) {
@@ -352,44 +293,44 @@ const dynamicAnimationResolver: OptimizationPass = {
 
     collectAnimationNames(ir.rules);
 
-    const keyframeNodesToAppend: any[] = [];
+    if (!ir.atRules) ir.atRules = [];
+
     for (const animName of activeAnimationNames) {
-      if (registry.has(animName)) {
-        const rawNode = registry.getCompiledKeyframeNode(animName);
-        if (rawNode) {
-          // Fix #4: Use structuredClone when available
-          const keyframeNode = typeof structuredClone === "function"
-            ? structuredClone(rawNode)
-            : JSON.parse(JSON.stringify(rawNode));
-          keyframeNodesToAppend.push(keyframeNode);
-          keyframeNode.meta = keyframeNode.meta || {};
-          keyframeNode.meta.dependents = keyframeNode.meta.dependents || [];
+      if (!hasKeyframePreset(animName)) continue;
 
-          function linkDependencies(rules: IRRule[]) {
-            for (const rule of rules) {
-              if (ruleReferencesAnimation(rule, animName)) {
-                const ruleMeta = ensureRuleMeta(rule);
-                ruleMeta.dependencies ??= [];
-                if (!ruleMeta.dependencies.includes(keyframeNode.id)) {
-                  ruleMeta.dependencies.push(keyframeNode.id);
-                }
-                if (!keyframeNode.meta.dependents.includes(rule.id)) {
-                  keyframeNode.meta.dependents.push(rule.id);
-                }
-              }
-              if (rule.nestedRules && rule.nestedRules.length > 0) {
-                linkDependencies(rule.nestedRules);
-              }
-            }
+      const frames = getKeyframeFrames(animName);
+      if (frames.length === 0) continue;
+
+      const alreadyExists = ir.atRules.some(
+        (atRule) =>
+          atRule.type === "keyframes" &&
+          atRule.name === animName,
+      );
+
+      if (alreadyExists) continue;
+
+      const keyframeAtRule: IRAtRule = {
+        id: nextId("atrule"),
+        type: "keyframes",
+        name: animName,
+        keyframes: frames.map((frame: { keyText: string; declarations: Record<string, string | number> }) => {
+          const kf = createKeyframeFrame(frame.keyText, {});
+          for (const [p, v] of Object.entries(frame.declarations) as Array<[string, string | number]>) {
+            kf.declarations.push(
+              createDeclaration(kebabProp(p), v, {}),
+            );
           }
+          return kf;
+        }),
+        declarations: [],
+        nestedRules: [],
+        source: {},
+        history: [
+          record("dynamic-animation-resolver", "created", undefined, "Generated keyframes from animation preset"),
+        ],
+      };
 
-          linkDependencies(ir.rules);
-        }
-      }
-    }
-
-    if (keyframeNodesToAppend.length > 0) {
-      ir.rules.push(...keyframeNodesToAppend);
+      ir.atRules.push(keyframeAtRule);
     }
 
     return {
@@ -489,7 +430,7 @@ function stampPassMeta(rules: IRRule[], metaStamp: Record<string, any>) {
   }
 }
 
-function refreshIRMetadata(ir: StyleIR, metricsEnabled: boolean) {
+function buildIRMetadata(ir: StyleIR, metricsEnabled: boolean): void {
   if (metricsEnabled) defaultMetrics.start("graph_build");
   ir.graph = buildIRGraph(ir);
   if (metricsEnabled) {
@@ -513,6 +454,8 @@ export class Pipeline {
   private diagnostics: DiagnosticReporter;
   private tracer: typeof defaultTracer;
   private immutableMode: boolean = false; // Fix #5: Default false — no silent mutation mismatch
+  private graphDirty = true;
+  private symbolTableDirty = true;
 
   constructor(config: PipelineConfig) {
     this.config = config;
@@ -576,13 +519,59 @@ export class Pipeline {
     return this.tracer;
   }
 
+  private applyPassInvalidation(passName: string): void {
+    const declaration = this.passDeclarations.find((p) => p.name === passName);
+    if (!declaration) return;
+
+    if (declaration.invalidates.includes("ir-graph")) {
+      this.graphDirty = true;
+    }
+    if (declaration.invalidates.includes("ir-symbol-table")) {
+      this.symbolTableDirty = true;
+    }
+  }
+
+  private invalidateIRMetadata(): void {
+    this.graphDirty = true;
+    this.symbolTableDirty = true;
+  }
+
+  private ensureIRMetadata(ir: StyleIR): void {
+    if (this.graphDirty || !ir.graph) {
+      buildIRMetadata(ir, this.metricsEnabled);
+      this.graphDirty = false;
+      this.symbolTableDirty = false;
+      return;
+    }
+
+    if (this.symbolTableDirty || !(ir as any)._symbolTable) {
+      if (this.metricsEnabled) defaultMetrics.start("symbol_table_build");
+      (ir as any)._symbolTable = buildSymbolTable(ir);
+      if (this.metricsEnabled) {
+        defaultMetrics.stop("symbol_table_build");
+        defaultMetrics.increment("pipeline_passes_run");
+      }
+      this.symbolTableDirty = false;
+    }
+  }
+
+  private buildExecutionOrder(): PassDeclaration[] {
+    const schedule = schedulePasses(this.passDeclarations);
+
+    if (schedule.errors.length === 0 && schedule.ordered.length > 0) {
+      return schedule.ordered;
+    }
+
+    return [];
+  }
+
   public execute(ir: StyleIR, filePath?: string): PipelineResult {
     const startTime = performance.now();
     const timeline: PipelineStageResult[] = [];
     
     // Fix #5: Clone IR when immutableMode is enabled
     let currentIR = this.immutableMode
-      ? JSON.parse(JSON.stringify(ir))
+      ? cloneIR(ir)
       : ir;
 
     const rootSpan = this.tracer.startSpan("pipeline-execute", undefined);
@@ -596,7 +585,9 @@ export class Pipeline {
 
     currentIR.diagnostics = currentIR.diagnostics || [];
 
-    refreshIRMetadata(currentIR, this.metricsEnabled);
+    this.ensureIRMetadata(currentIR);
+
+    const executionOrder = this.buildExecutionOrder();
 
     const pipelineContext = {
       filePath,
@@ -610,7 +601,15 @@ export class Pipeline {
       if (this.config.normalization) {
         activeStage = "normalize";
         if (this.metricsEnabled) defaultMetrics.start("normalize");
-        for (const pass of this.config.normalization as NormalizationPass[]) {
+        const scheduledNormalization = (this.config.normalization || [])
+          .slice()
+          .sort((a, b) => {
+            const ia = executionOrder.findIndex((p) => p.name === (a as any).name);
+            const ib = executionOrder.findIndex((p) => p.name === (b as any).name);
+            return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+          }) as NormalizationPass[];
+
+        for (const pass of scheduledNormalization) {
           const passStart = performance.now();
           const span = this.tracer.startSpan(`normalize-${pass.name}`, rootSpan.id);
           const stageContext = {
@@ -619,6 +618,7 @@ export class Pipeline {
           };
           const res = pass.normalize(currentIR, stageContext as any);
           currentIR = res.ir;
+          this.applyPassInvalidation(pass.name);
           this.tracer.endSpan(span.id, "ok");
           timeline.push({
             stage: "normalization",
@@ -726,7 +726,15 @@ export class Pipeline {
       if (this.config.optimization) {
         activeStage = "optimize";
         if (this.metricsEnabled) defaultMetrics.start("optimize");
-        for (const pass of this.config.optimization as OptimizationPass[]) {
+        const scheduledOptimization = (this.config.optimization || [])
+          .slice()
+          .sort((a, b) => {
+            const ia = executionOrder.findIndex((p) => p.name === (a as any).name);
+            const ib = executionOrder.findIndex((p) => p.name === (b as any).name);
+            return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+          }) as OptimizationPass[];
+
+        for (const pass of scheduledOptimization) {
           const passStart = performance.now();
           const span = this.tracer.startSpan(`optimize-${pass.name}`, rootSpan.id);
           const stageContext = {
@@ -735,6 +743,7 @@ export class Pipeline {
           };
           const res = pass.optimize(currentIR, stageContext as any);
           currentIR = res.ir;
+          this.applyPassInvalidation(pass.name);
           this.tracer.endSpan(span.id, "ok");
           timeline.push({
             stage: "optimization",
@@ -747,7 +756,8 @@ export class Pipeline {
         if (this.metricsEnabled) defaultMetrics.stop("optimize");
         activeStage = null;
 
-        refreshIRMetadata(currentIR, this.metricsEnabled);
+        this.invalidateIRMetadata();
+        this.ensureIRMetadata(currentIR);
       }
 
       // 5. Lowering Stage
@@ -755,7 +765,15 @@ export class Pipeline {
       if (this.config.lowering) {
         activeStage = "lower";
         if (this.metricsEnabled) defaultMetrics.start("lower");
-        for (const pass of this.config.lowering as LoweringPass[]) {
+        const scheduledLowering = (this.config.lowering || [])
+          .slice()
+          .sort((a, b) => {
+            const ia = executionOrder.findIndex((p) => p.name === (a as any).name);
+            const ib = executionOrder.findIndex((p) => p.name === (b as any).name);
+            return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+          }) as LoweringPass[];
+
+        for (const pass of scheduledLowering) {
           const passStart = performance.now();
           const span = this.tracer.startSpan(`lower-${pass.name}`, rootSpan.id);
           let res: LoweringResult = { ir: currentIR, generatedNodes: 0 };
@@ -764,6 +782,7 @@ export class Pipeline {
             ...(pipelineContext.lowering || {}),
           };
           const passRes = pass.generate(currentIR, stageContext as any);
+          this.applyPassInvalidation(pass.name);
           if (passRes) {
             res = passRes;
             if (passRes.generatedOutput) {

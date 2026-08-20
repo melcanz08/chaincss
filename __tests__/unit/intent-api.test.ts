@@ -262,7 +262,15 @@ describe('Intent API', () => {
     it('resolves _intent metadata on rules', () => {
       const ir = createIR();
       const rule = createRule('.my-card');
-      rule.meta._intent = 'card';
+      rule.passMeta = {
+    analysis: {
+      semantic: {
+        intents: ['card'],
+        tokens: [],
+        constraints: [],
+      },
+    },
+  };
       ir.rules.push(rule);
 
       const result = intentAPIPass(ir);
@@ -274,7 +282,15 @@ describe('Intent API', () => {
     it('creates pseudo-classes for states', () => {
       const ir = createIR();
       const rule = createRule('.btn');
-      rule.meta._intent = 'button-primary';
+      rule.passMeta = {
+    analysis: {
+      semantic: {
+        intents: ['button-primary'],
+        tokens: [],
+        constraints: [],
+      },
+    },
+  };
       ir.rules.push(rule);
 
       const result = intentAPIPass(ir);
@@ -285,7 +301,15 @@ describe('Intent API', () => {
     it('records transform history', () => {
       const ir = createIR();
       const rule = createRule('.card');
-      rule.meta._intent = 'card';
+      rule.passMeta = {
+    analysis: {
+      semantic: {
+        intents: ['card'],
+        tokens: [],
+        constraints: [],
+      },
+    },
+  };
       ir.rules.push(rule);
 
       const result = intentAPIPass(ir);
@@ -306,7 +330,15 @@ describe('Intent API', () => {
     it('stores a11y requirements for accessibility pass', () => {
       const ir = createIR();
       const rule = createRule('.btn');
-      rule.meta._intent = 'button-primary';
+      rule.passMeta = {
+    analysis: {
+      semantic: {
+        intents: ['button-primary'],
+        tokens: [],
+        constraints: [],
+      },
+    },
+  };
       ir.rules.push(rule);
 
       const result = intentAPIPass(ir);

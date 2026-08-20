@@ -11,6 +11,7 @@ import {
   record,
 } from "./index.js";
 import type {
+  SourceLocation,
   IRPseudoClass,
   IRAtRule,
   IRCondition,
@@ -46,6 +47,50 @@ function isDynamicToken(value: string): boolean {
 // Fix #5: LRU cache for normalizeProperty
 const propCache = new Map<string, string>();
 const PROP_CACHE_LIMIT = 500;
+
+function parseNestedObject(
+  selector: string,
+  value: any,
+  rule: IRRule,
+  source?: SourceLocation,
+): void {
+  if (!value || typeof value !== "object") return;
+
+  for (const [p, v] of Object.entries(value)) {
+    if (p.startsWith("&")) {
+      const nestedSelector = p.replace(/&/g, selector);
+      const nestedRule = createRule(nestedSelector, source, rule.id);
+      parseNestedObject(nestedSelector, v, nestedRule, source);
+      rule.nestedRules.push(nestedRule);
+      continue;
+    }
+
+    if (typeof v === "string" || typeof v === "number") {
+      rule.declarations.push(
+        createDeclaration(normalizeProperty(p), v, source),
+      );
+      continue;
+    }
+
+    if (Array.isArray(v)) {
+      for (const item of v) {
+        if (typeof item === "string" || typeof item === "number") {
+          rule.declarations.push(
+            createDeclaration(normalizeProperty(p), item, source),
+          );
+        }
+      }
+      continue;
+    }
+
+    if (typeof v === "object" && v !== null) {
+      const nestedSelector = `${selector} ${p}`.trim();
+      const nestedRule = createRule(nestedSelector, source, rule.id);
+      parseNestedObject(nestedSelector, v, nestedRule, source);
+      rule.nestedRules.push(nestedRule);
+    }
+  }
+}
 
 function normalizeProperty(prop: string): string {
   if (propCache.has(prop)) return propCache.get(prop)!;
@@ -175,6 +220,19 @@ export function parseIR(
               }
             }
           }
+          rule.nestedRules.push(nestedRule);
+          continue;
+        }
+
+                // ── Nested selectors (recursive) ──
+        if (
+          prop.startsWith("&") &&
+          typeof value === "object" &&
+          value !== null
+        ) {
+          const nestedSelector = prop.replace(/&/g, rule.selector);
+          const nestedRule = createRule(nestedSelector, rule.source, rule.id);
+          parseNestedObject(nestedSelector, value, nestedRule, rule.source);
           rule.nestedRules.push(nestedRule);
           continue;
         }
@@ -445,7 +503,6 @@ export function parseIR(
           ...(rule.passMeta.analysis.semantic.intents || []),
           ...allIntents,
         ];
-        (rule.meta as any)._intent = allIntents[0];
       }
     }
 

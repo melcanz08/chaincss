@@ -61,6 +61,7 @@ export type { ValueClass } from "@core/usecases/value-classifier.js";
 
 // Utilities (browser-safe only)
 export {
+  injectToDOM,
   hashString,
   kebabCase,
   camelCase,

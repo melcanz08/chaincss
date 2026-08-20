@@ -471,6 +471,21 @@ function levenshteinDistance(a: string, b: string): number {
   return matrix[a.length][b.length];
 }
 
+export function hasKeyframePreset(name: string): boolean {
+  return Object.prototype.hasOwnProperty.call(animationPresets, name);
+}
+
+export function getKeyframeFrames(
+  name: string,
+): Array<{ keyText: string; declarations: Record<string, string | number> }> {
+  const def = animationPresets[name];
+  if (!def) return [];
+  return Object.entries(def).map(([keyText, styles]) => ({
+    keyText,
+    declarations: styles,
+  }));
+}
+
 export default {
   animationPresets,
   createAnimation,
@@ -487,4 +502,6 @@ export default {
   getAnimationSuggestion,
   timingFunctions,
   DEFAULT_ANIMATION_CONFIG,
+  hasKeyframePreset,
+  getKeyframeFrames,
 };

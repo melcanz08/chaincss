@@ -29,6 +29,8 @@ export interface ScheduleResult {
   warnings: string[];
 }
 
+const INITIAL_RESOURCES = new Set(["initial-ir"]);
+
 const PHASE_ORDER: Record<PassPhase, number> = {
   normalize: 0,
   validate: 1,
@@ -74,7 +76,7 @@ export function schedulePasses(passes: PassDeclaration[]): ScheduleResult {
   // Validate: check that all requirements can be satisfied
   for (const pass of passes) {
     for (const req of pass.requires) {
-      if (!resourceProducers.has(req)) {
+      if (!resourceProducers.has(req) && !INITIAL_RESOURCES.has(req)) {
         errors.push(
           `Pass "${pass.name}" requires "${req}" but no pass produces it`,
         );

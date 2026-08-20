@@ -1118,9 +1118,7 @@ export const intentResolver: LoweringPass = {
     for (const rule of ir.rules) {
       const intentNames: string[] =
         rule.passMeta?.analysis?.semantic?.intents ??
-        ((rule.meta as any)._intent
-          ? [(rule.meta as any)._intent as string]
-          : []);
+        rule.passMeta?.analysis?.semantic?.intents ?? [];
 
       if (intentNames.length === 0) continue;
 

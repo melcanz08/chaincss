@@ -3,7 +3,6 @@
 
 export { chain } from "@core/entities/style-collector.js";
 export { compileToCSS, transpile } from "@core/usecases/style-compiler.js";
-export { injectToDOM } from "@shared/index.js";
 export { injectChainStyles } from "@frameworks/index.js";
 export { VERSION } from "@shared/constants/index.js";
 export {

@@ -46,6 +46,13 @@ export interface IRDynamicValue {
   variable: string;
   /** The type of dynamic value */
   kind: 'function' | 'token' | 'prop';
+    /**
+   * Original runtime value.
+   *
+   * Function values are intentionally non-serializable.
+   * Token/prop values are serializable strings.
+   */
+  originalValue?: unknown;
 }
 
 /** A single CSS declaration (property: value) */
@@ -220,6 +227,7 @@ export interface IRTransformRecord {
 export interface StyleIR {
   id: string;
   rules: IRRule[];
+  atRules: IRAtRule[];
   diagnostics: IRDiagnostic[];
   meta: {
     version: string;

@@ -176,6 +176,7 @@ export function cloneIR(ir: StyleIR): StyleIR {
   const clonedIR: StyleIR = {
     id: ir.id,
     rules: clonedRules,
+    atRules: ir.atRules ?? [],
     diagnostics: (ir.diagnostics || []).map((d) => ({ ...d })),
     meta: {
       ...ir.meta,
