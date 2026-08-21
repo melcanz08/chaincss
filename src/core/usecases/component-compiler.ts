@@ -32,11 +32,12 @@ function isStyleDef(v: any): boolean {
     v.selectors ||
     v._atRules ||
     v._nestedRules ||
-    keys.some(
-      (k) =>
-        k.startsWith("&") ||
-        k.startsWith(".") ||
-        /^[a-zA-Z]+(?:[A-Z][a-z]*)+$/.test(k), // camelCase CSS property
+    v._intents?.length > 0 ||
+    keys.some(k =>
+      k.startsWith("&") ||
+      k.startsWith(".") ||
+      k === "hover" || k === "focus" || k === "active" ||
+      /^[a-zA-Z]+(?:[A-Z][a-z]*)+$/.test(k)
     )
   );
 }
@@ -160,12 +161,21 @@ export function createComponentCompiler(ctx: ComponentContext) {
         const result = ctx.compileStyle(name, style as StyleDefinition);
         const className =
           (Object.values(result.classMap)[0] as string | undefined) || "";
-        if (className) {
+
+        // Fix: merge atomic classes from atomic-extractor meta
+        const atomicClasses =
+          (result as any).meta?.atomicClasses ||
+          (result as any).atomicClasses ||
+          (result as any)._ir?.rules?.[0]?.meta?.atomicClasses ||
+          [];
+        const finalClass = [className,...atomicClasses].filter(Boolean).join(" ");
+
+        if (finalClass) {
           const dyn = result.dynamic;
           if (dyn && Object.keys(dyn).length > 0) {
-            js += `export const ${safeKey(name)} = { className: '${className}', dynamic: ${serializeDynamic(dyn as any)} };\n`;
+            js += `export const ${safeKey(name)} = { className: '${finalClass}', dynamic: ${serializeDynamic(dyn as any)} };\n`;
           } else {
-            js += `export const ${safeKey(name)} = '${className}';\n`;
+            js += `export const ${safeKey(name)} = '${finalClass}';\n`;
           }
           hasExport = true;
         }

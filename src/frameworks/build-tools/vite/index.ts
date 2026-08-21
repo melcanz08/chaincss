@@ -231,24 +231,11 @@ export default function chaincssPlugin(
     cssFileCache.clear();
     inspectorStore.clear();
     const chainFiles: string[] = [];
-
-    const IGNORED_DIRS = new Set([
-      "node_modules",
-      "dist",
-      ".git",
-      ".vite",
-      "build",
-      "coverage",
-      ".chaincss-cache",
-    ]);
+    const IGNORED_DIRS = new Set(["node_modules","dist",".git",".vite","build","coverage",".chaincss-cache"]);
 
     function walk(dir: string) {
       let entries: fs.Dirent[];
-      try {
-        entries = fs.readdirSync(dir, { withFileTypes: true });
-      } catch {
-        return;
-      }
+      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
       for (const entry of entries) {
         const fullPath = path.join(dir, entry.name);
         if (isTmpFile(fullPath) || isGeneratedOutput(fullPath)) continue;
@@ -260,13 +247,9 @@ export default function chaincssPlugin(
         }
       }
     }
-
     walk(root);
 
-    if (!silent)
-      summary(
-        `Pre-compiling ${chainFiles.length} styling definition file(s)...`,
-      );
+    if (!silent) summary(`Pre-compiling ${chainFiles.length} styling definition file(s)...`);
 
     const concurrency = Math.min(cpus().length, chainFiles.length || 1);
     let successCount = 0;
@@ -278,8 +261,9 @@ export default function chaincssPlugin(
         const file = chainFiles[i];
         try {
           const { css, classMap, dynamicMap } = await compileFile(file);
+          // FIX: always update cache, even if css is temporarily empty, to keep key
+          updateCSS(file, css || "");
           if (css.trim()) {
-            updateCSS(file, css);
             const cssPath = file.replace(CHAIN_FILE_RE, ".css");
             ensureDir(path.dirname(cssPath));
             await fsp.writeFile(cssPath, formatCSS(css, false), "utf8");
@@ -290,20 +274,14 @@ export default function chaincssPlugin(
           await fsp.writeFile(classPath, content, "utf8");
           successCount++;
         } catch (err) {
-          logError(
-            `Pre-compile failure on ${path.basename(file)}: ${(err as Error).message}`,
-          );
+          logError(`Pre-compile failure on ${path.basename(file)}: ${(err as Error).message}`);
         }
       }
     }
-
     const workers = Array.from({ length: concurrency }, () => worker());
     await Promise.all(workers);
 
-    if (!silent)
-      summary(
-        `Pre-compiled ${successCount}/${chainFiles.length} style manifests successfully.`,
-      );
+    if (!silent) summary(`Pre-compiled ${successCount}/${chainFiles.length} style manifests successfully.`);
     return getCSS();
   }
 
@@ -464,13 +442,12 @@ export default function chaincssPlugin(
       const absPath = path.resolve(id);
       try {
         const { css, classMap, dynamicMap } = await compileFile(absPath);
-        if (css.trim()) updateCSS(absPath, css);
+        // FIX: always update cache, don't gate on css.trim()
+        updateCSS(absPath, css || "");
         const code = writeClassFileContent(classMap, dynamicMap);
         return { code, map: { mappings: "" } as any };
       } catch (err) {
-        logError(
-          `Transform runtime failure on ${path.basename(id)}: ${(err as Error).message}`,
-        );
+        logError(`Transform runtime failure on ${path.basename(id)}: ${(err as Error).message}`);
         return null;
       }
     },

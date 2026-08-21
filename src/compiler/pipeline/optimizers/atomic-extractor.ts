@@ -262,20 +262,64 @@ export const atomicExtractor: OptimizationPass = {
         const parts = data.media.split(":");
         const type = parts[0] as any;
         const query = parts.slice(1).join(":");
-        const atRule = {
-          id: `at-${rawName}`,
-          type,
-          query,
-          name: undefined,
-          declarations: [atomicDecl],
-          nestedRules: [],
-          source: atomicRule.source,
-          history: [],
-        };
-        atomicRule.atRules = [atRule];
+
+        if (!atomicRule.atRules) {
+          atomicRule.atRules = [];
+        }
+        let existingAtRule = atomicRule.atRules.find(ar => ar.type === type && ar.query === query);
+        
+        if (!existingAtRule) {
+          existingAtRule = {
+            id: `at-${rawName}-${type}-${query}`,
+            type,
+            query,
+            name: undefined,
+            declarations: [],
+            nestedRules: [],
+            source: atomicRule.source,
+            history: [],
+          };
+          atomicRule.atRules.push(existingAtRule);
+        }
+
+        if (data.pseudo !== "root") {
+          if (!existingAtRule.nestedRules) {
+            existingAtRule.nestedRules = [];
+          }
+          let existingNested = existingAtRule.nestedRules.find(nr => nr.selector === `&:${data.pseudo}`);
+          if (existingNested) {
+            existingNested.declarations.push(atomicDecl);
+          } else {
+            const nestedRule = createRule(`&:${data.pseudo}`);
+            nestedRule.declarations = [atomicDecl];
+            existingAtRule.nestedRules.push(nestedRule);
+          }
+        } else {
+          existingAtRule.declarations.push(atomicDecl);
+        }
         atomicRule.declarations = [];
       } else {
-        atomicRule.declarations.push(atomicDecl);
+        if (data.pseudo !== "root") {
+          if (!atomicRule.pseudoClasses) {
+            atomicRule.pseudoClasses = [];
+          }
+          // Accumulate multiple properties into the same pseudo-class block
+          let existingPseudo = atomicRule.pseudoClasses.find(pc => pc.name === data.pseudo);
+          if (existingPseudo) {
+            existingPseudo.declarations.push(atomicDecl);
+          } else {
+            atomicRule.pseudoClasses.push({
+              id: `pc-${rawName}-${data.pseudo}`,
+              name: data.pseudo,
+              declarations: [atomicDecl],
+              parentId: atomicRule.id,
+              source: atomicRule.source,
+              history: [],
+            } as any);
+          }
+        } else {
+          atomicRule.declarations.push(atomicDecl);
+        }
       }
 
       atomicRule.meta = {
@@ -412,14 +456,18 @@ export const atomicExtractor: OptimizationPass = {
       }
 
       // Fix #1: Check all structural collections before marking dead
+      const hasAtomicClasses = ((rule.meta as any)?.atomicClasses || []).length > 0;
       if (
         rule.declarations.length === 0 &&
         (rule.pseudoClasses || []).length === 0 &&
         (rule.atRules || []).length === 0 &&
         (rule.nestedRules || []).length === 0
       ) {
-        rule.isDead = true;
-        rulesEliminated++;
+        // only dead if NO atomicClasses AND empty
+        if (!hasAtomicClasses) {
+          rule.isDead = true;
+          rulesEliminated++;
+        }
       }
 
       for (const nested of rule.nestedRules || []) {

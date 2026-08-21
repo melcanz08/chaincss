@@ -126,15 +126,15 @@ export function parseIR(
   styles: Record<string, StyleDefinition> | Record<string, any>,
   sourceFile?: string,
 ): StyleIR {
-  const ir = createIR(sourceFile ? [sourceFile] : []);
+  const ir = createIR(sourceFile? [sourceFile] : []);
 
   for (const [componentName, styleDef] of Object.entries(styles)) {
-    if (!styleDef || typeof styleDef !== "object") continue;
+    if (!styleDef || typeof styleDef!== "object") continue;
 
     const selectors = Array.isArray(styleDef.selectors)
-      ? styleDef.selectors
+     ? styleDef.selectors
       : styleDef.selector
-        ? [styleDef.selector]
+       ? [styleDef.selector]
         : ["." + componentName];
 
     const componentRules: IRRule[] = [];
@@ -155,18 +155,18 @@ export function parseIR(
         if (prop === "atRules" || prop === "nestedRules" || prop === "themes")
           continue;
 
-        // ── Pseudo-classes & pseudo-elements ──
+        // ── Pseudo-classes & pseudo-elements &:hover &:focus &::before ──
         if (
           (prop.startsWith("&:") || prop.startsWith("&::")) &&
           typeof value === "object" &&
-          value !== null
+          value!== null
         ) {
           const isElement = prop.startsWith("&::");
           const pseudoName = prop.replace(/^&::?/, "");
           const pc: IRPseudoClass = {
             id: nextId(pseudoName),
             parentId: rule.id,
-            name: isElement ? `::${pseudoName}` : pseudoName,
+            name: isElement? `::${pseudoName}` : pseudoName,
             declarations: [],
             source: rule.source,
             history: [
@@ -178,14 +178,20 @@ export function parseIR(
               pc.declarations.push(
                 createDeclaration(normalizeProperty(p), v, rule.source),
               );
-            }
-            // Fix #3: Array fallback values in pseudo-classes
-            else if (Array.isArray(v)) {
+            } else if (Array.isArray(v)) {
               for (const item of v) {
                 if (typeof item === "string" || typeof item === "number") {
                   pc.declarations.push(
                     createDeclaration(normalizeProperty(p), item, rule.source),
                   );
+                }
+              }
+            } else if (typeof v === "object" && v!== null) {
+              // chain() nested: background:{color}
+              for (const [ik, iv] of Object.entries(v as any)) {
+                if (typeof iv === "string" || typeof iv === "number") {
+                  const pn = ik === "color" && p === "background"? "backgroundColor" : ik;
+                  pc.declarations.push(createDeclaration(normalizeProperty(pn), iv as any, rule.source));
                 }
               }
             }
@@ -194,81 +200,60 @@ export function parseIR(
           continue;
         }
 
-        // ── Nested selectors ──
+        // ── Nested selectors & ──
         if (
           prop.startsWith("&") &&
           typeof value === "object" &&
-          value !== null
+          value!== null
         ) {
-          // Fix #2: Global ampersand replace — handles && and multiple &
           const nestedSelector = prop.replace(/&/g, rule.selector);
           const nestedRule = createRule(nestedSelector, rule.source, rule.id);
-          for (const [p, v] of Object.entries(value)) {
-            if (typeof v === "string" || typeof v === "number") {
-              nestedRule.declarations.push(
-                createDeclaration(normalizeProperty(p), v, rule.source),
-              );
-            }
-            // Fix #3: Array fallback values in nested rules
-            else if (Array.isArray(v)) {
-              for (const item of v) {
-                if (typeof item === "string" || typeof item === "number") {
-                  nestedRule.declarations.push(
-                    createDeclaration(normalizeProperty(p), item, rule.source),
-                  );
-                }
-              }
-            }
+          if (typeof value === "object") {
+            parseNestedObject(nestedSelector, value, nestedRule, rule.source);
           }
           rule.nestedRules.push(nestedRule);
           continue;
         }
 
-                // ── Nested selectors (recursive) ──
+        // ── Legacy hover/focus/active from chain().hover().end() ──
         if (
-          prop.startsWith("&") &&
+          (prop === "hover" || prop === "focus" || prop === "active") &&
           typeof value === "object" &&
-          value !== null
-        ) {
-          const nestedSelector = prop.replace(/&/g, rule.selector);
-          const nestedRule = createRule(nestedSelector, rule.source, rule.id);
-          parseNestedObject(nestedSelector, value, nestedRule, rule.source);
-          rule.nestedRules.push(nestedRule);
-          continue;
-        }
-
-        // ── Legacy `hover` key fallback ──
-        if (
-          prop === "hover" &&
-          typeof value === "object" &&
-          value !== null &&
-          !styleDef["&:hover"]
+          value!== null &&
+         !styleDef[`&:${prop}`]
         ) {
           const pc: IRPseudoClass = {
-            id: nextId("hover"),
+            id: nextId(prop),
             parentId: rule.id,
-            name: "hover",
+            name: prop,
             declarations: [],
             source: rule.source,
             history: [
-              record("parser", "created", undefined, "Parsed hover block"),
+              record("parser", "created", undefined, `Parsed ${prop} block`),
             ],
           };
 
-          const hEntries = Object.entries(value);
-          for (let k = 0; k < hEntries.length; k++) {
-            const [p, v] = hEntries[k];
-            if (typeof v === "string" || typeof v === "number") {
+          for (const [intentKey, intentVal] of Object.entries(value)) {
+            if (typeof intentVal === "string" || typeof intentVal === "number") {
               pc.declarations.push(
-                createDeclaration(normalizeProperty(p), v, rule.source),
+                createDeclaration(normalizeProperty(intentKey), intentVal, rule.source),
               );
-            } else if (Array.isArray(v)) {
-              for (const item of v) {
+            } else if (Array.isArray(intentVal)) {
+              for (const item of intentVal) {
                 if (typeof item === "string" || typeof item === "number") {
                   pc.declarations.push(
-                    createDeclaration(normalizeProperty(p), item, rule.source),
+                    createDeclaration(normalizeProperty(intentKey), item, rule.source),
                   );
                 }
+              }
+            } else if (typeof intentVal === "object" && intentVal!== null) {
+              for (const [innerK, innerV] of Object.entries(intentVal as any)) {
+                if (typeof innerV!== "string" && typeof innerV!== "number") continue;
+                let propName = innerK;
+                if (innerK === "color" && intentKey === "background") propName = "backgroundColor";
+                pc.declarations.push(
+                  createDeclaration(normalizeProperty(propName), innerV as any, rule.source),
+                );
               }
             }
           }
@@ -278,40 +263,27 @@ export function parseIR(
           continue;
         }
 
-        // ── Dynamic Values (functions) ──
         if (typeof value === "function") {
           const variable = getDynamicVariableName(selector, prop);
           rule.declarations.push(
             createDeclaration(normalizeProperty(prop), "", rule.source, {
-              dynamic: {
-                kind: "function",
-                variable,
-                // Fix #4: Store original function reference for runtime
-                originalValue: value,
-              },
+              dynamic: { kind: "function", variable, originalValue: value },
             }),
           );
           continue;
         }
 
-        // ── Dynamic Values (token/prop strings) ──
         if (typeof value === "string" && isDynamicToken(value)) {
           const variable = getDynamicVariableName(selector, prop);
-          const kind: "token" | "prop" = value.startsWith("theme.") ? "token" : "prop";
+          const kind: "token" | "prop" = value.startsWith("theme.")? "token" : "prop";
           rule.declarations.push(
             createDeclaration(normalizeProperty(prop), value, rule.source, {
-              dynamic: {
-                kind,
-                variable,
-                // Fix #4: Store original token string for runtime
-                originalValue: value,
-              },
+              dynamic: { kind, variable, originalValue: value },
             }),
           );
           continue;
         }
 
-        // Fix #3: Array fallback values — push each item as declaration
         if (Array.isArray(value)) {
           for (const item of value) {
             if (typeof item === "string" || typeof item === "number") {
@@ -323,21 +295,13 @@ export function parseIR(
           continue;
         }
 
-        // Fix #6: Responsive objects should be expanded by StyleCollector
-        if (typeof value === "object" && value !== null) {
-          if (
-            typeof process !== "undefined" &&
-            process.env?.NODE_ENV === "development"
-          ) {
-            console.warn(
-              `[ChainCSS] Responsive object not expanded for "${prop}" — check StyleCollector. Value:`,
-              value,
-            );
+        if (typeof value === "object" && value!== null) {
+          if (typeof process!== "undefined" && process.env?.NODE_ENV === "development") {
+            console.warn(`[ChainCSS] Responsive object not expanded for "${prop}"`, value);
           }
           continue;
         }
 
-        // ── Regular CSS Declarations ──
         if (typeof value === "string" || typeof value === "number") {
           rule.declarations.push(
             createDeclaration(normalizeProperty(prop), value, rule.source),
@@ -349,15 +313,12 @@ export function parseIR(
       componentRules.push(rule);
     }
 
-    // ── Parse At-Rules ──
     const allAtRules = styleDef._atRules || styleDef.atRules;
     if (allAtRules && Array.isArray(allAtRules)) {
       for (let i = 0; i < allAtRules.length; i++) {
         const atRule = allAtRules[i];
-        if (!atRule || typeof atRule !== "object") continue;
-
+        if (!atRule || typeof atRule!== "object") continue;
         const type = atRule.type || "media";
-
         const templateAtRule: IRAtRule = {
           id: nextId("atrule"),
           type,
@@ -367,117 +328,43 @@ export function parseIR(
           nestedRules: [],
           keyframes: [],
           source: { file: sourceFile, component: componentName },
-          history: [
-            record("parser", "created", undefined, `Parsed @${type} block`),
-          ],
+          history: [record("parser", "created", undefined, `Parsed @${type} block`)],
         };
-
         if (atRule.styles && typeof atRule.styles === "object") {
-          const sEntries = Object.entries(atRule.styles);
-          for (let j = 0; j < sEntries.length; j++) {
-            const [prop, value] = sEntries[j];
+          for (const [prop, value] of Object.entries(atRule.styles)) {
             if (typeof value === "string" || typeof value === "number") {
-              templateAtRule.declarations.push(
-                createDeclaration(
-                  normalizeProperty(prop),
-                  value,
-                  templateAtRule.source,
-                ),
-              );
-            } else if (Array.isArray(value)) {
-              for (const item of value) {
-                if (typeof item === "string" || typeof item === "number") {
-                  templateAtRule.declarations.push(
-                    createDeclaration(normalizeProperty(prop), item, templateAtRule.source),
-                  );
-                }
-              }
+              templateAtRule.declarations.push(createDeclaration(normalizeProperty(prop), value, templateAtRule.source));
             }
           }
         }
-
-        if (
-          type === "keyframes" &&
-          atRule.frames &&
-          typeof atRule.frames === "object"
-        ) {
-          const fEntries = Object.entries(atRule.frames);
-          for (let j = 0; j < fEntries.length; j++) {
-            const [keyText, frameStyles] = fEntries[j];
-            if (frameStyles && typeof frameStyles === "object") {
-              const frame: IRKeyframeFrame = {
-                id: nextId("frame"),
-                keyText,
-                declarations: [],
-                source: templateAtRule.source,
-              };
-
-              const fsEntries = Object.entries(frameStyles);
-              for (let k = 0; k < fsEntries.length; k++) {
-                const [p, v] = fsEntries[k];
-                if (typeof v === "string" || typeof v === "number") {
-                  frame.declarations.push(
-                    createDeclaration(normalizeProperty(p), v, frame.source),
-                  );
-                }
-              }
-              templateAtRule.keyframes!.push(frame);
-            }
-          }
-        }
-
         for (let j = 0; j < componentRules.length; j++) {
           const rule = componentRules[j];
           rule.atRules.push({
-            ...templateAtRule,
+           ...templateAtRule,
             id: nextId("atrule"),
             parentId: rule.id,
             declarations: [...templateAtRule.declarations],
-            keyframes: templateAtRule.keyframes
-              ? templateAtRule.keyframes.map((f) => ({
-                  ...f,
-                  id: nextId("frame"),
-                  declarations: [...f.declarations],
-                }))
-              : undefined,
+            keyframes: templateAtRule.keyframes? templateAtRule.keyframes.map((f) => ({...f, id: nextId("frame"), declarations: [...f.declarations] })) : undefined,
             nestedRules: [...templateAtRule.nestedRules],
           });
         }
       }
     }
 
-    // ── Parse Nested Rules ──
     const allNestedRules = styleDef._nestedRules || styleDef.nestedRules;
     if (allNestedRules && Array.isArray(allNestedRules)) {
       for (let i = 0; i < allNestedRules.length; i++) {
         const nestedDef = allNestedRules[i];
-        if (!nestedDef || typeof nestedDef !== "object") continue;
-
+        if (!nestedDef || typeof nestedDef!== "object") continue;
         const nestedSelector = nestedDef.selector || "";
         const nestedStyles = nestedDef.styles || {};
-
         for (let j = 0; j < componentRules.length; j++) {
           const rule = componentRules[j];
-          // Fix #2: Global ampersand replace
-          const resolvedSelector = nestedSelector.includes("&")
-            ? nestedSelector.replace(/&/g, rule.selector)
-            : `${rule.selector} ${nestedSelector}`.trim();
-
+          const resolvedSelector = nestedSelector.includes("&")? nestedSelector.replace(/&/g, rule.selector) : `${rule.selector} ${nestedSelector}`.trim();
           const nestedRule = createRule(resolvedSelector, rule.source, rule.id);
-
           for (const [p, v] of Object.entries(nestedStyles)) {
             if (typeof v === "string" || typeof v === "number") {
-              nestedRule.declarations.push(
-                createDeclaration(normalizeProperty(p), v, rule.source),
-              );
-            } else if (Array.isArray(v)) {
-              for (const item of v) {
-                if (typeof item === "string" || typeof item === "number") {
-                  nestedRule.declarations.push(
-                    createDeclaration(normalizeProperty(p), item, rule.source),
-                  );
-                }
-              }
+              nestedRule.declarations.push(createDeclaration(normalizeProperty(p), v, rule.source));
             }
           }
           rule.nestedRules.push(nestedRule);
@@ -485,58 +372,16 @@ export function parseIR(
       }
     }
 
-    // ── Parse Semantic Intents ──
     const allIntents: string[] = styleDef._intents || [];
     if (allIntents.length > 0) {
       for (let j = 0; j < componentRules.length; j++) {
         const rule = componentRules[j];
         if (!rule.passMeta) rule.passMeta = {};
         if (!rule.passMeta.analysis) rule.passMeta.analysis = {};
-        if (!rule.passMeta.analysis.semantic) {
-          rule.passMeta.analysis.semantic = {
-            tokens: [],
-            intents: [],
-            constraints: [],
-          };
-        }
-        rule.passMeta.analysis.semantic.intents = [
-          ...(rule.passMeta.analysis.semantic.intents || []),
-          ...allIntents,
-        ];
-      }
-    }
-
-    // ── Parse CSS if() Conditions ──
-    if (styleDef._ifConditions && Array.isArray(styleDef._ifConditions)) {
-      for (let i = 0; i < styleDef._ifConditions.length; i++) {
-        const cond = styleDef._ifConditions[i];
-        if (!cond.property || !cond.variable) {
-          ir.diagnostics.push({
-            id: nextId("diag"),
-            nodeId: ir.id,
-            severity: "warning",
-            message: `Skipping malformed if() condition in ${componentName}: missing property or variable`,
-            pass: "parser",
-          });
-          continue;
-        }
-
-        const templateCond: IRCondition = {
-          id: nextId("cond"),
-          property: normalizeProperty(cond.property),
-          variable: cond.variable,
-          conditions: cond.conditions || {},
-          defaultValue: cond.defaultValue || "",
-          source: { file: sourceFile, component: componentName },
-        };
-
-        for (let j = 0; j < componentRules.length; j++) {
-          const rule = componentRules[j];
-          rule.conditions.push({ ...templateCond, id: nextId("cond") });
-        }
+        if (!rule.passMeta.analysis.semantic) rule.passMeta.analysis.semantic = { tokens: [], intents: [], constraints: [] };
+        rule.passMeta.analysis.semantic.intents = [...(rule.passMeta.analysis.semantic.intents || []),...allIntents];
       }
     }
   }
-
   return ir;
 }
