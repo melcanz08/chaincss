@@ -29,9 +29,11 @@ export function hashString(str: string): string {
  * Convert camelCase to kebab-case
  */
 export function kebabCase(str: string): string {
-  return str.replace(/([A-Z])/g, "-$1").toLowerCase();
+  return str
+    .replace(/([A-Z])/g, '-$1')
+    .toLowerCase()
+    .replace(/^-/, '');
 }
-
 /**
  * Check if code is running in browser
  */

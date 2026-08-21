@@ -375,7 +375,7 @@ const PRESETS: Record<PipelinePreset, Partial<PipelineConfig>> = {
     optimization: [
       astOptimizer,
       dynamicAnimationResolver,
-      deadCodeEliminator,
+      //deadCodeEliminator,
       cssCompressor,
       specificitySorter,
       mediaQueryPacker,

@@ -378,8 +378,42 @@ export function parseIR(
         const rule = componentRules[j];
         if (!rule.passMeta) rule.passMeta = {};
         if (!rule.passMeta.analysis) rule.passMeta.analysis = {};
-        if (!rule.passMeta.analysis.semantic) rule.passMeta.analysis.semantic = { tokens: [], intents: [], constraints: [] };
-        rule.passMeta.analysis.semantic.intents = [...(rule.passMeta.analysis.semantic.intents || []),...allIntents];
+        if (!rule.passMeta.analysis.semantic) {
+          rule.passMeta.analysis.semantic = { tokens: [], intents: [], constraints: [] };
+        }
+        rule.passMeta.analysis.semantic.intents = [
+         ...(rule.passMeta.analysis.semantic.intents || []),
+         ...allIntents,
+        ];
+      }
+    }
+
+    // ── Parse CSS if() Conditions ── THIS WAS MISSING
+    if (styleDef._ifConditions && Array.isArray(styleDef._ifConditions)) {
+      for (let i = 0; i < styleDef._ifConditions.length; i++) {
+        const cond = styleDef._ifConditions[i];
+        if (!cond.property ||!cond.variable) {
+          ir.diagnostics.push({
+            id: nextId("diag"),
+            nodeId: ir.id,
+            severity: "warning",
+            message: `Skipping malformed if() condition in ${componentName}: missing property or variable`,
+            pass: "parser",
+          });
+          continue;
+        }
+        const templateCond: IRCondition = {
+          id: nextId("cond"),
+          property: normalizeProperty(cond.property),
+          variable: cond.variable,
+          conditions: cond.conditions || {},
+          defaultValue: cond.defaultValue || "",
+          source: { file: sourceFile, component: componentName },
+        };
+        for (let j = 0; j < componentRules.length; j++) {
+          const rule = componentRules[j];
+          rule.conditions.push({...templateCond, id: nextId("cond") });
+        }
       }
     }
   }

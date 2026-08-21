@@ -26,6 +26,9 @@ import {
 } from "@compiler/pipeline/persistent-compiler.js";
 import { StatefulIncrementalCompiler } from "@compiler/incremental/stateful-compiler.js";
 import { tokens as designTokens } from "@compiler/tokens/tokens.js";
+import { kebabCase } from "../../core/utils.js";
+
+const toKebabCase = kebabCase;
 
 const CHAIN_FILE_RE = /\.chain\.(ts|js)x?$/;
 const TMP_MARKER = ".chaincss-tmp";
@@ -173,12 +176,15 @@ export default function chaincssPlugin(
           any,
         ][]) {
           if (compileResult?.css) css += compileResult.css + "\n";
+          
           const className = Object.values(compileResult.classMap || {})[0] as
             | string
             | undefined;
           if (className) classMap[name] = className;
-          if ((compileResult as any)?.dynamic)
+          
+          if ((compileResult as any)?.dynamic) {
             dynamicMap[name] = (compileResult as any).dynamic;
+          }
 
           registerInspectorRules(compileResult?.inspector, absPath, name);
         }
@@ -187,19 +193,51 @@ export default function chaincssPlugin(
         throw e;
       }
 
+      // FIX: Generate dynamic styles including PSEUDO-CLASSES (hover, focus, active, etc.)
       for (const [name, dyn] of Object.entries(dynamicMap)) {
-        if (dyn && Object.keys(dyn).length > 0) {
-          const className = classMap[name];
-          if (className) {
-            css += `\n.${className} {\n`;
-            for (const [prop, fn] of Object.entries(
-              dyn as Record<string, any>,
-            )) {
-              const kebabProp = prop.replace(/([A-Z])/g, "-$1").toLowerCase();
-              css += `  ${kebabProp}: var(--${className}-${kebabProp});\n`;
+        if (!dyn || typeof dyn !== 'object') continue;
+        const className = classMap[name];
+        if (!className) continue;
+
+        const baseProps: Record<string, any> = {};
+        const pseudoStates: Record<string, Record<string, any>> = {};
+
+        // Split dynamic entries into base props and pseudo-states
+        for (const [key, value] of Object.entries(dyn as Record<string, any>)) {
+          if (key.startsWith('_')) continue;
+          
+          if (key.startsWith('&:') || key === 'hover' || key === 'focus' || 
+              key === 'active' || key === 'disabled' || key === 'checked') {
+            const pseudoName = key.replace(/^&:/, '');
+            if (value && typeof value === 'object') {
+              pseudoStates[pseudoName] = value;
             }
-            css += "}\n";
+          } else {
+            baseProps[key] = value;
           }
+        }
+
+        // Generate base class with CSS variables
+        if (Object.keys(baseProps).length > 0) {
+          css += `\n.${className} {\n`;
+          for (const [prop] of Object.entries(baseProps)) {
+            const kebabProp = toKebabCase(prop);
+            css += `  ${kebabProp}: var(--${className}-${kebabProp});\n`;
+          }
+          css += "}\n";
+        }
+
+        // Generate pseudo-class selectors with their own CSS variables
+        for (const [pseudoName, pseudoStyles] of Object.entries(pseudoStates)) {
+          const entries = Object.entries(pseudoStyles).filter(([k]) => !k.startsWith('_'));
+          if (entries.length === 0) continue;
+          
+          css += `\n.${className}:${pseudoName} {\n`;
+          for (const [prop] of entries) {
+            const kebabProp = toKebabCase(prop);
+            css += `  ${kebabProp}: var(--${className}-${pseudoName}-${kebabProp});\n`;
+          }
+          css += "}\n";
         }
       }
 
@@ -251,35 +289,34 @@ export default function chaincssPlugin(
 
     if (!silent) summary(`Pre-compiling ${chainFiles.length} styling definition file(s)...`);
 
-    const concurrency = Math.min(cpus().length, chainFiles.length || 1);
+    // FIX: Process SEQUENTIALLY to avoid race conditions in ChainCSS compiler
+    // The compiler has shared mutable state (caches, registries) that isn't
+    // safe for parallel access. Parallel compilation causes missing styles
+    // (especially hover pseudo-classes) on machines with fewer CPU cores.
     let successCount = 0;
-    let index = 0;
 
-    async function worker() {
-      while (index < chainFiles.length) {
-        const i = index++;
-        const file = chainFiles[i];
-        try {
-          const { css, classMap, dynamicMap } = await compileFile(file);
-          // FIX: always update cache, even if css is temporarily empty, to keep key
-          updateCSS(file, css || "");
-          if (css.trim()) {
-            const cssPath = file.replace(CHAIN_FILE_RE, ".css");
-            ensureDir(path.dirname(cssPath));
-            await fsp.writeFile(cssPath, formatCSS(css, false), "utf8");
-          }
-          const classPath = file.replace(CHAIN_FILE_RE, ".class.js");
-          const content = writeClassFileContent(classMap, dynamicMap);
-          ensureDir(path.dirname(classPath));
-          await fsp.writeFile(classPath, content, "utf8");
-          successCount++;
-        } catch (err) {
-          logError(`Pre-compile failure on ${path.basename(file)}: ${(err as Error).message}`);
+    for (const file of chainFiles) {
+      try {
+        const { css, classMap, dynamicMap } = await compileFile(file);
+        // Always update cache, even if css is temporarily empty
+        updateCSS(file, css || "");
+        
+        if (css.trim()) {
+          const cssPath = file.replace(CHAIN_FILE_RE, ".css");
+          ensureDir(path.dirname(cssPath));
+          await fsp.writeFile(cssPath, formatCSS(css, false), "utf8");
         }
+        
+        const classPath = file.replace(CHAIN_FILE_RE, ".class.js");
+        const content = writeClassFileContent(classMap, dynamicMap);
+        ensureDir(path.dirname(classPath));
+        await fsp.writeFile(classPath, content, "utf8");
+        
+        successCount++;
+      } catch (err) {
+        logError(`Pre-compile failure on ${path.basename(file)}: ${(err as Error).message}`);
       }
     }
-    const workers = Array.from({ length: concurrency }, () => worker());
-    await Promise.all(workers);
 
     if (!silent) summary(`Pre-compiled ${successCount}/${chainFiles.length} style manifests successfully.`);
     return getCSS();
@@ -896,13 +933,15 @@ export default function chaincssPlugin(
             tag: "link",
             attrs: {
               rel: "stylesheet",
-              href: `${base}assets/chaincss.css`,
+              // Use base-relative path that Vite will resolve correctly
+              href: path.posix.join(base, 'assets/chaincss.css'),
               "data-chaincss": "",
             },
             injectTo: "head",
           },
         ];
       }
+      // Dev mode unchanged
       return [
         {
           tag: "style",
@@ -916,6 +955,6 @@ export default function chaincssPlugin(
           injectTo: "head",
         },
       ];
-    },
+    }
   };
 }

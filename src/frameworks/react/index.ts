@@ -6,6 +6,9 @@
 
 import React, { useMemo, useEffect, createContext, useContext } from "react";
 import type { UseChainStylesOptions } from "@shared/types/index.js";
+import { kebabCase } from "../core/utils.js";
+
+const toKebabCase = kebabCase;
 
 interface StyleDefinition {
   className?: string;
@@ -49,50 +52,69 @@ export function useChainStyles(
   cx: (...names: any[]) => string;
   cn: (...names: any[]) => string;
 } {
-  // Build dependency array for useMemo from deps object values
   const depValues = Object.values(deps);
 
   return useMemo(() => {
     const classes: Record<string, string> = {};
     const styleVars: Record<string, string> = {};
-
-    // Merge theme and component deps into a single context object
     const context = { ...deps };
 
     for (const [key, styleObj] of Object.entries(styles)) {
       if (!styleObj) continue;
 
-      // Get the base class name
       const baseClass =
         styleObj.className ||
         styleObj.selectors?.[0]?.replace(/^\./, "") ||
         key;
       classes[key] = baseClass;
 
-      // Evaluate dynamic functions into CSS custom properties
       if (styleObj.dynamic) {
-        for (const [prop, fn] of Object.entries(styleObj.dynamic)) {
-          if (typeof fn === "function") {
+        // Process ALL entries in dynamic
+        for (const [prop, value] of Object.entries(styleObj.dynamic)) {
+          // Skip internal keys
+          if (prop.startsWith('_')) continue;
+
+          // ============================================
+          // CASE 1: Base dynamic property (function)
+          // ============================================
+          if (typeof value === "function") {
             try {
-              // Pass merged context (theme + deps) to the function
-              const value = (fn as Function)(context);
-
-              // Convert camelCase to kebab-case for CSS custom property name
-              const cleanProp = prop
-                .replace(/([A-Z])/g, "-$1")
-                .toLowerCase()
-                .replace(/^-/, "");
+              const result = (value as Function)(context);
+              const cleanProp = toKebabCase(prop);
               const varName = `--${baseClass}-${cleanProp}`;
-
-              if (value !== undefined && value !== null) {
-                styleVars[varName] = String(value);
+              if (result !== undefined && result !== null) {
+                styleVars[varName] = String(result);
               }
             } catch (err) {
               if (options.debug) {
-                console.warn(
-                  `[ChainCSS] Error evaluating dynamic style "${key}.${prop}":`,
-                  err,
-                );
+                console.warn(`[ChainCSS] Error evaluating "${key}.${prop}":`, err);
+              }
+            }
+          }
+          // ============================================
+          // CASE 2: Pseudo-class object ('&:hover', 'hover', etc.)
+          // ============================================
+          else if (value && typeof value === 'object' && !Array.isArray(value)) {
+            // Extract pseudo name from '&:hover' or 'hover'
+            const pseudoName = prop.replace(/^&:/, '').replace(/^:/, '');
+            
+            // Process nested dynamic properties in the pseudo-class
+            for (const [nestedProp, nestedValue] of Object.entries(value)) {
+              if (nestedProp.startsWith('_')) continue;
+              
+              if (typeof nestedValue === "function") {
+                try {
+                  const result = (nestedValue as Function)(context);
+                  const cleanProp = toKebabCase(nestedProp);
+                  const varName = `--${baseClass}-${pseudoName}-${cleanProp}`;
+                  if (result !== undefined && result !== null) {
+                    styleVars[varName] = String(result);
+                  }
+                } catch (err) {
+                  if (options.debug) {
+                    console.warn(`[ChainCSS] Error evaluating "${key}.${pseudoName}.${nestedProp}":`, err);
+                  }
+                }
               }
             }
           }
