@@ -1,6 +1,6 @@
 {
   "name": "chaincss",
-  "version": "2.15.17",
+  "version": "2.15.18",
   "description": "The design-system compiler with compile-time accessibility and multi-target emission.",
   "type": "module",
   "main": "./dist/index.js",
