@@ -26,6 +26,14 @@ interface StyleCollectorLike {
   when(c: boolean, fn: any): any;
   keyframes(n: string, s: any): any;
   fontFace(p: any): any;
+  scope(q: string, fn: any): any;
+  startingStyle(s: string, fn: any): any;
+  viewTransition(n: string, fn: any): any;
+  property(n: string, d: any): any;
+  counterStyle(n: string, d: any): any;
+  page(s: string, p: any): any;
+  import(u: string, m?: string): any;
+  namespace(p: string, u: string): any;
   grid(o?: any): any;
   flex(o?: any): any;
   background(o?: any): any;
@@ -127,7 +135,7 @@ const TERMINAL = new Map<string, Handler>([
 ]);
 
 const CHAINABLE = new Map<string, Handler>([
-  ...[
+    ...[
     "hover",
     "focus",
     "active",
@@ -135,9 +143,19 @@ const CHAINABLE = new Map<string, Handler>([
     "disabled",
     "before",
     "after",
-    "end",
     "placeholder",
-  ].map((k) => [k, noArg(k)] as const),
+  ].map((k) => [k, (t: StyleCollectorLike, p: any, ...args: any[]) => {
+    if (args.length > 0) {
+      // Forward the callback to the StyleCollector
+      t[k](...args);
+    } else {
+      // No callback - just enter pseudo mode
+      t[k]();
+    }
+    return p;
+  }] as const),
+  // "end" still uses noArg because it takes no arguments
+  ["end", noArg("end")],
   [
     "debug",
     (t, p) => {
@@ -198,6 +216,9 @@ const CHILD = new Map<string, Handler>([
   ...["media", "supports", "container", "layer", "nest"].map(
     (k) => [k, twoArgs(k)] as const,
   ),
+  ["scope", twoArgs("scope")],
+  ["startingStyle", twoArgs("startingStyle")],
+  ["viewTransition", twoArgs("viewTransition")],
   [
     "children",
     (t, p, fn: Function) => {
@@ -226,6 +247,25 @@ const SPECIAL = new Map<string, Handler>([
     "fontFace",
     (t, p, pr: any) => {
       t.fontFace(pr);
+      return p;
+    },
+  ],
+  ["property", (t, p, n: string, d: any) => { t.property(n, d); return p; }],
+  ["counterStyle", (t, p, n: string, d: any) => { t.counterStyle(n, d); return p; }],
+  ["page", (t, p, s: string, pr: any) => { t.page(s, pr); return p; }],
+  ["import", (t, p, u: string, m?: string) => { t.import(u, m); return p; }],
+  ["namespace", (t, p, pr: string, u: string) => { t.namespace(pr, u); return p; }],
+  [
+    "pseudo",
+    (t, p, styles: Record<string, any>) => {
+      t.pseudo(styles);
+      return p;
+    },
+  ],
+  [
+    "atrule",
+    (t, p, styles: Record<string, any>) => {
+      t.atrule(styles);
       return p;
     },
   ],

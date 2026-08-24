@@ -384,6 +384,45 @@ const targets = [
     format: 'cjs',
     packages: 'external',
   },
+    // Playground entry (browser-safe compiler bridge for the website playground)
+  {
+    name: 'playground-entry',
+    entryPoints: ['src/playground-entry.ts'],
+    outfile: 'dist/playground-entry.js',
+    platform: 'browser',
+    format: 'esm',
+    external: ["react", "react-dom", "vue", "svelte", "url", "fs", "fs/promises", "module", "path", "node:fs", "node:fs/promises", "node:path", "chalk"],
+    define: {
+      'process.env.NODE_ENV': '"production"',
+      'process.env.CHAINCSS_METRICS': '"false"',
+      'process.platform': '"browser"',
+      'process.stdout': 'undefined',
+      'process.stderr': 'undefined',
+      'process.env.NO_COLOR': '"true"',
+      'process.env.WT_SESSION': 'undefined',
+      'process.env.TERM': 'undefined',
+      'process.env.LANG': 'undefined',
+    },
+  },
+  {
+    name: 'playground-entry-cjs',
+    entryPoints: ['src/playground-entry.ts'],
+    outfile: 'dist/playground-entry.cjs',
+    platform: 'browser',
+    format: 'cjs',
+    external: ["react", "react-dom", "vue", "svelte", "url", "fs", "fs/promises", "module", "path", "node:fs", "node:fs/promises", "node:path", "chalk"],
+    define: {
+      'process.env.NODE_ENV': '"production"',
+      'process.env.CHAINCSS_METRICS': '"false"',
+      'process.platform': '"browser"',
+      'process.stdout': 'undefined',
+      'process.stderr': 'undefined',
+      'process.env.NO_COLOR': '"true"',
+      'process.env.WT_SESSION': 'undefined',
+      'process.env.TERM': 'undefined',
+      'process.env.LANG': 'undefined',
+    },
+  },
 ];
 
 // ============================================================================

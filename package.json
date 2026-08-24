@@ -89,6 +89,10 @@
       "types": "./dist/token-api.d.ts",
       "import": "./dist/token-api.js",
       "require": "./dist/token-api.cjs"
+    },
+    "./playground": {
+      "import": "./dist/playground-entry.js",
+      "require": "./dist/playground-entry.cjs"
     }
   },
   "scripts": {

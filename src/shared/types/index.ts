@@ -164,9 +164,65 @@ export type AtRule =
       history?: any[];
     }
   | {
-      type: "counter-style" | "property";
+      type: "counter-style";
       name?: string;
-      descriptors?: Record<string, string>;
+      properties?: Record<string, string>;
+      id?: string;
+      source?: { file?: string; component?: string };
+      history?: any[];
+    }
+  | {
+      type: "property";
+      name?: string;
+      properties?: Record<string, string>;
+      id?: string;
+      source?: { file?: string; component?: string };
+      history?: any[];
+    }
+  | {
+      type: "scope";
+      query?: string;
+      styles?: StyleObject;
+      id?: string;
+      source?: { file?: string; component?: string };
+      history?: any[];
+    }
+  | {
+      type: "starting-style";
+      query?: string;
+      styles?: StyleObject;
+      id?: string;
+      source?: { file?: string; component?: string };
+      history?: any[];
+    }
+  | {
+      type: "view-transition";
+      name?: string;
+      styles?: StyleObject;
+      id?: string;
+      source?: { file?: string; component?: string };
+      history?: any[];
+    }
+  | {
+      type: "page";
+      query?: string;
+      properties?: Record<string, string>;
+      id?: string;
+      source?: { file?: string; component?: string };
+      history?: any[];
+    }
+  | {
+      type: "import";
+      query?: string;
+      name?: string;
+      id?: string;
+      source?: { file?: string; component?: string };
+      history?: any[];
+    }
+  | {
+      type: "namespace";
+      query?: string;
+      name?: string;
       id?: string;
       source?: { file?: string; component?: string };
       history?: any[];
@@ -613,6 +669,8 @@ export function isAtRule(value: unknown): value is AtRule {
   return [
     "media", "keyframes", "font-face", "supports",
     "container", "layer", "counter-style", "property",
+    "scope", "starting-style", "view-transition",
+    "page", "import", "namespace",
   ].includes(type as string);
 }
 

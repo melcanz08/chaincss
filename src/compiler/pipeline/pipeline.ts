@@ -53,6 +53,8 @@ import type {
   LoweringResult,
 } from "./pipeline-types.js";
 import { cloneIR } from "./ir/utils.js";
+import { cssValueValidator } from "./validators/css-value-validator.js";
+import { intentSuggestionValidator } from "./validators/intent-suggestion-validator.js";
 
 // ============================================================================
 // Metrics & Observability
@@ -259,9 +261,9 @@ const dynamicAnimationResolver: OptimizationPass = {
     const activeAnimationNames = new Set<string>();
 
     function kebabProp(prop: string): string {
-  if (prop.startsWith("--")) return prop;
-  return prop.replace(/([A-Z])/g, "-$1").toLowerCase();
-}
+      if (prop.startsWith("--")) return prop;
+      return prop.replace(/([A-Z])/g, "-$1").toLowerCase();
+    }
 
     function collectAnimationNames(rules: IRRule[]) {
       for (const rule of rules) {
@@ -385,7 +387,7 @@ const PRESETS: Record<PipelinePreset, Partial<PipelineConfig>> = {
   },
   ci: {
     normalization: BASE_NORMALIZATION,
-    validation: [accessibilityValidator, conflictValidator, ideDiagnostics],
+    validation: [cssValueValidator, accessibilityValidator, conflictValidator, ideDiagnostics],
     analysis: [responsiveAnalyzer, layoutAnalyzer, patternDetector],
     optimization: [
       astOptimizer,
@@ -402,7 +404,7 @@ const PRESETS: Record<PipelinePreset, Partial<PipelineConfig>> = {
   },
   lint: {
     normalization: BASE_NORMALIZATION,
-    validation: [accessibilityValidator, conflictValidator, ideDiagnostics],
+    validation: [cssValueValidator, accessibilityValidator, conflictValidator, ideDiagnostics, intentSuggestionValidator],
     analysis: [],
     optimization: [],
     lowering: BASE_LOWERING,

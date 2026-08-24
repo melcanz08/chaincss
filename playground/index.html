@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ChainCSS Playground</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>ChainCSS <span>Playground</span></h1>
+      <button id="compile-btn">Compile (Ctrl+Enter)</button>
+    </header>
+    <main>
+      <div class="pane top-left">
+        <div class="pane-header">ChainCSS JavaScript Input (chain API — end with .$el())</div>
+        <div id="editor"></div>
+      </div>
+      
+      <div class="pane top-right">
+        <div class="pane-header">
+          Compiled CSS
+          <button id="copy-css-btn" class="copy-btn">📋 Copy</button>
+        </div>
+        <pre id="output-css"></pre>
+      </div>
+      
+      <div class="pane diagnostics-pane" id="diagnostics-pane" style="display: none;">
+        <div class="pane-header">Diagnostics <span id="diag-counter"></span></div>
+        <div id="diagnostics-list"></div>
+      </div>
+      
+      <div class="pane bottom">
+        <div class="pane-header">
+          AST / IR Inspector
+          <div style="float: right;">
+            <button id="copy-json-btn" class="copy-btn">📋 Copy</button>
+            <button id="table-view-btn" class="view-btn active">📊 Table</button>
+            <button id="json-view-btn" class="view-btn">📝 JSON</button>
+          </div>
+        </div>
+        <div id="ast-table-container" style="display: none;"></div>
+        <pre id="output-ast"></pre>
+      </div>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

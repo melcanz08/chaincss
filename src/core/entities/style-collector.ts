@@ -72,7 +72,7 @@ export class StyleCollector {
   private _intents: string[] = [];
 
   constructor(
-    private options?: { debug?: boolean; classPrefix?: string; tokens?: any },
+  private options?: { debug?: boolean; classPrefix?: string; tokens?: any },
   ) {
     this.props = new PropertyStore(options?.tokens);
     this.rules = new RuleBuilder();
@@ -221,24 +221,79 @@ export class StyleCollector {
     if (typeof options === "string") return this.set("flex", options);
     if (typeof options === "object") {
       if (this.getDisplay() !== "inline-flex") this.set("display", "flex");
-      if (options.direction) this.set("flexDirection", options.direction as any);
-      if (options.wrap) this.set("flexWrap", options.wrap as any);
-      if (options.grow !== undefined) this.set("flexGrow", options.grow as any);
-      if (options.shrink !== undefined) this.set("flexShrink", options.shrink as any);
-      if (options.basis !== undefined) this.set("flexBasis", options.basis as any);
-      if (options.align) this.set("alignItems", options.align as any);
-      if (options.justify) this.set("justifyContent", options.justify as any);
-      if (options.alignContent) this.set("alignContent", options.alignContent as any);
-      if (options.alignSelf) this.set("alignSelf", options.alignSelf as any);
-      if (options.gap !== undefined) this.set("gap", options.gap as any);
-      if (options.d && !options.direction) this.set("flexDirection", options.d as any);
-      if (options.w && !options.wrap) this.set("flexWrap", options.w as any);
-      if (options.gr !== undefined && options.grow === undefined) this.set("flexGrow", options.gr as any);
-      if (options.sh !== undefined && options.shrink === undefined) this.set("flexShrink", options.sh as any);
-      if (options.b !== undefined && options.basis === undefined) this.set("flexBasis", options.b as any);
-      if (options.ai && !options.align) this.set("alignItems", options.ai as any);
-      if (options.jc && !options.justify) this.set("justifyContent", options.jc as any);
-      if (options.f) this.set("flex", options.f as any);
+
+      // Direction alias map for shorthand values
+      const directionMap: Record<string, string> = {
+        'row': 'row',
+        'row-reverse': 'row-reverse',
+        'col': 'column',
+        'column': 'column',
+        'column-reverse': 'column-reverse',
+      };
+
+      // Helper to resolve Dynamic<T> values
+      const resolveDynamic = (val: any): any => {
+        return typeof val === 'function' ? val() : val;
+      };
+
+      if (options.direction) {
+        const direction = resolveDynamic(options.direction);
+        this.set("flexDirection", directionMap[direction] || direction);
+      }
+      if (options.wrap) {
+        this.set("flexWrap", resolveDynamic(options.wrap));
+      }
+      if (options.grow !== undefined) {
+        this.set("flexGrow", resolveDynamic(options.grow));
+      }
+      if (options.shrink !== undefined) {
+        this.set("flexShrink", resolveDynamic(options.shrink));
+      }
+      if (options.basis !== undefined) {
+        this.set("flexBasis", resolveDynamic(options.basis));
+      }
+      if (options.align) {
+        this.set("alignItems", resolveDynamic(options.align));
+      }
+      if (options.justify) {
+        this.set("justifyContent", resolveDynamic(options.justify));
+      }
+      if (options.alignContent) {
+        this.set("alignContent", resolveDynamic(options.alignContent));
+      }
+      if (options.alignSelf) {
+        this.set("alignSelf", resolveDynamic(options.alignSelf));
+      }
+      if (options.gap !== undefined) {
+        this.set("gap", resolveDynamic(options.gap));
+      }
+
+      // Shorthand aliases
+      if (options.d && !options.direction) {
+        const dValue = resolveDynamic(options.d);
+        this.set("flexDirection", directionMap[dValue] || dValue);
+      }
+      if (options.w && !options.wrap) {
+        this.set("flexWrap", resolveDynamic(options.w));
+      }
+      if (options.gr !== undefined && options.grow === undefined) {
+        this.set("flexGrow", resolveDynamic(options.gr));
+      }
+      if (options.sh !== undefined && options.shrink === undefined) {
+        this.set("flexShrink", resolveDynamic(options.sh));
+      }
+      if (options.b !== undefined && options.basis === undefined) {
+        this.set("flexBasis", resolveDynamic(options.b));
+      }
+      if (options.ai && !options.align) {
+        this.set("alignItems", resolveDynamic(options.ai));
+      }
+      if (options.jc && !options.justify) {
+        this.set("justifyContent", resolveDynamic(options.jc));
+      }
+      if (options.f) {
+        this.set("flex", resolveDynamic(options.f));
+      }
     }
     return this;
   }
@@ -497,52 +552,52 @@ export class StyleCollector {
   hover(): this;
   hover(fn: (c: ChainProxy) => void): this;
   hover(fn?: (c: ChainProxy) => void): this {
-    return fn ? this.pseudoWithCallback("hover", fn) : this.pseudo("hover");
+    return fn ? this.pseudoWithCallback("hover", fn) : this.states("hover");
   }
 
   focus(): this;
   focus(fn: (c: ChainProxy) => void): this;
   focus(fn?: (c: ChainProxy) => void): this {
-    return fn ? this.pseudoWithCallback("focus", fn) : this.pseudo("focus");
+    return fn ? this.pseudoWithCallback("focus", fn) : this.states("focus");
   }
 
   active(): this;
   active(fn: (c: ChainProxy) => void): this;
   active(fn?: (c: ChainProxy) => void): this {
-    return fn ? this.pseudoWithCallback("active", fn) : this.pseudo("active");
+    return fn ? this.pseudoWithCallback("active", fn) : this.states("active");
   }
 
   checked(): this;
   checked(fn: (c: ChainProxy) => void): this;
   checked(fn?: (c: ChainProxy) => void): this {
-    return fn ? this.pseudoWithCallback("checked", fn) : this.pseudo("checked");
+    return fn ? this.pseudoWithCallback("checked", fn) : this.states("checked");
   }
 
   disabled(): this;
   disabled(fn: (c: ChainProxy) => void): this;
   disabled(fn?: (c: ChainProxy) => void): this {
-    return fn ? this.pseudoWithCallback("disabled", fn) : this.pseudo("disabled");
+    return fn ? this.pseudoWithCallback("disabled", fn) : this.states("disabled");
   }
 
   before(): this;
   before(fn: (c: ChainProxy) => void): this;
   before(fn?: (c: ChainProxy) => void): this {
     // Fix #4: ::before pseudo-element
-    return fn ? this.pseudoWithCallback("::before", fn) : this.pseudo("::before");
+    return fn ? this.pseudoWithCallback("::before", fn) : this.states("::before");
   }
 
   after(): this;
   after(fn: (c: ChainProxy) => void): this;
   after(fn?: (c: ChainProxy) => void): this {
     // Fix #4: ::after pseudo-element
-    return fn ? this.pseudoWithCallback("::after", fn) : this.pseudo("::after");
+    return fn ? this.pseudoWithCallback("::after", fn) : this.states("::after");
   }
 
   placeholder(): this;
   placeholder(fn: (c: ChainProxy) => void): this;
   placeholder(fn?: (c: ChainProxy) => void): this {
     // Fix #4: ::placeholder pseudo-element
-    return fn ? this.pseudoWithCallback("::placeholder", fn) : this.pseudo("::placeholder");
+    return fn ? this.pseudoWithCallback("::placeholder", fn) : this.states("::placeholder");
   }
 
   private pseudoWithCallback(name: string, fn: (c: ChainProxy) => void): this {
@@ -552,10 +607,54 @@ export class StyleCollector {
     return this;
   }
 
-  private pseudo(name: string): this {
+  private states(name: string): this {
     if (this.pseudoStore && !this.pseudoStore.isEmpty()) this.end();
     this.pseudoStore = new PropertyStore(this.options?.tokens);
     this.pseudoName = name;
+    return this;
+  }
+
+  pseudo(styles: Record<string, any>): this {
+    const pseudoElements = new Set([
+      "before", "after", "placeholder", "selection", "marker",
+      "first-line", "first-letter", "backdrop",
+      "file-selector-button", "spelling-error", "grammar-error",
+    ]);
+
+    for (const [pseudoKey, pseudoStyles] of Object.entries(styles)) {
+      let selector: string;
+      
+      // Handle explicit :: prefix
+      if (pseudoKey.startsWith("::")) {
+        selector = `&${pseudoKey}`;
+      }
+      // Handle functional pseudo-classes like nth-child(2n+1)
+      else if (pseudoKey.includes("(")) {
+        selector = `&:${pseudoKey}`;
+      }
+      // Handle known pseudo-elements
+      else if (pseudoElements.has(pseudoKey)) {
+        selector = `&::${pseudoKey}`;
+      }
+      // Handle regular pseudo-classes
+      else {
+        selector = `&:${pseudoKey}`;
+      }
+      
+      // If pseudoStyles is a function (callback), build the child
+      if (typeof pseudoStyles === "function") {
+        const childResult = this.buildChild(pseudoStyles);
+        this.rules.addNested(selector, childResult);
+      }
+      // If pseudoStyles is a single value, wrap it
+      else if (typeof pseudoStyles === "string" || typeof pseudoStyles === "number") {
+        this.rules.addNested(selector, { [pseudoKey.split("(")[0]]: pseudoStyles } as any);
+      }
+      // If pseudoStyles is an object of properties
+      else if (typeof pseudoStyles === "object" && pseudoStyles !== null) {
+        this.rules.addNested(selector, pseudoStyles as any);
+      }
+    }
     return this;
   }
 
@@ -601,6 +700,265 @@ export class StyleCollector {
   }
   fontFace(properties: Record<string, string>): this {
     this.rules.addFontFace(properties);
+    return this;
+  }
+
+  scope(scopeQuery: string, fn: (c: ChainProxy) => void): this {
+    this.rules.addScope(scopeQuery, this.buildChild(fn));
+    return this;
+  }
+
+  startingStyle(selector: string, fn: (c: ChainProxy) => void): this {
+    this.rules.addStartingStyle(selector, this.buildChild(fn));
+    return this;
+  }
+
+  viewTransition(name: string, fn: (c: ChainProxy) => void): this {
+    this.rules.addViewTransition(name, this.buildChild(fn));
+    return this;
+  }
+
+  property(name: string, descriptor: Record<string, any>): this {
+    this.rules.addProperty(name, descriptor);
+    return this;
+  }
+
+  counterStyle(name: string, styleDef: Record<string, any>): this {
+    this.rules.addCounterStyle(name, styleDef);
+    return this;
+  }
+
+  page(selector: string, properties: Record<string, any>): this {
+    this.rules.addPage(selector, properties);
+    return this;
+  }
+
+  import(url: string, mediaQuery?: string): this {
+    this.rules.addImport(url, mediaQuery);
+    return this;
+  }
+
+  namespace(prefix: string, url: string): this {
+    this.rules.addNamespace(prefix, url);
+    return this;
+  }
+
+  atrule(styles: Record<string, any>): this {
+    for (const [atRuleType, atRuleConfig] of Object.entries(styles)) {
+      switch (atRuleType) {
+        // ============================================================
+        // CONDITIONAL
+        // ============================================================
+        case "media": {
+          const query = typeof atRuleConfig === "function" 
+            ? (atRuleConfig as any)._query || ""
+            : atRuleConfig.query || atRuleConfig.condition || "";
+          const styles = typeof atRuleConfig === "function"
+            ? this.buildChild(atRuleConfig)
+            : atRuleConfig.styles || {};
+          this.rules.addMedia(query, styles as any);
+          break;
+        }
+        case "supports": {
+          const condition = typeof atRuleConfig === "function"
+            ? (atRuleConfig as any)._condition || ""
+            : atRuleConfig.query || atRuleConfig.condition || "";
+          const styles = typeof atRuleConfig === "function"
+            ? this.buildChild(atRuleConfig)
+            : atRuleConfig.styles || {};
+          this.rules.addSupports(condition, styles as any);
+          break;
+        }
+        case "container": {
+          const query = typeof atRuleConfig === "function"
+            ? (atRuleConfig as any)._query || ""
+            : atRuleConfig.query || atRuleConfig.condition || "";
+          const styles = typeof atRuleConfig === "function"
+            ? this.buildChild(atRuleConfig)
+            : atRuleConfig.styles || {};
+          this.rules.addContainer(query, styles as any);
+          break;
+        }
+
+        // ============================================================
+        // ARCHITECTURE
+        // ============================================================
+        case "layer": {
+          const name = typeof atRuleConfig === "function"
+            ? (atRuleConfig as any)._name || ""
+            : atRuleConfig.name || "";
+          const styles = typeof atRuleConfig === "function"
+            ? this.buildChild(atRuleConfig)
+            : atRuleConfig.styles || {};
+          this.rules.addLayer(name, styles as any);
+          break;
+        }
+        case "scope": {
+          const query = atRuleConfig.query || "";
+          const styles = typeof atRuleConfig === "function"
+            ? this.buildChild(atRuleConfig)
+            : atRuleConfig.styles || {};
+          this.rules.addScope(query, styles as any);
+          break;
+        }
+        case "import": {
+          const url = atRuleConfig.url || "";
+          const mediaQuery = atRuleConfig.mediaQuery || atRuleConfig.media || "";
+          this.rules.addImport(url, mediaQuery);
+          break;
+        }
+        case "namespace": {
+          const prefix = atRuleConfig.prefix || "";
+          const url = atRuleConfig.url || "";
+          this.rules.addNamespace(prefix, url);
+          break;
+        }
+        case "charset": {
+          const encoding = atRuleConfig.encoding || atRuleConfig.value || "UTF-8";
+          this.rules.addAtRule({ type: "charset", query: encoding } as any);
+          break;
+        }
+        case "nest": {
+          const selector = atRuleConfig.selector || "&";
+          const styles = typeof atRuleConfig === "function"
+            ? this.buildChild(atRuleConfig)
+            : atRuleConfig.styles || {};
+          this.rules.addNested(selector, styles as any);
+          break;
+        }
+        case "document": {
+          const url = atRuleConfig.url || atRuleConfig.query || "";
+          const styles = typeof atRuleConfig === "function"
+            ? this.buildChild(atRuleConfig)
+            : atRuleConfig.styles || {};
+          this.rules.addAtRule({ type: "document", query: url, styles: styles as any } as any);
+          break;
+        }
+        case "viewport": {
+          const styles = atRuleConfig.styles || atRuleConfig;
+          this.rules.addAtRule({ type: "viewport", styles: styles as any } as any);
+          break;
+        }
+
+        // ============================================================
+        // ANIMATION
+        // ============================================================
+        case "keyframes": {
+          const name = atRuleConfig.name || "";
+          const steps = atRuleConfig.steps || atRuleConfig.frames || {};
+          this.rules.addKeyframes(name, steps);
+          break;
+        }
+        case "starting-style": {
+          const query = atRuleConfig.query || atRuleConfig.selector || "";
+          const styles = typeof atRuleConfig === "function"
+            ? this.buildChild(atRuleConfig)
+            : atRuleConfig.styles || {};
+          this.rules.addStartingStyle(query, styles as any);
+          break;
+        }
+        case "view-transition": {
+          const name = atRuleConfig.name || "";
+          const styles = typeof atRuleConfig === "function"
+            ? this.buildChild(atRuleConfig)
+            : atRuleConfig.styles || {};
+          this.rules.addViewTransition(name, styles as any);
+          break;
+        }
+        case "position-try": {
+          const name = atRuleConfig.name || "";
+          const styles = atRuleConfig.styles || {};
+          this.rules.addAtRule({ type: "position-try", name: name, styles: styles as any } as any);
+          break;
+        }
+
+        // ============================================================
+        // TYPOGRAPHY
+        // ============================================================
+        case "font-face": {
+          const properties = atRuleConfig.properties || atRuleConfig;
+          this.rules.addFontFace(properties);
+          break;
+        }
+        case "font-feature-values": {
+          const name = atRuleConfig.name || atRuleConfig.fontFamily || "";
+          const styles = atRuleConfig.styles || atRuleConfig.values || {};
+          this.rules.addAtRule({ type: "font-feature-values", name: name, styles: styles as any } as any);
+          break;
+        }
+        case "font-palette-values": {
+          const name = atRuleConfig.name || "";
+          const styles = atRuleConfig.styles || atRuleConfig.values || {};
+          this.rules.addAtRule({ type: "font-palette-values", name: name, styles: styles as any } as any);
+          break;
+        }
+
+        // ============================================================
+        // CUSTOM DATA
+        // ============================================================
+        case "property": {
+          const name = atRuleConfig.name || "";
+          const descriptor = atRuleConfig.descriptor || atRuleConfig;
+          this.rules.addProperty(name, descriptor);
+          break;
+        }
+        case "counter-style": {
+          const name = atRuleConfig.name || "";
+          const styleDef = atRuleConfig.styleDef || atRuleConfig.styles || atRuleConfig;
+          this.rules.addCounterStyle(name, styleDef);
+          break;
+        }
+        case "color-profile": {
+          const name = atRuleConfig.name || "";
+          const descriptor = atRuleConfig.descriptor || atRuleConfig;
+          this.rules.addAtRule({ type: "color-profile", name: name, properties: descriptor } as any);
+          break;
+        }
+        case "custom-media": {
+          const name = atRuleConfig.name || "";
+          const query = atRuleConfig.query || atRuleConfig.value || "";
+          this.rules.addAtRule({ type: "custom-media", name: name, query: query } as any);
+          break;
+        }
+        case "custom-selector": {
+          const name = atRuleConfig.name || "";
+          const selector = atRuleConfig.selector || "";
+          this.rules.addAtRule({ type: "custom-selector", name: name, query: selector } as any);
+          break;
+        }
+
+        // ============================================================
+        // PRINT
+        // ============================================================
+        case "page": {
+          const selector = atRuleConfig.selector || "";
+          const properties = atRuleConfig.properties || atRuleConfig.styles || {};
+          this.rules.addPage(selector, properties);
+          break;
+        }
+        case "top-left": case "top-right": case "bottom-left": case "bottom-right":
+        case "top-center": case "bottom-center": case "left-top": case "left-bottom":
+        case "right-top": case "right-bottom": {
+          const properties = atRuleConfig.properties || atRuleConfig.styles || {};
+          this.rules.addAtRule({ type: atRuleType, properties: properties as any } as any);
+          break;
+        }
+        case "left": case "right": {
+          const properties = atRuleConfig.properties || atRuleConfig.styles || {};
+          this.rules.addAtRule({ type: atRuleType, properties: properties as any } as any);
+          break;
+        }
+
+        default: {
+          // Unknown at-rule — add generically
+          const query = atRuleConfig.query || atRuleConfig.condition || "";
+          const name = atRuleConfig.name || "";
+          const styles = atRuleConfig.styles || atRuleConfig;
+          this.rules.addAtRule({ type: atRuleType, query: query, name: name, styles: styles as any } as any);
+          break;
+        }
+      }
+    }
     return this;
   }
 

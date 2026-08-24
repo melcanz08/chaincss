@@ -194,7 +194,15 @@ export interface IRAtRule {
     | "font-face"
     | "supports"
     | "container"
-    | "layer";
+    | "layer"
+    | "scope"
+    | "starting-style"
+    | "view-transition"
+    | "property"
+    | "counter-style"
+    | "page"
+    | "import"
+    | "namespace";
   query?: string; // Media query text (e.g. '(min-width: 768px)')
   name?: string; // Keyframes identifier name (e.g. 'fade-in')
   declarations: IRDeclaration[];

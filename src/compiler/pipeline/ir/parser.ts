@@ -322,7 +322,7 @@ export function parseIR(
         const templateAtRule: IRAtRule = {
           id: nextId("atrule"),
           type,
-          query: atRule.query,
+          query: atRule.query || (atRule as any).condition || "",
           name: atRule.name,
           declarations: [],
           nestedRules: [],
@@ -330,12 +330,85 @@ export function parseIR(
           source: { file: sourceFile, component: componentName },
           history: [record("parser", "created", undefined, `Parsed @${type} block`)],
         };
+        // Handle @media, @supports, @container, @layer (they use "styles")
         if (atRule.styles && typeof atRule.styles === "object") {
           for (const [prop, value] of Object.entries(atRule.styles)) {
             if (typeof value === "string" || typeof value === "number") {
               templateAtRule.declarations.push(createDeclaration(normalizeProperty(prop), value, templateAtRule.source));
             }
           }
+        }
+        // Handle @keyframes (it uses "steps")
+        if (type === "keyframes" && (atRule as any).steps && typeof (atRule as any).steps === "object") {
+          const steps = (atRule as any).steps;
+          for (const [keyText, declarations] of Object.entries(steps)) {
+            const frame: IRKeyframeFrame = {
+              id: nextId("frame"),
+              keyText: keyText,
+              declarations: [],
+              source: { file: sourceFile, component: componentName },
+            };
+            if (declarations && typeof declarations === "object") {
+              for (const [prop, val] of Object.entries(declarations)) {
+                if (typeof val === "string" || typeof val === "number") {
+                  frame.declarations.push(
+                    createDeclaration(normalizeProperty(prop), val, frame.source),
+                  );
+                }
+              }
+            }
+            if (!templateAtRule.keyframes) templateAtRule.keyframes = [];
+            templateAtRule.keyframes.push(frame);
+          }
+        }
+
+        // Handle @font-face (it uses "properties")
+        if (type === "font-face" && (atRule as any).properties && typeof (atRule as any).properties === "object") {
+          const properties = (atRule as any).properties;
+          for (const [prop, value] of Object.entries(properties)) {
+            if (typeof value === "string" || typeof value === "number") {
+              templateAtRule.declarations.push(createDeclaration(normalizeProperty(prop), value, templateAtRule.source));
+            }
+          }
+        }
+        // Handle @property (it uses "properties")
+        if (type === "property" && (atRule as any).properties) {
+          const props = (atRule as any).properties;
+          for (const [prop, value] of Object.entries(props)) {
+            if (typeof value === "string" || typeof value === "number") {
+              templateAtRule.declarations.push(createDeclaration(normalizeProperty(prop), value, templateAtRule.source));
+            }
+          }
+        }
+
+        // Handle @counter-style (it uses "properties")
+        if (type === "counter-style" && (atRule as any).properties) {
+          const props = (atRule as any).properties;
+          for (const [prop, value] of Object.entries(props)) {
+            if (typeof value === "string" || typeof value === "number") {
+              templateAtRule.declarations.push(createDeclaration(normalizeProperty(prop), value, templateAtRule.source));
+            }
+          }
+        }
+
+        // Handle @page (it uses "properties")
+        if (type === "page" && (atRule as any).properties) {
+          const props = (atRule as any).properties;
+          for (const [prop, value] of Object.entries(props)) {
+            if (typeof value === "string" || typeof value === "number") {
+              templateAtRule.declarations.push(createDeclaration(normalizeProperty(prop), value, templateAtRule.source));
+            }
+          }
+        }
+
+        // Handle @import (it uses "query" for URL and "name" for media query)
+        if (type === "import") {
+          // No declarations needed, just the URL and optional media query
+        }
+
+        // Handle @namespace (it uses "query" for URL and "name" for prefix)
+        if (type === "namespace") {
+          // No declarations needed, just the URL and optional prefix
         }
         for (let j = 0; j < componentRules.length; j++) {
           const rule = componentRules[j];

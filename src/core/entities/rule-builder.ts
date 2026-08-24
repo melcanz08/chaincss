@@ -79,7 +79,6 @@ export class RuleBuilder {
   private containerMap = new Map<string, AtRule>();
   private layerMap = new Map<string, AtRule>();
   private keyframesMap = new Map<string, AtRule>();
-  // Fix #4: Font-face dedup map
   private fontFaceMap = new Map<string, AtRule>();
 
   buildChild(
@@ -161,7 +160,16 @@ export class RuleBuilder {
   }
 
   addNested(selector: string, childResult: StyleObject): void {
-    this.nestedRules.push({ selector, styles: childResult });
+    const existing = this.nestedRules.find((r) => r.selector === selector);
+    if (existing) {
+      shallowMerge(existing.styles as any, childResult as any);
+    } else {
+      this.nestedRules.push({ selector, styles: childResult });
+    }
+  }
+
+  addAtRule(rule: AtRule): void {
+    this.atRules.push(rule);
   }
 
   addKeyframes(name: string, steps: Record<string, any>): void {
@@ -177,7 +185,6 @@ export class RuleBuilder {
     }
   }
 
-  // Fix #4: Dedup font-face by properties signature
   addFontFace(properties: Record<string, string>): void {
     const signature = Object.entries(properties)
       .sort(([a], [b]) => a.localeCompare(b))
@@ -189,6 +196,95 @@ export class RuleBuilder {
     const rule: AtRule = { type: "font-face", properties } as any;
     this.atRules.push(rule);
     this.fontFaceMap.set(signature, rule);
+  }
+
+  addScope(scopeQuery: string, childResult: StyleObject): void {
+    if (isStyleObjectEmpty(childResult)) return;
+    const key = normalizeQuery(scopeQuery);
+    const rule: AtRule = { type: "scope", query: key, styles: childResult as any } as any;
+    this.atRules.push(rule);
+  }
+
+  addStartingStyle(selector: string, childResult: StyleObject): void {
+    if (isStyleObjectEmpty(childResult)) return;
+    const rule: AtRule = { type: "starting-style", query: selector, styles: childResult as any } as any;
+    this.atRules.push(rule);
+  }
+
+  addViewTransition(name: string, childResult: StyleObject): void {
+    if (isStyleObjectEmpty(childResult)) return;
+    const rule: AtRule = { type: "view-transition", name: name, styles: childResult as any } as any;
+    this.atRules.push(rule);
+  }
+
+  addProperty(propertyName: string, descriptor: Record<string, any>): void {
+    const rule: AtRule = { type: "property", name: propertyName, properties: descriptor } as any;
+    this.atRules.push(rule);
+  }
+
+  addCounterStyle(name: string, styleDef: Record<string, any>): void {
+    const rule: AtRule = { type: "counter-style", name: name, properties: styleDef } as any;
+    this.atRules.push(rule);
+  }
+
+  addPage(selector: string, properties: Record<string, any>): void {
+    const rule: AtRule = { type: "page", query: selector, properties: properties } as any;
+    this.atRules.push(rule);
+  }
+
+  addImport(url: string, mediaQuery?: string): void {
+    const rule: AtRule = { type: "import", query: url, name: mediaQuery || "" } as any;
+    this.atRules.push(rule);
+  }
+
+  addNamespace(prefix: string, url: string): void {
+    const rule: AtRule = { type: "namespace", query: url, name: prefix || "" } as any;
+    this.atRules.push(rule);
+  }
+
+  addCharset(encoding: string): void {
+    const rule: AtRule = { type: "charset", query: encoding } as any;
+    this.atRules.push(rule);
+  }
+
+  addColorProfile(name: string, descriptor: Record<string, any>): void {
+    const rule: AtRule = { type: "color-profile", name: name, properties: descriptor } as any;
+    this.atRules.push(rule);
+  }
+
+  addFontFeatureValues(name: string, values: Record<string, any>): void {
+    const rule: AtRule = { type: "font-feature-values", name: name, styles: values } as any;
+    this.atRules.push(rule);
+  }
+
+  addFontPaletteValues(name: string, values: Record<string, any>): void {
+    const rule: AtRule = { type: "font-palette-values", name: name, styles: values } as any;
+    this.atRules.push(rule);
+  }
+
+  addPositionTry(name: string, styles: Record<string, any>): void {
+    const rule: AtRule = { type: "position-try", name: name, styles: styles } as any;
+    this.atRules.push(rule);
+  }
+
+  addCustomMedia(name: string, query: string): void {
+    const rule: AtRule = { type: "custom-media", name: name, query: query } as any;
+    this.atRules.push(rule);
+  }
+
+  addCustomSelector(name: string, selector: string): void {
+    const rule: AtRule = { type: "custom-selector", name: name, query: selector } as any;
+    this.atRules.push(rule);
+  }
+
+  addDocument(url: string, styles: Record<string, any>): void {
+    const rule: AtRule = { type: "document", query: url, styles: styles } as any;
+    this.atRules.push(rule);
+  }
+
+  addViewport(styles: Record<string, any>): void {
+    const rule: AtRule = { type: "viewport", styles: styles } as any;
+    this.atRules.push(rule);
   }
 
   getAtRules(): AtRule[] {

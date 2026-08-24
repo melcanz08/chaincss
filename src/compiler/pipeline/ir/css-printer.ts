@@ -384,7 +384,8 @@ function emitAtRule(
           if (c) inner += (inner ? (ctx.minify ? "" : "\n\n") : "") + c;
         }
       }
-      return `@supports ${atRule.query || ""} {${ctx.nl}${emitIndented(inner, ctx)}${ctx.nl}}`;
+      const query = atRule.query || "";
+      return `@supports${query ? ` ${query}` : ""} {${ctx.nl}${emitIndented(inner, ctx)}${ctx.nl}}`;
     }
 
     case "container": {
@@ -396,7 +397,8 @@ function emitAtRule(
           if (c) inner += (inner ? (ctx.minify ? "" : "\n\n") : "") + c;
         }
       }
-      return `@container ${atRule.query || ""} {${ctx.nl}${emitIndented(inner, ctx)}${ctx.nl}}`;
+      const query = atRule.query || "";
+      return `@container${query ? ` ${query}` : ""} {${ctx.nl}${emitIndented(inner, ctx)}${ctx.nl}}`;
     }
 
     case "layer": {
@@ -448,6 +450,102 @@ function emitAtRule(
       ctx.emittedKeyframes.add(key);
 
       return emitKeyframesStructural(name, atRule.keyframes, ctx);
+    }
+
+    case "scope": {
+      const query = atRule.query || "";
+      let inner = activeDecls.length ? emitDeclBlock(parentSelector, activeDecls, ctx) : "";
+      if (atRule.nestedRules) {
+        for (let i = 0; i < atRule.nestedRules.length; i++) {
+          const c = emitRule(atRule.nestedRules[i], ctx);
+          if (c) inner += (inner ? (ctx.minify ? "" : "\n\n") : "") + c;
+        }
+      }
+      if (!inner && !query) return "";
+      return `@scope${query ? ` ${query}` : ""} {${ctx.nl}${emitIndented(inner, ctx)}${ctx.nl}}`;
+    }
+
+    case "starting-style": {
+      const query = atRule.query || "";
+      let inner = activeDecls.length ? emitDeclBlock(parentSelector, activeDecls, ctx) : "";
+      if (atRule.nestedRules) {
+        for (let i = 0; i < atRule.nestedRules.length; i++) {
+          const c = emitRule(atRule.nestedRules[i], ctx);
+          if (c) inner += (inner ? (ctx.minify ? "" : "\n\n") : "") + c;
+        }
+      }
+      if (!inner && !query) return "";
+      return `@starting-style${query ? ` ${query}` : ""} {${ctx.nl}${emitIndented(inner, ctx)}${ctx.nl}}`;
+    }
+
+    case "view-transition": {
+      const name = atRule.name || "";
+      let inner = activeDecls.length ? emitDeclBlock(parentSelector, activeDecls, ctx) : "";
+      if (atRule.nestedRules) {
+        for (let i = 0; i < atRule.nestedRules.length; i++) {
+          const c = emitRule(atRule.nestedRules[i], ctx);
+          if (c) inner += (inner ? (ctx.minify ? "" : "\n\n") : "") + c;
+        }
+      }
+      if (!inner && !name) return "";
+      return `@view-transition${name ? ` ${name}` : ""} {${ctx.nl}${emitIndented(inner, ctx)}${ctx.nl}}`;
+    }
+
+    case "property": {
+      if (activeDecls.length === 0) return "";
+      const name = atRule.name || "";
+      const lines: string[] = [];
+      for (const d of activeDecls) {
+        const values = formatValues(d.value as string | number | (string | number)[]);
+        for (const v of values) {
+          lines.push(
+            `${ctx.indent}${kebab(d.property)}:${ctx.space}${formatValue(v as string | number)};`,
+          );
+        }
+      }
+      return `@property ${name} {${ctx.nl}${lines.join(ctx.nl)}${ctx.nl}}`;
+    }
+
+    case "counter-style": {
+      if (activeDecls.length === 0) return "";
+      const name = atRule.name || "";
+      const lines: string[] = [];
+      for (const d of activeDecls) {
+        const values = formatValues(d.value as string | number | (string | number)[]);
+        for (const v of values) {
+          lines.push(
+            `${ctx.indent}${kebab(d.property)}:${ctx.space}${formatValue(v as string | number)};`,
+          );
+        }
+      }
+      return `@counter-style ${name} {${ctx.nl}${lines.join(ctx.nl)}${ctx.nl}}`;
+    }
+
+    case "page": {
+      if (activeDecls.length === 0) return "";
+      const query = atRule.query || "";
+      const lines: string[] = [];
+      for (const d of activeDecls) {
+        const values = formatValues(d.value as string | number | (string | number)[]);
+        for (const v of values) {
+          lines.push(
+            `${ctx.indent}${kebab(d.property)}:${ctx.space}${formatValue(v as string | number)};`,
+          );
+        }
+      }
+      return `@page${query ? ` ${query}` : ""} {${ctx.nl}${lines.join(ctx.nl)}${ctx.nl}}`;
+    }
+
+    case "import": {
+      const url = atRule.query || "";
+      const mediaQuery = atRule.name || "";
+      return `@import ${url}${mediaQuery ? ` ${mediaQuery}` : ""};`;
+    }
+
+    case "namespace": {
+      const url = atRule.query || "";
+      const prefix = atRule.name || "";
+      return `@namespace${prefix ? ` ${prefix}` : ""} ${url};`;
     }
 
     default: {

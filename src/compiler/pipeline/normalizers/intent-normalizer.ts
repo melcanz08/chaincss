@@ -17,6 +17,19 @@ import type {
 let _customShorthands: Set<string> | null = null;
 let _customMacros: Set<string> | null = null;
 
+const KNOWN_VALID_PROPERTIES = new Set([
+  "animation-name",
+  "animation-duration",
+  "animation-timing-function",
+  "animation-delay",
+  "animation-iteration-count",
+  "animation-direction",
+  "animation-fill-mode",
+  "animation-play-state",
+  "animation-range",
+  "animation-timeline",
+]);
+
 function getCustomSets() {
   if (!_customShorthands || !_customMacros) {
     const sh = shorthandsModule || {};
@@ -70,6 +83,11 @@ export const intentNormalizer: NormalizationPass = {
 
         // Fix #3: Lowercase for shorthand/macro lookup
         const lowerProp = decl.property.toLowerCase();
+
+        // Skip known valid CSS properties that should never be auto-corrected
+        if (KNOWN_VALID_PROPERTIES.has(lowerProp)) {
+          continue;
+        }
 
         if (shorthands.has(lowerProp) || macros.has(lowerProp)) continue;
         if (
