@@ -1,9 +1,15 @@
 // src/core/usecases/value-classifier.ts
 
-import type { CSSProperties, CSSPrimitiveValue } from "@shared/types/index.js";
-import { isDynamicValue } from "@shared/types/index.js";
+import type { CSSProperties, CSSPrimitiveValue } from "@shared/types/style-types.js";
 
 export type ValueClass = "static" | "dynamic" | "invalid";
+
+function isDynamicValue(
+  value: unknown,
+): value is (...args: unknown[]) => unknown {
+  return typeof value === "function";
+}
+
 
 // Fix #1: Hoisted regex — no re-creation per content call
 const DOLLAR_BRACE = "${";

@@ -8,7 +8,7 @@ import type {
   MathContext,
   MathResult,
   FluidTypeConfig,
-} from "@shared/types/index.js";
+} from "@shared/types/math-types.js";
 
 export type { CSSUnit, CSSMathValue, MathContext, MathResult, FluidTypeConfig };
 export type MathOp = "add" | "subtract" | "multiply" | "divide";

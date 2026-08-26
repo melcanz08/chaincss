@@ -3,13 +3,7 @@
 // ============================================================================
 
 import type { StyleDefinition } from "@shared/types/index.js";
-import {
-  createIR,
-  createRule,
-  createDeclaration,
-  nextId,
-  record,
-} from "./index.js";
+import { createIR, createRule, createDeclaration, nextId, record } from "./factory.js";
 import type {
   SourceLocation,
   IRPseudoClass,

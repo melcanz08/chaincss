@@ -10,7 +10,7 @@
  * Multiple components sharing the same styles share a single <style> entry.
  */
 
-import { compileToCSS } from "@core/usecases/style-compiler.js";
+import { compileToCSSBrowser as compileToCSS } from "@core/usecases/browser-safe-compiler.js";
 import type { StyleObject } from "@shared/types/index.js";
 
 const TOKEN_KEY = "__CHAINCSS_TOKENS__";
@@ -475,5 +475,3 @@ export function setManifest(manifest: Record<string, any>): void {
     (styleInjector as any)._manifest = manifest;
   }
 }
-
-export { compileToCSS } from "@core/usecases/style-compiler.js";
