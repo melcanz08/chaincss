@@ -1,0 +1,830 @@
+# captured from e7f4190
+# chaincss 2.15.19
+
+======================================================================
+ENTRY: 001-card
+======================================================================
+--- build ---
+
+ChainCSS Build Pipeline
+───────────────────────
+ℹ 🔁 Persistent compiler enabled
+ℹ 🆕 No cached state — starting fresh
+ℹ Target inputs: src/**/*.chain.{ts,tsx}
+✓ Found 1 file(s) to compile.
+ℹ Compiled: src/card.chain.ts (100%)
+ℹ 📊 Inspector Map: 1 rules → dist/chaincss-ir.json
+ℹ Complete! (100%)
+✓ Successfully compiled 1 file(s) in XXXms
+ℹ Compilation metrics:
+  Total parsed styles: 1
+  Atomic classes     : 0
+  Static definitions : 1
+  Output stylesheet  : dist/styles.css
+  Generated bindings : 1
+build_exit=0
+
+--- emitted styles.css ---
+/* src/card.chain.ts */
+.card{display:flex;flex-direction:column;gap:16px;padding:24px;background:white;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.1);}.card:hover{box-shadow:0 4px 6px rgba(0,0,0,0.1);transform:translatey(-2px);}
+--- emitted chaincss-ir.json ---
+{
+  "schemaVersion": 1,
+  "compilerVersion": "2.15.19",
+  "pipeline": "standard-build",
+  "generatedAt": "TIMESTAMP",
+  "rules": [
+    {
+      "id": "src/card.chain.ts::.card",
+      "selector": ".card",
+      "source": {
+        "file": "src/card.chain.ts",
+        "component": "card"
+      },
+      "diagnostics": [
+        {
+          "severity": "error",
+          "category": "general",
+          "message": "Maximum call stack size exceeded",
+          "suggestion": "",
+          "wcag": "",
+          "autoFixable": false
+        }
+      ],
+      "declarations": [
+        {
+          "property": "display",
+          "value": "flex",
+          "history": [
+            {
+              "pass": "parser",
+              "action": "created",
+              "reason": "Parsed from StyleDefinition"
+            }
+          ]
+        },
+        {
+          "property": "flex-direction",
+          "value": "column",
+          "history": [
+            {
+              "pass": "parser",
+              "action": "created",
+              "reason": "Parsed from StyleDefinition"
+            }
+          ]
+        },
+        {
+          "property": "gap",
+          "value": "16px",
+          "history": [
+            {
+              "pass": "parser",
+              "action": "created",
+              "reason": "Parsed from StyleDefinition"
+            }
+          ]
+        },
+        {
+          "property": "padding",
+          "value": "24px",
+          "history": [
+            {
+              "pass": "parser",
+              "action": "created",
+              "reason": "Parsed from StyleDefinition"
+            }
+          ]
+        },
+        {
+          "property": "background",
+          "value": "white",
+          "history": [
+            {
+              "pass": "parser",
+              "action": "created",
+              "reason": "Parsed from StyleDefinition"
+            }
+          ]
+        },
+        {
+          "property": "border-radius",
+          "value": "12px",
+          "history": [
+            {
+              "pass": "parser",
+              "action": "created",
+              "reason": "Parsed from StyleDefinition"
+            }
+          ]
+        },
+        {
+          "property": "box-shadow",
+          "value": "0 1px 3px rgba(0,0,0,0.1)",
+          "history": [
+            {
+              "pass": "parser",
+              "action": "created",
+              "reason": "Parsed from StyleDefinition"
+            }
+          ]
+        }
+      ],
+      "stats": {
+        "declarationCount": 7,
+        "estimatedBytes": 152,
+        "pipelinePasses": 5,
+        "hasHover": true
+      },
+      "pipeline": [
+        {
+          "stage": "normalization",
+          "pass": "intent-normalizer",
+          "duration": 0,
+          "changes": 0,
+          "hasError": false,
+          "affectedDeclarations": []
+        },
+        {
+          "stage": "normalization",
+          "pass": "unit-normalizer",
+          "duration": 0,
+          "changes": 0,
+          "hasError": false,
+          "affectedDeclarations": []
+        },
+        {
+          "stage": "normalization",
+          "pass": "token-normalizer",
+          "duration": 0,
+          "changes": 0,
+          "hasError": false,
+          "affectedDeclarations": []
+        },
+        {
+          "stage": "optimization",
+          "pass": "ast-optimizer",
+          "duration": 0,
+          "changes": 1,
+          "hasError": false,
+          "affectedDeclarations": []
+        },
+        {
+          "stage": "optimization",
+          "pass": "dynamic-animation-resolver",
+          "duration": 0,
+          "changes": 0,
+          "hasError": false,
+          "affectedDeclarations": []
+        }
+      ],
+      "snapshots": [
+        {
+          "pass": "intent-normalizer",
+          "stage": "normalization",
+          "declarations": [
+            {
+              "property": "background",
+              "value": "white"
+            },
+            {
+              "property": "border-radius",
+              "value": "12px"
+            },
+            {
+              "property": "box-shadow",
+              "value": "0 1px 3px rgba(0,0,0,0.1)"
+            },
+            {
+              "property": "display",
+              "value": "flex"
+            },
+            {
+              "property": "flex-direction",
+              "value": "column"
+            },
+            {
+              "property": "gap",
+              "value": "16px"
+            },
+            {
+              "property": "padding",
+              "value": "24px"
+            }
+          ]
+        }
+      ],
+      "suggestions": []
+    }
+  ]
+}
+--- check ---
+
+ChainCSS Audit
+──────────────
+ℹ Input patterns: src/**/*.chain.{ts,tsx}
+✓ Found 1 file(s) to audit
+ℹ Auditing src/card.chain.ts... (100%)
+ℹ Complete! (100%)
+
+🔍 ChainCSS Audit Report
+────────────────────────────────────────────────────────────
+  Files audited:  1 in XXXms
+
+📋 Details
+────────────────────────────────────────────────────────────
+
+  src/card.chain.ts (1 errors, 1 warnings, 1 info)
+    ⚠️  ".card" has :hover but no :focus-visible fallback
+        → Mirror hover styles to :focus-visible for keyboard users.
+    ℹ️  ".card" has :hover styles but no transition for smooth animation.
+        → transition: all 0.2s ease;
+    ❌ Maximum call stack size exceeded
+
+────────────────────────────────────────────────────────────
+  🔴 ERRORS — 1
+  🟡 WARNINGS — 1
+  🔵 INFO — 1
+
+────────────────────────────────────────────────────────────
+❌ 1 critical issue(s) found.
+  Run with --fix to auto-correct what can be fixed.
+
+  Run "chaincss check --fix" to auto-correct issues.
+check_exit=1
+
+======================================================================
+ENTRY: 002-button
+======================================================================
+--- build ---
+
+ChainCSS Build Pipeline
+───────────────────────
+ℹ 🔁 Persistent compiler enabled
+ℹ 🆕 No cached state — starting fresh
+ℹ Target inputs: src/**/*.chain.{ts,tsx}
+✓ Found 1 file(s) to compile.
+ℹ Compiled: src/button.chain.ts (100%)
+ℹ 📊 Inspector Map: 1 rules → dist/chaincss-ir.json
+ℹ Complete! (100%)
+✓ Successfully compiled 1 file(s) in XXXms
+ℹ Compilation metrics:
+  Total parsed styles: 1
+  Atomic classes     : 0
+  Static definitions : 1
+  Output stylesheet  : dist/styles.css
+  Generated bindings : 1
+build_exit=0
+
+--- emitted styles.css ---
+/* src/button.chain.ts */
+.btn{display:inline-flex;align-items:center;gap:8px;padding:12px 24px;background:#3b82f6;color:white;border-radius:8px;cursor:pointer;transition:all 0.2s ease;}.btn:active{transform:scale(0.95);}
+--- emitted chaincss-ir.json ---
+{
+  "schemaVersion": 1,
+  "compilerVersion": "2.15.19",
+  "pipeline": "standard-build",
+  "generatedAt": "TIMESTAMP",
+  "rules": [
+    {
+      "id": "src/button.chain.ts::.btn",
+      "selector": ".btn",
+      "source": {
+        "file": "src/button.chain.ts",
+        "component": "button"
+      },
+      "diagnostics": [],
+      "declarations": [
+        {
+          "property": "display",
+          "value": "inline-flex",
+          "history": [
+            {
+              "pass": "parser",
+              "action": "created",
+              "reason": "Parsed from StyleDefinition"
+            }
+          ]
+        },
+        {
+          "property": "align-items",
+          "value": "center",
+          "history": [
+            {
+              "pass": "parser",
+              "action": "created",
+              "reason": "Parsed from StyleDefinition"
+            }
+          ]
+        },
+        {
+          "property": "gap",
+          "value": "8px",
+          "history": [
+            {
+              "pass": "parser",
+              "action": "created",
+              "reason": "Parsed from StyleDefinition"
+            }
+          ]
+        },
+        {
+          "property": "padding",
+          "value": "12px 24px",
+          "history": [
+            {
+              "pass": "parser",
+              "action": "created",
+              "reason": "Parsed from StyleDefinition"
+            }
+          ]
+        },
+        {
+          "property": "background",
+          "value": "#3b82f6",
+          "history": [
+            {
+              "pass": "parser",
+              "action": "created",
+              "reason": "Parsed from StyleDefinition"
+            }
+          ]
+        },
+        {
+          "property": "color",
+          "value": "white",
+          "history": [
+            {
+              "pass": "parser",
+              "action": "created",
+              "reason": "Parsed from StyleDefinition"
+            }
+          ]
+        },
+        {
+          "property": "border-radius",
+          "value": "8px",
+          "history": [
+            {
+              "pass": "parser",
+              "action": "created",
+              "reason": "Parsed from StyleDefinition"
+            }
+          ]
+        },
+        {
+          "property": "cursor",
+          "value": "pointer",
+          "history": [
+            {
+              "pass": "parser",
+              "action": "created",
+              "reason": "Parsed from StyleDefinition"
+            }
+          ]
+        },
+        {
+          "property": "transition",
+          "value": "all 0.2s ease",
+          "history": [
+            {
+              "pass": "parser",
+              "action": "created",
+              "reason": "Parsed from StyleDefinition"
+            }
+          ]
+        }
+      ],
+      "stats": {
+        "declarationCount": 9,
+        "estimatedBytes": 179,
+        "pipelinePasses": 10,
+        "hasHover": false
+      },
+      "pipeline": [
+        {
+          "stage": "normalization",
+          "pass": "intent-normalizer",
+          "duration": 0,
+          "changes": 0,
+          "hasError": false,
+          "affectedDeclarations": []
+        },
+        {
+          "stage": "normalization",
+          "pass": "unit-normalizer",
+          "duration": 0,
+          "changes": 0,
+          "hasError": false,
+          "affectedDeclarations": []
+        },
+        {
+          "stage": "normalization",
+          "pass": "token-normalizer",
+          "duration": 0,
+          "changes": 0,
+          "hasError": false,
+          "affectedDeclarations": []
+        },
+        {
+          "stage": "optimization",
+          "pass": "ast-optimizer",
+          "duration": 0,
+          "changes": 0,
+          "hasError": false,
+          "affectedDeclarations": []
+        },
+        {
+          "stage": "optimization",
+          "pass": "dynamic-animation-resolver",
+          "duration": 0,
+          "changes": 0,
+          "hasError": false,
+          "affectedDeclarations": []
+        },
+        {
+          "stage": "optimization",
+          "pass": "css-compressor",
+          "duration": 0,
+          "changes": 0,
+          "hasError": false,
+          "affectedDeclarations": []
+        },
+        {
+          "stage": "optimization",
+          "pass": "media-query-packer",
+          "duration": 0,
+          "changes": 0,
+          "hasError": false,
+          "affectedDeclarations": []
+        },
+        {
+          "stage": "lowering",
+          "pass": "intent-resolver",
+          "duration": 0,
+          "changes": 0,
+          "hasError": false,
+          "affectedDeclarations": []
+        },
+        {
+          "stage": "lowering",
+          "pass": "token-resolver",
+          "duration": 0,
+          "changes": 0,
+          "hasError": false,
+          "affectedDeclarations": []
+        },
+        {
+          "stage": "lowering",
+          "pass": "css-emitter",
+          "duration": 0,
+          "changes": 0,
+          "hasError": false,
+          "affectedDeclarations": []
+        }
+      ],
+      "snapshots": [
+        {
+          "pass": "intent-normalizer",
+          "stage": "normalization",
+          "declarations": [
+            {
+              "property": "align-items",
+              "value": "center"
+            },
+            {
+              "property": "background",
+              "value": "#3b82f6"
+            },
+            {
+              "property": "border-radius",
+              "value": "8px"
+            },
+            {
+              "property": "color",
+              "value": "white"
+            },
+            {
+              "property": "cursor",
+              "value": "pointer"
+            },
+            {
+              "property": "display",
+              "value": "inline-flex"
+            },
+            {
+              "property": "gap",
+              "value": "8px"
+            },
+            {
+              "property": "padding",
+              "value": "12px 24px"
+            },
+            {
+              "property": "transition",
+              "value": "all 0.2s ease"
+            }
+          ]
+        }
+      ],
+      "suggestions": []
+    }
+  ]
+}
+--- check ---
+
+ChainCSS Audit
+──────────────
+ℹ Input patterns: src/**/*.chain.{ts,tsx}
+✓ Found 1 file(s) to audit
+ℹ Auditing src/button.chain.ts... (100%)
+ℹ Complete! (100%)
+
+🔍 ChainCSS Audit Report
+────────────────────────────────────────────────────────────
+  Files audited:  1 in XXXms
+
+📋 Details
+────────────────────────────────────────────────────────────
+
+  src/button.chain.ts (1 errors, 1 warnings)
+    ❌ Contrast ratio 3.7:1 fails WCAG AA standards (requires ≥ 4.5:1)
+        → Darken text color or lighten background layer. Current configuration: white text on #3b82f6 background
+    ⚠️  ".btn" deploys animations without prefers-reduced-motion
+        → Wrap in @media (prefers-reduced-motion: no-preference) { ... }
+
+────────────────────────────────────────────────────────────
+  🔴 ERRORS — 1
+  🟡 WARNINGS — 1
+
+────────────────────────────────────────────────────────────
+❌ 1 critical issue(s) found.
+  Run with --fix to auto-correct what can be fixed.
+
+  Run "chaincss check --fix" to auto-correct issues.
+check_exit=1
+
+======================================================================
+ENTRY: 003-lenient-passthrough
+======================================================================
+--- build ---
+
+ChainCSS Build Pipeline
+───────────────────────
+ℹ 🔁 Persistent compiler enabled
+ℹ 🆕 No cached state — starting fresh
+ℹ Target inputs: src/**/*.chain.{ts,tsx}
+✓ Found 1 file(s) to compile.
+ℹ Compiled: src/lenient.chain.ts (100%)
+ℹ 📊 Inspector Map: 1 rules → dist/chaincss-ir.json
+ℹ Complete! (100%)
+✓ Successfully compiled 1 file(s) in XXXms
+ℹ Compilation metrics:
+  Total parsed styles: 1
+  Atomic classes     : 0
+  Static definitions : 1
+  Output stylesheet  : dist/styles.css
+  Generated bindings : 1
+build_exit=0
+
+--- emitted styles.css ---
+/* src/lenient.chain.ts */
+.broken{display:12345px;unknown-property:nope;}
+--- emitted chaincss-ir.json ---
+{
+  "schemaVersion": 1,
+  "compilerVersion": "2.15.19",
+  "pipeline": "standard-build",
+  "generatedAt": "TIMESTAMP",
+  "rules": [
+    {
+      "id": "src/lenient.chain.ts::.broken",
+      "selector": ".broken",
+      "source": {
+        "file": "src/lenient.chain.ts",
+        "component": "broken"
+      },
+      "diagnostics": [],
+      "declarations": [
+        {
+          "property": "display",
+          "value": "12345px",
+          "history": [
+            {
+              "pass": "parser",
+              "action": "created",
+              "reason": "Parsed from StyleDefinition"
+            },
+            {
+              "pass": "unit-normalizer",
+              "action": "added-unit",
+              "reason": "Added px unit to number value",
+              "previous": 12345
+            }
+          ]
+        },
+        {
+          "property": "unknown-property",
+          "value": "nope",
+          "history": [
+            {
+              "pass": "parser",
+              "action": "created",
+              "reason": "Parsed from StyleDefinition"
+            }
+          ]
+        }
+      ],
+      "stats": {
+        "declarationCount": 2,
+        "estimatedBytes": 52,
+        "pipelinePasses": 10,
+        "hasHover": false
+      },
+      "pipeline": [
+        {
+          "stage": "normalization",
+          "pass": "intent-normalizer",
+          "duration": 0,
+          "changes": 0,
+          "hasError": false,
+          "affectedDeclarations": []
+        },
+        {
+          "stage": "normalization",
+          "pass": "unit-normalizer",
+          "duration": 0,
+          "changes": 0,
+          "hasError": false,
+          "affectedDeclarations": [
+            {
+              "property": "display",
+              "before": "12345",
+              "after": "12345px",
+              "reason": "Added px unit to number value"
+            }
+          ]
+        },
+        {
+          "stage": "normalization",
+          "pass": "token-normalizer",
+          "duration": 0,
+          "changes": 0,
+          "hasError": false,
+          "affectedDeclarations": []
+        },
+        {
+          "stage": "optimization",
+          "pass": "ast-optimizer",
+          "duration": 0,
+          "changes": 0,
+          "hasError": false,
+          "affectedDeclarations": []
+        },
+        {
+          "stage": "optimization",
+          "pass": "dynamic-animation-resolver",
+          "duration": 0,
+          "changes": 0,
+          "hasError": false,
+          "affectedDeclarations": []
+        },
+        {
+          "stage": "optimization",
+          "pass": "css-compressor",
+          "duration": 0,
+          "changes": 0,
+          "hasError": false,
+          "affectedDeclarations": []
+        },
+        {
+          "stage": "optimization",
+          "pass": "media-query-packer",
+          "duration": 0,
+          "changes": 0,
+          "hasError": false,
+          "affectedDeclarations": []
+        },
+        {
+          "stage": "lowering",
+          "pass": "intent-resolver",
+          "duration": 0,
+          "changes": 0,
+          "hasError": false,
+          "affectedDeclarations": []
+        },
+        {
+          "stage": "lowering",
+          "pass": "token-resolver",
+          "duration": 0,
+          "changes": 0,
+          "hasError": false,
+          "affectedDeclarations": []
+        },
+        {
+          "stage": "lowering",
+          "pass": "css-emitter",
+          "duration": 0,
+          "changes": 0,
+          "hasError": false,
+          "affectedDeclarations": []
+        }
+      ],
+      "snapshots": [
+        {
+          "pass": "intent-normalizer",
+          "stage": "normalization",
+          "declarations": [
+            {
+              "property": "display",
+              "value": "12345px"
+            },
+            {
+              "property": "unknown-property",
+              "value": "nope"
+            }
+          ]
+        }
+      ],
+      "suggestions": []
+    }
+  ]
+}
+--- check ---
+
+ChainCSS Audit
+──────────────
+ℹ Input patterns: src/**/*.chain.{ts,tsx}
+✓ Found 1 file(s) to audit
+ℹ Auditing src/lenient.chain.ts... (100%)
+ℹ Complete! (100%)
+
+🔍 ChainCSS Audit Report
+────────────────────────────────────────────────────────────
+  Files audited:  1 in XXXms
+
+📋 Details
+────────────────────────────────────────────────────────────
+
+  src/lenient.chain.ts (1 errors)
+    ❌ Unknown CSS value "nope" for property "unknown-property".
+        → Check the CSS specification or use a valid design token.
+
+────────────────────────────────────────────────────────────
+  🔴 ERRORS — 1
+
+────────────────────────────────────────────────────────────
+❌ 1 critical issue(s) found.
+  Run with --fix to auto-correct what can be fixed.
+
+  Run "chaincss check --fix" to auto-correct issues.
+check_exit=1
+
+======================================================================
+ENTRY: 004-invalid
+======================================================================
+--- build ---
+
+ChainCSS Build Pipeline
+───────────────────────
+ℹ 🔁 Persistent compiler enabled
+ℹ 🆕 No cached state — starting fresh
+ℹ Target inputs: src/**/*.chain.{ts,tsx}
+✓ Found 1 file(s) to compile.
+✗ Failed to compile src/invalid.chain.ts: Failed to import invalid.chain.ts: Expected ',', got 'ident'
+✗ Compilation phase encountered fatal validation errors. Halting build pipeline.
+build_exit=1
+
+--- emitted styles.css ---
+(missing)
+
+--- emitted chaincss-ir.json ---
+(missing)
+
+--- check ---
+
+ChainCSS Audit
+──────────────
+ℹ Input patterns: src/**/*.chain.{ts,tsx}
+✓ Found 1 file(s) to audit
+ℹ Failed src/invalid.chain.ts (100%)
+✗ Failed to audit src/invalid.chain.ts: Failed to import invalid.chain.ts: Expected ',', got 'ident'
+ℹ Complete! (100%)
+
+🔍 ChainCSS Audit Report
+────────────────────────────────────────────────────────────
+  Files audited:  1 in XXXms
+
+📋 Details
+────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────
+  🔴 ERRORS — 1
+
+────────────────────────────────────────────────────────────
+❌ 1 critical issue(s) found.
+  Run with --fix to auto-correct what can be fixed.
+
+  Run "chaincss check --fix" to auto-correct issues.
+check_exit=1
+
