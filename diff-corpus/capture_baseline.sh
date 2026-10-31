@@ -20,7 +20,7 @@ if [ ! -f "$BIN" ]; then
 fi
 
 {
-    echo "# captured from $(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+    echo "# baseline for chaincss v2.15.19 (frozen at phase0-complete)"
     echo "# chaincss $(node "$BIN" --version 2>/dev/null | head -1)"
     echo
 

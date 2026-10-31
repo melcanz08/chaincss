@@ -1,4 +1,4 @@
-# captured from fcb9e99
+# baseline for chaincss v2.15.19 (frozen at phase0-complete)
 # chaincss 2.15.19
 
 ======================================================================
