@@ -10,7 +10,7 @@
  * Multiple components sharing the same styles share a single <style> entry.
  */
 
-import { compileToCSSBrowser as compileToCSS } from "@core/usecases/browser-safe-compiler.js";
+import { compileToCSSBrowser as compileToCSS } from "./browser-safe-compiler.js";
 import type { StyleObject } from "@shared/types/index.js";
 
 const TOKEN_KEY = "__CHAINCSS_TOKENS__";

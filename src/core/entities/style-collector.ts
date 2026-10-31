@@ -157,6 +157,7 @@ export class StyleCollector {
 
     // Existing behavior
     if (classifyValue(value) === "dynamic") this.markMixed();
+    
     const target = this.pseudoStore || this.props;
     const entry: PropertyStoreEntry = target.set(prop, value);
     this.debugger.log(
