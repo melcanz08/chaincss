@@ -1,0 +1,16 @@
+{
+  "diagnostics": [
+    {
+      "severity": "error",
+      "message": "Undefined variable 'x'"
+    },
+    {
+      "severity": "error",
+      "message": "Type mismatch: expected Int, found String"
+    },
+    {
+      "severity": "error",
+      "message": "Cannot assign to immutable variable 'y'"
+    }
+  ]
+}

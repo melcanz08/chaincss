@@ -1,0 +1,23 @@
+{
+  "diagnostics": [
+    {
+      "severity": "error",
+      "message": "Undefined function 'parseIR'",
+      "suggestion": "Did you mean 'parseIr' or 'parse'?"
+    },
+    {
+      "severity": "warning",
+      "message": "Unused variable 'unused'",
+      "suggestion": "Remove the binding or prefix with '_'"
+    },
+    {
+      "severity": "info",
+      "message": "Consider enabling strict mode",
+      "suggestion": "Add 'strict: true' to your config"
+    },
+    {
+      "severity": "debug",
+      "message": "Compilation timing: 42ms"
+    }
+  ]
+}

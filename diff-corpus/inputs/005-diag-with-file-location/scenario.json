@@ -1,0 +1,22 @@
+{
+  "diagnostics": [
+    {
+      "severity": "error",
+      "message": "Syntax error at start of declaration",
+      "file": "src/card.chain.ts",
+      "line": 12
+    },
+    {
+      "severity": "warning",
+      "message": "Deprecated API",
+      "file": "src/button.chain.ts",
+      "line": 5,
+      "column": 3
+    },
+    {
+      "severity": "error",
+      "message": "Unresolved reference",
+      "file": "src/other.chain.ts"
+    }
+  ]
+}
