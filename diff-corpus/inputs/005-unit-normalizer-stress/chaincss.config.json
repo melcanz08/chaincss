@@ -1,0 +1,9 @@
+{
+  "inputs": ["src/**/*.chain.ts"],
+  "output": {
+    "cssFile": "dist/styles.css",
+    "minify": false,
+    "generateGlobalCSS": true,
+    "targets": ["css"]
+  }
+}
